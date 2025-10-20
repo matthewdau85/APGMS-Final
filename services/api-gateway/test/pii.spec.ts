@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+﻿import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import Fastify from "fastify";
 

@@ -1,4 +1,4 @@
-const SENSITIVE_KEY_PATTERNS = [
+﻿const SENSITIVE_KEY_PATTERNS = [
   "password",
   "token",
   "secret",
