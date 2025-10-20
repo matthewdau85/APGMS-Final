@@ -1,0 +1,13 @@
+﻿# node/ts
+node_modules/
+dist/
+.build/
+coverage/
+*.log
+*.tsbuildinfo
+
+# tooling
+.playwright/
+.vscode/
+.env
+.env.*

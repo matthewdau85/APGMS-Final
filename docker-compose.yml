@@ -1,0 +1,56 @@
+version: "3.9"
+name: apgms
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: apgms
+    ports: ["5432:5432"]
+    volumes: [ "dbdata:/var/lib/postgresql/data" ]
+    networks: [ apgmsnet ]
+
+  redis:
+    image: redis:7
+    ports: ["6379:6379"]
+    networks: [ apgmsnet ]
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    env_file: [ .env ]
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: ${DATABASE_URL}
+    depends_on: [ db ]
+    ports: ["3000:3000"]
+    networks: [ apgmsnet ]
+
+  tax-engine:
+    build:
+      context: .
+      dockerfile: services/tax-engine/Dockerfile
+    env_file: [ .env ]
+    environment:
+      TAX_ENGINE_PORT: "8000"
+    depends_on: [ db ]
+    ports: ["8000:8000"]
+    networks: [ apgmsnet ]
+
+  webapp:
+    build:
+      context: .
+      dockerfile: apps/webapp/Dockerfile
+    env_file: [ .env ]
+    depends_on: [ api-gateway ]
+    ports: ["5173:5173"]
+    networks: [ apgmsnet ]
+
+volumes:
+  dbdata:
+
+networks:
+  apgmsnet:
+    driver: bridge
