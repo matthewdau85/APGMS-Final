@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+model Org {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  deletedAt DateTime?
+  users     User[]
+  lines     BankLine[]
+  tombstones OrgTombstone[]
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId     String
+}
+
+model BankLine {
+  id        String   @id @default(cuid())
+  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId     String
+  date      DateTime
+  amount    Decimal
+  payee     String
+  desc      String
+  createdAt DateTime @default(now())
+}
+
+model OrgTombstone {
+  id        String   @id @default(cuid())
+  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId     String
+  payload   Json
+  createdAt DateTime @default(now())
+}

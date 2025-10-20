@@ -1,0 +1,8 @@
+﻿name: Security
+on: [push]
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo scanning
