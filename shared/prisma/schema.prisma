@@ -1,19 +1,20 @@
 generator client {
   provider = "prisma-client-js"
 }
+
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
   shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
 model Org {
-  id        String   @id @default(cuid())
-  name      String
-  createdAt DateTime @default(now())
-  deletedAt DateTime?
-  users     User[]
-  lines     BankLine[]
+  id         String         @id @default(cuid())
+  name       String
+  createdAt  DateTime       @default(now())
+  deletedAt  DateTime?
+  users      User[]
+  lines      BankLine[]
   tombstones OrgTombstone[]
 }
 
@@ -35,6 +36,11 @@ model BankLine {
   payee     String
   desc      String
   createdAt DateTime @default(now())
+
+  // NEW
+  idempotencyKey String?
+
+  @@unique([orgId, idempotencyKey])
 }
 
 model OrgTombstone {
