@@ -1,5 +1,5 @@
-﻿import { PrismaClient } from "@prisma/client";
-const prisma = new PrismaClient();
+﻿import { prisma } from "@apgms/shared/db";
+
 
 async function main() {
   const org = await prisma.org.upsert({
@@ -29,3 +29,4 @@ async function main() {
 
 main().catch(e => { console.error(e); process.exit(1); })
   .finally(async () => { await prisma.$disconnect(); });
+
