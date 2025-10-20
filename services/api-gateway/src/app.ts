@@ -47,7 +47,7 @@ let cachedPrisma: PrismaClient | null = null;
 
 async function loadDefaultPrisma(): Promise<PrismaLike> {
   if (!cachedPrisma) {
-    const module = (await import("@apgms/shared/src/db")) as { prisma: PrismaClient };
+    const module = (await import("@apgms/shared/db")) as { prisma: PrismaClient };
     cachedPrisma = module.prisma;
   }
   return cachedPrisma as PrismaLike;
@@ -230,3 +230,4 @@ function normaliseAmount(amount: unknown): number {
   }
   return 0;
 }
+
