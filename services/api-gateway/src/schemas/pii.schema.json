@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://apgms.example.com/schemas/pii.schema.json",
+  "title": "PIIRecord",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["abn", "tfnToken", "secret"],
+  "properties": {
+    "abn": {
+      "type": "string",
+      "pattern": "^\\d{11}$"
+    },
+    "tfnToken": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]{43,}$"
+    },
+    "secret": {
+      "type": "object",
+      "required": ["ciphertext", "kid"],
+      "additionalProperties": false,
+      "properties": {
+        "ciphertext": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kid": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

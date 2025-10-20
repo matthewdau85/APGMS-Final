@@ -1,0 +1,8 @@
+packages:
+  - services/*
+  - webapp
+  - shared
+  - worker
+
+ignoredBuiltDependencies:
+  - '@prisma/client'
