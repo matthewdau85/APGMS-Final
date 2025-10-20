@@ -1,4 +1,4 @@
-import { test } from "node:test";
+﻿import { test } from "node:test";
 import assert from "node:assert/strict";
 import Fastify from "fastify";
 import adminDataRoutes from "../src/routes/admin.data";
