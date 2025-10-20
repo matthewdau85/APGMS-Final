@@ -1,4 +1,4 @@
-import { defineConfig } from '@playwright/test';
+﻿import { defineConfig } from '@playwright/test';
 import path from 'node:path';
 
 const testDir = path.join(__dirname, 'webapp', 'tests');
