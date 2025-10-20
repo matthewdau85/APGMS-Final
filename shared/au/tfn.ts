@@ -1,4 +1,4 @@
-const TFN_8_WEIGHTS = [10, 7, 8, 4, 6, 3, 5, 2] as const;
+﻿const TFN_8_WEIGHTS = [10, 7, 8, 4, 6, 3, 5, 2] as const;
 const TFN_9_WEIGHTS = [1, 4, 7, 10, 3, 5, 8, 11, 2] as const;
 
 const DIGIT_ONLY = /\d+/g;

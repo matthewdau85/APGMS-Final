@@ -1,4 +1,4 @@
-import { NavLink, Route, Routes } from 'react-router-dom';
+﻿import { NavLink, Route, Routes } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
 import HomePage from './pages/Home';
 import BankLinesPage from './pages/BankLines';
@@ -54,7 +54,7 @@ export default function App() {
           onClick={() => setTheme(nextTheme)}
           aria-label={`Switch to ${nextTheme} theme`}
         >
-          {theme === 'light' ? '🌞' : '🌙'}
+          {theme === 'light' ? 'ðŸŒž' : 'ðŸŒ™'}
         </button>
       </header>
       <main className="app__content">

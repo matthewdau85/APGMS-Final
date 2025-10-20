@@ -1,4 +1,4 @@
-const ensureMounted = () =>
+﻿const ensureMounted = () =>
   new Promise<void>((resolve) => {
     if (document.readyState === 'complete') {
       requestAnimationFrame(() => resolve());
