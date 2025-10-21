@@ -1,6 +1,7 @@
 ﻿import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
-import type { Org, User, BankLine, PrismaClient } from "@prisma/client";
+import { z } from "zod";
+import { Prisma, type Org, type User, type BankLine, type PrismaClient } from "@prisma/client";
 
 import { maskError, maskObject } from "@apgms/shared";
 
@@ -36,11 +37,7 @@ type ExportableOrg = Org & { users: User[]; lines: BankLine[] };
 
 type PrismaLike = Pick<
   PrismaClient,
-  | "org"
-  | "user"
-  | "bankLine"
-  | "orgTombstone"
-  | "$transaction"
+  "org" | "user" | "bankLine" | "orgTombstone" | "$transaction" | "$queryRaw"
 >;
 
 let cachedPrisma: PrismaClient | null = null;
@@ -53,16 +50,35 @@ async function loadDefaultPrisma(): Promise<PrismaLike> {
   return cachedPrisma as PrismaLike;
 }
 
+/** Zod body schema for creating a bank line */
+const CreateLine = z.object({
+  date: z.string().datetime(),                     // ISO 8601 string
+  amount: z.string().regex(/^-?\d+(\.\d+)?$/),     // decimal as string
+  payee: z.string().min(1),
+  desc: z.string().min(1),
+  orgId: z.string().min(1),
+});
+
 export async function createApp(options: CreateAppOptions = {}): Promise<FastifyInstance> {
   const prisma = (options.prisma as PrismaLike | undefined) ?? (await loadDefaultPrisma());
 
   const app = Fastify({ logger: true });
-
   app.register(cors, { origin: true });
 
   app.log.info(maskObject({ DATABASE_URL: process.env.DATABASE_URL }), "loaded env");
 
   app.get("/health", async () => ({ ok: true, service: "api-gateway" }));
+
+  // Readiness: pings the DB
+  app.get("/ready", async (req, reply) => {
+    try {
+      // Raw ping; works across providers
+      await prisma.$queryRaw`SELECT 1`;
+      return reply.code(200).send({ ready: true });
+    } catch {
+      return reply.code(503).send({ ready: false });
+    }
+  });
 
   app.get("/users", async () => {
     const users = await prisma.user.findMany({
@@ -81,30 +97,62 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     return { lines };
   });
 
-  app.post("/bank-lines", async (req, rep) => {
+  // --- Validated + idempotent create ---
+  app.post("/bank-lines", async (req, reply) => {
+    const parsed = CreateLine.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "invalid_body", details: parsed.error.flatten() });
+    }
+
+    const { orgId, date, amount, payee, desc } = parsed.data;
+    const keyHeader = (req.headers["idempotency-key"] as string | undefined)?.trim();
+    const idemKey = keyHeader && keyHeader.length > 0 ? keyHeader : undefined;
+
     try {
-      const body = req.body as {
-        orgId: string;
-        date: string;
-        amount: number | string;
-        payee: string;
-        desc: string;
-      };
+      if (idemKey) {
+        // Upsert on the compound unique key @@unique([orgId, idempotencyKey])
+        const line = await prisma.bankLine.upsert({
+          where: { orgId_idempotencyKey: { orgId, idempotencyKey: idemKey } },
+          create: {
+            orgId,
+            date: new Date(date),
+            amount: new Prisma.Decimal(amount),
+            payee,
+            desc,
+            idempotencyKey: idemKey,
+          },
+          update: {}, // replay → no-op
+          select: {
+            id: true, orgId: true, date: true, amount: true, payee: true, desc: true, createdAt: true, idempotencyKey: true
+          },
+        });
+
+        reply.header("Idempotency-Status", "reused");
+        return reply.code(200).send(line);
+      }
+
+      // No idempotency key → plain create
       const created = await prisma.bankLine.create({
         data: {
-          orgId: body.orgId,
-          date: new Date(body.date),
-          amount: body.amount as any,
-          payee: body.payee,
-          desc: body.desc,
+          orgId,
+          date: new Date(date),
+          amount: new Prisma.Decimal(amount),
+          payee,
+          desc,
+        },
+        select: {
+          id: true, orgId: true, date: true, amount: true, payee: true, desc: true, createdAt: true, idempotencyKey: true
         },
       });
-      return rep.code(201).send(created);
+
+      return reply.code(201).send(created);
     } catch (e) {
+      // If a race slipped through, surface an idempotency-ish signal
       req.log.error({ err: maskError(e) }, "failed to create bank line");
-      return rep.code(400).send({ error: "bad_request" });
+      return reply.code(400).send({ error: "bad_request" });
     }
   });
+  // --- /validated + idempotent create ---
 
   app.get("/admin/export/:orgId", async (req, rep) => {
     if (!requireAdmin(req, rep)) {
@@ -214,9 +262,7 @@ function buildOrgExport(org: ExportableOrg): AdminOrgExport {
 }
 
 function normaliseAmount(amount: unknown): number {
-  if (typeof amount === "number") {
-    return amount;
-  }
+  if (typeof amount === "number") return amount;
   if (typeof amount === "string") {
     const parsed = Number(amount);
     return Number.isNaN(parsed) ? 0 : parsed;
@@ -230,4 +276,3 @@ function normaliseAmount(amount: unknown): number {
   }
   return 0;
 }
-
