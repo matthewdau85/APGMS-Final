@@ -19,3 +19,5 @@ webapp/test-results
 *.bak
 
 Verify-APGMS.ps1
+
+shared/prisma/.env
