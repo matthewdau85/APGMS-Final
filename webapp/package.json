@@ -1,27 +1,27 @@
 {
-  "name": "@apgms/webapp",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "test": "playwright test",
-    "test:axe": "playwright test tests/axe.spec.ts"
-  },
-  "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-router-dom": "^6.26.2"
-  },
-  "devDependencies": {
-    "@axe-core/playwright": "^4.9.0",
-    "@playwright/test": "^1.47.1",
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^4.3.1",
-    "typescript": "^5.9.3",
-    "vite": "^5.4.1"
-  }
+    "name":  "@apgms/webapp",
+    "version":  "0.1.0",
+    "private":  true,
+    "type":  "module",
+    "scripts":  {
+                    "dev":  "vite",
+                    "build":  "vite build",
+                    "preview":  "vite preview",
+                    "test":  "playwright test",
+                    "test:axe":  "playwright test tests/axe.spec.ts"
+                },
+    "dependencies":  {
+                         "react":  "^18.3.1",
+                         "react-dom":  "^18.3.1",
+                         "react-router-dom":  "^6.26.2"
+                     },
+    "devDependencies":  {
+                            "@axe-core/playwright":  "^4.9.0",
+                            "@playwright/test":  "^1.47.1",
+                            "@types/react":  "^18.3.3",
+                            "@types/react-dom":  "^18.3.1",
+                            "@vitejs/plugin-react":  "^4.3.1",
+                            "typescript":  "^5.9.3",
+                            "vite":  "^5.4.1"
+                        }
 }
