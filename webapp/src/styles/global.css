@@ -46,3 +46,47 @@ button,
  select {
   font: inherit;
 }
+
+/* ===== Status badges (a11y-compliant) ===== */
+
+/* Generic badge structure – keep whatever you already have */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .15rem .5rem;
+  border-radius: 9999px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+/* Label vs hint (hint often rendered smaller) */
+.status-badge__label { font-size: 12px; }
+.status-badge__hint  { font-size: 10.4px; }
+
+/* ACTIVE */
+.status-badge--active {
+  color: var(--status-active-fg);
+  background-color: var(--status-active-bg);
+}
+.status-badge--active > .status-badge__hint {
+  color: var(--status-active-hint-fg);
+}
+
+/* MONITORING */
+.status-badge--monitoring {
+  color: var(--status-monitor-fg);
+  background-color: var(--status-monitor-bg);
+}
+.status-badge--monitoring > .status-badge__hint {
+  color: var(--status-monitor-hint-fg);
+}
+
+/* PENDING */
+.status-badge--pending {
+  color: var(--status-pending-fg);
+  background-color: var(--status-pending-bg);
+}
+.status-badge--pending > .status-badge__hint {
+  color: var(--status-pending-hint-fg);
+}
