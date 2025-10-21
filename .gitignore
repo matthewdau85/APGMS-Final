@@ -11,3 +11,9 @@ coverage/
 .vscode/
 .env
 .env.*
+
+webapp/dist
+
+webapp/test-results
+
+*.bak
