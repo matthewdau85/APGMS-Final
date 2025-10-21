@@ -28,20 +28,22 @@ model User {
 }
 
 model BankLine {
-  id        String   @id @default(cuid())
-  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  orgId     String
-  date      DateTime
-  amount    Decimal
-  payee     String
-  desc      String
-  createdAt DateTime @default(now())
+  id              String   @id @default(cuid())
+  org             Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId           String
+  date            DateTime
+  amount          Decimal   // consider scale/precision if needed, e.g. @db.Decimal(18, 2) for Postgres
+  payee           String
+  desc            String
+  createdAt       DateTime  @default(now())
 
-  // NEW
-  idempotencyKey String?
+  // For idempotency:
+  idempotencyKey  String?   // you can also constrain length per-DB, e.g. @db.VarChar(128) on Postgres
 
-  @@unique([orgId, idempotencyKey])
+  @@unique([orgId, idempotencyKey])   // replays with same key hit this
+  @@index([orgId])                    // helpful for org queries
 }
+
 
 model OrgTombstone {
   id        String   @id @default(cuid())
