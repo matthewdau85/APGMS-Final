@@ -17,3 +17,5 @@ webapp/dist
 webapp/test-results
 
 *.bak
+
+Verify-APGMS.ps1
