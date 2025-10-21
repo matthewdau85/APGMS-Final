@@ -46,6 +46,22 @@
 
   --shadow-sm: 0 6px 18px rgba(15, 23, 42, 0.08);
   --shadow-md: 0 16px 35px rgba(15, 23, 42, 0.15);
+
+  /* ---- Status badge tokens (WCAG AA) ---- */
+  /* Active (green) */
+  --status-active-fg: #075a42;          /* darker for contrast */
+  --status-active-hint-fg: #0a5a3f;     /* hint text (smaller size) */
+  --status-active-bg: #eaf5f1;          /* lighter background */
+
+  /* Monitoring (blue) */
+  --status-monitor-fg: #1b57b8;         /* darker for contrast */
+  --status-monitor-hint-fg: #184da3;
+  --status-monitor-bg: #eef4fe;         /* lighter background */
+
+  /* Pending (orange) */
+  --status-pending-fg: #7a4900;         /* much darker for contrast */
+  --status-pending-hint-fg: #6a3f00;
+  --status-pending-bg: #fbefdb;         /* lighter background */
 }
 
 [data-theme='dark'] {
