@@ -4,11 +4,11 @@
   "version": "0.1.0",
   "workspaces": ["services/*", "webapp", "shared", "worker"],
   "scripts": {
-    "build": "pnpm -r run build",
-    "test": "pnpm -r run test",
-    "db:migrate": "pnpm --filter @apgms/shared prisma migrate dev --schema shared/prisma/schema.prisma",
-    "db:deploy": "pnpm --filter @apgms/shared prisma migrate deploy --schema shared/prisma/schema.prisma",
-    "db:gen": "pnpm --filter @apgms/shared prisma generate --schema shared/prisma/schema.prisma"
+    "db:migrate": "pnpm --filter @apgms/shared exec prisma migrate dev --schema prisma/schema.prisma",
+    "db:deploy":  "pnpm --filter @apgms/shared exec prisma migrate deploy --schema prisma/schema.prisma",
+    "db:gen":     "pnpm --filter @apgms/shared exec prisma generate --schema prisma/schema.prisma",
+    "test":       "pnpm -r test",
+    "build":      "pnpm -r build"
   },
   "devDependencies": {
     "@types/node": "^24.7.1",
