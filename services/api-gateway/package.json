@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx src/index.ts",
-    "test": "tsx --test test/privacy.spec.ts"
+    "test": "tsx --test \"test/**/*.spec.ts\""
   },
   "dependencies": {
     "@apgms/shared": "workspace:*",
