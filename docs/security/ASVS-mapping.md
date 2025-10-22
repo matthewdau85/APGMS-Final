@@ -1,1 +1,24 @@
-﻿# OWASP ASVS L2
+# OWASP ASVS L2 Mapping
+
+The table below maps OWASP Application Security Verification Standard (ASVS) v4.0 Level 2 controls to the
+corresponding features, processes, and verification activities that exist in the platform today.
+
+| Control Area | ASVS Requirement(s) | Implementation Notes | Verification Activities |
+| --- | --- | --- | --- |
+| Authentication | V2.1, V2.2 | Authentication is delegated to the Identity service which issues short-lived JWT access tokens and long-lived refresh tokens. MFA can be enforced per-tenant using TOTP or WebAuthn authenticators. Passwords are hashed using Argon2id with per-user salts. | Automated API tests validate MFA enrollment and token issuance flows. Manual review confirms Argon2id parameters (`t=3`, `m=64MiB`, `p=1`) and that lockout thresholds are set to 5 failed attempts within 15 minutes. |
+| Session Management | V3.1, V3.2 | Session state is stored in signed, encrypted cookies backed by Redis for logout propagation. Session cookies are flagged `Secure`, `HttpOnly`, and `SameSite=Strict`. Refresh tokens can be revoked individually through the admin console. | Integration tests assert cookie flags and logout propagation. Penetration test checklist includes session fixation validation. |
+| Access Control | V4.1, V4.2 | Authorization is enforced through the Policy Decision Point in the `shared/authz` module. Policies are defined in Rego and evaluated via OPA sidecar. Default-deny authorization boundary is enforced at API gateway. | Unit tests cover policy evaluation for high-risk actions (role management, export). Quarterly access reviews confirm role assignments. |
+| Input Validation & Encoding | V5.1, V5.3 | Public APIs leverage centralized validation schemas using Zod. Server-side templates encode output via React escaping rules; no raw HTML rendering is permitted. File uploads are validated for content type and size before being stored in S3. | Static analysis (eslint-plugin-security) checks for unsanitized sinks. QA team executes OWASP ZAP scans on staging for injection and XSS vectors. |
+| Cryptography | V6.1, V6.2, V6.3 | AES-256-GCM is used for at-rest encryption of sensitive fields via the KMS-managed data encryption key. TLS 1.2+ is enforced with modern cipher suites. All secrets are stored in HashiCorp Vault with automatic rotation every 90 days. | Security hardening checklist verifies TLS configuration after every infrastructure change. KMS audit logs are reviewed monthly to confirm key rotation. |
+| Error Handling & Logging | V7.1, V7.3 | Application uses structured JSON logs with correlation IDs. Security-sensitive events (auth failures, privilege changes, data exports) are emitted at `WARN` level and shipped to the SIEM. User-facing errors are sanitized to avoid leaking stack traces. | SIEM detection rules alert on >10 failed logins/minute and privilege escalations. Manual red-team exercises validate that error responses are generic. |
+| Data Protection | V8.2, V8.3, V8.4 | PII is minimized and segregated in the `services/profile` database schema. Data exports are encrypted before download and URLs expire after 15 minutes. Backups are stored encrypted with separate key hierarchy. | Data catalog review ensures fields are tagged with sensitivity levels. Backup restoration tests run quarterly with verification of encryption integrity. |
+| Communications Security | V9.1, V9.3 | All internal service-to-service traffic is mTLS via the service mesh. External email notifications are sent through a provider supporting SPF, DKIM, and DMARC alignment. | Service mesh policy unit tests ensure `STRICT` mode. Email security is validated quarterly via third-party deliverability reports. |
+| Malicious Code & Configuration Hardening | V10.1, V14.2 | Dependencies are pinned via `pnpm-lock.yaml` and scanned daily with Snyk. Containers are built from distroless images, and runtime namespaces are read-only with seccomp profiles applied. | CI pipeline fails on critical Snyk findings. Infrastructure compliance reports confirm container runtime settings. |
+| API & Business Logic | V11.1, V11.2 | Rate limiting enforced at API gateway (100 req/min per token). Business workflows implement optimistic concurrency checks to avoid race conditions. | Load tests verify rate limits. QA scripts execute abuse case scenarios (duplicate refunds, privilege transfer). |
+| Configuration & Secrets Management | V12.1, V12.4 | Configuration managed via GitOps with mandatory code review. Secrets injected at runtime via Vault leases with least privilege policies. | GitHub branch protection enforces review. Vault audit trails reviewed monthly. |
+| Security Testing | V14.1, V14.3 | CI includes SAST, dependency, and IaC scanning. Annual third-party penetration test covers web, API, and mobile channels. | Test evidence archived in the GRC repository. Findings are tracked to closure in Jira with quarterly management review. |
+
+## Maintenance
+
+This mapping is reviewed bi-annually by the security engineering team. Updates are required whenever new
+features affecting authentication, authorization, cryptography, or logging are introduced.
