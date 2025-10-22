@@ -3,7 +3,7 @@ import cors from "@fastify/cors";
 import { z } from "zod";
 import { Prisma, type Org, type User, type BankLine, type PrismaClient } from "@prisma/client";
 
-import { maskError, maskObject } from "@apgms/shared";
+import { maskError, maskObject, redact } from "@apgms/shared";
 
 const ADMIN_HEADER = "x-admin-token";
 
@@ -80,21 +80,37 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     }
   });
 
-  app.get("/users", async () => {
+  app.get("/users", async (req) => {
+    const admin = isAdminRequest(req);
     const users = await prisma.user.findMany({
-      select: { email: true, orgId: true, createdAt: true },
       orderBy: { createdAt: "desc" },
     });
-    return { users };
+    return {
+      users: users.map((user) =>
+        redact(
+          {
+            id: user.id,
+            email: user.email,
+            orgId: user.orgId,
+            createdAt: user.createdAt,
+            phone: (user as any).phone,
+            bsb: (user as any).bsb,
+            account: (user as any).account,
+          },
+          admin,
+        ),
+      ),
+    };
   });
 
   app.get("/bank-lines", async (req) => {
+    const admin = isAdminRequest(req);
     const take = Number((req.query as any).take ?? 20);
     const lines = await prisma.bankLine.findMany({
       orderBy: { date: "desc" },
       take: Math.min(Math.max(take, 1), 200),
     });
-    return { lines };
+    return { lines: lines.map((line) => redact(line as any, admin)) };
   });
 
   // --- Validated + idempotent create ---
@@ -219,6 +235,18 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   return app;
 }
 
+function isAdminRequest(req: FastifyRequest): boolean {
+  const configuredToken = process.env.ADMIN_TOKEN;
+  if (!configuredToken) {
+    return false;
+  }
+
+  const provided = req.headers[ADMIN_HEADER] ?? req.headers[ADMIN_HEADER.toUpperCase() as keyof typeof req.headers];
+  const providedValue = Array.isArray(provided) ? provided[0] : provided;
+
+  return providedValue === configuredToken;
+}
+
 function requireAdmin(req: FastifyRequest, rep: FastifyReply): boolean {
   const configuredToken = process.env.ADMIN_TOKEN;
   if (!configuredToken) {
@@ -227,10 +255,7 @@ function requireAdmin(req: FastifyRequest, rep: FastifyReply): boolean {
     return false;
   }
 
-  const provided = req.headers[ADMIN_HEADER] ?? req.headers[ADMIN_HEADER.toUpperCase() as keyof typeof req.headers];
-  const providedValue = Array.isArray(provided) ? provided[0] : provided;
-
-  if (providedValue !== configuredToken) {
+  if (!isAdminRequest(req)) {
     void rep.code(403).send({ error: "forbidden" });
     return false;
   }

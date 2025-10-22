@@ -105,3 +105,18 @@ export function maskError(err: unknown): Record<string, unknown> {
   }
   return { error: maskValue(err) };
 }
+
+export const maskEmail = (e?: string) => (e ? e.replace(/(^.).*(@.*$)/, "$1***$2") : e);
+export const maskPhone = (p?: string) => (p ? p.replace(/\d(?=\d{2})/g, "•") : p);
+export const maskBsb = (b?: string) => (b ? b.replace(/^\d{2}/, "••") : b);
+export const maskAcct = (a?: string) => (a ? a.replace(/\d(?=\d{4})/g, "•") : a);
+
+export function redact<T extends Record<string, any>>(obj: T, admin = false): T {
+  if (admin) return obj;
+  const copy = { ...obj } as Record<string, any>;
+  if ("email" in copy) copy.email = maskEmail(copy.email);
+  if ("phone" in copy) copy.phone = maskPhone(copy.phone);
+  if ("bsb" in copy) copy.bsb = maskBsb(copy.bsb);
+  if ("account" in copy) copy.account = maskAcct(copy.account);
+  return copy as T;
+}
