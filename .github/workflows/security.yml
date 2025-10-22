@@ -1,8 +1,61 @@
-﻿name: Security
-on: [push]
+name: Security
+
+on:
+  push:
+  workflow_dispatch:
+
 jobs:
-  scan:
+  scans:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: echo scanning
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate CycloneDX SBOM
+        run: |
+          mkdir -p artifacts/sbom
+          pnpm dlx @cyclonedx/cyclonedx-npm --include-workspace --output-format json --output-file artifacts/sbom/cyclonedx.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyclonedx-sbom
+          path: artifacts/sbom
+
+      - name: Run pnpm audit
+        run: pnpm audit --severity high
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          args: detect --source . --no-git --redact
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          scan-type: fs
+          scanners: vuln
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          format: sarif
+          output: trivy-results.sarif
+
+      - name: Upload Trivy report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-results
+          path: trivy-results.sarif
