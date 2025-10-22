@@ -145,3 +145,32 @@ export function registerPIIRoutes(app: FastifyInstance, guard: AdminGuard): void
     },
   );
 }
+
+const EMAIL_REDACTION = "***redacted***";
+
+export function redactEmail(email: string): string {
+  if (!email) {
+    return EMAIL_REDACTION;
+  }
+
+  const [local, domain] = email.split("@");
+  if (!domain) {
+    return EMAIL_REDACTION;
+  }
+
+  if (local.length <= 2) {
+    return `${local.charAt(0)}***@${domain}`;
+  }
+
+  const visiblePrefix = local.slice(0, 2);
+  const visibleSuffix = local.slice(-1);
+  const maskedLength = Math.max(3, local.length - 3);
+  return `${visiblePrefix}${"*".repeat(maskedLength)}${visibleSuffix}@${domain}`;
+}
+
+export function redactEmailIfNeeded(email: string, role: string): string {
+  if (role?.toLowerCase() === "admin") {
+    return email;
+  }
+  return redactEmail(email);
+}
