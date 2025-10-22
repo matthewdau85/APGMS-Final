@@ -3,6 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Keep this CSP in sync with services/api-gateway/src/app.ts.
+         Append any origins defined in CORS_ALLOWLIST to connect-src and
+         mirror the server-side nonce policy when hosting inline scripts. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; connect-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none';"
+    />
     <title>APGMS Pro+</title>
   </head>
   <body>

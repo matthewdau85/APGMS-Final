@@ -1,5 +1,7 @@
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
+import { randomBytes } from "node:crypto";
 import type { Org, User, BankLine, PrismaClient } from "@prisma/client";
 
 import { maskError, maskObject } from "@apgms/shared";
@@ -8,6 +10,12 @@ const ADMIN_HEADER = "x-admin-token";
 
 export interface CreateAppOptions {
   prisma?: PrismaClient;
+}
+
+declare module "fastify" {
+  interface FastifyReply {
+    cspNonce: string;
+  }
 }
 
 export interface AdminOrgExport {
@@ -58,7 +66,63 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 
   const app = Fastify({ logger: true });
 
-  app.register(cors, { origin: true });
+  const allowlist = parseAllowlist(process.env.CORS_ALLOWLIST);
+  const allowedOrigins = new Set(allowlist);
+  const enforceCors = allowedOrigins.size > 0;
+  const connectSources = ["'self'", ...allowlist];
+
+  app.decorateReply("cspNonce", "");
+
+  app.addHook("onRequest", (req, reply, done) => {
+    reply.cspNonce = randomBytes(16).toString("base64");
+
+    const originHeader = typeof req.headers.origin === "string" ? req.headers.origin.trim() : "";
+    const normalizedOrigin = originHeader ? normalizeOrigin(originHeader) : "";
+    if (!normalizedOrigin || !enforceCors || allowedOrigins.has(normalizedOrigin)) {
+      done();
+      return;
+    }
+
+    req.log.warn({ origin: originHeader }, "blocked disallowed origin");
+    void reply
+      .code(403)
+      .type("application/json")
+      .send({ error: "forbidden_origin" });
+    return;
+  });
+
+  await app.register(helmet, {
+    contentSecurityPolicy: {
+      useDefaults: false,
+      directives: {
+        "default-src": ["'self'"],
+        "connect-src": connectSources,
+        "script-src": [
+          "'self'",
+          (req, reply) => `'nonce-${reply.cspNonce}'`,
+        ],
+        "style-src": ["'self'", "'unsafe-inline'"],
+        "frame-ancestors": ["'none'"],
+      },
+    },
+  });
+
+  await app.register(cors, {
+    origin: (origin, cb) => {
+      if (!origin || !enforceCors) {
+        cb(null, true);
+        return;
+      }
+
+      const normalizedOrigin = normalizeOrigin(origin);
+      if (allowedOrigins.has(normalizedOrigin)) {
+        cb(null, normalizedOrigin);
+        return;
+      }
+
+      cb(null, false);
+    },
+  });
 
   app.log.info(maskObject({ DATABASE_URL: process.env.DATABASE_URL }), "loaded env");
 
@@ -169,6 +233,23 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   });
 
   return app;
+}
+
+function parseAllowlist(raw: string | undefined): string[] {
+  if (!raw) {
+    return [];
+  }
+
+  const origins = raw
+    .split(",")
+    .map((origin) => normalizeOrigin(origin.trim()))
+    .filter(Boolean);
+
+  return Array.from(new Set(origins));
+}
+
+function normalizeOrigin(origin: string): string {
+  return origin.replace(/\/+$/, "");
 }
 
 function requireAdmin(req: FastifyRequest, rep: FastifyReply): boolean {
