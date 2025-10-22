@@ -19,12 +19,13 @@ model Org {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  createdAt DateTime @default(now())
-  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  orgId     String
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  roles        String[] @default([])
+  createdAt    DateTime @default(now())
+  org          Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId        String
 }
 
 model BankLine {

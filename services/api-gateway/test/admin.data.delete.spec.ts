@@ -16,7 +16,8 @@ process.env.SHADOW_DATABASE_URL ??= "postgresql://user:pass@localhost:5432/test-
 type PrismaUser = {
   id: string;
   email: string;
-  password: string | null;
+  passwordHash: string | null;
+  roles: string[];
   createdAt: Date;
   orgId: string;
 };
@@ -130,7 +131,8 @@ describe("POST /admin/data/delete", () => {
     const user: PrismaUser = {
       id: "user-1",
       email: defaultPayload.email,
-      password: "secret",
+      passwordHash: "secret",
+      roles: ["member"],
       createdAt: new Date(),
       orgId: defaultPayload.orgId,
     };
@@ -185,7 +187,7 @@ describe("POST /admin/data/delete", () => {
     assert.equal(updateCalls.length, 1);
     const updateArgs = updateCalls[0];
     assert.match(updateArgs.data.email, /^deleted\+[a-f0-9]{12}@example.com$/);
-    assert.equal(updateArgs.data.password, "__deleted__");
+    assert.equal(updateArgs.data.passwordHash, "__deleted__");
 
     const lastLog = securityLogs.at(-1);
     assert.deepEqual(lastLog, {
@@ -201,7 +203,8 @@ describe("POST /admin/data/delete", () => {
     const user: PrismaUser = {
       id: "user-2",
       email: defaultPayload.email,
-      password: "secret",
+      passwordHash: "secret",
+      roles: ["member"],
       createdAt: new Date(),
       orgId: defaultPayload.orgId,
     };
