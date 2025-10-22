@@ -1,8 +1,30 @@
-﻿name: Security
-on: [push]
+name: Security
+
+on: [workflow_dispatch, push]
+
 jobs:
-  scan:
+  security:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: echo scanning
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+
+      # SBOM
+      - run: pnpm dlx @cyclonedx/cyclonedx-npm --output-format json --output-file sbom.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.json
+
+      # SCA (fail on high+)
+      - run: pnpm audit --prod --audit-level=high
+
+      # Secrets
+      - uses: gitleaks/gitleaks-action@v2
+        with:
+          args: "--redact --no-banner"
