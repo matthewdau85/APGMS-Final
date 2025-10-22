@@ -188,7 +188,7 @@ const adminDataRoutes: FastifyPluginAsync = async (app) => {
         where: { id: subject.id },
         data: {
           email: anonymizedEmail,
-          password: PASSWORD_PLACEHOLDER,
+          passwordHash: PASSWORD_PLACEHOLDER,
         },
       });
 
