@@ -1,0 +1,59 @@
+name: repo-audit
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".gitignore"
+      - "scripts/**"
+      - "services/**"
+      - "apps/**"
+      - "packages/**"
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.11'
+          cache: 'pnpm'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.6.0
+
+      - name: Ensure scripts folder exists
+        run: mkdir -p scripts
+
+      - name: Run repo audit
+        run: |
+          node --version
+          pnpm --version || true
+          node scripts/repo-audit.mjs | tee audit-output.txt
+        shell: bash
+
+      - name: Save report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: repo-audit-report
+          path: |
+            repo-audit-report.md
+            audit-output.txt
+          if-no-files-found: warn
+
+      - name: Append to Job Summary
+        run: |
+          echo "### APGMS Repo Audit" >> $GITHUB_STEP_SUMMARY
+          if test -f repo-audit-report.md; then
+            cat repo-audit-report.md >> $GITHUB_STEP_SUMMARY
+          else
+            echo "_No report file found; see logs._" >> $GITHUB_STEP_SUMMARY
+          fi
