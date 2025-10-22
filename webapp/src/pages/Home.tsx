@@ -1,26 +1,8 @@
-﻿import './Home.css';
-
-const metrics = [
-  {
-    title: 'Active mandates',
-    value: '24',
-    change: '+3.4% vs last week',
-    description:
-      'Structured credit and private equity deals currently tracked in the Pro+ workspace.'
-  },
-  {
-    title: 'Total committed capital',
-    value: '$4.8B',
-    change: '+$180M new commitments',
-    description: 'Aggregate bank and fund lines allocated across open portfolios.'
-  },
-  {
-    title: 'Average utilization',
-    value: '67%',
-    change: '-5.3% risk exposure',
-    description: 'Weighted utilization across all active bank lines for the current quarter.'
-  }
-];
+import './Home.css';
+import { VarianceBadge } from '../components/VarianceBadge';
+import { PaygwGauge } from '../components/PaygwGauge';
+import { DeadlineCapsule } from '../components/DeadlineCapsule';
+import { useKpiStore, useMetricList, type VarianceTone } from '../store/useKpiStore';
 
 const activities = [
   {
@@ -40,28 +22,61 @@ const activities = [
   }
 ];
 
+const resolveTone = (change: string): VarianceTone => {
+  const trimmed = change.trim();
+  if (trimmed.startsWith('-')) {
+    return 'negative';
+  }
+  if (trimmed.startsWith('+')) {
+    return 'positive';
+  }
+  return 'neutral';
+};
+
 export default function HomePage() {
+  const metrics = useMetricList();
+  const paygwCompliance = useKpiStore((state) => state.paygwCompliance);
+  const paygwVariance = useKpiStore((state) => state.paygwVariance);
+  const basLodgmentDays = useKpiStore((state) => state.basLodgmentDays);
+
   return (
     <div className="page">
       <header className="page__header">
         <h1>Portfolio pulse</h1>
         <p>
-          Monitor capital utilization, track live mandates, and surface emerging risk signals
-          across your institutional banking relationships.
+          Monitor capital utilization, track live mandates, and surface emerging risk signals across your
+          institutional banking relationships.
         </p>
       </header>
 
       <section aria-label="Key metrics" className="metric-grid">
         {metrics.map((metric) => (
-          <article className="metric-card" key={metric.title}>
+          <article className="metric-card" key={metric.id}>
             <header className="metric-card__header">
               <h2>{metric.title}</h2>
-              <span className="metric-card__change">{metric.change}</span>
+              <VarianceBadge tone={resolveTone(metric.change)}>{metric.change}</VarianceBadge>
             </header>
             <p className="metric-card__value">{metric.value}</p>
             <p className="metric-card__description">{metric.description}</p>
           </article>
         ))}
+      </section>
+
+      <section aria-label="PAYGW compliance" className="compliance">
+        <div className="compliance__body">
+          <PaygwGauge value={paygwCompliance} />
+          <div className="compliance__details">
+            <div className="compliance__badges">
+              <VarianceBadge tone={paygwVariance.tone}>{paygwVariance.label}</VarianceBadge>
+              <DeadlineCapsule daysRemaining={basLodgmentDays} label="Until BAS lodgment" />
+            </div>
+            <h2>PAYGW remittance health</h2>
+            <p>
+              Real-time withholding compliance is trending above baseline. Exceptions flagged by payroll
+              automations have dropped this cycle, keeping the team ahead of ATO lodgment requirements.
+            </p>
+          </div>
+        </div>
       </section>
 
       <section aria-label="Latest activity" className="activity">

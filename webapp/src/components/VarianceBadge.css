@@ -1,0 +1,31 @@
+.variance-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem 0.25rem 0.45rem;
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.variance-badge__icon {
+  width: 0.8rem;
+  height: 0.8rem;
+}
+
+.variance-badge--positive {
+  background: rgba(10, 125, 87, 0.15);
+  color: var(--color-success);
+}
+
+.variance-badge--negative {
+  background: rgba(196, 71, 71, 0.15);
+  color: var(--color-danger);
+}
+
+.variance-badge--neutral {
+  background: rgba(0, 90, 214, 0.12);
+  color: var(--color-text-muted);
+}

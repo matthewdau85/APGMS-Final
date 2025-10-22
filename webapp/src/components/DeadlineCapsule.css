@@ -1,0 +1,20 @@
+.deadline-capsule {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(135deg, rgba(0, 122, 255, 0.18), rgba(0, 90, 214, 0.24));
+  color: var(--color-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.deadline-capsule__icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.deadline-capsule strong {
+  font-weight: var(--font-weight-semibold);
+}

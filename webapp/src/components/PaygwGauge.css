@@ -1,0 +1,45 @@
+.paygw-gauge {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  max-width: 220px;
+  aspect-ratio: 1 / 1;
+}
+
+.paygw-gauge__svg {
+  width: 100%;
+  height: auto;
+  transform: rotate(-90deg);
+}
+
+.paygw-gauge__track {
+  fill: none;
+  stroke: rgba(86, 96, 121, 0.15);
+}
+
+.paygw-gauge__value {
+  fill: none;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 900ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.paygw-gauge__content {
+  position: absolute;
+  display: grid;
+  gap: 0.35rem;
+  place-items: center;
+}
+
+.paygw-gauge__eyebrow {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.paygw-gauge__value-label {
+  font-size: 2.5rem;
+  letter-spacing: -0.04em;
+  font-weight: var(--font-weight-semibold);
+}
