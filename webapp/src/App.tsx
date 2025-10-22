@@ -38,6 +38,10 @@ export default function App() {
 
   return (
     <div className="app">
+      <a className="skip-link" href="#main-content">
+        Skip to content
+      </a>
+      <div className="app__live-region visually-hidden" aria-live="polite" aria-atomic="true" />
       <header className="app__header">
         <div className="app__brand">APGMS Pro+</div>
         <nav className="app__nav" aria-label="Primary">
@@ -52,12 +56,12 @@ export default function App() {
           type="button"
           className="app__theme-toggle"
           onClick={() => setTheme(nextTheme)}
-          aria-label={`Switch to ${nextTheme} theme`}
         >
-          {theme === 'light' ? 'ðŸŒž' : 'ðŸŒ™'}
+          <span aria-hidden="true">{theme === 'light' ? '🌙' : '🌞'}</span>
+          <span className="visually-hidden">{`Switch to ${nextTheme} theme`}</span>
         </button>
       </header>
-      <main className="app__content">
+      <main className="app__content" id="main-content">
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/bank-lines" element={<BankLinesPage />} />
