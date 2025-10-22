@@ -1,14 +1,17 @@
-﻿import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
 import { z } from "zod";
 import { Prisma, type Org, type User, type BankLine, type PrismaClient } from "@prisma/client";
 
 import { maskError, maskObject } from "@apgms/shared";
+import { loadDefaultQueue, type QueueClient } from "./lib/queue";
+import { setupMetrics } from "./lib/metrics";
 
 const ADMIN_HEADER = "x-admin-token";
 
 export interface CreateAppOptions {
   prisma?: PrismaClient;
+  queue?: QueueClient;
 }
 
 export interface AdminOrgExport {
@@ -35,12 +38,16 @@ export interface AdminOrgExport {
 
 type ExportableOrg = Org & { users: User[]; lines: BankLine[] };
 
-type PrismaLike = Pick<
+export type PrismaLike = Pick<
   PrismaClient,
   "org" | "user" | "bankLine" | "orgTombstone" | "$transaction" | "$queryRaw"
->;
+> & {
+  $use?: PrismaClient["$use"];
+  $disconnect?: PrismaClient["$disconnect"];
+};
 
 let cachedPrisma: PrismaClient | null = null;
+let cachedQueue: QueueClient | null = null;
 
 async function loadDefaultPrisma(): Promise<PrismaLike> {
   if (!cachedPrisma) {
@@ -48,6 +55,17 @@ async function loadDefaultPrisma(): Promise<PrismaLike> {
     cachedPrisma = module.prisma;
   }
   return cachedPrisma as PrismaLike;
+}
+
+async function loadQueueClient(optionsQueue?: QueueClient): Promise<QueueClient> {
+  if (optionsQueue) {
+    cachedQueue = optionsQueue;
+    return optionsQueue;
+  }
+  if (!cachedQueue) {
+    cachedQueue = await loadDefaultQueue();
+  }
+  return cachedQueue;
 }
 
 /** Zod body schema for creating a bank line */
@@ -61,22 +79,48 @@ const CreateLine = z.object({
 
 export async function createApp(options: CreateAppOptions = {}): Promise<FastifyInstance> {
   const prisma = (options.prisma as PrismaLike | undefined) ?? (await loadDefaultPrisma());
+  const queue = await loadQueueClient(options.queue);
 
   const app = Fastify({ logger: true });
   app.register(cors, { origin: true });
 
   app.log.info(maskObject({ DATABASE_URL: process.env.DATABASE_URL }), "loaded env");
 
+  const metrics = setupMetrics(app, prisma);
+
   app.get("/health", async () => ({ ok: true, service: "api-gateway" }));
 
-  // Readiness: pings the DB
+  // Readiness: verifies DB and queue availability
   app.get("/ready", async (req, reply) => {
-    try {
-      // Raw ping; works across providers
-      await prisma.$queryRaw`SELECT 1`;
-      return reply.code(200).send({ ready: true });
-    } catch {
-      return reply.code(503).send({ ready: false });
+    const [dbResult, queueResult] = await Promise.allSettled([
+      prisma.$queryRaw`SELECT 1`,
+      queue.ping(),
+    ]);
+
+    const dbReady = dbResult.status === "fulfilled";
+    const queueReady = queueResult.status === "fulfilled";
+    const ready = dbReady && queueReady;
+
+    const statusCode = ready ? 200 : 503;
+    return reply.code(statusCode).send({
+      ready,
+      dependencies: {
+        database: dbReady,
+        queue: queueReady,
+      },
+    });
+  });
+
+  app.get("/metrics", async (_req, reply) => {
+    reply.header("Content-Type", metrics.registry.contentType);
+    return reply.send(await metrics.registry.metrics());
+  });
+  app.addHook("onClose", async () => {
+    if (typeof queue.close === "function") {
+      await queue.close();
+    }
+    if (!options.prisma && typeof prisma.$disconnect === "function") {
+      await prisma.$disconnect();
     }
   });
 
