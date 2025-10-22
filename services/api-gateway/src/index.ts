@@ -15,6 +15,22 @@ app.ready(() => {
   app.log.info(app.printRoutes());
 });
 
+const handleSignal = (signal: NodeJS.Signals) => {
+  app.log.info({ signal }, "received shutdown signal");
+  void (async () => {
+    try {
+      await app.close();
+      process.exit(0);
+    } catch (err) {
+      app.log.error({ err }, "error during shutdown");
+      process.exit(1);
+    }
+  })();
+};
+
+process.once("SIGINT", handleSignal);
+process.once("SIGTERM", handleSignal);
+
 const port = Number(process.env.PORT ?? 3000);
 const host = "0.0.0.0";
 
