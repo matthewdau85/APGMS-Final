@@ -5,4 +5,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Guard: no merge markers
+        run: |
+          if git grep -n '<<<<<<<\|=======\|>>>>>>>' -- ':!*.lock'; then
+            echo "Merge markers present"
+            exit 1
+          fi
       - run: echo scanning
