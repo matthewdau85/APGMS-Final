@@ -1,11 +1,15 @@
-﻿<<<<<<< HEAD
 import { createHash } from "node:crypto";
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyPluginAsync, FastifyRequest } from "fastify";
+
+import { createAuditLogWriter, type AuditLogWriter } from "@apgms/shared";
 import {
   adminDataDeleteRequestSchema,
   adminDataDeleteResponseSchema,
+  subjectDataExportRequestSchema,
+  subjectDataExportResponseSchema,
   type AdminDataDeleteRequest,
   type AdminDataDeleteResponse,
+  type SubjectDataExportResponse,
 } from "../schemas/admin.data";
 
 interface Principal {
@@ -16,76 +20,18 @@ interface Principal {
 }
 
 export interface SecurityLogPayload {
-  event: "data_delete";
+  event: "data_delete" | "data_export";
   orgId: string;
   principal: string;
-  subjectUserId: string;
-  mode: "anonymized" | "deleted";
+  subjectUserId?: string;
+  subjectEmail?: string;
+  mode?: "anonymized" | "deleted";
 }
 
 const PASSWORD_PLACEHOLDER = "__deleted__";
 
 type SharedDbModule = typeof import("../../../../shared/src/db.js");
-type PrismaClientLike = Pick<SharedDbModule["prisma"], "user" | "bankLine">;
-
-interface AdminDataRouteDeps {
-  prisma?: PrismaClientLike;
-  secLog?: (payload: SecurityLogPayload) => Promise<void> | void;
-}
-
-export async function registerAdminDataRoutes(
-  app: FastifyInstance,
-  deps: AdminDataRouteDeps = {}
-) {
-  const prisma = deps.prisma ?? (await getDefaultPrisma());
-  const securityLogger =
-    deps.secLog ??
-    (async (payload: SecurityLogPayload) => {
-      app.log.info({ security: payload }, "security_event");
-    });
-
-  app.post("/admin/data/delete", async (request, reply) => {
-    const principal = parseAuthorization(request);
-=======
-import { FastifyPluginAsync, FastifyRequest } from "fastify";
-import { z } from "zod";
-import {
-  subjectDataExportRequestSchema,
-  subjectDataExportResponseSchema,
-} from "../schemas/admin.data";
-
-const principalSchema = z.object({
-  id: z.string(),
-  orgId: z.string(),
-  role: z.enum(["admin", "user"]),
-  email: z.string().email(),
-});
-
-type Principal = z.infer<typeof principalSchema>;
-
-type DbClient = {
-  user: {
-    findFirst: (args: {
-      where: { email: string; orgId: string };
-      select: {
-        id: true;
-        email: true;
-        createdAt: true;
-        org: { select: { id: true; name: true } };
-      };
-    }) => Promise<
-      | {
-          id: string;
-          email: string;
-          createdAt: Date;
-          org: { id: string; name: string };
-        }
-      | null
-    >;
-  };
-  bankLine: {
-    count: (args: { where: { orgId: string } }) => Promise<number>;
-  };
+type PrismaClientLike = Pick<SharedDbModule["prisma"], "user" | "bankLine"> & {
   accessLog?: {
     create: (args: {
       data: {
@@ -98,49 +44,30 @@ type DbClient = {
   };
 };
 
-type SecLogFn = (payload: {
-  event: string;
-  orgId: string;
-  principal: string;
-  subjectEmail: string;
-}) => void;
+type AccessLogClient = NonNullable<PrismaClientLike["accessLog"]>;
 
-const parsePrincipal = (req: FastifyRequest): Principal | null => {
-  const header = req.headers.authorization;
-  if (!header) return null;
-  const match = /^Bearer\s+(.+)$/i.exec(header);
-  if (!match) return null;
-  try {
-    const decoded = Buffer.from(match[1], "base64url").toString("utf8");
-    const parsed = JSON.parse(decoded);
-    return principalSchema.parse(parsed);
-  } catch {
-    return null;
-  }
-};
+interface AdminDataRouteDeps {
+  prisma?: PrismaClientLike;
+  secLog?: (payload: SecurityLogPayload) => Promise<void> | void;
+  auditLog?: AuditLogWriter;
+  now?: () => Date;
+}
 
-const adminDataRoutes: FastifyPluginAsync = async (app) => {
-  const db: DbClient | undefined = (app as any).db;
-  if (!db) {
-    throw new Error("database client not registered");
-  }
-
-  const log: SecLogFn =
-    (app as any).secLog ??
-    ((entry) => {
-      app.log.info({ event: entry.event, ...entry }, "security_event");
+export async function registerAdminDataRoutes(
+  app: FastifyInstance,
+  deps: AdminDataRouteDeps = {},
+): Promise<void> {
+  const prisma = deps.prisma ?? (await getDefaultPrisma());
+  const securityLogger =
+    deps.secLog ??
+    (async (payload: SecurityLogPayload) => {
+      app.log.info({ security: payload }, "security_event");
     });
+  const auditLogger = deps.auditLog ?? createAuditLogWriter();
+  const now = deps.now ?? (() => new Date());
 
-  app.post("/admin/data/export", async (req, reply) => {
-    const bodyResult = subjectDataExportRequestSchema.safeParse(req.body);
-    if (!bodyResult.success) {
-      return reply.code(400).send({ error: "invalid_request" });
-    }
-
-    const body = bodyResult.data;
-
-    const principal = parsePrincipal(req);
->>>>>>> origin/codex/add-admin-gated-subject-data-export-endpoint
+  app.post("/admin/data/delete", async (request, reply) => {
+    const principal = parseAuthorization(request);
     if (!principal) {
       return reply.code(401).send({ error: "unauthorized" });
     }
@@ -149,7 +76,6 @@ const adminDataRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(403).send({ error: "forbidden" });
     }
 
-<<<<<<< HEAD
     const parsed = adminDataDeleteRequestSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "invalid_request" });
@@ -157,13 +83,10 @@ const adminDataRoutes: FastifyPluginAsync = async (app) => {
 
     const body = parsed.data;
 
-=======
->>>>>>> origin/codex/add-admin-gated-subject-data-export-endpoint
     if (principal.orgId !== body.orgId) {
       return reply.code(403).send({ error: "forbidden" });
     }
 
-<<<<<<< HEAD
     const subject = await prisma.user.findFirst({
       where: { orgId: body.orgId, email: body.email },
     });
@@ -176,10 +99,10 @@ const adminDataRoutes: FastifyPluginAsync = async (app) => {
       prisma,
       subject.id,
       subject.email,
-      subject.orgId
+      subject.orgId,
     );
 
-    const occurredAt = new Date().toISOString();
+    const occurredAt = now().toISOString();
     let response: AdminDataDeleteResponse;
 
     if (hasConstraintRisk) {
@@ -214,7 +137,103 @@ const adminDataRoutes: FastifyPluginAsync = async (app) => {
       mode: response.action,
     });
 
+    await auditLogger.write({
+      principal: principal.id,
+      action: "admin.data.delete",
+      scope: buildScope(body.orgId, subject.id),
+      timestamp: occurredAt,
+      metadata: { mode: response.action },
+    });
+
     return reply.code(202).send(response);
+  });
+
+  app.post("/admin/data/export", async (request, reply) => {
+    const principal = parseAuthorization(request);
+    if (!principal) {
+      return reply.code(401).send({ error: "unauthorized" });
+    }
+
+    if (principal.role !== "admin") {
+      return reply.code(403).send({ error: "forbidden" });
+    }
+
+    const parsed = subjectDataExportRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "invalid_request" });
+    }
+
+    const body = parsed.data;
+
+    if (principal.orgId !== body.orgId) {
+      return reply.code(403).send({ error: "forbidden" });
+    }
+
+    const userRecord = await prisma.user.findFirst({
+      where: { orgId: body.orgId, email: body.email },
+      select: {
+        id: true,
+        email: true,
+        createdAt: true,
+        org: { select: { id: true, name: true } },
+      },
+    });
+
+    if (!userRecord) {
+      return reply.code(404).send({ error: "not_found" });
+    }
+
+    const bankLinesCount = await prisma.bankLine.count({
+      where: { orgId: body.orgId },
+    });
+
+    const exportedAt = now().toISOString();
+
+    const accessLog: AccessLogClient | undefined = prisma.accessLog;
+    if (accessLog?.create) {
+      await accessLog.create({
+        data: {
+          event: "data_export",
+          orgId: body.orgId,
+          principalId: principal.id,
+          subjectEmail: body.email,
+        },
+      });
+    }
+
+    await securityLogger({
+      event: "data_export",
+      orgId: body.orgId,
+      principal: principal.id,
+      subjectEmail: body.email,
+    });
+
+    await auditLogger.write({
+      principal: principal.id,
+      action: "admin.data.export",
+      scope: buildScope(body.orgId, userRecord.id),
+      timestamp: exportedAt,
+    });
+
+    const responsePayload: SubjectDataExportResponse = {
+      org: {
+        id: userRecord.org.id,
+        name: maskOrgName(userRecord.org.name),
+      },
+      user: {
+        id: userRecord.id,
+        email: maskEmail(userRecord.email),
+        createdAt: userRecord.createdAt.toISOString(),
+      },
+      relationships: {
+        bankLinesCount,
+      },
+      exportedAt,
+    };
+
+    const validated = subjectDataExportResponseSchema.parse(responsePayload);
+
+    return reply.send(validated);
   });
 }
 
@@ -247,7 +266,7 @@ async function detectForeignKeyRisk(
   prisma: PrismaClientLike,
   userId: string,
   email: string,
-  orgId: string
+  orgId: string,
 ): Promise<boolean> {
   const relatedLines = await prisma.bankLine.count({
     where: {
@@ -277,6 +296,35 @@ function anonymizeEmail(email: string, userId: string): string {
   return `deleted+${hash.slice(0, 12)}@example.com`;
 }
 
+function maskEmail(email: string): string {
+  if (!email.includes("@")) {
+    return "xx@xx";
+  }
+  const [localPart, domainPart] = email.split("@");
+  const visibleLocal = localPart.slice(0, Math.min(2, localPart.length));
+  const maskedLocal = `${visibleLocal}${"x".repeat(Math.max(1, localPart.length - visibleLocal.length))}`;
+  const [domainLabel, ...rest] = domainPart.split(".");
+  if (!domainLabel) {
+    return `${maskedLocal}@xx`;
+  }
+  const maskedDomainLabel = `${domainLabel.slice(0, 1)}${"x".repeat(Math.max(1, domainLabel.length - 1))}`;
+  const maskedDomain = rest.length > 0 ? `${maskedDomainLabel}.${rest.join(".")}` : maskedDomainLabel;
+  return `${maskedLocal}@${maskedDomain}`;
+}
+
+function maskOrgName(name: string): string {
+  if (name.length <= 2) {
+    return `${name[0] ?? "*"}*`;
+  }
+  const first = name[0];
+  const last = name[name.length - 1];
+  return `${first}${"*".repeat(name.length - 2)}${last}`;
+}
+
+function buildScope(orgId: string, subjectId: string): string {
+  return `org:${orgId}:user:${subjectId}`;
+}
+
 let cachedDefaultPrisma: PrismaClientLike | null = null;
 
 async function getDefaultPrisma(): Promise<PrismaClientLike> {
@@ -288,67 +336,12 @@ async function getDefaultPrisma(): Promise<PrismaClientLike> {
 }
 
 export type { AdminDataDeleteRequest, AdminDataDeleteResponse };
-=======
-    const userRecord = await db.user.findFirst({
-      where: { email: body.email, orgId: body.orgId },
-      select: {
-        id: true,
-        email: true,
-        createdAt: true,
-        org: { select: { id: true, name: true } },
-      },
-    });
 
-    if (!userRecord) {
-      return reply.code(404).send({ error: "not_found" });
-    }
-
-    const bankLinesCount = await db.bankLine.count({
-      where: { orgId: body.orgId },
-    });
-
-    const exportedAt = new Date().toISOString();
-
-    if (db.accessLog?.create) {
-      await db.accessLog.create({
-        data: {
-          event: "data_export",
-          orgId: body.orgId,
-          principalId: principal.id,
-          subjectEmail: body.email,
-        },
-      });
-    }
-
-    log({
-      event: "data_export",
-      orgId: body.orgId,
-      principal: principal.id,
-      subjectEmail: body.email,
-    });
-
-    const responsePayload = {
-      org: {
-        id: userRecord.org.id,
-        name: userRecord.org.name,
-      },
-      user: {
-        id: userRecord.id,
-        email: userRecord.email,
-        createdAt: userRecord.createdAt.toISOString(),
-      },
-      relationships: {
-        bankLinesCount,
-      },
-      exportedAt,
-    };
-
-    const validated = subjectDataExportResponseSchema.parse(responsePayload);
-
-    return reply.send(validated);
-  });
+const adminDataPlugin: FastifyPluginAsync = async (app) => {
+  const prisma = ((app as any).db ?? (await getDefaultPrisma())) as PrismaClientLike;
+  const secLog = (app as any).secLog as AdminDataRouteDeps["secLog"];
+  const auditLog = (app as any).auditLog as AuditLogWriter | undefined;
+  await registerAdminDataRoutes(app, { prisma, secLog, auditLog });
 };
 
-export default adminDataRoutes;
->>>>>>> origin/codex/add-admin-gated-subject-data-export-endpoint
-
+export default adminDataPlugin;
