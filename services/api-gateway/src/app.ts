@@ -1,9 +1,11 @@
-﻿import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
 import { z } from "zod";
-import { Prisma, type Org, type User, type BankLine, type PrismaClient } from "@prisma/client";
+import type { Org, User, BankLine, PrismaClient } from "@prisma/client";
+import { Decimal } from "@prisma/client/runtime/library";
 
 import { maskError, maskObject } from "@apgms/shared";
+import { createAuthVerifier } from "./auth";
 
 const ADMIN_HEADER = "x-admin-token";
 
@@ -56,7 +58,7 @@ const CreateLine = z.object({
   amount: z.string().regex(/^-?\d+(\.\d+)?$/),     // decimal as string
   payee: z.string().min(1),
   desc: z.string().min(1),
-  orgId: z.string().min(1),
+  orgId: z.string().min(1).optional(),
 });
 
 export async function createApp(options: CreateAppOptions = {}): Promise<FastifyInstance> {
@@ -64,8 +66,16 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 
   const app = Fastify({ logger: true });
   app.register(cors, { origin: true });
+  app.decorateRequest("principal", null);
 
   app.log.info(maskObject({ DATABASE_URL: process.env.DATABASE_URL }), "loaded env");
+
+  const requireAuth = createAuthVerifier({
+    issuer: getRequiredEnv("AUTH_JWT_ISSUER"),
+    audience: getRequiredEnv("AUTH_JWT_AUDIENCE"),
+    secret: getRequiredEnv("AUTH_JWT_SECRET"),
+    prisma,
+  });
 
   app.get("/health", async () => ({ ok: true, service: "api-gateway" }));
 
@@ -80,31 +90,53 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     }
   });
 
-  app.get("/users", async () => {
+  const userSelect = { id: true, email: true, createdAt: true } as const;
+  const bankLineSelect = {
+    id: true,
+    orgId: true,
+    date: true,
+    amount: true,
+    payee: true,
+    desc: true,
+    createdAt: true,
+    idempotencyKey: true,
+  } as const;
+
+  app.get("/users", { preHandler: requireAuth }, async (req) => {
+    const principal = req.principal!;
     const users = await prisma.user.findMany({
-      select: { email: true, orgId: true, createdAt: true },
+      where: { orgId: principal.orgId },
+      select: userSelect,
       orderBy: { createdAt: "desc" },
     });
     return { users };
   });
 
-  app.get("/bank-lines", async (req) => {
+  app.get("/bank-lines", { preHandler: requireAuth }, async (req) => {
+    const principal = req.principal!;
     const take = Number((req.query as any).take ?? 20);
     const lines = await prisma.bankLine.findMany({
+      where: { orgId: principal.orgId },
       orderBy: { date: "desc" },
       take: Math.min(Math.max(take, 1), 200),
+      select: bankLineSelect,
     });
     return { lines };
   });
 
   // --- Validated + idempotent create ---
-  app.post("/bank-lines", async (req, reply) => {
+  app.post("/bank-lines", { preHandler: requireAuth }, async (req, reply) => {
+    const principal = req.principal!;
     const parsed = CreateLine.safeParse(req.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "invalid_body", details: parsed.error.flatten() });
     }
 
-    const { orgId, date, amount, payee, desc } = parsed.data;
+    const { date, amount, payee, desc } = parsed.data;
+    const targetOrgId = parsed.data.orgId ?? principal.orgId;
+    if (parsed.data.orgId && parsed.data.orgId !== principal.orgId) {
+      return reply.code(403).send({ error: "forbidden" });
+    }
     const keyHeader = (req.headers["idempotency-key"] as string | undefined)?.trim();
     const idemKey = keyHeader && keyHeader.length > 0 ? keyHeader : undefined;
 
@@ -112,19 +144,17 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       if (idemKey) {
         // Upsert on the compound unique key @@unique([orgId, idempotencyKey])
         const line = await prisma.bankLine.upsert({
-          where: { orgId_idempotencyKey: { orgId, idempotencyKey: idemKey } },
+          where: { orgId_idempotencyKey: { orgId: targetOrgId, idempotencyKey: idemKey } },
           create: {
-            orgId,
+            orgId: targetOrgId,
             date: new Date(date),
-            amount: new Prisma.Decimal(amount),
+            amount: new Decimal(amount),
             payee,
             desc,
             idempotencyKey: idemKey,
           },
           update: {}, // replay → no-op
-          select: {
-            id: true, orgId: true, date: true, amount: true, payee: true, desc: true, createdAt: true, idempotencyKey: true
-          },
+          select: bankLineSelect,
         });
 
         reply.header("Idempotency-Status", "reused");
@@ -134,15 +164,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       // No idempotency key → plain create
       const created = await prisma.bankLine.create({
         data: {
-          orgId,
+          orgId: targetOrgId,
           date: new Date(date),
-          amount: new Prisma.Decimal(amount),
+          amount: new Decimal(amount),
           payee,
           desc,
         },
-        select: {
-          id: true, orgId: true, date: true, amount: true, payee: true, desc: true, createdAt: true, idempotencyKey: true
-        },
+        select: bankLineSelect,
       });
 
       return reply.code(201).send(created);
@@ -275,4 +303,12 @@ function normaliseAmount(amount: unknown): number {
     }
   }
   return 0;
+}
+
+function getRequiredEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`${name} is not configured`);
+  }
+  return value;
 }
