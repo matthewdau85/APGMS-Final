@@ -5,6 +5,7 @@ import type { Org, User, BankLine, PrismaClient } from "@prisma/client";
 import { maskError, maskObject } from "@apgms/shared";
 
 const ADMIN_HEADER = "x-admin-token";
+const METRICS_CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8";
 
 export interface CreateAppOptions {
   prisma?: PrismaClient;
@@ -41,6 +42,8 @@ type PrismaLike = Pick<
   | "bankLine"
   | "orgTombstone"
   | "$transaction"
+  | "$disconnect"
+  | "$queryRaw"
 >;
 
 let cachedPrisma: PrismaClient | null = null;
@@ -57,12 +60,48 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   const prisma = (options.prisma as PrismaLike | undefined) ?? (await loadDefaultPrisma());
 
   const app = Fastify({ logger: true });
+  const requestMetrics: MetricsState = new Map();
 
   app.register(cors, { origin: true });
 
   app.log.info(maskObject({ DATABASE_URL: process.env.DATABASE_URL }), "loaded env");
 
   app.get("/health", async () => ({ ok: true, service: "api-gateway" }));
+
+  app.get("/ready", async (req, rep) => {
+    if (!prisma) {
+      req.log.error("prisma client not available for readiness check");
+      return rep.code(503).send({ ready: false, reason: "prisma_unavailable" });
+    }
+
+    try {
+      if (typeof prisma.$queryRaw === "function") {
+        await prisma.$queryRaw`SELECT 1`;
+      } else if (typeof prisma.$transaction === "function") {
+        await prisma.$transaction(async () => undefined);
+      } else {
+        req.log.error("prisma client does not expose a readiness probe method");
+        return rep.code(503).send({ ready: false, reason: "readiness_not_supported" });
+      }
+      return { ready: true };
+    } catch (err) {
+      req.log.error({ err: maskError(err) }, "database readiness check failed");
+      return rep.code(503).send({ ready: false, reason: "database_unreachable" });
+    }
+  });
+
+  app.get("/metrics", async (_req, rep) => {
+    rep.header("Content-Type", METRICS_CONTENT_TYPE);
+    return rep.send(formatPrometheusMetrics(requestMetrics));
+  });
+
+  app.addHook("onResponse", async (request, reply) => {
+    const route =
+      (request.routeOptions?.url as string | undefined) ??
+      ((request as unknown as { routerPath?: string }).routerPath ?? request.url);
+    const status = reply.statusCode;
+    incrementRequestMetric(requestMetrics, route, status);
+  });
 
   app.get("/users", async () => {
     const users = await prisma.user.findMany({
@@ -168,6 +207,12 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     app.log.info(app.printRoutes());
   });
 
+  app.addHook("onClose", async () => {
+    if (prisma && typeof prisma.$disconnect === "function") {
+      await prisma.$disconnect();
+    }
+  });
+
   return app;
 }
 
@@ -187,6 +232,45 @@ function requireAdmin(req: FastifyRequest, rep: FastifyReply): boolean {
     return false;
   }
   return true;
+}
+
+type MetricsState = Map<string, Map<string, number>>;
+
+function incrementRequestMetric(metrics: MetricsState, route: string, statusCode: number): void {
+  const routeKey = route ?? "unknown";
+  const statusKey = String(statusCode);
+  let counters = metrics.get(routeKey);
+  if (!counters) {
+    counters = new Map();
+    metrics.set(routeKey, counters);
+  }
+  counters.set(statusKey, (counters.get(statusKey) ?? 0) + 1);
+}
+
+function formatPrometheusMetrics(metrics: MetricsState): string {
+  const lines: string[] = [
+    "# HELP http_requests_total Total number of HTTP requests",
+    "# TYPE http_requests_total counter",
+  ];
+
+  const sortedRoutes = Array.from(metrics.keys()).sort();
+  for (const route of sortedRoutes) {
+    const counters = metrics.get(route);
+    if (!counters) continue;
+    const sortedStatuses = Array.from(counters.keys()).sort();
+    for (const status of sortedStatuses) {
+      const value = counters.get(status) ?? 0;
+      lines.push(
+        `http_requests_total{route="${escapeLabelValue(route)}",status="${escapeLabelValue(status)}"} ${value}`,
+      );
+    }
+  }
+
+  return lines.join("\n") + "\n";
+}
+
+function escapeLabelValue(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/"/g, '\\"');
 }
 
 function buildOrgExport(org: ExportableOrg): AdminOrgExport {

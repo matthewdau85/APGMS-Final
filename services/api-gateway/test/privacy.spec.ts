@@ -27,6 +27,8 @@ type PrismaLike = Pick<
   | "bankLine"
   | "orgTombstone"
   | "$transaction"
+  | "$disconnect"
+  | "$queryRaw"
 >;
 
 type Stub = {
@@ -208,6 +210,10 @@ function createPrismaStub(initial?: Partial<State>): Stub {
     $transaction: async <T>(callback: TransactionCallback<T>) => {
       return callback(client);
     },
+    $disconnect: async () => {
+      // no-op for tests
+    },
+    $queryRaw: async () => 1,
   } as unknown as PrismaLike;
 
   return { client, state };
