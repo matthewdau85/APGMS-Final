@@ -9,6 +9,8 @@
   },
   "dependencies": {
     "@apgms/shared": "workspace:*",
+    "@aws-sdk/client-kms": "^3.726.1",
+    "@aws-sdk/client-secrets-manager": "^3.726.1",
     "@fastify/cors": "^11.1.0",
     "@prisma/client": "6.17.1",
     "dotenv": "^16.6.1",
