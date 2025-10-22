@@ -23,3 +23,33 @@ app.listen({ port, host }).catch((err) => {
   process.exit(1);
 });
 
+async function shutdown(signal: NodeJS.Signals) {
+  app.log.info({ signal }, "received shutdown signal");
+
+  const timeout = setTimeout(() => {
+    app.log.error({ signal }, "shutdown timed out, forcing exit");
+    process.exit(1);
+  }, 10_000);
+  timeout.unref();
+
+  try {
+    await app.close();
+    const prisma = app.prisma as { $disconnect?: () => Promise<void> };
+    if (prisma && typeof prisma.$disconnect === "function") {
+      await prisma.$disconnect();
+    }
+    process.exit(0);
+  } catch (err) {
+    app.log.error({ err }, "failed during shutdown");
+    process.exit(1);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.once(signal, () => {
+    void shutdown(signal);
+  });
+}
+

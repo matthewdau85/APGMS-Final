@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
+import { collectDefaultMetrics, Counter, Histogram, Registry } from "prom-client";
 import type { Org, User, BankLine, PrismaClient } from "@prisma/client";
 
 import { maskError, maskObject } from "@apgms/shared";
@@ -41,7 +42,63 @@ type PrismaLike = Pick<
   | "bankLine"
   | "orgTombstone"
   | "$transaction"
->;
+  | "$disconnect"
+> & {
+  $runHealthCheck?: () => Promise<void>;
+};
+
+declare module "fastify" {
+  interface FastifyInstance {
+    prisma: PrismaLike;
+  }
+}
+
+let metricsRegistry: Registry | null = null;
+let requestCounter: Counter<"method" | "route" | "status">;
+let requestDuration: Histogram<"method" | "route" | "status">;
+
+function ensureMetrics(): {
+  registry: Registry;
+  counter: Counter<"method" | "route" | "status">;
+  duration: Histogram<"method" | "route" | "status">;
+} {
+  if (!metricsRegistry) {
+    metricsRegistry = new Registry();
+    collectDefaultMetrics({ register: metricsRegistry });
+
+    requestCounter = new Counter({
+      name: "api_gateway_requests_total",
+      help: "Total number of requests received",
+      labelNames: ["method", "route", "status"],
+      registers: [metricsRegistry],
+    });
+
+    requestDuration = new Histogram({
+      name: "api_gateway_request_duration_seconds",
+      help: "Duration of requests in seconds",
+      labelNames: ["method", "route", "status"],
+      buckets: [
+        0.005,
+        0.01,
+        0.025,
+        0.05,
+        0.1,
+        0.25,
+        0.5,
+        1,
+        2.5,
+        5,
+      ],
+      registers: [metricsRegistry],
+    });
+  }
+
+  return {
+    registry: metricsRegistry!,
+    counter: requestCounter!,
+    duration: requestDuration!,
+  };
+}
 
 let cachedPrisma: PrismaClient | null = null;
 
@@ -57,12 +114,54 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   const prisma = (options.prisma as PrismaLike | undefined) ?? (await loadDefaultPrisma());
 
   const app = Fastify({ logger: true });
+  app.decorate("prisma", prisma);
+
+  const { registry, counter, duration } = ensureMetrics();
 
   app.register(cors, { origin: true });
 
   app.log.info(maskObject({ DATABASE_URL: process.env.DATABASE_URL }), "loaded env");
 
   app.get("/health", async () => ({ ok: true, service: "api-gateway" }));
+
+  app.get("/ready", async (_req, rep) => {
+    try {
+      if (typeof prisma.$runHealthCheck === "function") {
+        await prisma.$runHealthCheck();
+      } else if (prisma.user && typeof prisma.user.findFirst === "function") {
+        await prisma.user.findFirst({ select: { id: true } });
+      }
+      return rep.code(200).send({ status: "ready" });
+    } catch (err) {
+      app.log.error({ err: maskError(err) }, "readiness check failed");
+      return rep.code(503).send({ status: "unavailable" });
+    }
+  });
+
+  app.get("/metrics", async (_req, rep) => {
+    const metrics = await registry.metrics();
+    return rep.header("Content-Type", registry.contentType).send(metrics);
+  });
+
+  app.addHook("onRequest", async (req) => {
+    (req as any)._metricsStart = process.hrtime.bigint();
+  });
+
+  app.addHook("onResponse", async (req, reply) => {
+    const start = (req as any)._metricsStart as bigint | undefined;
+    const route = req.routeOptions?.url ?? req.routerPath ?? req.raw.url ?? "unknown";
+    const status = String(reply.statusCode ?? 0);
+
+    if (start) {
+      const diff = process.hrtime.bigint() - start;
+      const seconds = Number(diff) / 1e9;
+      duration.observe({ method: req.method, route, status }, seconds);
+    } else {
+      duration.observe({ method: req.method, route, status }, 0);
+    }
+
+    counter.inc({ method: req.method, route, status });
+  });
 
   app.get("/users", async () => {
     const users = await prisma.user.findMany({

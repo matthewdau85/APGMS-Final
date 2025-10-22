@@ -17,6 +17,9 @@ importers:
       fastify:
         specifier: ^5.6.1
         version: 5.6.1
+      prom-client:
+        specifier: link:src/vendor/prom-client
+        version: link:src/vendor/prom-client
       zod:
         specifier: ^4.1.12
         version: 4.1.12
