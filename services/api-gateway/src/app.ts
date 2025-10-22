@@ -5,10 +5,19 @@ import { Prisma, type Org, type User, type BankLine, type PrismaClient } from "@
 
 import { maskError, maskObject } from "@apgms/shared";
 
-const ADMIN_HEADER = "x-admin-token";
+import { bootstrapPII } from "./lib/pii-bootstrap";
+import { requireSignedAdmin } from "./lib/admin-auth";
+import type { AwsKmsClientLike } from "./lib/providers/aws-kms";
+import type { SecretsManagerClientLike } from "./lib/providers/secrets-manager";
+import type { AuditLogger } from "./lib/pii";
 
 export interface CreateAppOptions {
   prisma?: PrismaClient;
+  pii?: {
+    kmsClient?: AwsKmsClientLike;
+    secretsClient?: SecretsManagerClientLike;
+    auditLogger?: AuditLogger;
+  };
 }
 
 export interface AdminOrgExport {
@@ -66,6 +75,12 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   app.register(cors, { origin: true });
 
   app.log.info(maskObject({ DATABASE_URL: process.env.DATABASE_URL }), "loaded env");
+
+  await bootstrapPII(app, {
+    kmsClient: options.pii?.kmsClient,
+    secretsClient: options.pii?.secretsClient,
+    auditLogger: options.pii?.auditLogger,
+  });
 
   app.get("/health", async () => ({ ok: true, service: "api-gateway" }));
 
@@ -220,21 +235,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 }
 
 function requireAdmin(req: FastifyRequest, rep: FastifyReply): boolean {
-  const configuredToken = process.env.ADMIN_TOKEN;
-  if (!configuredToken) {
-    req.log.error("ADMIN_TOKEN is not configured");
-    void rep.code(500).send({ error: "admin_config_missing" });
-    return false;
-  }
-
-  const provided = req.headers[ADMIN_HEADER] ?? req.headers[ADMIN_HEADER.toUpperCase() as keyof typeof req.headers];
-  const providedValue = Array.isArray(provided) ? provided[0] : provided;
-
-  if (providedValue !== configuredToken) {
-    void rep.code(403).send({ error: "forbidden" });
-    return false;
-  }
-  return true;
+  return requireSignedAdmin(req, rep);
 }
 
 function buildOrgExport(org: ExportableOrg): AdminOrgExport {

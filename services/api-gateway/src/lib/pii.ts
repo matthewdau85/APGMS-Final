@@ -108,6 +108,7 @@ export function decryptPII(payload: { ciphertext: string; kid: string }): string
 export interface AdminGuardResult {
   allowed: boolean;
   actorId: string;
+  reason?: "missing_config" | "unauthorized";
 }
 
 export type AdminGuard = (request: FastifyRequest) => Promise<AdminGuardResult> | AdminGuardResult;
@@ -122,6 +123,9 @@ export function registerPIIRoutes(app: FastifyInstance, guard: AdminGuard): void
 
       const decision = await guard(request);
       if (!decision.allowed) {
+        if (decision.reason === "missing_config") {
+          return reply.code(500).send({ error: "admin_config_missing" });
+        }
         return reply.code(403).send({ error: "forbidden" });
       }
 
