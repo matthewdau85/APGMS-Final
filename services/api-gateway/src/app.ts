@@ -1,5 +1,7 @@
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
+import crypto from "node:crypto";
 import type { Org, User, BankLine, PrismaClient } from "@prisma/client";
 
 import { maskError, maskObject } from "@apgms/shared";
@@ -45,6 +47,25 @@ type PrismaLike = Pick<
 
 let cachedPrisma: PrismaClient | null = null;
 
+declare module "fastify" {
+  interface FastifyReply {
+    scriptNonce?: string;
+  }
+}
+
+function parseAllowlist(rawAllowlist: string | undefined): Set<string> {
+  return new Set(
+    (rawAllowlist ?? "")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter((origin) => origin.length > 0),
+  );
+}
+
+function createScriptNonce(): string {
+  return crypto.randomBytes(16).toString("base64");
+}
+
 async function loadDefaultPrisma(): Promise<PrismaLike> {
   if (!cachedPrisma) {
     const module = (await import("@apgms/shared/src/db")) as { prisma: PrismaClient };
@@ -58,7 +79,57 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 
   const app = Fastify({ logger: true });
 
-  app.register(cors, { origin: true });
+  const corsAllowlist = parseAllowlist(process.env.CORS_ALLOWLIST);
+
+  app.addHook("onRequest", (req, reply, done) => {
+    reply.scriptNonce = createScriptNonce();
+
+    const originHeader = req.headers.origin;
+    if (originHeader && !corsAllowlist.has(originHeader)) {
+      reply
+        .code(403)
+        .send({ error: "origin_forbidden" })
+        .catch((err) => req.log.error({ err: maskError(err) }, "failed to send cors error"));
+      return;
+    }
+
+    done();
+  });
+
+  await app.register(cors, {
+    origin: (origin, cb) => {
+      if (!origin) {
+        cb(null, true);
+        return;
+      }
+
+      if (corsAllowlist.has(origin)) {
+        cb(null, true);
+        return;
+      }
+
+      cb(null, false);
+    },
+  });
+
+  await app.register(helmet, {
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        connectSrc: ["'self'", ...corsAllowlist],
+        frameAncestors: ["'none'"],
+        scriptSrc: [
+          "'self'",
+          (_req, res) => {
+            const nonce = res.scriptNonce ?? createScriptNonce();
+            res.scriptNonce = nonce;
+            return `'nonce-${nonce}'`;
+          },
+        ],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+      },
+    },
+  });
 
   app.log.info(maskObject({ DATABASE_URL: process.env.DATABASE_URL }), "loaded env");
 
