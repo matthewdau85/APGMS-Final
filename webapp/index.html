@@ -3,6 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Keep this CSP in sync with services/api-gateway/src/app.ts -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; connect-src 'self'; script-src 'self' 'nonce-__NONCE__'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"
+    />
     <title>APGMS Pro+</title>
   </head>
   <body>

@@ -1,5 +1,7 @@
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
+import { randomBytes } from "node:crypto";
 import type { Org, User, BankLine, PrismaClient } from "@prisma/client";
 
 import { maskError, maskObject } from "@apgms/shared";
@@ -43,6 +45,16 @@ type PrismaLike = Pick<
   | "$transaction"
 >;
 
+declare module "fastify" {
+  interface FastifyRequest {
+    nonce?: string;
+  }
+
+  interface FastifyReply {
+    locals?: Record<string, unknown>;
+  }
+}
+
 let cachedPrisma: PrismaClient | null = null;
 
 async function loadDefaultPrisma(): Promise<PrismaLike> {
@@ -58,9 +70,67 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 
   const app = Fastify({ logger: true });
 
-  app.register(cors, { origin: true });
+  const rawCorsAllowlist = process.env.CORS_ALLOWLIST ?? "";
+  const corsAllowlist = rawCorsAllowlist
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+  const corsAllowlistSet = new Set(corsAllowlist);
 
-  app.log.info(maskObject({ DATABASE_URL: process.env.DATABASE_URL }), "loaded env");
+  app.addHook("onRequest", (req, reply, done) => {
+    const nonce = randomBytes(16).toString("base64");
+    req.nonce = nonce;
+    reply.locals = { ...(reply.locals ?? {}), cspNonce: nonce };
+    done();
+  });
+
+  app.register(cors, {
+    origin: (origin, cb) => {
+      if (!origin) {
+        cb(null, true);
+        return;
+      }
+
+      if (corsAllowlistSet.has(origin)) {
+        cb(null, true);
+        return;
+      }
+
+      const error = new Error("Origin not allowed") as Error & { statusCode?: number };
+      error.statusCode = 403;
+      cb(error, false);
+    },
+  });
+
+  app.register(helmet, {
+    contentSecurityPolicy: {
+      directives: {
+        "default-src": ["'self'"],
+        "connect-src": ["'self'", ...corsAllowlist],
+        "script-src": [
+          "'self'",
+          (request) => `'nonce-${request.nonce ?? ""}'`,
+        ],
+        "style-src": ["'self'", "'unsafe-inline'"],
+        "frame-ancestors": ["'none'"],
+      },
+    },
+  });
+
+  app.setErrorHandler((error, request, reply) => {
+    if (error && (error as { statusCode?: number }).statusCode === 403 && error.message === "Origin not allowed") {
+      request.log.warn({ origin: request.headers.origin }, "blocked origin by CORS policy");
+      void reply.code(403).send({ error: "cors_forbidden" });
+      return;
+    }
+
+    void reply.send(error);
+  });
+
+  app.log.info(
+    maskObject({ DATABASE_URL: process.env.DATABASE_URL, CORS_ALLOWLIST: corsAllowlist.join(",") }),
+    "loaded env",
+  );
 
   app.get("/health", async () => ({ ok: true, service: "api-gateway" }));
 
