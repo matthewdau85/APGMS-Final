@@ -1,20 +1,24 @@
-﻿import { test } from "node:test";
+import { test } from "node:test";
 import assert from "node:assert/strict";
 import Fastify from "fastify";
-import adminDataRoutes from "../src/routes/admin.data";
+
+import {
+  registerAdminDataRoutes,
+  type SecurityLogPayload,
+} from "../src/routes/admin.data";
 import { subjectDataExportResponseSchema } from "../src/schemas/admin.data";
 
 type DbOverrides = {
-  userFindFirst?: DbClient["user"]["findFirst"];
-  bankLineCount?: DbClient["bankLine"]["count"];
-  accessLogCreate?: NonNullable<DbClient["accessLog"]>["create"];
+  userFindFirst?: PrismaStub["user"]["findFirst"];
+  bankLineCount?: PrismaStub["bankLine"]["count"];
+  accessLogCreate?: NonNullable<PrismaStub["accessLog"]>["create"];
 };
 
-type DbClient = {
+type PrismaStub = {
   user: {
     findFirst: (args: {
       where: { email: string; orgId: string };
-      select: {
+      select?: {
         id: true;
         email: true;
         createdAt: true;
@@ -25,6 +29,7 @@ type DbClient = {
           id: string;
           email: string;
           createdAt: Date;
+          orgId: string;
           org: { id: string; name: string };
         }
       | null
@@ -33,7 +38,7 @@ type DbClient = {
   bankLine: {
     count: (args: { where: { orgId: string } }) => Promise<number>;
   };
-  accessLog: {
+  accessLog?: {
     create: (args: {
       data: {
         event: string;
@@ -45,7 +50,7 @@ type DbClient = {
   };
 };
 
-const buildTestDb = (overrides: DbOverrides = {}): DbClient => ({
+const buildTestDb = (overrides: DbOverrides = {}): PrismaStub => ({
   user: {
     findFirst:
       overrides.userFindFirst ??
@@ -53,37 +58,31 @@ const buildTestDb = (overrides: DbOverrides = {}): DbClient => ({
         id: "user-1",
         email: "subject@example.com",
         createdAt: new Date("2023-01-01T00:00:00.000Z"),
+        orgId: "org-123",
         org: { id: "org-123", name: "Example Org" },
       })),
   },
   bankLine: {
     count: overrides.bankLineCount ?? (async () => 0),
   },
-  accessLog: {
-    create: overrides.accessLogCreate ?? (async () => ({})),
-  },
+  accessLog: overrides.accessLogCreate
+    ? { create: overrides.accessLogCreate }
+    : { create: async () => ({}) },
 });
 
 const buildToken = (principal: {
   id: string;
   orgId: string;
   role: "admin" | "user";
-  email: string;
+  email?: string;
 }) => `Bearer ${Buffer.from(JSON.stringify(principal)).toString("base64url")}`;
 
 const buildApp = async (
-  db: DbClient,
-  secLog: (entry: {
-    event: string;
-    orgId: string;
-    principal: string;
-    subjectEmail: string;
-  }) => void = () => {}
+  db: PrismaStub,
+  secLog: (entry: SecurityLogPayload) => void | Promise<void> = () => {}
 ) => {
   const app = Fastify();
-  app.decorate("db", db);
-  app.decorate("secLog", secLog);
-  await app.register(adminDataRoutes);
+  await registerAdminDataRoutes(app, { prisma: db as any, secLog });
   await app.ready();
   return app;
 };
@@ -143,7 +142,7 @@ test("404 when subject is missing", async () => {
 
 test("200 returns expected export bundle", async () => {
   const accessLogCalls: unknown[] = [];
-  const secLogCalls: unknown[] = [];
+  const secLogCalls: SecurityLogPayload[] = [];
   const app = await buildApp(
     buildTestDb({
       bankLineCount: async () => 5,
@@ -151,6 +150,7 @@ test("200 returns expected export bundle", async () => {
         id: "user-99",
         email: "subject@example.com",
         createdAt: new Date("2022-05-05T00:00:00.000Z"),
+        orgId: "org-123",
         org: { id: "org-123", name: "Example Org" },
       }),
       accessLogCreate: async (args) => {
