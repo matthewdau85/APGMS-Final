@@ -44,6 +44,9 @@ const statusLabels: Record<LineStatus, string> = {
   Monitoring: 'Watch closely'
 };
 
+const getUtilizationSummary = (line: BankLine) =>
+  `${line.bank} is utilizing ${line.utilization} of its ${line.limit} credit line.`;
+
 export default function BankLinesPage() {
   return (
     <div className="bank-lines">
@@ -62,7 +65,7 @@ export default function BankLinesPage() {
 
       <div className="bank-lines__table-wrapper">
         <table>
-          <caption className="sr-only">Breakdown of bank line utilization and statuses</caption>
+          <caption className="visually-hidden">Breakdown of bank line utilization and statuses</caption>
           <thead>
             <tr>
               <th scope="col">Lender</th>
@@ -87,6 +90,7 @@ export default function BankLinesPage() {
                         style={{ width: line.utilization }}
                       />
                     </div>
+                    <span className="visually-hidden">{getUtilizationSummary(line)}</span>
                   </div>
                 </td>
                 <td>
