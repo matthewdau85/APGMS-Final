@@ -1,40 +1,11 @@
-﻿import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+
+import { type AuditLogger, type KeyManagementService, type TokenSaltProvider } from "@apgms/shared/pii";
 
 const AES_ALGORITHM = "aes-256-gcm";
 const AES_IV_LENGTH = 12;
 const AES_AUTH_TAG_LENGTH = 16;
-
-export interface EncryptionKey {
-  kid: string;
-  material: Buffer;
-}
-
-export interface KeyManagementService {
-  getActiveKey(): EncryptionKey;
-  getKeyById(kid: string): EncryptionKey | undefined;
-}
-
-export interface SaltMaterial {
-  sid: string;
-  secret: Buffer;
-}
-
-export interface TokenSaltProvider {
-  getActiveSalt(): SaltMaterial;
-  getSaltById(id: string): SaltMaterial | undefined;
-}
-
-export interface AuditEvent {
-  actorId: string;
-  action: string;
-  timestamp: string;
-  metadata?: Record<string, unknown>;
-}
-
-export interface AuditLogger {
-  record(event: AuditEvent): void | Promise<void>;
-}
 
 interface PIIContext {
   kms: KeyManagementService;
@@ -112,6 +83,13 @@ export interface AdminGuardResult {
 
 export type AdminGuard = (request: FastifyRequest) => Promise<AdminGuardResult> | AdminGuardResult;
 
+export class AdminGuardConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AdminGuardConfigurationError";
+  }
+}
+
 export function registerPIIRoutes(app: FastifyInstance, guard: AdminGuard): void {
   app.post(
     "/admin/pii/decrypt",
@@ -120,7 +98,16 @@ export function registerPIIRoutes(app: FastifyInstance, guard: AdminGuard): void
         return reply.code(500).send({ error: "pii_unconfigured" });
       }
 
-      const decision = await guard(request);
+      let decision: AdminGuardResult;
+      try {
+        decision = await guard(request);
+      } catch (error) {
+        request.log.error({ err: error }, "admin guard failed");
+        if (error instanceof AdminGuardConfigurationError) {
+          return reply.code(500).send({ error: "admin_config_missing" });
+        }
+        return reply.code(500).send({ error: "guard_failed" });
+      }
       if (!decision.allowed) {
         return reply.code(403).send({ error: "forbidden" });
       }
@@ -140,9 +127,9 @@ export function registerPIIRoutes(app: FastifyInstance, guard: AdminGuard): void
         });
         return reply.code(200).send({ value });
       } catch (error) {
+        request.log.warn({ err: error }, "failed to decrypt pii payload");
         return reply.code(400).send({ error: "invalid_payload" });
       }
     },
   );
 }
-

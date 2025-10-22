@@ -8,11 +8,14 @@ import {
   encryptPII,
   registerPIIRoutes,
   tokenizeTFN,
+  AdminGuardConfigurationError,
+} from "../src/lib/pii";
+import {
   type AuditEvent,
   type AuditLogger,
   type KeyManagementService,
   type TokenSaltProvider,
-} from "../src/lib/pii";
+} from "@apgms/shared/pii";
 import { isValidABN } from "@apgms/shared-au/abn";
 import { isValidTFN } from "@apgms/shared-au/tfn";
 
@@ -121,6 +124,49 @@ describe("admin decryption", () => {
 
     assert.equal(response.statusCode, 403);
     assert.equal(events.length, 0);
+
+    await app.close();
+  });
+
+  it("returns 500 when the admin guard is misconfigured", async () => {
+    const app = Fastify();
+    registerPIIRoutes(
+      app,
+      () => {
+        throw new AdminGuardConfigurationError("missing token");
+      },
+    );
+    await app.ready();
+
+    const secret = encryptPII("payload");
+    const response = await app.inject({
+      method: "POST",
+      url: "/admin/pii/decrypt",
+      payload: secret,
+    });
+
+    assert.equal(response.statusCode, 500);
+    assert.deepEqual(response.json(), { error: "admin_config_missing" });
+
+    await app.close();
+  });
+
+  it("returns a guard failure when the guard throws", async () => {
+    const app = Fastify();
+    registerPIIRoutes(app, () => {
+      throw new Error("boom");
+    });
+    await app.ready();
+
+    const secret = encryptPII("payload");
+    const response = await app.inject({
+      method: "POST",
+      url: "/admin/pii/decrypt",
+      payload: secret,
+    });
+
+    assert.equal(response.statusCode, 500);
+    assert.deepEqual(response.json(), { error: "guard_failed" });
 
     await app.close();
   });
