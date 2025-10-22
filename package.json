@@ -8,7 +8,8 @@
     "db:deploy":  "pnpm --filter @apgms/shared exec prisma migrate deploy --schema prisma/schema.prisma",
     "db:gen":     "pnpm --filter @apgms/shared exec prisma generate --schema prisma/schema.prisma",
     "test":       "pnpm -r test",
-    "build":      "pnpm -r build"
+    "build":      "pnpm -r build",
+    "typecheck:webapp": "pnpm --filter @apgms/webapp exec tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^24.7.1",

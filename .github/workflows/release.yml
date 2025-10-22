@@ -1,0 +1,122 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag or ref to build
+        required: false
+
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || (github.event.release && github.event.release.tag_name) || github.ref_name || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  publish-artifacts:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Determine release ref
+        id: release_meta
+        run: |
+          tag="${{ github.event.release.tag_name || '' }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            tag="${{ inputs.tag }}"
+          fi
+          if [ -z "$tag" ]; then
+            tag="${{ github.ref_name }}"
+          fi
+          if [ -z "$tag" ]; then
+            echo "::error::Unable to determine release tag. Provide one via the workflow dispatch input." >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release_meta.outputs.tag }}
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps
+      - run: pnpm -r build
+      - run: pnpm -r test
+      - run: pnpm typecheck:webapp
+      - name: Package webapp build
+        run: |
+          mkdir -p release-artifacts
+          tar -czf release-artifacts/webapp-dist.tar.gz -C webapp dist
+      - name: Generate checksum
+        run: sha256sum release-artifacts/webapp-dist.tar.gz > release-artifacts/webapp-dist.sha256
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          output-file: release-artifacts/webapp-dist.sbom.spdx.json
+      - uses: sigstore/cosign-installer@v3.5.0
+      - name: Sign artifacts
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: |
+          cosign sign-blob --yes --output-signature release-artifacts/webapp-dist.sig --output-certificate release-artifacts/webapp-dist.pem release-artifacts/webapp-dist.tar.gz
+          cosign sign-blob --yes --output-signature release-artifacts/webapp-dist.sbom.sig --output-certificate release-artifacts/webapp-dist.sbom.pem release-artifacts/webapp-dist.sbom.spdx.json
+      - name: Verify signatures
+        env:
+          WORKFLOW_IDENTITY: https://github.com/${{ github.workflow_ref }}
+        run: |
+          cosign verify-blob \
+            --certificate release-artifacts/webapp-dist.pem \
+            --signature release-artifacts/webapp-dist.sig \
+            --certificate-identity "${WORKFLOW_IDENTITY}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            release-artifacts/webapp-dist.tar.gz
+          cosign verify-blob \
+            --certificate release-artifacts/webapp-dist.sbom.pem \
+            --signature release-artifacts/webapp-dist.sbom.sig \
+            --certificate-identity "${WORKFLOW_IDENTITY}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            release-artifacts/webapp-dist.sbom.spdx.json
+      - name: Generate SLSA provenance
+        uses: slsa-framework/slsa-github-generator/actions/run-slsa-generic@v1.10.0
+        with:
+          artifact_path: release-artifacts/webapp-dist.tar.gz
+          artifact_name: webapp-dist.tar.gz
+          provenance_name: webapp-dist.intoto.jsonl
+      - name: Bundle provenance artifact
+        run: mv webapp-dist.intoto.jsonl release-artifacts/
+      - uses: slsa-framework/slsa-verifier/actions/install@v2.5.1
+      - name: Verify provenance
+        env:
+          SOURCE_URI: github.com/${{ github.repository }}
+          WORKFLOW_URI: github.com/${{ github.workflow_ref }}
+        run: |
+          slsa-verifier verify-artifact \
+            --provenance-path release-artifacts/webapp-dist.intoto.jsonl \
+            --source-uri "${SOURCE_URI}" \
+            --workflow-uri "${WORKFLOW_URI}" \
+            --builder-id https://github.com/slsa-framework/slsa-github-generator/actions/run-slsa-generic@v1 \
+            release-artifacts/webapp-dist.tar.gz
+      - name: Publish release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_meta.outputs.tag }}
+          files: |
+            release-artifacts/webapp-dist.tar.gz
+            release-artifacts/webapp-dist.sha256
+            release-artifacts/webapp-dist.sig
+            release-artifacts/webapp-dist.pem
+            release-artifacts/webapp-dist.sbom.spdx.json
+            release-artifacts/webapp-dist.sbom.sig
+            release-artifacts/webapp-dist.sbom.pem
+            release-artifacts/webapp-dist.intoto.jsonl
+          fail_on_unmatched_files: true

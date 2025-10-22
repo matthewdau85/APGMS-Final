@@ -1,8 +1,187 @@
-﻿name: Security
-on: [push]
+name: Security
+
+on:
+  push:
+    branches: ["main", "work", "master"]
+  pull_request:
+  schedule:
+    - cron: "30 5 * * 1"
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  scan:
+  dependency-review:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
-      - run: echo scanning
+      - uses: actions/dependency-review-action@v4
+
+  supply-chain-audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Audit dependencies
+        id: pnpm-audit
+        run: |
+          set -eo pipefail
+          scopes=(prod dev)
+          status=0
+          for scope in "${scopes[@]}"; do
+            file="audit-${scope}.json"
+            pnpm audit --${scope} --json >"${file}" || true
+            if jq -e '.error.code == "ERR_PNPM_AUDIT_BAD_RESPONSE"' "${file}" >/dev/null 2>&1; then
+              echo "::warning::pnpm ${scope} audit API unavailable; skipping failure for this run"
+              continue
+            fi
+            severe=$(jq '[.vulnerabilities[]? | (.severity // .data?.severity // "") | ascii_downcase | select(. == "high" or . == "critical")] | length' "${file}")
+            if [ "${severe}" -gt 0 ]; then
+              echo "::error::Found ${severe} high or critical vulnerabilities in ${scope} dependencies"
+              cat "${file}"
+              status=1
+            fi
+          done
+          exit ${status}
+      - name: Upload audit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pnpm-audit-reports
+          path: |
+            audit-prod.json
+            audit-dev.json
+
+  trivy-scan:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan dependencies with Trivy
+        uses: aquasecurity/trivy-action@v0.22.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-results.sarif
+          severity: HIGH,CRITICAL
+      - name: Upload Trivy report
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+
+  container-scan:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      matrix:
+        include:
+          - name: api-gateway
+            dockerfile: services/api-gateway/Dockerfile
+          - name: tax-engine
+            dockerfile: services/tax-engine/Dockerfile
+          - name: webapp
+            dockerfile: apps/webapp/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build container image
+        run: docker build -f ${{ matrix.dockerfile }} -t local/${{ matrix.name }}:ci .
+      - name: Scan container image with Trivy
+        uses: aquasecurity/trivy-action@v0.22.0
+        with:
+          scan-type: image
+          image-ref: local/${{ matrix.name }}:ci
+          format: sarif
+          output: trivy-${{ matrix.name }}.sarif
+          severity: HIGH,CRITICAL
+      - name: Upload Trivy image report
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-${{ matrix.name }}.sarif
+
+  sbom:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: anchore/sbom-action@v0
+        with:
+          path: .
+          output-file: sbom.spdx.json
+      - uses: sigstore/cosign-installer@v3.5.0
+      - name: Sign SBOM
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: cosign sign-blob --yes --output-signature sbom.spdx.sig --output-certificate sbom.spdx.pem sbom.spdx.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom-spdx
+          path: sbom.spdx.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom-signature
+          path: |
+            sbom.spdx.sig
+            sbom.spdx.pem
+
+  secret-scan:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan for committed secrets
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          args: detect --source=. --no-git --redact --report-format sarif --report-path gitleaks.sarif
+      - name: Upload Gitleaks report
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: gitleaks.sarif
+
+  scorecard:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      security-events: write
+    steps:
+      - uses: ossf/scorecard-action@v2.3.3
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+      - uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
