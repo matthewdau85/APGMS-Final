@@ -2,13 +2,14 @@
   "name": "apgms",
   "private": true,
   "version": "0.1.0",
-  "workspaces": ["services/*", "webapp", "shared", "worker"],
+  "workspaces": ["services/*", "apps/*", "shared", "worker"],
   "scripts": {
     "db:migrate": "pnpm --filter @apgms/shared exec prisma migrate dev --schema prisma/schema.prisma",
     "db:deploy":  "pnpm --filter @apgms/shared exec prisma migrate deploy --schema prisma/schema.prisma",
     "db:gen":     "pnpm --filter @apgms/shared exec prisma generate --schema prisma/schema.prisma",
     "test":       "pnpm -r test",
-    "build":      "pnpm -r build"
+    "build":      "pnpm -r build",
+    "preview:web": "pnpm --filter @apgms/webapp preview"
   },
   "devDependencies": {
     "@types/node": "^24.7.1",
