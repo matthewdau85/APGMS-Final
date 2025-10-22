@@ -1,4 +1,5 @@
-﻿import './BankLines.css';
+import './BankLines.css';
+import StatusBadge from '../components/ui/StatusBadge';
 
 type LineStatus = 'Active' | 'Pending' | 'Monitoring';
 
@@ -90,10 +91,11 @@ export default function BankLinesPage() {
                   </div>
                 </td>
                 <td>
-                  <span className={`status-badge status-badge--${line.status.toLowerCase()}`}>
-                    <span className="status-badge__label">{line.status}</span>
-                    <span className="status-badge__hint">{statusLabels[line.status]}</span>
-                  </span>
+                  <StatusBadge
+                    variant={line.status.toLowerCase() as 'active' | 'monitoring' | 'pending'}
+                    label={line.status}
+                    hint={statusLabels[line.status]}
+                  />
                 </td>
                 <td>{line.updated}</td>
                 <td>{line.notes}</td>
