@@ -1,0 +1,24 @@
+.focus-card__summary {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  line-height: var(--font-lineheight-relaxed);
+}
+
+.focus-card__list-label {
+  color: var(--color-text-muted);
+}
+
+.focus-card__list-value {
+  font-weight: var(--font-weight-medium);
+}
+
+.focus-card__list-value--strong {
+  font-size: var(--font-size-lg);
+  letter-spacing: -0.01em;
+  font-weight: var(--font-weight-semibold);
+}
+
+.focus-card__footer {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
