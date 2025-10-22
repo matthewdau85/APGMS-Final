@@ -1,4 +1,8 @@
-import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
+import Fastify, {
+  type FastifyInstance,
+  type FastifyReply,
+  type FastifyRequest,
+} from "fastify";
 import cors from "@fastify/cors";
 import type { Org, User, BankLine, PrismaClient } from "@prisma/client";
 
@@ -43,6 +47,12 @@ type PrismaLike = Pick<
   | "$transaction"
 >;
 
+type PrismaWithHealthChecks = PrismaLike & {
+  $queryRaw?: (...args: unknown[]) => Promise<unknown>;
+  $queryRawUnsafe?: (...args: unknown[]) => Promise<unknown>;
+  $runCommandRaw?: (...args: unknown[]) => Promise<unknown>;
+};
+
 let cachedPrisma: PrismaClient | null = null;
 
 async function loadDefaultPrisma(): Promise<PrismaLike> {
@@ -55,14 +65,33 @@ async function loadDefaultPrisma(): Promise<PrismaLike> {
 
 export async function createApp(options: CreateAppOptions = {}): Promise<FastifyInstance> {
   const prisma = (options.prisma as PrismaLike | undefined) ?? (await loadDefaultPrisma());
+  const prismaWithHealth = prisma as PrismaWithHealthChecks;
 
   const app = Fastify({ logger: true });
+
+  app.decorate("prisma", prisma);
+
+  const routeStatusCounters = new Map<string, number>();
 
   app.register(cors, { origin: true });
 
   app.log.info(maskObject({ DATABASE_URL: process.env.DATABASE_URL }), "loaded env");
 
   app.get("/health", async () => ({ ok: true, service: "api-gateway" }));
+
+  app.get("/ready", async (req, rep) => {
+    try {
+      await ensurePrismaReady(prismaWithHealth);
+      return rep.code(200).send({ ready: true });
+    } catch (error) {
+      req.log.error({ err: maskError(error) }, "prisma readiness check failed");
+      const reason =
+        error instanceof Error && error.message === "prisma_health_check_unavailable"
+          ? error.message
+          : "prisma_unavailable";
+      return rep.code(503).send({ ready: false, reason });
+    }
+  });
 
   app.get("/users", async () => {
     const users = await prisma.user.findMany({
@@ -164,6 +193,21 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     return rep.send({ status: "deleted", deletedAt: deletedAt.toISOString() });
   });
 
+  app.get("/metrics", async (_req, rep) => {
+    const payload = formatMetrics(routeStatusCounters);
+    return rep
+      .header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+      .send(payload);
+  });
+
+  app.addHook("onResponse", async (req, reply) => {
+    const method = req.method;
+    const route = resolveRoute(req);
+    const status = reply.statusCode;
+    const key = `${method}|${route}|${status}`;
+    routeStatusCounters.set(key, (routeStatusCounters.get(key) ?? 0) + 1);
+  });
+
   app.ready(() => {
     app.log.info(app.printRoutes());
   });
@@ -229,4 +273,63 @@ function normaliseAmount(amount: unknown): number {
     }
   }
   return 0;
+}
+
+async function ensurePrismaReady(prisma: PrismaWithHealthChecks): Promise<void> {
+  if (typeof prisma.$queryRaw === "function") {
+    await prisma.$queryRaw`SELECT 1`;
+    return;
+  }
+  if (typeof prisma.$queryRawUnsafe === "function") {
+    await prisma.$queryRawUnsafe("SELECT 1");
+    return;
+  }
+  if (typeof prisma.$runCommandRaw === "function") {
+    await prisma.$runCommandRaw({ ping: 1 });
+    return;
+  }
+  if (typeof prisma.$transaction === "function") {
+    await prisma.$transaction(async () => null);
+    return;
+  }
+  throw new Error("prisma_health_check_unavailable");
+}
+
+function formatMetrics(counters: Map<string, number>): string {
+  const lines: string[] = [
+    "# HELP api_route_status_total Count of HTTP responses by route, method, and status.",
+    "# TYPE api_route_status_total counter",
+  ];
+
+  const entries = Array.from(counters.entries()).map(([key, value]) => {
+    const [method, route, status] = key.split("|");
+    return { method, route, status, value };
+  });
+
+  entries.sort((a, b) => {
+    if (a.route !== b.route) {
+      return a.route.localeCompare(b.route);
+    }
+    if (a.method !== b.method) {
+      return a.method.localeCompare(b.method);
+    }
+    return Number(a.status) - Number(b.status);
+  });
+
+  for (const entry of entries) {
+    lines.push(
+      `api_route_status_total{method="${escapeLabelValue(entry.method)}",route="${escapeLabelValue(entry.route)}",status="${escapeLabelValue(entry.status)}"} ${entry.value}`,
+    );
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
+function escapeLabelValue(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/"/g, '\\"');
+}
+
+function resolveRoute(req: FastifyRequest): string {
+  const asAny = req as FastifyRequest & { routeOptions?: { url?: string } };
+  return req.routerPath ?? asAny.routeOptions?.url ?? req.url;
 }
