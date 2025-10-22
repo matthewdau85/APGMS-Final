@@ -1,13 +1,21 @@
 name: CI
 
-on: [push, pull_request]
+on:
+  push:
+    branches: ["main", "work", "master"]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * *"
 
-defaults:
-  run:
-    working-directory: apgms
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
+    permissions:
+      contents: read
+      id-token: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,16 +24,41 @@ jobs:
           version: 9
       - uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          cache: 'pnpm'
-          cache-dependency-path: apgms/pnpm-lock.yaml
-      - run: pnpm install
+          node-version: "18"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps
       - run: pnpm -r build
       - run: pnpm -r test
+      - name: Package webapp build
+        run: |
+          mkdir -p build-artifacts
+          tar -czf build-artifacts/webapp-dist.tar.gz -C webapp dist
+      - name: Record build checksum
+        run: sha256sum build-artifacts/webapp-dist.tar.gz > build-artifacts/webapp-dist.sha256
+      - name: Install cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@v3.5.0
+      - name: Sign webapp build
+        if: github.event_name != 'pull_request'
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: cosign sign-blob --yes --output-signature build-artifacts/webapp-dist.sig --output-certificate build-artifacts/webapp-dist.pem build-artifacts/webapp-dist.tar.gz
+      - name: Upload webapp build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: webapp-dist
+          path: build-artifacts/*
+          if-no-files-found: error
 
   axe:
-    needs: build
+    needs: [build, typecheck]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,15 +67,20 @@ jobs:
           version: 9
       - uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          cache: 'pnpm'
-          cache-dependency-path: apgms/pnpm-lock.yaml
-      - run: pnpm install
+          node-version: "18"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps
       - run: pnpm --filter @apgms/webapp test:axe
 
   lighthouse:
-    needs: build
+    needs: [build, typecheck]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -51,14 +89,125 @@ jobs:
           version: 9
       - uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          cache: 'pnpm'
-          cache-dependency-path: apgms/pnpm-lock.yaml
-      - run: pnpm install
+          node-version: "18"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @apgms/webapp build
       - name: Lighthouse CI
         uses: treosh/lighthouse-ci-action@v10
         with:
-          configPath: ./apgms/lighthouserc.json
+          configPath: ./lighthouserc.json
           runs: 1
           uploadArtifacts: true
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck:webapp
+
+  provenance:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: webapp-dist
+          path: provenance-input
+      - name: Generate SLSA provenance
+        uses: slsa-framework/slsa-github-generator/actions/run-slsa-generic@v1.10.0
+        with:
+          artifact_path: provenance-input/webapp-dist.tar.gz
+          artifact_name: webapp-dist.tar.gz
+          provenance_name: webapp-dist.intoto.jsonl
+      - name: Upload provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: webapp-dist-provenance
+          path: webapp-dist.intoto.jsonl
+
+  verify-provenance:
+    needs: provenance
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: webapp-dist
+          path: verified
+      - uses: actions/download-artifact@v4
+        with:
+          name: webapp-dist-provenance
+          path: verified
+      - uses: slsa-framework/slsa-verifier/actions/install@v2.5.1
+      - name: Verify SLSA provenance
+        env:
+          SOURCE_URI: github.com/${{ github.repository }}
+          WORKFLOW_URI: github.com/${{ github.workflow_ref }}
+        run: |
+          slsa-verifier verify-artifact \
+            --provenance-path verified/webapp-dist.intoto.jsonl \
+            --source-uri "${SOURCE_URI}" \
+            --workflow-uri "${WORKFLOW_URI}" \
+            --builder-id https://github.com/slsa-framework/slsa-github-generator/actions/run-slsa-generic@v1 \
+            verified/webapp-dist.tar.gz
+
+  verify-signature:
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: webapp-dist
+          path: signed-artifact
+      - uses: sigstore/cosign-installer@v3.5.0
+      - name: Verify artifact signature
+        env:
+          WORKFLOW_IDENTITY: https://github.com/${{ github.workflow_ref }}
+        run: |
+          cosign verify-blob \
+            --certificate signed-artifact/webapp-dist.pem \
+            --signature signed-artifact/webapp-dist.sig \
+            --certificate-identity "${WORKFLOW_IDENTITY}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            signed-artifact/webapp-dist.tar.gz
+
+  e2e:
+    needs: [build, typecheck]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps
+      - run: pnpm --filter @apgms/webapp build
+      - run: pnpm --filter @apgms/webapp test
