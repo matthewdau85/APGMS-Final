@@ -11,6 +11,9 @@ importers:
       '@apgms/shared':
         specifier: workspace:*
         version: link:../../shared
+      argon2:
+        specifier: workspace:*
+        version: link:../../packages/argon2
       '@fastify/cors':
         specifier: ^11.1.0
         version: 11.1.0

@@ -21,6 +21,7 @@ model User {
   id        String   @id @default(cuid())
   email     String   @unique
   password  String
+  passwordVersion Int?
   createdAt DateTime @default(now())
   org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
   orgId     String

@@ -14,7 +14,8 @@
     "build": "echo building shared"
   },
   "dependencies": {
-    "@prisma/client": "6.17.1"
+    "@prisma/client": "6.17.1",
+    "argon2": "workspace:*"
   },
   "devDependencies": {
     "prisma": "6.17.1",

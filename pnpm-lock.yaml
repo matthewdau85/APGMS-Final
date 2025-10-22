@@ -39,6 +39,9 @@ importers:
       '@apgms/shared':
         specifier: workspace:*
         version: link:../../shared
+      argon2:
+        specifier: workspace:*
+        version: link:packages/argon2
       '@fastify/cors':
         specifier: ^11.1.0
         version: 11.1.0
@@ -67,6 +70,9 @@ importers:
       '@prisma/client':
         specifier: 6.17.1
         version: 6.17.1(prisma@6.17.1(typescript@5.9.3))(typescript@5.9.3)
+      argon2:
+        specifier: workspace:*
+        version: link:packages/argon2
     devDependencies:
       prisma:
         specifier: 6.17.1
@@ -74,6 +80,8 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+
+  packages/argon2: {}
 
   webapp: {}
 

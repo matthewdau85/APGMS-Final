@@ -17,6 +17,7 @@ type PrismaUser = {
   id: string;
   email: string;
   password: string | null;
+  passwordVersion: number | null;
   createdAt: Date;
   orgId: string;
 };
@@ -131,6 +132,7 @@ describe("POST /admin/data/delete", () => {
       id: "user-1",
       email: defaultPayload.email,
       password: "secret",
+      passwordVersion: null,
       createdAt: new Date(),
       orgId: defaultPayload.orgId,
     };
@@ -153,7 +155,7 @@ describe("POST /admin/data/delete", () => {
     const updateCalls: any[] = [];
     prismaStub.user.update = async (args: any) => {
       updateCalls.push(args);
-      return { ...user, email: "deleted" };
+      return { ...user, email: "deleted", passwordVersion: null };
     };
 
     let deleteCalled = false;
@@ -186,6 +188,7 @@ describe("POST /admin/data/delete", () => {
     const updateArgs = updateCalls[0];
     assert.match(updateArgs.data.email, /^deleted\+[a-f0-9]{12}@example.com$/);
     assert.equal(updateArgs.data.password, "__deleted__");
+    assert.equal(updateArgs.data.passwordVersion, null);
 
     const lastLog = securityLogs.at(-1);
     assert.deepEqual(lastLog, {
@@ -202,6 +205,7 @@ describe("POST /admin/data/delete", () => {
       id: "user-2",
       email: defaultPayload.email,
       password: "secret",
+      passwordVersion: null,
       createdAt: new Date(),
       orgId: defaultPayload.orgId,
     };
@@ -218,7 +222,7 @@ describe("POST /admin/data/delete", () => {
     let deleteArgs: any = null;
     prismaStub.user.delete = async (args: any) => {
       deleteArgs = args;
-      return user;
+      return { ...user };
     };
 
     const response = await app.inject({

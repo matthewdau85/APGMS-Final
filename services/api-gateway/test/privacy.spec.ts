@@ -225,6 +225,7 @@ function seedOrgWithData(state: State, ids: { orgId: string; userId: string; lin
     id: ids.userId,
     email: "someone@example.com",
     password: "hashed-password",
+    passwordVersion: 1,
     orgId: ids.orgId,
     createdAt,
   } as User);
