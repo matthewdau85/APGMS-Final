@@ -1,1 +1,8 @@
-﻿# TFN handling SOP
+# TFN SOP (Request, Verification, Erasure/Export)
+
+- **Intake**: Accept subject access/erase/export tickets only through authenticated admin APIs – `/admin/data/export`, `/admin/data/delete`, and `/admin/pii/decrypt` enforce admin headers/guards before any TFN work begins (`services/api-gateway/src/app.ts`, `services/api-gateway/src/routes/admin.data.ts`, `services/api-gateway/src/lib/pii.ts`).
+- **Verification**: Require two approvers to record an allow decision in the guard layer; successful approvals must emit an audit event before data is returned (`registerPIIRoutes` → `AuditLogger.record` with `action: "pii.decrypt"`, `services/api-gateway/src/lib/pii.ts`).
+- **Access**: Default responses stay tokenised/masked – TFNs remain salted tokens (`tokenizeTFN`) and decrypted payloads only flow to admins when `AdminGuard` returns `allowed: true` (`services/api-gateway/src/lib/pii.ts`, tests `services/api-gateway/test/pii.spec.ts`).
+- **Erasure**: `/admin/data/delete` anonymises or deletes the subject, records `event: "data_delete"`, and writes a tombstone for traceability (`services/api-gateway/src/routes/admin.data.ts`, tests `services/api-gateway/test/admin.data.delete.spec.ts`).
+- **Export**: `/admin/data/export` assembles redacted bundles with relationship counts and logs both access and security events (`services/api-gateway/src/routes/admin.data.ts`, tests `services/api-gateway/test/admin.data.export.spec.ts`).
+- **Evidence**: Correlate requests via the append-only security/audit sink (see `services/audit/`) and the per-request metadata recorded by `AuditLogger.record` / `secLog` hooks (`services/api-gateway/src/lib/pii.ts`, `services/api-gateway/src/routes/admin.data.ts`).
