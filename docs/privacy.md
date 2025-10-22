@@ -19,7 +19,7 @@ This document outlines how Birchal satisfies Australian Privacy Principles (APP)
 
 ## Locating information
 1. Query the data inventory for systems tagged with the requester's organisation ID.
-2. Run `/admin/export/:orgId` in the API Gateway (with an approved admin token) to gather structured exports.
+2. Run `/admin/export/:orgId` in the API Gateway after authenticating with an allowlisted admin account (JWT scoped to the target org) to gather structured exports.
 3. Collect additional artefacts: audit logs, support transcripts, manual files stored in Google Drive.
 4. Store copies in the encrypted privacy evidence folder with restricted permissions.
 

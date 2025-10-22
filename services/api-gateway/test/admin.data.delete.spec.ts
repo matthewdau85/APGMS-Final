@@ -6,8 +6,10 @@ import Fastify from "fastify";
 
 import {
   registerAdminDataRoutes,
+  type AdminPrincipal,
   type SecurityLogPayload,
 } from "../src/routes/admin.data";
+import type { AppendOnlyAuditLogEntry } from "@apgms/shared/audit-log";
 import { adminDataDeleteResponseSchema } from "../src/schemas/admin.data";
 
 process.env.DATABASE_URL ??= "postgresql://user:pass@localhost:5432/test";
@@ -33,6 +35,7 @@ describe("POST /admin/data/delete", () => {
       count: async (_args: any) => 0,
     },
   };
+  const auditLogEntries: AppendOnlyAuditLogEntry[] = [];
   let securityLogs: SecurityLogPayload[] = [];
 
   beforeEach(async () => {
@@ -45,11 +48,22 @@ describe("POST /admin/data/delete", () => {
     prismaStub.user.delete = async () => null;
     prismaStub.bankLine.count = async () => 0;
 
+    auditLogEntries.length = 0;
+
     await registerAdminDataRoutes(app, {
       prisma: prismaStub as any,
       secLog: async (payload) => {
         securityLogs.push(payload);
       },
+      auth: {
+        verify: async (request) =>
+          parseToken(request.headers.authorization as string | undefined),
+      },
+      auditLog: {
+        append: async (entry: AppendOnlyAuditLogEntry) => {
+          auditLogEntries.push(entry);
+        },
+      } as any,
     });
 
     await app.ready();
@@ -58,6 +72,29 @@ describe("POST /admin/data/delete", () => {
   afterEach(async () => {
     await app.close();
   });
+
+  const parseToken = (header?: string): AdminPrincipal | null => {
+    if (!header) {
+      return null;
+    }
+    const match = /^Bearer\s+(.+)$/i.exec(header);
+    if (!match) {
+      return null;
+    }
+    const [role, principalId, orgId] = match[1].split(":");
+    if (!role || !principalId || !orgId) {
+      return null;
+    }
+    if (role !== "admin" && role !== "user") {
+      return null;
+    }
+    return {
+      id: principalId,
+      role,
+      orgId,
+      email: `${principalId}@example.com`,
+    } satisfies AdminPrincipal;
+  };
 
   const buildToken = (role: string, orgId: string, principalId = "principal") =>
     `Bearer ${role}:${principalId}:${orgId}`;
@@ -90,7 +127,7 @@ describe("POST /admin/data/delete", () => {
       url: "/admin/data/delete",
       payload: defaultPayload,
       headers: {
-        authorization: buildToken("member", defaultPayload.orgId),
+        authorization: buildToken("user", defaultPayload.orgId),
       },
     });
 
@@ -177,6 +214,7 @@ describe("POST /admin/data/delete", () => {
     assert.equal(body.action, "anonymized");
     assert.equal(body.userId, user.id);
     assert.equal(typeof body.occurredAt, "string");
+    assert.ok(Date.parse(body.occurredAt));
 
     assert.equal(findCalls, 1);
     assert.equal(countCalls.length, 1);
@@ -187,14 +225,19 @@ describe("POST /admin/data/delete", () => {
     assert.match(updateArgs.data.email, /^deleted\+[a-f0-9]{12}@example.com$/);
     assert.equal(updateArgs.data.password, "__deleted__");
 
-    const lastLog = securityLogs.at(-1);
-    assert.deepEqual(lastLog, {
-      event: "data_delete",
-      orgId: defaultPayload.orgId,
-      principal: "admin-1",
-      subjectUserId: user.id,
-      mode: "anonymized",
-    });
+    const lastLog = securityLogs[securityLogs.length - 1];
+    assert.equal(lastLog?.event, "data_delete");
+    assert.equal(lastLog?.orgId, defaultPayload.orgId);
+    assert.equal(lastLog?.principal, "admin-1");
+    assert.equal(lastLog?.subjectUserId, user.id);
+    assert.equal(lastLog?.mode, "anonymized");
+    assert.ok(lastLog?.occurredAt && Date.parse(lastLog.occurredAt));
+    assert.equal(auditLogEntries.length, 1);
+    assert.equal(auditLogEntries[0].event, "data_delete");
+    assert.equal(auditLogEntries[0].orgId, defaultPayload.orgId);
+    assert.equal(auditLogEntries[0].principalId, "admin-1");
+    assert.equal(auditLogEntries[0].payload.subjectUserId, user.id);
+    assert.equal(auditLogEntries[0].payload.mode, "anonymized");
   });
 
   it("hard deletes user when no constraint risk", async () => {
@@ -239,13 +282,18 @@ describe("POST /admin/data/delete", () => {
     assert.equal(updateCalled, false);
     assert.deepEqual(deleteArgs, { where: { id: user.id } });
 
-    const lastLog = securityLogs.at(-1);
-    assert.deepEqual(lastLog, {
-      event: "data_delete",
-      orgId: defaultPayload.orgId,
-      principal: "principal",
-      subjectUserId: user.id,
-      mode: "deleted",
-    });
+    const lastLog = securityLogs[securityLogs.length - 1];
+    assert.equal(lastLog?.event, "data_delete");
+    assert.equal(lastLog?.orgId, defaultPayload.orgId);
+    assert.equal(lastLog?.principal, "principal");
+    assert.equal(lastLog?.subjectUserId, user.id);
+    assert.equal(lastLog?.mode, "deleted");
+    assert.ok(lastLog?.occurredAt && Date.parse(lastLog.occurredAt));
+    assert.equal(auditLogEntries.length >= 1, true);
+    const auditTail = auditLogEntries[auditLogEntries.length - 1];
+    assert.equal(auditTail?.event, "data_delete");
+    assert.equal(auditTail?.orgId, defaultPayload.orgId);
+    assert.equal(auditTail?.payload.subjectUserId, user.id);
+    assert.equal(auditTail?.payload.mode, "deleted");
   });
 });

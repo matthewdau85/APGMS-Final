@@ -10,7 +10,7 @@ This statement covers the APGMS public marketing site, authenticated customer ex
 
 ## Testing Approach
 
-We evaluate accessibility on an ongoing basis using automated testing (Playwright with axe-core) and manual review. Automated checks are part of our continuous integration pipeline and run on every change. Failures block deployment until resolved.
+We evaluate accessibility on an ongoing basis using automated rendering checks (React server rendering with axe-informed assertions) and manual review. Automated checks run within our Node-based coverage harness on every change, and failures block deployment until resolved.
 
 ## Known Limitations
 

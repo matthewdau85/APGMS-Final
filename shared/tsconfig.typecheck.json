@@ -1,0 +1,18 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@apgms/shared": ["src/index.ts"],
+      "@apgms/shared/*": ["src/*"],
+      "@prisma/client": ["types/@prisma/client"],
+      "@prisma/client/*": ["types/@prisma/client"],
+      "@prisma/client/default": ["types/@prisma/client"]
+    },
+    "types": ["node"],
+    "typeRoots": ["../types", "../node_modules/@types"],
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"],
+  "exclude": ["node_modules"]
+}

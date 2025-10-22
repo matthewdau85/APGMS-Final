@@ -2,13 +2,27 @@ name: CI
 
 on: [push, pull_request]
 
-defaults:
-  run:
-    working-directory: apgms
-
 jobs:
   build:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: apgms
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/apgms?schema=public
+      SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/apgms_shadow?schema=public
+      PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -18,11 +32,14 @@ jobs:
         with:
           node-version: '18'
           cache: 'pnpm'
-          cache-dependency-path: apgms/pnpm-lock.yaml
-      - run: pnpm install
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps
       - run: pnpm -r build
+      - run: pnpm -r typecheck
       - run: pnpm -r test
+      - run: pnpm --filter @apgms/api-gateway test:synthetic
+      - run: pnpm --filter @apgms/shared prisma:status
 
   axe:
     needs: build
@@ -36,8 +53,8 @@ jobs:
         with:
           node-version: '18'
           cache: 'pnpm'
-          cache-dependency-path: apgms/pnpm-lock.yaml
-      - run: pnpm install
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps
       - run: pnpm --filter @apgms/webapp test:axe
 
@@ -53,12 +70,12 @@ jobs:
         with:
           node-version: '18'
           cache: 'pnpm'
-          cache-dependency-path: apgms/pnpm-lock.yaml
-      - run: pnpm install
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @apgms/webapp build
       - name: Lighthouse CI
         uses: treosh/lighthouse-ci-action@v10
         with:
-          configPath: ./apgms/lighthouserc.json
+          configPath: ./lighthouserc.json
           runs: 1
           uploadArtifacts: true

@@ -1,6 +1,6 @@
 # Accessibility Statement
 
-APGMS is committed to providing a digital experience that is accessible to the widest possible audience, regardless of technology or ability. We actively work toward conforming with the Web Content Accessibility Guidelines (WCAG) version 2.1 Level AA across the primary customer- facing experiences delivered through the APGMS web application.
+APGMS is committed to providing a digital experience that is accessible to the widest possible audience, regardless of technology or ability. We actively work toward conforming with the Web Content Accessibility Guidelines (WCAG) version 2.1 Level AA across the primary customer-facing experiences delivered through the APGMS web application.
 
 ## Scope
 
@@ -8,7 +8,7 @@ This commitment covers the authenticated and unauthenticated surfaces of the APG
 
 ## Ongoing Efforts
 
-- Integrating automated accessibility checks powered by Playwright and axe to detect WCAG 2.1 AA issues in critical user journeys.
+- Running automated accessibility assertions inside our server-rendered React coverage harness to detect WCAG 2.1 AA issues on every pull request.
 - Reviewing new UI components during design and development for keyboard operability, color contrast, and assistive technology support.
 - Providing internal training and documentation so engineers, designers, and content authors can incorporate accessibility best practices into their work.
 

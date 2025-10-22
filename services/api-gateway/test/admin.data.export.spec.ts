@@ -1,13 +1,18 @@
 ﻿import { test } from "node:test";
 import assert from "node:assert/strict";
 import Fastify from "fastify";
-import adminDataRoutes from "../src/routes/admin.data";
+import { registerAdminDataRoutes, type AdminPrincipal } from "../src/routes/admin.data";
 import { subjectDataExportResponseSchema } from "../src/schemas/admin.data";
+import type { AppendOnlyAuditLogEntry } from "@apgms/shared/audit-log";
 
 type DbOverrides = {
   userFindFirst?: DbClient["user"]["findFirst"];
   bankLineCount?: DbClient["bankLine"]["count"];
   accessLogCreate?: NonNullable<DbClient["accessLog"]>["create"];
+};
+
+type AuditLogStub = {
+  append: (entry: AppendOnlyAuditLogEntry) => Promise<void>;
 };
 
 type DbClient = {
@@ -71,6 +76,34 @@ const buildToken = (principal: {
   email: string;
 }) => `Bearer ${Buffer.from(JSON.stringify(principal)).toString("base64url")}`;
 
+const parseToken = (header?: string): AdminPrincipal | null => {
+  if (!header) {
+    return null;
+  }
+  const match = /^Bearer\s+(.+)$/i.exec(header);
+  if (!match) {
+    return null;
+  }
+  try {
+    const decoded = JSON.parse(Buffer.from(match[1], "base64url").toString("utf8"));
+    if (!decoded || typeof decoded !== "object") {
+      return null;
+    }
+    if (typeof decoded.id !== "string" || typeof decoded.orgId !== "string") {
+      return null;
+    }
+    if (decoded.role !== "admin" && decoded.role !== "user") {
+      return null;
+    }
+    if (typeof decoded.email !== "string") {
+      return null;
+    }
+    return decoded as AdminPrincipal;
+  } catch {
+    return null;
+  }
+};
+
 const buildApp = async (
   db: DbClient,
   secLog: (entry: {
@@ -78,12 +111,22 @@ const buildApp = async (
     orgId: string;
     principal: string;
     subjectEmail: string;
-  }) => void = () => {}
+    occurredAt: string;
+  }) => void = () => {},
+  auditLog: AuditLogStub = { append: async () => {} }
 ) => {
   const app = Fastify();
   app.decorate("db", db);
   app.decorate("secLog", secLog);
-  await app.register(adminDataRoutes);
+  await registerAdminDataRoutes(app, {
+    prisma: db as unknown as any,
+    auth: {
+      verify: async (request) => parseToken(request.headers.authorization as string | undefined),
+    },
+    secLog: secLog as any,
+    accessLog: db.accessLog,
+    auditLog: auditLog as any,
+  });
   await app.ready();
   return app;
 };
@@ -142,8 +185,15 @@ test("404 when subject is missing", async () => {
 });
 
 test("200 returns expected export bundle", async () => {
-  const accessLogCalls: unknown[] = [];
-  const secLogCalls: unknown[] = [];
+  const accessLogCalls: Array<{ data: Record<string, unknown> }> = [];
+  const secLogCalls: Array<{
+    event: string;
+    orgId: string;
+    principal: string;
+    subjectEmail: string;
+    occurredAt: string;
+  }> = [];
+  const auditLogCalls: AppendOnlyAuditLogEntry[] = [];
   const app = await buildApp(
     buildTestDb({
       bankLineCount: async () => 5,
@@ -160,6 +210,11 @@ test("200 returns expected export bundle", async () => {
     }),
     (entry) => {
       secLogCalls.push(entry);
+    },
+    {
+      append: async (entry) => {
+        auditLogCalls.push(entry);
+      },
     }
   );
 
@@ -195,12 +250,18 @@ test("200 returns expected export bundle", async () => {
     },
   });
   assert.equal(secLogCalls.length, 1);
-  assert.deepEqual(secLogCalls[0], {
-    event: "data_export",
-    orgId: "org-123",
-    principal: "admin-1",
-    subjectEmail: "subject@example.com",
-  });
+  assert.equal(secLogCalls[0].event, "data_export");
+  assert.equal(secLogCalls[0].orgId, "org-123");
+  assert.equal(secLogCalls[0].principal, "admin-1");
+  assert.equal(secLogCalls[0].subjectEmail, "subject@example.com");
+  assert.equal(typeof secLogCalls[0].occurredAt, "string");
+  assert.ok(Date.parse(secLogCalls[0].occurredAt));
+  assert.equal(auditLogCalls.length, 1);
+  assert.equal(auditLogCalls[0].event, "data_export");
+  assert.equal(auditLogCalls[0].orgId, "org-123");
+  assert.equal(auditLogCalls[0].principalId, "admin-1");
+  assert.equal(auditLogCalls[0].payload.subjectEmail, "subject@example.com");
+  assert.equal(auditLogCalls[0].payload.bankLinesCount, 5);
 
   await app.close();
 });

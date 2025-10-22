@@ -1,0 +1,16 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "types": ["node"],
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@apgms/shared": ["src/index.ts"],
+      "@apgms/shared/*": ["src/*"],
+      "@apgms/shared-au/*": ["au/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "types/**/*.d.ts"],
+  "exclude": ["node_modules"]
+}
