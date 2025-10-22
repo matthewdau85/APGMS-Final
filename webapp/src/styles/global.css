@@ -16,6 +16,14 @@ body {
   color: var(--color-text);
 }
 
+.text-success {
+  color: var(--color-success) !important;
+}
+
+.text-danger {
+  color: var(--color-danger) !important;
+}
+
 h1,
  h2,
  h3,
