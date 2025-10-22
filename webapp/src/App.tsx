@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import HomePage from './pages/Home';
 import BankLinesPage from './pages/BankLines';
+import PAYGWPage from './pages/PAYGW';
 import './App.css';
 
 type Theme = 'light' | 'dark';
@@ -47,6 +48,9 @@ export default function App() {
           <NavLink className="app__nav-link" to="/bank-lines">
             Bank lines
           </NavLink>
+          <NavLink className="app__nav-link" to="/paygw">
+            PAYGW flow
+          </NavLink>
         </nav>
         <button
           type="button"
@@ -61,6 +65,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/bank-lines" element={<BankLinesPage />} />
+          <Route path="/paygw" element={<PAYGWPage />} />
         </Routes>
       </main>
       <footer className="app__footer">
