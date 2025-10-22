@@ -147,8 +147,11 @@ function createPrismaStub(initial?: Partial<State>): Stub {
       },
     },
     user: {
-      findMany: async ({ select, orderBy }) => {
+      findMany: async ({ where, select, orderBy }) => {
         let users = [...state.users];
+        if (where?.orgId) {
+          users = users.filter((user) => user.orgId === where.orgId);
+        }
         if (orderBy?.createdAt === "desc") {
           users.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
         }
@@ -164,10 +167,20 @@ function createPrismaStub(initial?: Partial<State>): Stub {
       },
     },
     bankLine: {
-      findMany: async ({ orderBy, take }) => {
+      findMany: async ({ orderBy, take, skip }) => {
         let lines = [...state.bankLines];
-        if (orderBy?.date === "desc") {
-          lines.sort((a, b) => b.date.getTime() - a.date.getTime());
+        if (orderBy?.date) {
+          const dir = orderBy.date === "asc" ? 1 : -1;
+          lines.sort((a, b) => dir * (a.date.getTime() - b.date.getTime()));
+        } else if (orderBy?.amount) {
+          const dir = orderBy.amount === "asc" ? 1 : -1;
+          lines.sort(
+            (a, b) =>
+              dir * (Number(a.amount as any) - Number(b.amount as any))
+          );
+        }
+        if (typeof skip === "number" && skip > 0) {
+          lines = lines.slice(skip);
         }
         if (typeof take === "number") {
           lines = lines.slice(0, take);

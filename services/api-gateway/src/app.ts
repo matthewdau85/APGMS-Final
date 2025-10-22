@@ -1,7 +1,8 @@
 ﻿import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
 import { z } from "zod";
-import { Prisma, type Org, type User, type BankLine, type PrismaClient } from "@prisma/client";
+import { type Org, type User, type BankLine, type PrismaClient } from "@prisma/client";
+import { Decimal } from "@prisma/client/runtime/library";
 
 import { maskError, maskObject } from "@apgms/shared";
 
@@ -59,6 +60,24 @@ const CreateLine = z.object({
   orgId: z.string().min(1),
 });
 
+const BankLinesQuery = z
+  .object({
+    take: z.coerce.number().int().min(1).max(200).default(20),
+    skip: z.coerce.number().int().min(0).max(1000).default(0),
+    sort: z.enum(["date", "amount"]).default("date"),
+    direction: z.enum(["asc", "desc"]).default("desc"),
+  })
+  .strict();
+
+const PrincipalSchema = z.object({
+  id: z.string(),
+  orgId: z.string(),
+  role: z.enum(["admin", "user"]),
+  email: z.string().email(),
+});
+
+type Principal = z.infer<typeof PrincipalSchema>;
+
 export async function createApp(options: CreateAppOptions = {}): Promise<FastifyInstance> {
   const prisma = (options.prisma as PrismaLike | undefined) ?? (await loadDefaultPrisma());
 
@@ -80,19 +99,40 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     }
   });
 
-  app.get("/users", async () => {
+  app.get("/users", async (req, reply) => {
+    const principal = parsePrincipal(req);
+    if (!principal) {
+      return reply.code(401).send({ error: "unauthorized" });
+    }
+
     const users = await prisma.user.findMany({
-      select: { email: true, orgId: true, createdAt: true },
+      where: { orgId: principal.orgId },
+      select: { id: true, email: true, createdAt: true },
       orderBy: { createdAt: "desc" },
     });
-    return { users };
+
+    return {
+      users: users.map((user) => ({
+        id: user.id,
+        email: maskEmail(user.email),
+        createdAt: normaliseDate(user.createdAt),
+      })),
+    };
   });
 
-  app.get("/bank-lines", async (req) => {
-    const take = Number((req.query as any).take ?? 20);
+  app.get("/bank-lines", async (req, reply) => {
+    const parsed = BankLinesQuery.safeParse(req.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "invalid_query", details: parsed.error.flatten() });
+    }
+
+    const { take, skip, sort, direction } = parsed.data;
+    const orderBy = sort === "amount" ? { amount: direction } : { date: direction };
+
     const lines = await prisma.bankLine.findMany({
-      orderBy: { date: "desc" },
-      take: Math.min(Math.max(take, 1), 200),
+      orderBy,
+      skip,
+      take,
     });
     return { lines };
   });
@@ -116,7 +156,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
           create: {
             orgId,
             date: new Date(date),
-            amount: new Prisma.Decimal(amount),
+            amount: new Decimal(amount),
             payee,
             desc,
             idempotencyKey: idemKey,
@@ -136,7 +176,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
         data: {
           orgId,
           date: new Date(date),
-          amount: new Prisma.Decimal(amount),
+          amount: new Decimal(amount),
           payee,
           desc,
         },
@@ -275,4 +315,48 @@ function normaliseAmount(amount: unknown): number {
     }
   }
   return 0;
+}
+
+function parsePrincipal(req: FastifyRequest): Principal | null {
+  const header = req.headers.authorization;
+  if (!header) return null;
+
+  const value = Array.isArray(header) ? header[0] : header;
+  if (!value) return null;
+
+  const match = /^Bearer\s+(.+)$/i.exec(value.trim());
+  if (!match) return null;
+
+  try {
+    const decoded = Buffer.from(match[1], "base64url").toString("utf8");
+    const parsed = JSON.parse(decoded);
+    return PrincipalSchema.parse(parsed);
+  } catch {
+    return null;
+  }
+}
+
+function maskEmail(email: string): string {
+  const [local, domain] = email.split("@");
+  if (!domain) {
+    return "***";
+  }
+
+  const first = local.charAt(0) || "*";
+  const last = local.length > 1 ? local.charAt(local.length - 1) : "";
+  const maskedLocal = last ? `${first}***${last}` : `${first}***`;
+  return `${maskedLocal}@${domain}`;
+}
+
+function normaliseDate(value: unknown): string {
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString();
+    }
+  }
+  return new Date(0).toISOString();
 }
