@@ -145,3 +145,20 @@ export function registerPIIRoutes(app: FastifyInstance, guard: AdminGuard): void
     },
   );
 }
+
+export function maskEmail(email: string): string {
+  const [local, domain] = email.split("@");
+  if (!domain || !local) {
+    return "***";
+  }
+  if (local.length <= 2) {
+    return `${local[0] ?? "*"}*@${domain}`;
+  }
+  const lastChar = local.charAt(local.length - 1) || "*";
+  const maskedLocal = `${local[0]}${"*".repeat(Math.max(local.length - 2, 1))}${lastChar}`;
+  return `${maskedLocal}@${domain}`;
+}
+
+export function maskEmailForRole(email: string, role: string): string {
+  return role === "admin" ? email : maskEmail(email);
+}

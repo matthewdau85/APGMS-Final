@@ -39,6 +39,7 @@ let stub: Stub;
 
 beforeEach(async () => {
   process.env.ADMIN_TOKEN = ADMIN_TOKEN;
+  process.env.API_KEY = "test-api-key";
   stub = createPrismaStub();
   app = await createApp({ prisma: stub.client as unknown as PrismaClient });
   await app.ready();
@@ -46,6 +47,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await app.close();
+  delete process.env.API_KEY;
 });
 
 test("admin export requires a valid admin token", async (t) => {
@@ -54,6 +56,87 @@ test("admin export requires a valid admin token", async (t) => {
     url: "/admin/export/example-org",
   });
   assert.equal(response.statusCode, 403);
+});
+
+test("users endpoint requires authentication", async () => {
+  const response = await app.inject({
+    method: "GET",
+    url: "/users",
+  });
+  assert.equal(response.statusCode, 401);
+});
+
+test("users endpoint redacts emails for non-admins", async () => {
+  seedOrgWithData(stub.state, {
+    orgId: "org-123",
+    userId: "user-456",
+    lineId: "line-789",
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/users",
+    headers: authHeaders({ orgId: "org-123", role: "member" }),
+  });
+
+  assert.equal(response.statusCode, 200);
+  const payload = response.json() as { users: Array<{ email: string }> };
+  assert.equal(payload.users.length, 1);
+  assert.equal(payload.users[0].email, "s*****e@example.com");
+});
+
+test("bank lines require auth and enforce idempotency", async () => {
+  seedOrgWithData(stub.state, {
+    orgId: "org-abc",
+    userId: "user-abc",
+    lineId: "line-abc",
+  });
+
+  const baseHeaders = authHeaders({ orgId: "org-abc", role: "admin" });
+
+  const unauthenticated = await app.inject({ method: "GET", url: "/bank-lines" });
+  assert.equal(unauthenticated.statusCode, 401);
+
+  const firstResponse = await app.inject({
+    method: "POST",
+    url: "/bank-lines",
+    headers: { ...baseHeaders, "idempotency-key": "idem-1" },
+    payload: {
+      date: "2024-03-03T00:00:00.000Z",
+      amount: 4200,
+      payee: "Vendor",
+      desc: "Invoice",
+    },
+  });
+  assert.equal(firstResponse.statusCode, 201);
+  const created = firstResponse.json();
+
+  const duplicate = await app.inject({
+    method: "POST",
+    url: "/bank-lines",
+    headers: { ...baseHeaders, "idempotency-key": "idem-1" },
+    payload: {
+      date: "2024-03-03T00:00:00.000Z",
+      amount: 4200,
+      payee: "Vendor",
+      desc: "Invoice",
+    },
+  });
+  assert.equal(duplicate.statusCode, 201);
+  assert.deepEqual(duplicate.json(), created);
+
+  const conflict = await app.inject({
+    method: "POST",
+    url: "/bank-lines",
+    headers: { ...baseHeaders, "idempotency-key": "idem-1" },
+    payload: {
+      date: "2024-03-03T00:00:00.000Z",
+      amount: 9999,
+      payee: "Vendor",
+      desc: "Invoice",
+    },
+  });
+  assert.equal(conflict.statusCode, 409);
 });
 
 test("admin export returns organisation data without secrets", async (t) => {
@@ -147,8 +230,11 @@ function createPrismaStub(initial?: Partial<State>): Stub {
       },
     },
     user: {
-      findMany: async ({ select, orderBy }) => {
+      findMany: async ({ select, orderBy, where }) => {
         let users = [...state.users];
+        if (where?.orgId) {
+          users = users.filter((user) => user.orgId === where.orgId);
+        }
         if (orderBy?.createdAt === "desc") {
           users.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
         }
@@ -164,8 +250,11 @@ function createPrismaStub(initial?: Partial<State>): Stub {
       },
     },
     bankLine: {
-      findMany: async ({ orderBy, take }) => {
+      findMany: async ({ orderBy, take, where }) => {
         let lines = [...state.bankLines];
+        if (where?.orgId) {
+          lines = lines.filter((line) => line.orgId === where.orgId);
+        }
         if (orderBy?.date === "desc") {
           lines.sort((a, b) => b.date.getTime() - a.date.getTime());
         }
@@ -237,6 +326,14 @@ function seedOrgWithData(state: State, ids: { orgId: string; userId: string; lin
     desc: "Invoice",
     createdAt,
   } as BankLine);
+}
+
+function authHeaders({ orgId, role }: { orgId: string; role: string }) {
+  return {
+    "x-api-key": process.env.API_KEY!,
+    "x-org-id": orgId,
+    "x-user-role": role,
+  };
 }
 
 function pick<T>(value: T, select: Record<string, boolean>): Record<string, unknown> {
