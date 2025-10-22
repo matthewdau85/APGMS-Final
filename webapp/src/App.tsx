@@ -2,6 +2,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import HomePage from './pages/Home';
 import BankLinesPage from './pages/BankLines';
+import PaygwPage from './pages/Paygw';
+import GstPage from './pages/Gst';
+import CompliancePage from './pages/Compliance';
+import SecurityPage from './pages/Security';
 import './App.css';
 
 type Theme = 'light' | 'dark';
@@ -42,7 +46,19 @@ export default function App() {
         <div className="app__brand">APGMS Pro+</div>
         <nav className="app__nav" aria-label="Primary">
           <NavLink className="app__nav-link" to="/" end>
-            Overview
+            Obligations
+          </NavLink>
+          <NavLink className="app__nav-link" to="/paygw">
+            PAYGW
+          </NavLink>
+          <NavLink className="app__nav-link" to="/gst">
+            GST
+          </NavLink>
+          <NavLink className="app__nav-link" to="/compliance">
+            Compliance
+          </NavLink>
+          <NavLink className="app__nav-link" to="/security">
+            Security
           </NavLink>
           <NavLink className="app__nav-link" to="/bank-lines">
             Bank lines
@@ -60,11 +76,15 @@ export default function App() {
       <main className="app__content">
         <Routes>
           <Route path="/" element={<HomePage />} />
+          <Route path="/paygw" element={<PaygwPage />} />
+          <Route path="/gst" element={<GstPage />} />
+          <Route path="/compliance" element={<CompliancePage />} />
+          <Route path="/security" element={<SecurityPage />} />
           <Route path="/bank-lines" element={<BankLinesPage />} />
         </Routes>
       </main>
       <footer className="app__footer">
-        <p>Portfolio monitoring built for institutional capital teams.</p>
+        <p>Obligation management built for institutional finance teams.</p>
       </footer>
     </div>
   );
