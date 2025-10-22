@@ -8,6 +8,7 @@ import type { BankLine, Org, PrismaClient, User } from "@prisma/client";
 import { createApp, type AdminOrgExport } from "../src/app";
 
 const ADMIN_TOKEN = "test-admin-token";
+const API_KEY = "test-api-key";
 
 type OrgState = Org & { deletedAt: Date | null };
 
@@ -37,8 +38,17 @@ type Stub = {
 let app: FastifyInstance;
 let stub: Stub;
 
+function authHeaders(params: { orgId: string; role: "admin" | "member" }) {
+  return {
+    "x-api-key": API_KEY,
+    "x-org-id": params.orgId,
+    "x-user-role": params.role,
+  };
+}
+
 beforeEach(async () => {
   process.env.ADMIN_TOKEN = ADMIN_TOKEN;
+  process.env.AUTH_API_KEY = API_KEY;
   stub = createPrismaStub();
   app = await createApp({ prisma: stub.client as unknown as PrismaClient });
   await app.ready();
@@ -46,6 +56,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await app.close();
+  delete process.env.AUTH_API_KEY;
 });
 
 test("admin export requires a valid admin token", async (t) => {
@@ -117,6 +128,93 @@ test("deleting an organisation soft-deletes data and records a tombstone", async
   assert.ok(tombstone.payload.org.deletedAt && Date.parse(tombstone.payload.org.deletedAt));
 });
 
+test("users endpoint scopes results and redacts member emails", async () => {
+  seedOrgWithData(stub.state, {
+    orgId: "org-member",
+    userId: "member-user",
+    lineId: "line-member",
+  });
+  stub.state.users.push({
+    id: "other-user",
+    email: "other@example.com",
+    password: "hashed-password",
+    orgId: "other-org",
+    createdAt: new Date("2024-03-01T00:00:00Z"),
+  } as User);
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/users",
+    headers: authHeaders({ orgId: "org-member", role: "member" }),
+  });
+
+  assert.equal(response.statusCode, 200);
+  const body = response.json() as { users: Array<{ email: string | null; orgId: string }> };
+  assert.equal(body.users.length, 1);
+  assert.equal(body.users[0].orgId, "org-member");
+  assert.equal(body.users[0].email, null);
+});
+
+test("bank lines endpoint enforces idempotency and scoping", async () => {
+  seedOrgWithData(stub.state, {
+    orgId: "org-bank",
+    userId: "bank-user",
+    lineId: "existing-line",
+  });
+  stub.state.bankLines.push({
+    id: "other-line",
+    orgId: "other-org",
+    date: new Date("2024-02-01T00:00:00Z"),
+    amount: 2000 as any,
+    payee: "Other",
+    desc: "Hidden",
+    createdAt: new Date("2024-02-01T00:00:00Z"),
+  } as BankLine);
+
+  const getResponse = await app.inject({
+    method: "GET",
+    url: "/bank-lines",
+    headers: authHeaders({ orgId: "org-bank", role: "admin" }),
+  });
+  assert.equal(getResponse.statusCode, 200);
+  const initialLines = getResponse.json() as { lines: BankLine[] };
+  assert.equal(initialLines.lines.length, 1);
+
+  const payload = {
+    date: new Date("2024-05-05T00:00:00Z").toISOString(),
+    amount: 500,
+    payee: "Vendor",
+    memo: "Invoice 123",
+  };
+
+  const firstPost = await app.inject({
+    method: "POST",
+    url: "/bank-lines",
+    payload,
+    headers: {
+      ...authHeaders({ orgId: "org-bank", role: "admin" }),
+      "idempotency-key": "abc-123",
+    },
+  });
+  assert.equal(firstPost.statusCode, 201);
+  const createdLine = firstPost.json() as BankLine;
+  assert.equal(createdLine.orgId, "org-bank");
+  assert.equal(createdLine.desc, "Invoice 123");
+
+  const secondPost = await app.inject({
+    method: "POST",
+    url: "/bank-lines",
+    payload,
+    headers: {
+      ...authHeaders({ orgId: "org-bank", role: "admin" }),
+      "idempotency-key": "abc-123",
+    },
+  });
+  assert.equal(secondPost.statusCode, 201);
+  assert.equal(secondPost.headers["idempotent-replay"], "true");
+  assert.equal(stub.state.bankLines.filter((line) => line.orgId === "org-bank").length, 2);
+});
+
 function createPrismaStub(initial?: Partial<State>): Stub {
   const state: State = {
     orgs: initial?.orgs ?? [],
@@ -147,10 +245,13 @@ function createPrismaStub(initial?: Partial<State>): Stub {
       },
     },
     user: {
-      findMany: async ({ select, orderBy }) => {
+      findMany: async ({ select, orderBy, where } = {}) => {
         let users = [...state.users];
         if (orderBy?.createdAt === "desc") {
           users.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        }
+        if (where?.orgId) {
+          users = users.filter((user) => user.orgId === where.orgId);
         }
         if (select) {
           return users.map((user) => pick(user, select));
@@ -164,10 +265,13 @@ function createPrismaStub(initial?: Partial<State>): Stub {
       },
     },
     bankLine: {
-      findMany: async ({ orderBy, take }) => {
+      findMany: async ({ orderBy, take, where } = {}) => {
         let lines = [...state.bankLines];
         if (orderBy?.date === "desc") {
           lines.sort((a, b) => b.date.getTime() - a.date.getTime());
+        }
+        if (where?.orgId) {
+          lines = lines.filter((line) => line.orgId === where.orgId);
         }
         if (typeof take === "number") {
           lines = lines.slice(0, take);
