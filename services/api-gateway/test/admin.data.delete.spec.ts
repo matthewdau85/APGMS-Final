@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 
 import cors from "@fastify/cors";
 import Fastify from "fastify";
+import { createHmac } from "node:crypto";
 
 import {
   registerAdminDataRoutes,
@@ -34,8 +35,24 @@ describe("POST /admin/data/delete", () => {
     },
   };
   let securityLogs: SecurityLogPayload[] = [];
+  const adminSecret = "test-admin-secret";
+
+  const signJwt = (payload: Record<string, unknown>, secret: string) => {
+    const header = { alg: "HS256", typ: "JWT" };
+    const headerSegment = Buffer.from(JSON.stringify(header)).toString(
+      "base64url"
+    );
+    const payloadSegment = Buffer.from(JSON.stringify(payload)).toString(
+      "base64url"
+    );
+    const signature = createHmac("sha256", secret)
+      .update(`${headerSegment}.${payloadSegment}`)
+      .digest("base64url");
+    return `${headerSegment}.${payloadSegment}.${signature}`;
+  };
 
   beforeEach(async () => {
+    process.env.ADMIN_JWT_SECRET = adminSecret;
     app = Fastify({ logger: false });
     await app.register(cors, { origin: true });
     securityLogs = [];
@@ -57,10 +74,23 @@ describe("POST /admin/data/delete", () => {
 
   afterEach(async () => {
     await app.close();
+    delete process.env.ADMIN_JWT_SECRET;
   });
 
-  const buildToken = (role: string, orgId: string, principalId = "principal") =>
-    `Bearer ${role}:${principalId}:${orgId}`;
+  const buildToken = (
+    role: string,
+    orgId: string,
+    principalId = "principal"
+  ) =>
+    `Bearer ${signJwt(
+      {
+        sub: principalId,
+        orgId,
+        role,
+        iat: Math.floor(Date.now() / 1000),
+      },
+      adminSecret
+    )}`;
 
   const defaultPayload = {
     orgId: "org-123",
@@ -167,7 +197,11 @@ describe("POST /admin/data/delete", () => {
       url: "/admin/data/delete",
       payload: defaultPayload,
       headers: {
-        authorization: buildToken("admin", defaultPayload.orgId, "admin-1"),
+        authorization: buildToken(
+          "admin",
+          defaultPayload.orgId,
+          "admin-1"
+        ),
       },
     });
 

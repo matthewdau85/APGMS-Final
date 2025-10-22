@@ -1,8 +1,23 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import Fastify from "fastify";
+import { createHmac } from "node:crypto";
 import adminDataRoutes from "../src/routes/admin.data";
 import { subjectDataExportResponseSchema } from "../src/schemas/admin.data";
+
+const adminSecret = "test-admin-secret";
+
+process.env.ADMIN_JWT_SECRET = adminSecret;
+
+const signJwt = (payload: Record<string, unknown>, secret: string) => {
+  const header = { alg: "HS256", typ: "JWT" };
+  const headerSegment = Buffer.from(JSON.stringify(header)).toString("base64url");
+  const payloadSegment = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const signature = createHmac("sha256", secret)
+    .update(`${headerSegment}.${payloadSegment}`)
+    .digest("base64url");
+  return `${headerSegment}.${payloadSegment}.${signature}`;
+};
 
 type DbOverrides = {
   userFindFirst?: DbClient["user"]["findFirst"];
@@ -69,7 +84,17 @@ const buildToken = (principal: {
   orgId: string;
   role: "admin" | "user";
   email: string;
-}) => `Bearer ${Buffer.from(JSON.stringify(principal)).toString("base64url")}`;
+}) =>
+  `Bearer ${signJwt(
+    {
+      sub: principal.id,
+      orgId: principal.orgId,
+      role: principal.role,
+      email: principal.email,
+      iat: Math.floor(Date.now() / 1000),
+    },
+    adminSecret
+  )}`;
 
 const buildApp = async (
   db: DbClient,
