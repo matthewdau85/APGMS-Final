@@ -1,8 +1,8 @@
-﻿import { NavLink, Route, Routes } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
 import HomePage from './pages/Home';
 import BankLinesPage from './pages/BankLines';
-import './App.css';
+import AppShell from './components/AppShell/AppShell';
 
 type Theme = 'light' | 'dark';
 
@@ -37,35 +37,15 @@ export default function App() {
   }, [theme]);
 
   return (
-    <div className="app">
-      <header className="app__header">
-        <div className="app__brand">APGMS Pro+</div>
-        <nav className="app__nav" aria-label="Primary">
-          <NavLink className="app__nav-link" to="/" end>
-            Overview
-          </NavLink>
-          <NavLink className="app__nav-link" to="/bank-lines">
-            Bank lines
-          </NavLink>
-        </nav>
-        <button
-          type="button"
-          className="app__theme-toggle"
-          onClick={() => setTheme(nextTheme)}
-          aria-label={`Switch to ${nextTheme} theme`}
-        >
-          {theme === 'light' ? 'ðŸŒž' : 'ðŸŒ™'}
-        </button>
-      </header>
-      <main className="app__content">
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/bank-lines" element={<BankLinesPage />} />
-        </Routes>
-      </main>
-      <footer className="app__footer">
-        <p>Portfolio monitoring built for institutional capital teams.</p>
-      </footer>
-    </div>
+    <AppShell
+      theme={theme}
+      nextTheme={nextTheme}
+      onToggleTheme={() => setTheme(nextTheme)}
+    >
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/bank-lines" element={<BankLinesPage />} />
+      </Routes>
+    </AppShell>
   );
 }
