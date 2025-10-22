@@ -61,3 +61,4 @@ See `docs/ops/logging.md` for structured logging guidance.
 - Record outcomes in `status/README.md` with follow-up tasks.
 
 
+See docs/ops/alerts.md for alert routing and testing details.\n
