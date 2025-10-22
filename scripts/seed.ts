@@ -1,7 +1,16 @@
-﻿import { prisma } from "@apgms/shared/db";
+import { randomBytes, scryptSync } from "node:crypto";
+import { prisma } from "@apgms/shared/db";
 
+function hashPassword(password: string): string {
+  const salt = randomBytes(16).toString("hex");
+  const hash = scryptSync(password, salt, 64).toString("hex");
+  return `${salt}:${hash}`;
+}
 
 async function main() {
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? "password123";
+  const hashedPassword = hashPassword(adminPassword);
+
   const org = await prisma.org.upsert({
     where: { id: "demo-org" },
     update: {},
@@ -11,7 +20,7 @@ async function main() {
   await prisma.user.upsert({
     where: { email: "founder@example.com" },
     update: {},
-    create: { email: "founder@example.com", password: "password123", orgId: org.id },
+    create: { email: "founder@example.com", password: hashedPassword, orgId: org.id },
   });
 
   const today = new Date();
@@ -29,4 +38,3 @@ async function main() {
 
 main().catch(e => { console.error(e); process.exit(1); })
   .finally(async () => { await prisma.$disconnect(); });
-
