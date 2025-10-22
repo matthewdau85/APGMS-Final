@@ -1,11 +1,11 @@
-﻿import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
+import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import { z } from "zod";
 import { Prisma, type Org, type User, type BankLine, type PrismaClient } from "@prisma/client";
 
 import { maskError, maskObject } from "@apgms/shared";
 
-const ADMIN_HEADER = "x-admin-token";
+import { requireAdmin } from "./auth/require-admin";
 
 export interface CreateAppOptions {
   prisma?: PrismaClient;
@@ -155,10 +155,15 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   // --- /validated + idempotent create ---
 
   app.get("/admin/export/:orgId", async (req, rep) => {
-    if (!requireAdmin(req, rep)) {
+    const admin = await requireAdmin(req, rep);
+    if (!admin) {
       return;
     }
     const { orgId } = req.params as { orgId: string };
+    if (admin.orgId !== orgId) {
+      void rep.code(403).send({ error: "forbidden" });
+      return;
+    }
     const org = await prisma.org.findUnique({
       where: { id: orgId },
       include: { users: true, lines: true },
@@ -172,10 +177,15 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   });
 
   app.delete("/admin/delete/:orgId", async (req, rep) => {
-    if (!requireAdmin(req, rep)) {
+    const admin = await requireAdmin(req, rep);
+    if (!admin) {
       return;
     }
     const { orgId } = req.params as { orgId: string };
+    if (admin.orgId !== orgId) {
+      void rep.code(403).send({ error: "forbidden" });
+      return;
+    }
     const org = await prisma.org.findUnique({
       where: { id: orgId },
       include: { users: true, lines: true },
@@ -217,24 +227,6 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   });
 
   return app;
-}
-
-function requireAdmin(req: FastifyRequest, rep: FastifyReply): boolean {
-  const configuredToken = process.env.ADMIN_TOKEN;
-  if (!configuredToken) {
-    req.log.error("ADMIN_TOKEN is not configured");
-    void rep.code(500).send({ error: "admin_config_missing" });
-    return false;
-  }
-
-  const provided = req.headers[ADMIN_HEADER] ?? req.headers[ADMIN_HEADER.toUpperCase() as keyof typeof req.headers];
-  const providedValue = Array.isArray(provided) ? provided[0] : provided;
-
-  if (providedValue !== configuredToken) {
-    void rep.code(403).send({ error: "forbidden" });
-    return false;
-  }
-  return true;
 }
 
 function buildOrgExport(org: ExportableOrg): AdminOrgExport {
