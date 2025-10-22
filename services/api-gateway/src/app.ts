@@ -4,6 +4,11 @@ import { z } from "zod";
 import { Prisma, type Org, type User, type BankLine, type PrismaClient } from "@prisma/client";
 
 import { maskError, maskObject } from "@apgms/shared";
+import {
+  bankLinesQuerySchema,
+  bankLinesResponseSchema,
+  usersResponseSchema,
+} from "./schemas/public.data";
 
 const ADMIN_HEADER = "x-admin-token";
 
@@ -50,6 +55,24 @@ async function loadDefaultPrisma(): Promise<PrismaLike> {
   return cachedPrisma as PrismaLike;
 }
 
+function maskEmail(email: string): string {
+  const [local, domain] = email.split("@");
+  if (!domain) {
+    return "***redacted***";
+  }
+
+  if (local.length <= 1) {
+    return `*@${domain}`;
+  }
+
+  if (local.length === 2) {
+    return `${local[0]}*@${domain}`;
+  }
+
+  const maskedLocal = `${local[0]}${"*".repeat(local.length - 2)}${local.slice(-1)}`;
+  return `${maskedLocal}@${domain}`;
+}
+
 /** Zod body schema for creating a bank line */
 const CreateLine = z.object({
   date: z.string().datetime(),                     // ISO 8601 string
@@ -82,19 +105,51 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 
   app.get("/users", async () => {
     const users = await prisma.user.findMany({
-      select: { email: true, orgId: true, createdAt: true },
+      select: { id: true, email: true, createdAt: true },
       orderBy: { createdAt: "desc" },
     });
-    return { users };
+
+    return usersResponseSchema.parse({
+      users: users.map((user) => ({
+        id: user.id,
+        email: maskEmail(user.email),
+        createdAt: user.createdAt.toISOString(),
+      })),
+    });
   });
 
-  app.get("/bank-lines", async (req) => {
-    const take = Number((req.query as any).take ?? 20);
+  app.get("/bank-lines", async (req, reply) => {
+    const parsedQuery = bankLinesQuerySchema.safeParse((req.query as Record<string, unknown>) ?? {});
+    if (!parsedQuery.success) {
+      return reply
+        .code(400)
+        .send({ error: "invalid_query", details: parsedQuery.error.flatten() });
+    }
+
+    const { take } = parsedQuery.data;
     const lines = await prisma.bankLine.findMany({
       orderBy: { date: "desc" },
-      take: Math.min(Math.max(take, 1), 200),
+      take: (take ?? 20),
+      select: {
+        id: true,
+        date: true,
+        amount: true,
+        payee: true,
+        desc: true,
+        createdAt: true,
+      },
     });
-    return { lines };
+
+    return bankLinesResponseSchema.parse({
+      lines: lines.map((line) => ({
+        id: line.id,
+        date: line.date.toISOString(),
+        amount: line.amount.toString(),
+        payee: line.payee,
+        desc: line.desc,
+        createdAt: line.createdAt.toISOString(),
+      })),
+    });
   });
 
   // --- Validated + idempotent create ---
