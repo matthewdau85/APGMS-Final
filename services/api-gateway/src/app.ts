@@ -1,10 +1,21 @@
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
-import type { Org, User, BankLine, PrismaClient } from "@prisma/client";
+import { createHash } from "node:crypto";
+import type { Org, User, BankLine, PrismaClient, Prisma } from "@prisma/client";
 
 import { maskError, maskObject } from "@apgms/shared";
+import { bankLineQuerySchema, createBankLineSchema } from "./schemas/bank-lines";
 
 const ADMIN_HEADER = "x-admin-token";
+const IDEMPOTENCY_HEADER = "idempotency-key";
+const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
+
+type IdempotencyRecord = {
+  hash: string;
+  statusCode: number;
+  response: unknown;
+  timestamp: number;
+};
 
 export interface CreateAppOptions {
   prisma?: PrismaClient;
@@ -57,6 +68,17 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   const prisma = (options.prisma as PrismaLike | undefined) ?? (await loadDefaultPrisma());
 
   const app = Fastify({ logger: true });
+  const idempotencyCache = new Map<string, IdempotencyRecord>();
+
+  const cleanupIdempotencyCache = (now: number) => {
+    for (const [key, record] of idempotencyCache) {
+      if (now - record.timestamp > IDEMPOTENCY_TTL_MS) {
+        idempotencyCache.delete(key);
+      }
+    }
+  };
+
+  const cacheKeyFor = (orgId: string, key: string) => `${orgId}:${key}`;
 
   app.register(cors, { origin: true });
 
@@ -72,33 +94,89 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     return { users };
   });
 
-  app.get("/bank-lines", async (req) => {
-    const take = Number((req.query as any).take ?? 20);
+  app.get("/bank-lines", async (req, rep) => {
+    const parsedQuery = bankLineQuerySchema.safeParse(req.query ?? {});
+    if (!parsedQuery.success) {
+      return rep.code(400).send({
+        error: "invalid_query",
+        details: parsedQuery.error.issues,
+      });
+    }
+
+    const { take, from, to } = parsedQuery.data;
+    const where: Prisma.BankLineWhereInput = {};
+    if (from || to) {
+      const dateFilter: Prisma.DateTimeFilter = {};
+      if (from) {
+        dateFilter.gte = new Date(from);
+      }
+      if (to) {
+        dateFilter.lte = new Date(to);
+      }
+      where.date = dateFilter;
+    }
+
     const lines = await prisma.bankLine.findMany({
       orderBy: { date: "desc" },
-      take: Math.min(Math.max(take, 1), 200),
+      take,
+      where,
     });
     return { lines };
   });
 
   app.post("/bank-lines", async (req, rep) => {
+    const rawKey = req.headers[IDEMPOTENCY_HEADER as keyof typeof req.headers];
+    const idempotencyKey = Array.isArray(rawKey) ? rawKey[0] : rawKey;
+
+    if (!idempotencyKey) {
+      return rep.code(400).send({ error: "idempotency_key_required" });
+    }
+
+    if (idempotencyKey.length > 64) {
+      return rep.code(400).send({ error: "idempotency_key_too_long" });
+    }
+
+    const parsedBody = createBankLineSchema.safeParse(req.body ?? {});
+    if (!parsedBody.success) {
+      return rep.code(400).send({
+        error: "invalid_body",
+        details: parsedBody.error.issues,
+      });
+    }
+
+    const payload = parsedBody.data;
+    const now = Date.now();
+    cleanupIdempotencyCache(now);
+
+    const bodyHash = createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+    const cacheKey = cacheKeyFor(payload.orgId, idempotencyKey);
+    const existing = idempotencyCache.get(cacheKey);
+
+    if (existing) {
+      if (existing.hash === bodyHash) {
+        return rep.code(existing.statusCode).send(existing.response);
+      }
+      return rep.code(409).send({ error: "idempotency_conflict" });
+    }
+
     try {
-      const body = req.body as {
-        orgId: string;
-        date: string;
-        amount: number | string;
-        payee: string;
-        desc: string;
-      };
       const created = await prisma.bankLine.create({
         data: {
-          orgId: body.orgId,
-          date: new Date(body.date),
-          amount: body.amount as any,
-          payee: body.payee,
-          desc: body.desc,
+          orgId: payload.orgId,
+          date: new Date(payload.date),
+          amount: payload.amount as any,
+          payee: payload.memo ?? "",
+          desc: payload.memo ?? "",
         },
       });
+
+      idempotencyCache.set(cacheKey, {
+        hash: bodyHash,
+        response: created,
+        statusCode: 201,
+        timestamp: now,
+      });
+
       return rep.code(201).send(created);
     } catch (e) {
       req.log.error({ err: maskError(e) }, "failed to create bank line");

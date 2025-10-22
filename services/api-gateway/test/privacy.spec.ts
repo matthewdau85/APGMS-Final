@@ -117,6 +117,80 @@ test("deleting an organisation soft-deletes data and records a tombstone", async
   assert.ok(tombstone.payload.org.deletedAt && Date.parse(tombstone.payload.org.deletedAt));
 });
 
+test("bank line query rejects invalid filters", async () => {
+  const response = await app.inject({
+    method: "GET",
+    url: "/bank-lines",
+    query: { take: "5000", from: "not-a-date" },
+  });
+
+  assert.equal(response.statusCode, 400);
+  const body = response.json() as { error: string; details: unknown };
+  assert.equal(body.error, "invalid_query");
+  assert.ok(Array.isArray((body as any).details));
+});
+
+test("bank line creation is idempotent for identical payloads", async () => {
+  const payload = {
+    orgId: "org-123",
+    amount: 2500,
+    date: new Date("2024-05-01T00:00:00Z").toISOString(),
+    memo: "Initial drawdown",
+  };
+
+  const first = await app.inject({
+    method: "POST",
+    url: "/bank-lines",
+    headers: { "idempotency-key": "line-create-1" },
+    payload,
+  });
+
+  assert.equal(first.statusCode, 201);
+  assert.equal(stub.state.bankLines.length, 1);
+
+  const second = await app.inject({
+    method: "POST",
+    url: "/bank-lines",
+    headers: { "idempotency-key": "line-create-1" },
+    payload,
+  });
+
+  assert.equal(second.statusCode, 201);
+  assert.equal(stub.state.bankLines.length, 1);
+  assert.deepEqual(second.json(), first.json());
+});
+
+test("bank line creation detects conflicting payloads for the same key", async () => {
+  const payload = {
+    orgId: "org-123",
+    amount: 2500,
+    date: new Date("2024-05-01T00:00:00Z").toISOString(),
+    memo: "Initial drawdown",
+  };
+
+  const first = await app.inject({
+    method: "POST",
+    url: "/bank-lines",
+    headers: { "idempotency-key": "line-create-2" },
+    payload,
+  });
+
+  assert.equal(first.statusCode, 201);
+  assert.equal(stub.state.bankLines.length, 1);
+
+  const conflict = await app.inject({
+    method: "POST",
+    url: "/bank-lines",
+    headers: { "idempotency-key": "line-create-2" },
+    payload: { ...payload, amount: 3000 },
+  });
+
+  assert.equal(conflict.statusCode, 409);
+  const body = conflict.json() as { error: string };
+  assert.equal(body.error, "idempotency_conflict");
+  assert.equal(stub.state.bankLines.length, 1);
+});
+
 function createPrismaStub(initial?: Partial<State>): Stub {
   const state: State = {
     orgs: initial?.orgs ?? [],
@@ -164,8 +238,14 @@ function createPrismaStub(initial?: Partial<State>): Stub {
       },
     },
     bankLine: {
-      findMany: async ({ orderBy, take }) => {
+      findMany: async ({ orderBy, take, where }) => {
         let lines = [...state.bankLines];
+        if (where?.date?.gte) {
+          lines = lines.filter((line) => line.date >= (where.date!.gte as Date));
+        }
+        if (where?.date?.lte) {
+          lines = lines.filter((line) => line.date <= (where.date!.lte as Date));
+        }
         if (orderBy?.date === "desc") {
           lines.sort((a, b) => b.date.getTime() - a.date.getTime());
         }
@@ -178,10 +258,10 @@ function createPrismaStub(initial?: Partial<State>): Stub {
         const created = {
           id: data.id ?? randomUUID(),
           orgId: data.orgId!,
-          date: data.date as Date,
+          date: data.date instanceof Date ? data.date : new Date(data.date as any),
           amount: data.amount as any,
-          payee: data.payee!,
-          desc: data.desc!,
+          payee: data.payee ?? "",
+          desc: data.desc ?? "",
           createdAt: data.createdAt ?? new Date(),
         } as unknown as BankLine;
         state.bankLines.push(created);
