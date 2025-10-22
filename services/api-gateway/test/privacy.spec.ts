@@ -1,13 +1,15 @@
 ﻿import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
 import type { BankLine, Org, PrismaClient, User } from "@prisma/client";
 
 import { createApp, type AdminOrgExport } from "../src/app";
 
-const ADMIN_TOKEN = "test-admin-token";
+const ADMIN_SECRET = "test-admin-secret";
+const ADMIN_ISSUER = "test-issuer";
+const ADMIN_AUDIENCE = "api-gateway-admin";
 
 type OrgState = Org & { deletedAt: Date | null };
 
@@ -38,7 +40,9 @@ let app: FastifyInstance;
 let stub: Stub;
 
 beforeEach(async () => {
-  process.env.ADMIN_TOKEN = ADMIN_TOKEN;
+  process.env.ADMIN_JWT_SECRET = ADMIN_SECRET;
+  process.env.ADMIN_JWT_ISSUER = ADMIN_ISSUER;
+  process.env.ADMIN_JWT_AUDIENCE = ADMIN_AUDIENCE;
   stub = createPrismaStub();
   app = await createApp({ prisma: stub.client as unknown as PrismaClient });
   await app.ready();
@@ -46,6 +50,9 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await app.close();
+  delete process.env.ADMIN_JWT_SECRET;
+  delete process.env.ADMIN_JWT_ISSUER;
+  delete process.env.ADMIN_JWT_AUDIENCE;
 });
 
 test("admin export requires a valid admin token", async (t) => {
@@ -53,7 +60,7 @@ test("admin export requires a valid admin token", async (t) => {
     method: "GET",
     url: "/admin/export/example-org",
   });
-  assert.equal(response.statusCode, 403);
+  assert.equal(response.statusCode, 401);
 });
 
 test("admin export returns organisation data without secrets", async (t) => {
@@ -66,7 +73,7 @@ test("admin export returns organisation data without secrets", async (t) => {
   const response = await app.inject({
     method: "GET",
     url: "/admin/export/org-123",
-    headers: { "x-admin-token": ADMIN_TOKEN },
+    headers: { Authorization: `Bearer ${createAdminToken({ orgId: "org-123" })}` },
   });
 
   assert.equal(response.statusCode, 200);
@@ -95,7 +102,7 @@ test("deleting an organisation soft-deletes data and records a tombstone", async
   const response = await app.inject({
     method: "DELETE",
     url: "/admin/delete/delete-me",
-    headers: { "x-admin-token": ADMIN_TOKEN },
+    headers: { Authorization: `Bearer ${createAdminToken({ orgId: "delete-me" })}` },
   });
 
   assert.equal(response.statusCode, 200);
@@ -211,6 +218,37 @@ function createPrismaStub(initial?: Partial<State>): Stub {
   } as unknown as PrismaLike;
 
   return { client, state };
+}
+
+function createAdminToken({
+  orgId,
+  jti = randomUUID(),
+  exp = Math.floor(Date.now() / 1000) + 60,
+  roles = ["admin"],
+  sub = "admin-user",
+}: {
+  orgId: string;
+  jti?: string;
+  exp?: number;
+  roles?: string[];
+  sub?: string;
+}): string {
+  const header = { alg: "HS256", typ: "JWT" };
+  const payload = {
+    iss: ADMIN_ISSUER,
+    aud: ADMIN_AUDIENCE,
+    sub,
+    exp,
+    iat: Math.floor(Date.now() / 1000),
+    jti,
+    roles,
+    orgs: [orgId],
+  };
+
+  const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  const signingInput = `${encode(header)}.${encode(payload)}`;
+  const signature = createHmac("sha256", ADMIN_SECRET).update(signingInput).digest("base64url");
+  return `${signingInput}.${signature}`;
 }
 
 function seedOrgWithData(state: State, ids: { orgId: string; userId: string; lineId: string }) {

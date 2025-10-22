@@ -5,7 +5,14 @@ import { Prisma, type Org, type User, type BankLine, type PrismaClient } from "@
 
 import { maskError, maskObject } from "@apgms/shared";
 
-const ADMIN_HEADER = "x-admin-token";
+import {
+  AdminAuthError,
+  createAdminVerifier,
+  loadAdminConfigFromEnv,
+  type AdminClaims,
+  type AdminVerifier,
+} from "./lib/admin-auth";
+import { registerPIIRoutes, type AdminGuard } from "./lib/pii";
 
 export interface CreateAppOptions {
   prisma?: PrismaClient;
@@ -66,6 +73,64 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   app.register(cors, { origin: true });
 
   app.log.info(maskObject({ DATABASE_URL: process.env.DATABASE_URL }), "loaded env");
+
+  let adminVerifier: AdminVerifier | null = null;
+  try {
+    adminVerifier = createAdminVerifier(loadAdminConfigFromEnv());
+  } catch (error) {
+    app.log.error({ err: maskError(error) }, "failed to configure admin auth");
+  }
+
+  const piiGuard: AdminGuard = async (request) => {
+    if (!adminVerifier) {
+      request.log.error("admin auth not configured");
+      return { allowed: false, actorId: "" };
+    }
+
+    try {
+      const claims = adminVerifier.verifyRequest(request, { requiredRole: "admin" });
+      const actorId = typeof claims.sub === "string" ? claims.sub : "";
+      return { allowed: true, actorId };
+    } catch (error) {
+      if (error instanceof AdminAuthError) {
+        request.log.warn({ code: error.code }, "admin auth denied for pii route");
+        return { allowed: false, actorId: "" };
+      }
+      request.log.error({ err: maskError(error) }, "unexpected admin auth failure for pii route");
+      return { allowed: false, actorId: "" };
+    }
+  };
+
+  registerPIIRoutes(app, piiGuard);
+
+  async function requireAdmin(
+    req: FastifyRequest,
+    rep: FastifyReply,
+    orgId?: string,
+  ): Promise<AdminClaims | null> {
+    if (!adminVerifier) {
+      req.log.error("admin auth not configured");
+      void rep.code(500).send({ error: "admin_config_missing" });
+      return null;
+    }
+
+    try {
+      return adminVerifier.verifyRequest(req, { requiredRole: "admin", orgId });
+    } catch (error) {
+      if (error instanceof AdminAuthError) {
+        if (error.statusCode >= 500) {
+          req.log.error({ err: maskError(error), code: error.code }, "admin auth validation failed");
+        } else {
+          req.log.warn({ code: error.code }, "admin auth denied");
+        }
+        void rep.code(error.statusCode).send({ error: error.code });
+        return null;
+      }
+      req.log.error({ err: maskError(error) }, "unexpected admin auth error");
+      void rep.code(500).send({ error: "admin_auth_error" });
+      return null;
+    }
+  }
 
   app.get("/health", async () => ({ ok: true, service: "api-gateway" }));
 
@@ -155,10 +220,10 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   // --- /validated + idempotent create ---
 
   app.get("/admin/export/:orgId", async (req, rep) => {
-    if (!requireAdmin(req, rep)) {
+    const { orgId } = req.params as { orgId: string };
+    if (!(await requireAdmin(req, rep, orgId))) {
       return;
     }
-    const { orgId } = req.params as { orgId: string };
     const org = await prisma.org.findUnique({
       where: { id: orgId },
       include: { users: true, lines: true },
@@ -172,10 +237,10 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   });
 
   app.delete("/admin/delete/:orgId", async (req, rep) => {
-    if (!requireAdmin(req, rep)) {
+    const { orgId } = req.params as { orgId: string };
+    if (!(await requireAdmin(req, rep, orgId))) {
       return;
     }
-    const { orgId } = req.params as { orgId: string };
     const org = await prisma.org.findUnique({
       where: { id: orgId },
       include: { users: true, lines: true },
@@ -217,24 +282,6 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   });
 
   return app;
-}
-
-function requireAdmin(req: FastifyRequest, rep: FastifyReply): boolean {
-  const configuredToken = process.env.ADMIN_TOKEN;
-  if (!configuredToken) {
-    req.log.error("ADMIN_TOKEN is not configured");
-    void rep.code(500).send({ error: "admin_config_missing" });
-    return false;
-  }
-
-  const provided = req.headers[ADMIN_HEADER] ?? req.headers[ADMIN_HEADER.toUpperCase() as keyof typeof req.headers];
-  const providedValue = Array.isArray(provided) ? provided[0] : provided;
-
-  if (providedValue !== configuredToken) {
-    void rep.code(403).send({ error: "forbidden" });
-    return false;
-  }
-  return true;
 }
 
 function buildOrgExport(org: ExportableOrg): AdminOrgExport {
