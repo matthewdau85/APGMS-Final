@@ -90,7 +90,7 @@ describe("POST /admin/data/delete", () => {
       url: "/admin/data/delete",
       payload: defaultPayload,
       headers: {
-        authorization: buildToken("member", defaultPayload.orgId),
+        authorization: buildToken("user", defaultPayload.orgId),
       },
     });
 
