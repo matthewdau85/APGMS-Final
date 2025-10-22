@@ -1,64 +1,176 @@
 name: CI
 
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - main
+  pull_request:
 
 defaults:
   run:
-    working-directory: apgms
+    shell: bash
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Fail on merge conflict markers
+        run: |
+          if git grep -n '<<<<<<<\|=======\|>>>>>>>' -- ':!*.lock'; then
+            echo "Merge conflict markers detected."
+            exit 1
+          fi
+
       - uses: pnpm/action-setup@v4
         with:
           version: 9
+
       - uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'pnpm'
-          cache-dependency-path: apgms/pnpm-lock.yaml
-      - run: pnpm install
-      - run: pnpm exec playwright install --with-deps
-      - run: pnpm -r build
-      - run: pnpm -r test
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps
+
+      - name: Check Prisma migration status
+        run: |
+          if pnpm exec prisma --help >/dev/null 2>&1; then
+            pnpm -r exec prisma migrate status
+          else
+            echo "Prisma CLI not found in workspace. Skipping migration drift check."
+          fi
+
+      - name: Build
+        run: pnpm -r build
+
+      - name: Test
+        run: pnpm -r test
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Detect typecheck scripts
+        id: detect
+        run: |
+          if rg --files-with-matches '"typecheck":' --glob 'package.json'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run typecheck
+        if: steps.detect.outputs.run == 'true'
+        run: pnpm -r run typecheck --if-present
+
+      - name: Skip message
+        if: steps.detect.outputs.run != 'true'
+        run: echo "No typecheck scripts found in workspace."
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Detect lint scripts
+        id: detect
+        run: |
+          if rg --files-with-matches '"lint":' --glob 'package.json'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run lint
+        if: steps.detect.outputs.run == 'true'
+        run: pnpm -r run lint --if-present
+
+      - name: Skip message
+        if: steps.detect.outputs.run != 'true'
+        run: echo "No lint scripts found in workspace."
 
   axe:
-    needs: build
+    needs: build-and-test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: pnpm/action-setup@v4
         with:
           version: 9
+
       - uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'pnpm'
-          cache-dependency-path: apgms/pnpm-lock.yaml
-      - run: pnpm install
-      - run: pnpm exec playwright install --with-deps
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps
+
       - run: pnpm --filter @apgms/webapp test:axe
 
   lighthouse:
-    needs: build
+    needs: build-and-test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: pnpm/action-setup@v4
         with:
           version: 9
+
       - uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'pnpm'
-          cache-dependency-path: apgms/pnpm-lock.yaml
-      - run: pnpm install
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - run: pnpm --filter @apgms/webapp build
+
       - name: Lighthouse CI
         uses: treosh/lighthouse-ci-action@v10
         with:
-          configPath: ./apgms/lighthouserc.json
+          configPath: ./lighthouserc.json
           runs: 1
           uploadArtifacts: true
