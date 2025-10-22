@@ -1,8 +1,64 @@
-﻿name: Security
-on: [push]
+name: security
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
 jobs:
-  scan:
+  sbom-audit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: echo scanning
+      - uses: actions/setup-node@v4
+        with: { node-version: '20.11', cache: 'pnpm' }
+      - uses: pnpm/action-setup@v4
+        with: { version: 9.6.0 }
+      - run: pnpm -r install --frozen-lockfile
+      - name: Generate SBOM (CycloneDX)
+        run: npx @cyclonedx/cyclonedx-npm --output-file sbom.json
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with: { name: sbom, path: sbom.json }
+
+  deps-vulnerability-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20.11' }
+      - run: corepack enable && corepack prepare pnpm@9.6.0 --activate
+      - run: pnpm audit --prod --json > audit.json || true
+      - name: Fail on high/critical
+        run: |
+          node -e "const r=require('./audit.json');const items=(r.advisories||r.vulnerabilities||{});let high=0,crit=0;for(const k in items){const s=(items[k].severity||items[k].severity||'').toLowerCase();if(s==='high')high++;if(s==='critical')crit++;}if(high||crit){console.error('High:',high,'Critical:',crit);process.exit(1);}else{console.log('OK');}"
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: gitleaks/gitleaks-action@v2
+        with: { args: "--redact --no-git -v . " }
+
+  trivy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy FS scan
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: fs
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+
+  header-auth-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20.11', cache: 'pnpm' }
+      - uses: pnpm/action-setup@v4
+        with: { version: 9.6.0 }
+      - run: pnpm -r install --frozen-lockfile
+      - run: pnpm -r build
+      - run: pnpm -r test -- --reporter=dot
