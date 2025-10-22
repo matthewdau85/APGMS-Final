@@ -14,13 +14,13 @@
 
 .bank-lines__header h1 {
   font-size: var(--font-size-2xl);
-  letter-spacing: -0.03em;
+  letter-spacing: var(--font-letterspacing-tight);
 }
 
 .bank-lines__header p {
   margin-top: var(--spacing-xs);
   color: var(--color-text-muted);
-  max-width: 40rem;
+  max-width: var(--layout-measure-md);
 }
 
 .bank-lines__cta {
@@ -36,8 +36,8 @@
 }
 
 .bank-lines__cta:focus-visible {
-  outline: 2px solid var(--color-focus);
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .bank-lines__table-wrapper {
@@ -83,7 +83,7 @@ tbody tr + tr {
 
 .bank-lines__utilization-track {
   position: relative;
-  height: 0.4rem;
+  height: var(--size-progress-thickness);
   background-color: var(--color-surface-muted);
   border-radius: var(--radius-pill);
   overflow: hidden;
@@ -105,7 +105,7 @@ tbody tr + tr {
   border-radius: var(--radius-md);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
-  letter-spacing: 0.04em;
+  letter-spacing: var(--font-letterspacing-wide);
   text-transform: uppercase;
 }
 
@@ -114,23 +114,23 @@ tbody tr + tr {
 }
 
 .status-badge__hint {
-  font-size: var(--font-size-xxs, 0.65rem);
-  opacity: 0.85;
+  font-size: var(--font-size-xxs);
+  opacity: var(--opacity-muted-strong);
 }
 
 .status-badge--active {
-  background-color: rgba(10, 125, 87, 0.16);
-  color: var(--color-success);
+  background-color: var(--status-active-bg);
+  color: var(--status-active-fg);
 }
 
 .status-badge--pending {
-  background-color: rgba(185, 115, 24, 0.18);
-  color: var(--color-warning);
+  background-color: var(--status-pending-bg);
+  color: var(--status-pending-fg);
 }
 
 .status-badge--monitoring {
-  background-color: var(--color-primary-soft);
-  color: var(--color-primary);
+  background-color: var(--status-monitor-bg);
+  color: var(--status-monitor-fg);
 }
 
 .sr-only {

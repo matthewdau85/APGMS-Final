@@ -31,6 +31,7 @@
   --radius-pill: 999px;
 
   --font-family-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-size-xxs: 0.65rem;
   --font-size-xs: 0.75rem;
   --font-size-sm: 0.875rem;
   --font-size-md: 1rem;
@@ -40,9 +41,20 @@
   --font-weight-regular: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
+  --font-letterspacing-tight: -0.03em;
+  --font-letterspacing-wide: 0.04em;
   --font-lineheight-tight: 1.2;
   --font-lineheight-cozy: 1.4;
   --font-lineheight-relaxed: 1.6;
+
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+
+  --opacity-muted-strong: 0.85;
+
+  --layout-measure-md: 40rem;
+
+  --size-progress-thickness: 0.4rem;
 
   --shadow-sm: 0 6px 18px rgba(15, 23, 42, 0.08);
   --shadow-md: 0 16px 35px rgba(15, 23, 42, 0.15);
