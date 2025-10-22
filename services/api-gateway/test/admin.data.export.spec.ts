@@ -1,206 +1,163 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
+import { test } from "node:test";
+
 import Fastify from "fastify";
-import adminDataRoutes from "../src/routes/admin.data";
-import { subjectDataExportResponseSchema } from "../src/schemas/admin.data";
 
-type DbOverrides = {
-  userFindFirst?: DbClient["user"]["findFirst"];
-  bankLineCount?: DbClient["bankLine"]["count"];
-  accessLogCreate?: NonNullable<DbClient["accessLog"]>["create"];
-};
+import {
+  registerAdminDataRoutes,
+  type SecurityLogPayload,
+} from "../src/routes/admin.data";
+import {
+  adminDataExportRequestSchema,
+  adminDataExportResponseSchema,
+} from "../src/schemas/admin.data";
 
-type DbClient = {
-  user: {
-    findFirst: (args: {
-      where: { email: string; orgId: string };
-      select: {
-        id: true;
-        email: true;
-        createdAt: true;
-        org: { select: { id: true; name: true } };
-      };
-    }) => Promise<
-      | {
-          id: string;
-          email: string;
-          createdAt: Date;
-          org: { id: string; name: string };
-        }
-      | null
-    >;
-  };
-  bankLine: {
-    count: (args: { where: { orgId: string } }) => Promise<number>;
-  };
-  accessLog: {
-    create: (args: {
-      data: {
-        event: string;
-        orgId: string;
-        principalId: string;
-        subjectEmail: string;
-      };
-    }) => Promise<unknown>;
-  };
-};
+const ADMIN_TOKEN = "test-admin-token";
+process.env.ADMIN_TOKEN = ADMIN_TOKEN;
 
-const buildTestDb = (overrides: DbOverrides = {}): DbClient => ({
-  user: {
-    findFirst:
-      overrides.userFindFirst ??
-      (async () => ({
-        id: "user-1",
-        email: "subject@example.com",
-        createdAt: new Date("2023-01-01T00:00:00.000Z"),
-        org: { id: "org-123", name: "Example Org" },
-      })),
-  },
-  bankLine: {
-    count: overrides.bankLineCount ?? (async () => 0),
-  },
-  accessLog: {
-    create: overrides.accessLogCreate ?? (async () => ({})),
-  },
-});
-
-const buildToken = (principal: {
-  id: string;
+type SubjectExportRecord = {
+  subjectId: string;
   orgId: string;
-  role: "admin" | "user";
-  email: string;
-}) => `Bearer ${Buffer.from(JSON.stringify(principal)).toString("base64url")}`;
-
-const buildApp = async (
-  db: DbClient,
-  secLog: (entry: {
-    event: string;
-    orgId: string;
-    principal: string;
-    subjectEmail: string;
-  }) => void = () => {}
-) => {
-  const app = Fastify();
-  app.decorate("db", db);
-  app.decorate("secLog", secLog);
-  await app.register(adminDataRoutes);
-  await app.ready();
-  return app;
+  createdAt: Date;
+  bankLineCount: number;
 };
 
-test("401 without token", async () => {
-  const app = await buildApp(buildTestDb());
+type BuildAppOptions = {
+  getSubjectExport?: (subjectId: string) => Promise<SubjectExportRecord | null>;
+};
+
+const buildApp = async (options: BuildAppOptions = {}) => {
+  const secLogCalls: SecurityLogPayload[] = [];
+  const app = Fastify({ logger: false });
+  await registerAdminDataRoutes(app, {
+    getSubjectExport: options.getSubjectExport,
+    secLog: (payload) => {
+      secLogCalls.push(payload);
+    },
+  });
+  await app.ready();
+
+  return { app, secLogCalls };
+};
+
+test("401 when Authorization header is missing", async (t) => {
+  const { app } = await buildApp();
+  t.after(async () => {
+    await app.close();
+  });
+
   const response = await app.inject({
     method: "POST",
     url: "/admin/data/export",
-    payload: { orgId: "org-123", email: "subject@example.com" },
+    payload: { subjectId: "subject-1" },
   });
+
   assert.equal(response.statusCode, 401);
-  await app.close();
+  assert.deepEqual(response.json(), { error: "unauthorized" });
 });
 
-test("403 when principal is not admin", async () => {
-  const app = await buildApp(buildTestDb());
+test("401 when token does not match", async (t) => {
+  const { app } = await buildApp();
+  t.after(async () => {
+    await app.close();
+  });
+
   const response = await app.inject({
     method: "POST",
     url: "/admin/data/export",
-    payload: { orgId: "org-123", email: "subject@example.com" },
-    headers: {
-      authorization: buildToken({
-        id: "user-1",
-        orgId: "org-123",
-        role: "user",
-        email: "user@example.com",
-      }),
-    },
+    payload: { subjectId: "subject-1" },
+    headers: { authorization: "Bearer wrong" },
   });
-  assert.equal(response.statusCode, 403);
-  await app.close();
+
+  assert.equal(response.statusCode, 401);
+  assert.deepEqual(response.json(), { error: "unauthorized" });
 });
 
-test("404 when subject is missing", async () => {
-  const app = await buildApp(
-    buildTestDb({
-      userFindFirst: async () => null,
-    })
-  );
+test("400 when request payload is invalid", async (t) => {
+  const { app } = await buildApp();
+  t.after(async () => {
+    await app.close();
+  });
+
   const response = await app.inject({
     method: "POST",
     url: "/admin/data/export",
-    payload: { orgId: "org-123", email: "missing@example.com" },
-    headers: {
-      authorization: buildToken({
-        id: "admin-1",
-        orgId: "org-123",
-        role: "admin",
-        email: "admin@example.com",
-      }),
-    },
+    payload: {},
+    headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
   });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error, "Bad Request");
+});
+
+test("404 when export record is not found", async (t) => {
+  const { app } = await buildApp({
+    getSubjectExport: async () => null,
+  });
+  t.after(async () => {
+    await app.close();
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/admin/data/export",
+    payload: { subjectId: "missing" },
+    headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+  });
+
   assert.equal(response.statusCode, 404);
-  await app.close();
+  assert.deepEqual(response.json(), { error: "not_found" });
 });
 
-test("200 returns expected export bundle", async () => {
-  const accessLogCalls: unknown[] = [];
-  const secLogCalls: unknown[] = [];
-  const app = await buildApp(
-    buildTestDb({
-      bankLineCount: async () => 5,
-      userFindFirst: async () => ({
-        id: "user-99",
-        email: "subject@example.com",
-        createdAt: new Date("2022-05-05T00:00:00.000Z"),
-        org: { id: "org-123", name: "Example Org" },
-      }),
-      accessLogCreate: async (args) => {
-        accessLogCalls.push(args);
-        return {};
-      },
-    }),
-    (entry) => {
-      secLogCalls.push(entry);
-    }
-  );
+test("200 when export succeeds", async (t) => {
+  const record: SubjectExportRecord = {
+    subjectId: "subject-99",
+    orgId: "org-55",
+    createdAt: new Date("2024-01-01T00:00:00.000Z"),
+    bankLineCount: 7,
+  };
+
+  let fetchCalls: string[] = [];
+  const { app, secLogCalls } = await buildApp({
+    getSubjectExport: async (subjectId) => {
+      fetchCalls.push(subjectId);
+      return record;
+    },
+  });
+  t.after(async () => {
+    await app.close();
+  });
 
   const response = await app.inject({
     method: "POST",
     url: "/admin/data/export",
-    payload: { orgId: "org-123", email: "subject@example.com" },
-    headers: {
-      authorization: buildToken({
-        id: "admin-1",
-        orgId: "org-123",
-        role: "admin",
-        email: "admin@example.com",
-      }),
-    },
+    payload: { subjectId: record.subjectId },
+    headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
   });
 
   assert.equal(response.statusCode, 200);
   const json = response.json();
-  const parsed = subjectDataExportResponseSchema.parse(json);
-  assert.equal(parsed.org.id, "org-123");
-  assert.equal(parsed.user.id, "user-99");
-  assert.equal(parsed.relationships.bankLinesCount, 5);
-  assert.ok(Date.parse(parsed.user.createdAt));
-  assert.ok(Date.parse(parsed.exportedAt));
-  assert.equal(accessLogCalls.length, 1);
-  assert.deepEqual(accessLogCalls[0], {
-    data: {
-      event: "data_export",
-      orgId: "org-123",
-      principalId: "admin-1",
-      subjectEmail: "subject@example.com",
-    },
+  const parsedRequest = adminDataExportRequestSchema.parse({
+    subjectId: record.subjectId,
   });
+  assert.equal(parsedRequest.subjectId, record.subjectId);
+
+  const parsedResponse = adminDataExportResponseSchema.parse(json);
+  assert.equal(parsedResponse.subject.id, record.subjectId);
+  assert.equal(parsedResponse.subject.orgId, record.orgId);
+  assert.equal(parsedResponse.relationships.bankLineCount, record.bankLineCount);
+  assert.ok(Date.parse(parsedResponse.exportedAt));
+  assert.ok(Date.parse(parsedResponse.subject.createdAt));
+  assert.equal(parsedResponse.metadata.redactedFields.includes("email"), true);
+  assert.equal(parsedResponse.metadata.redactedFields.includes("password"), true);
+
+  assert.deepEqual(fetchCalls, [record.subjectId]);
   assert.equal(secLogCalls.length, 1);
   assert.deepEqual(secLogCalls[0], {
-    event: "data_export",
-    orgId: "org-123",
-    principal: "admin-1",
-    subjectEmail: "subject@example.com",
+    event: "admin_data_export",
+    orgId: record.orgId,
+    principal: "admin_token",
+    subjectId: record.subjectId,
+    occurredAt: parsedResponse.exportedAt,
   });
-
-  await app.close();
 });

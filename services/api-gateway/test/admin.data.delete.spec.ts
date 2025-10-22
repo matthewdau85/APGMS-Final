@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
-import { afterEach, beforeEach, describe, it } from "node:test";
+import { test } from "node:test";
 
-import cors from "@fastify/cors";
 import Fastify from "fastify";
 
 import {
@@ -10,242 +9,139 @@ import {
 } from "../src/routes/admin.data";
 import { adminDataDeleteResponseSchema } from "../src/schemas/admin.data";
 
-process.env.DATABASE_URL ??= "postgresql://user:pass@localhost:5432/test";
-process.env.SHADOW_DATABASE_URL ??= "postgresql://user:pass@localhost:5432/test-shadow";
+const ADMIN_TOKEN = "test-admin-token";
+process.env.ADMIN_TOKEN = ADMIN_TOKEN;
 
-type PrismaUser = {
-  id: string;
-  email: string;
-  password: string | null;
-  createdAt: Date;
+type DeleteResult = {
+  subjectId: string;
   orgId: string;
+  deletedAt: Date;
 };
 
-describe("POST /admin/data/delete", () => {
-  let app: ReturnType<typeof Fastify>;
-  const prismaStub = {
-    user: {
-      findFirst: async () => null as PrismaUser | null,
-      update: async (_args: any) => null as PrismaUser | null,
-      delete: async (_args: any) => null as PrismaUser | null,
+type BuildOptions = {
+  deleteSubject?: (subjectId: string) => Promise<DeleteResult | null>;
+};
+
+const buildApp = async (options: BuildOptions = {}) => {
+  const secLogCalls: SecurityLogPayload[] = [];
+  const app = Fastify({ logger: false });
+  await registerAdminDataRoutes(app, {
+    deleteSubject: options.deleteSubject,
+    secLog: (payload) => {
+      secLogCalls.push(payload);
     },
-    bankLine: {
-      count: async (_args: any) => 0,
-    },
-  };
-  let securityLogs: SecurityLogPayload[] = [];
-
-  beforeEach(async () => {
-    app = Fastify({ logger: false });
-    await app.register(cors, { origin: true });
-    securityLogs = [];
-
-    prismaStub.user.findFirst = async () => null;
-    prismaStub.user.update = async () => null;
-    prismaStub.user.delete = async () => null;
-    prismaStub.bankLine.count = async () => 0;
-
-    await registerAdminDataRoutes(app, {
-      prisma: prismaStub as any,
-      secLog: async (payload) => {
-        securityLogs.push(payload);
-      },
-    });
-
-    await app.ready();
   });
+  await app.ready();
+  return { app, secLogCalls };
+};
 
-  afterEach(async () => {
+test("401 when Authorization header is missing", async (t) => {
+  const { app } = await buildApp();
+  t.after(async () => {
     await app.close();
   });
 
-  const buildToken = (role: string, orgId: string, principalId = "principal") =>
-    `Bearer ${role}:${principalId}:${orgId}`;
-
-  const defaultPayload = {
-    orgId: "org-123",
-    email: "user@example.com",
-    confirm: "DELETE",
-  } as const;
-
-  it("returns 401 without bearer token", async () => {
-    const response = await app.inject({
-      method: "POST",
-      url: "/admin/data/delete",
-      payload: defaultPayload,
-    });
-
-    assert.equal(response.statusCode, 401);
+  const response = await app.inject({
+    method: "POST",
+    url: "/admin/data/delete",
+    payload: { subjectId: "subject-1" },
   });
 
-  it("rejects non-admin principals", async () => {
-    let findCalled = false;
-    prismaStub.user.findFirst = (async (...args: any[]) => {
-      findCalled = true;
-      return null;
-    }) as typeof prismaStub.user.findFirst;
+  assert.equal(response.statusCode, 401);
+  assert.deepEqual(response.json(), { error: "unauthorized" });
+});
 
-    const response = await app.inject({
-      method: "POST",
-      url: "/admin/data/delete",
-      payload: defaultPayload,
-      headers: {
-        authorization: buildToken("member", defaultPayload.orgId),
-      },
-    });
-
-    assert.equal(response.statusCode, 403);
-    assert.equal(findCalled, false);
+test("401 when Authorization token does not match", async (t) => {
+  const { app } = await buildApp();
+  t.after(async () => {
+    await app.close();
   });
 
-  it("validates confirm token", async () => {
-    const response = await app.inject({
-      method: "POST",
-      url: "/admin/data/delete",
-      payload: { ...defaultPayload, confirm: "nope" },
-      headers: {
-        authorization: buildToken("admin", defaultPayload.orgId),
-      },
-    });
-
-    assert.equal(response.statusCode, 400);
+  const response = await app.inject({
+    method: "POST",
+    url: "/admin/data/delete",
+    payload: { subjectId: "subject-1" },
+    headers: { authorization: "Bearer wrong" },
   });
 
-  it("returns 404 for unknown subject", async () => {
-    prismaStub.user.findFirst = async () => null;
+  assert.equal(response.statusCode, 401);
+  assert.deepEqual(response.json(), { error: "unauthorized" });
+});
 
-    const response = await app.inject({
-      method: "POST",
-      url: "/admin/data/delete",
-      payload: defaultPayload,
-      headers: {
-        authorization: buildToken("admin", defaultPayload.orgId),
-      },
-    });
-
-    assert.equal(response.statusCode, 404);
+test("400 when body is invalid", async (t) => {
+  const { app } = await buildApp();
+  t.after(async () => {
+    await app.close();
   });
 
-  it("anonymizes user with constraint risk", async () => {
-    const user: PrismaUser = {
-      id: "user-1",
-      email: defaultPayload.email,
-      password: "secret",
-      createdAt: new Date(),
-      orgId: defaultPayload.orgId,
-    };
-
-    let findCalls = 0;
-    prismaStub.user.findFirst = async () => {
-      findCalls += 1;
-      return user;
-    };
-
-    const countCalls: any[] = [];
-    prismaStub.bankLine.count = async (args: any) => {
-      countCalls.push(args);
-      if (countCalls.length === 1) {
-        return 1;
-      }
-      return 0;
-    };
-
-    const updateCalls: any[] = [];
-    prismaStub.user.update = async (args: any) => {
-      updateCalls.push(args);
-      return { ...user, email: "deleted" };
-    };
-
-    let deleteCalled = false;
-    prismaStub.user.delete = async () => {
-      deleteCalled = true;
-      return user;
-    };
-
-    const response = await app.inject({
-      method: "POST",
-      url: "/admin/data/delete",
-      payload: defaultPayload,
-      headers: {
-        authorization: buildToken("admin", defaultPayload.orgId, "admin-1"),
-      },
-    });
-
-    assert.equal(response.statusCode, 202);
-    const body = response.json();
-    assert.doesNotThrow(() => adminDataDeleteResponseSchema.parse(body));
-    assert.equal(body.action, "anonymized");
-    assert.equal(body.userId, user.id);
-    assert.equal(typeof body.occurredAt, "string");
-
-    assert.equal(findCalls, 1);
-    assert.equal(countCalls.length, 1);
-    assert.equal(countCalls[0].where.payee, user.email);
-    assert.equal(deleteCalled, false);
-    assert.equal(updateCalls.length, 1);
-    const updateArgs = updateCalls[0];
-    assert.match(updateArgs.data.email, /^deleted\+[a-f0-9]{12}@example.com$/);
-    assert.equal(updateArgs.data.password, "__deleted__");
-
-    const lastLog = securityLogs.at(-1);
-    assert.deepEqual(lastLog, {
-      event: "data_delete",
-      orgId: defaultPayload.orgId,
-      principal: "admin-1",
-      subjectUserId: user.id,
-      mode: "anonymized",
-    });
+  const response = await app.inject({
+    method: "POST",
+    url: "/admin/data/delete",
+    payload: {},
+    headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
   });
 
-  it("hard deletes user when no constraint risk", async () => {
-    const user: PrismaUser = {
-      id: "user-2",
-      email: defaultPayload.email,
-      password: "secret",
-      createdAt: new Date(),
-      orgId: defaultPayload.orgId,
-    };
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error, "Bad Request");
+});
 
-    prismaStub.user.findFirst = async () => user;
-    prismaStub.bankLine.count = async () => 0;
+test("404 when delete service cannot locate subject", async (t) => {
+  const { app } = await buildApp({
+    deleteSubject: async () => null,
+  });
+  t.after(async () => {
+    await app.close();
+  });
 
-    let updateCalled = false;
-    prismaStub.user.update = async (args: any) => {
-      updateCalled = true;
-      return { ...user, email: args.data.email };
-    };
+  const response = await app.inject({
+    method: "POST",
+    url: "/admin/data/delete",
+    payload: { subjectId: "missing" },
+    headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+  });
 
-    let deleteArgs: any = null;
-    prismaStub.user.delete = async (args: any) => {
-      deleteArgs = args;
-      return user;
-    };
+  assert.equal(response.statusCode, 404);
+  assert.deepEqual(response.json(), { error: "not_found" });
+});
 
-    const response = await app.inject({
-      method: "POST",
-      url: "/admin/data/delete",
-      payload: defaultPayload,
-      headers: {
-        authorization: buildToken("admin", defaultPayload.orgId),
-      },
-    });
+test("202 when delete succeeds", async (t) => {
+  const deletedAt = new Date("2024-02-02T10:20:30.000Z");
+  let calls: string[] = [];
+  const { app, secLogCalls } = await buildApp({
+    deleteSubject: async (subjectId) => {
+      calls.push(subjectId);
+      return {
+        subjectId,
+        orgId: "org-1",
+        deletedAt,
+      };
+    },
+  });
+  t.after(async () => {
+    await app.close();
+  });
 
-    assert.equal(response.statusCode, 202);
-    const body = response.json();
-    assert.doesNotThrow(() => adminDataDeleteResponseSchema.parse(body));
-    assert.equal(body.action, "deleted");
-    assert.equal(body.userId, user.id);
+  const response = await app.inject({
+    method: "POST",
+    url: "/admin/data/delete",
+    payload: { subjectId: "subject-123" },
+    headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+  });
 
-    assert.equal(updateCalled, false);
-    assert.deepEqual(deleteArgs, { where: { id: user.id } });
+  assert.equal(response.statusCode, 202);
+  const json = response.json();
+  const parsed = adminDataDeleteResponseSchema.parse(json);
+  assert.equal(parsed.subjectId, "subject-123");
+  assert.equal(parsed.status, "deleted");
+  assert.equal(parsed.deletedAt, deletedAt.toISOString());
+  assert.deepEqual(calls, ["subject-123"]);
 
-    const lastLog = securityLogs.at(-1);
-    assert.deepEqual(lastLog, {
-      event: "data_delete",
-      orgId: defaultPayload.orgId,
-      principal: "principal",
-      subjectUserId: user.id,
-      mode: "deleted",
-    });
+  assert.equal(secLogCalls.length, 1);
+  assert.deepEqual(secLogCalls[0], {
+    event: "admin_data_delete",
+    orgId: "org-1",
+    principal: "admin_token",
+    subjectId: "subject-123",
+    occurredAt: deletedAt.toISOString(),
   });
 });
