@@ -1,9 +1,11 @@
-﻿import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
 import { z } from "zod";
 import { Prisma, type Org, type User, type BankLine, type PrismaClient } from "@prisma/client";
 
 import { maskError, maskObject } from "@apgms/shared";
+import { loadEnvironmentPIIProviders, type AuditLogger } from "@apgms/shared/pii";
+import { AdminGuardConfigurationError, configurePIIProviders, registerPIIRoutes } from "./lib/pii";
 
 const ADMIN_HEADER = "x-admin-token";
 
@@ -66,6 +68,9 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   app.register(cors, { origin: true });
 
   app.log.info(maskObject({ DATABASE_URL: process.env.DATABASE_URL }), "loaded env");
+
+  await setupPIIProviders(app);
+  registerPIIRoutes(app, createPIIAdminGuard());
 
   app.get("/health", async () => ({ ok: true, service: "api-gateway" }));
 
@@ -220,21 +225,84 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 }
 
 function requireAdmin(req: FastifyRequest, rep: FastifyReply): boolean {
-  const configuredToken = process.env.ADMIN_TOKEN;
-  if (!configuredToken) {
+  const decision = evaluateAdminRequest(req);
+  if (decision.status === "missing_config") {
     req.log.error("ADMIN_TOKEN is not configured");
     void rep.code(500).send({ error: "admin_config_missing" });
     return false;
+  }
+  if (decision.status === "forbidden") {
+    req.log.warn({ actor: decision.actorId }, "admin guard denied");
+    void rep.code(403).send({ error: "forbidden" });
+    return false;
+  }
+  return true;
+}
+
+async function setupPIIProviders(app: FastifyInstance): Promise<void> {
+  try {
+    const providers = await loadEnvironmentPIIProviders();
+    const auditLogger = createPIIAuditLogger(app);
+    const activeKid = providers.kms.getActiveKey().kid;
+    const activeSid = providers.saltProvider.getActiveSalt().sid;
+    configurePIIProviders({ ...providers, auditLogger });
+    app.log.info({ pii: { activeKid, activeSid } }, "configured pii providers");
+  } catch (error) {
+    app.log.warn({ err: maskError(error) }, "unable to configure pii providers");
+  }
+}
+
+function createPIIAuditLogger(app: FastifyInstance): AuditLogger {
+  return {
+    async record(event) {
+      app.log.info(
+        {
+          audit: "pii",
+          actorId: event.actorId,
+          action: event.action,
+          timestamp: event.timestamp,
+          metadata: event.metadata,
+        },
+        "pii audit event",
+      );
+    },
+  } satisfies AuditLogger;
+}
+
+function createPIIAdminGuard() {
+  return (request: FastifyRequest) => {
+    const decision = evaluateAdminRequest(request);
+    if (decision.status === "missing_config") {
+      throw new AdminGuardConfigurationError("ADMIN_TOKEN is not configured");
+    }
+    return { allowed: decision.status === "allowed", actorId: decision.actorId };
+  };
+}
+
+type AdminDecisionStatus = "allowed" | "forbidden" | "missing_config";
+
+interface AdminDecision {
+  status: AdminDecisionStatus;
+  actorId: string;
+}
+
+function evaluateAdminRequest(req: FastifyRequest): AdminDecision {
+  const configuredToken = process.env.ADMIN_TOKEN;
+  const actorHeader = (req.headers["x-admin-actor"] as string | undefined)?.trim();
+  const actorId = actorHeader && actorHeader.length > 0 ? actorHeader : "admin-token";
+
+  if (!configuredToken) {
+    return { status: "missing_config", actorId: actorHeader ?? "unconfigured" };
   }
 
   const provided = req.headers[ADMIN_HEADER] ?? req.headers[ADMIN_HEADER.toUpperCase() as keyof typeof req.headers];
   const providedValue = Array.isArray(provided) ? provided[0] : provided;
 
-  if (providedValue !== configuredToken) {
-    void rep.code(403).send({ error: "forbidden" });
-    return false;
+  if (typeof providedValue !== "string" || providedValue !== configuredToken) {
+    return { status: "forbidden", actorId: actorHeader ?? "unauthorised" };
   }
-  return true;
+
+  return { status: "allowed", actorId };
 }
 
 function buildOrgExport(org: ExportableOrg): AdminOrgExport {
