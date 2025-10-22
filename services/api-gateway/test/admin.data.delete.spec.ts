@@ -4,10 +4,7 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import cors from "@fastify/cors";
 import Fastify from "fastify";
 
-import {
-  registerAdminDataRoutes,
-  type SecurityLogPayload,
-} from "../src/routes/admin.data";
+import adminDataRoutes, { type SecurityLogPayload } from "../src/routes/admin.data";
 import { adminDataDeleteResponseSchema } from "../src/schemas/admin.data";
 
 process.env.DATABASE_URL ??= "postgresql://user:pass@localhost:5432/test";
@@ -45,8 +42,8 @@ describe("POST /admin/data/delete", () => {
     prismaStub.user.delete = async () => null;
     prismaStub.bankLine.count = async () => 0;
 
-    await registerAdminDataRoutes(app, {
-      prisma: prismaStub as any,
+    await app.register(adminDataRoutes, {
+      db: prismaStub as any,
       secLog: async (payload) => {
         securityLogs.push(payload);
       },
@@ -59,8 +56,15 @@ describe("POST /admin/data/delete", () => {
     await app.close();
   });
 
-  const buildToken = (role: string, orgId: string, principalId = "principal") =>
-    `Bearer ${role}:${principalId}:${orgId}`;
+  const buildToken = (role: "admin" | "user", orgId: string, principalId = "principal") =>
+    `Bearer ${Buffer.from(
+      JSON.stringify({
+        id: principalId,
+        orgId,
+        role,
+        email: `${principalId}@example.com`,
+      })
+    ).toString("base64url")}`;
 
   const defaultPayload = {
     orgId: "org-123",
@@ -90,7 +94,7 @@ describe("POST /admin/data/delete", () => {
       url: "/admin/data/delete",
       payload: defaultPayload,
       headers: {
-        authorization: buildToken("member", defaultPayload.orgId),
+        authorization: buildToken("user", defaultPayload.orgId),
       },
     });
 

@@ -29,6 +29,8 @@ type DbClient = {
         }
       | null
     >;
+    update: (args: unknown) => Promise<unknown>;
+    delete: (args: unknown) => Promise<unknown>;
   };
   bankLine: {
     count: (args: { where: { orgId: string } }) => Promise<number>;
@@ -55,6 +57,8 @@ const buildTestDb = (overrides: DbOverrides = {}): DbClient => ({
         createdAt: new Date("2023-01-01T00:00:00.000Z"),
         org: { id: "org-123", name: "Example Org" },
       })),
+    update: async () => ({}),
+    delete: async () => ({}),
   },
   bankLine: {
     count: overrides.bankLineCount ?? (async () => 0),
@@ -81,9 +85,7 @@ const buildApp = async (
   }) => void = () => {}
 ) => {
   const app = Fastify();
-  app.decorate("db", db);
-  app.decorate("secLog", secLog);
-  await app.register(adminDataRoutes);
+  await app.register(adminDataRoutes, { db, secLog });
   await app.ready();
   return app;
 };
