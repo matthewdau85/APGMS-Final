@@ -1,6 +1,7 @@
 ﻿<<<<<<< HEAD
 import { createHash } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { logger, withRedaction } from "@apgms/shared/logging";
 import {
   adminDataDeleteRequestSchema,
   adminDataDeleteResponseSchema,
@@ -205,6 +206,27 @@ const adminDataRoutes: FastifyPluginAsync = async (app) => {
         occurredAt,
       });
     }
+
+    logger.info({
+      type: "audit",
+      action: "admin.data.delete",
+      orgId: body.orgId,
+      by: principal.id,
+      target: subject.id,
+      before: withRedaction({
+        user: {
+          id: subject.id,
+          email: subject.email,
+          orgId: subject.orgId,
+        },
+      }),
+      after: withRedaction({
+        action: response.action,
+        userId: subject.id,
+      }),
+      ts: new Date().toISOString(),
+      corrId: request.id,
+    });
 
     await securityLogger({
       event: "data_delete",
