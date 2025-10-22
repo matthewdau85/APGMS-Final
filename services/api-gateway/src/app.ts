@@ -1,7 +1,9 @@
-﻿import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
+import securityHeaders from "./plugins/security-headers";
 import { z } from "zod";
-import { Prisma, type Org, type User, type BankLine, type PrismaClient } from "@prisma/client";
+import type { Org, User, BankLine, PrismaClient } from "@prisma/client";
+import { Decimal } from "@prisma/client/runtime/library";
 
 import { maskError, maskObject } from "@apgms/shared";
 
@@ -63,7 +65,53 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   const prisma = (options.prisma as PrismaLike | undefined) ?? (await loadDefaultPrisma());
 
   const app = Fastify({ logger: true });
-  app.register(cors, { origin: true });
+
+  const allowedOrigins = new Set(
+    (process.env.ALLOWED_ORIGINS ?? "")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter((origin) => origin.length > 0),
+  );
+
+  app.addHook("onRequest", async (request, reply) => {
+    const originHeader = request.headers.origin as string | undefined;
+    if (originHeader && !allowedOrigins.has(originHeader)) {
+      request.log.warn({ origin: originHeader }, "blocked disallowed origin");
+      reply.code(403).send({ error: "origin_not_allowed" });
+      return reply;
+    }
+  });
+
+  const cspDirectives = {
+    "default-src": ["'self'"],
+    "script-src": ["'self'"],
+    "style-src": ["'self'"],
+    "img-src": ["'self'", "data:"],
+    "connect-src": ["'self'"],
+    "font-src": ["'self'"],
+    "base-uri": ["'self'"],
+    "frame-ancestors": ["'none'"],
+    "form-action": ["'self'"],
+    "upgrade-insecure-requests": [],
+  } as const;
+
+  await securityHeaders(app, {
+    contentSecurityPolicy: {
+      directives: cspDirectives,
+    },
+  });
+
+  app.register(cors, {
+    origin(origin, cb) {
+      if (!origin || allowedOrigins.has(origin)) {
+        cb(null, true);
+        return;
+      }
+      cb(null, false);
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  });
 
   app.log.info(maskObject({ DATABASE_URL: process.env.DATABASE_URL }), "loaded env");
 
@@ -116,7 +164,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
           create: {
             orgId,
             date: new Date(date),
-            amount: new Prisma.Decimal(amount),
+            amount: new Decimal(amount),
             payee,
             desc,
             idempotencyKey: idemKey,
@@ -136,7 +184,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
         data: {
           orgId,
           date: new Date(date),
-          amount: new Prisma.Decimal(amount),
+          amount: new Decimal(amount),
           payee,
           desc,
         },
