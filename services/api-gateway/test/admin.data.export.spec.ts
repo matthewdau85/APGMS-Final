@@ -64,12 +64,13 @@ const buildTestDb = (overrides: DbOverrides = {}): DbClient => ({
   },
 });
 
-const buildToken = (principal: {
-  id: string;
-  orgId: string;
-  role: "admin" | "user";
-  email: string;
-}) => `Bearer ${Buffer.from(JSON.stringify(principal)).toString("base64url")}`;
+const ADMIN_TOKEN = "admin-token";
+const ADMIN_PRINCIPAL_ID = "admin-1";
+
+process.env.ADMIN_TOKEN = ADMIN_TOKEN;
+process.env.ADMIN_PRINCIPAL_ID = ADMIN_PRINCIPAL_ID;
+
+const buildToken = () => `Bearer ${ADMIN_TOKEN}`;
 
 const buildApp = async (
   db: DbClient,
@@ -99,22 +100,17 @@ test("401 without token", async () => {
   await app.close();
 });
 
-test("403 when principal is not admin", async () => {
+test("401 when token does not match admin token", async () => {
   const app = await buildApp(buildTestDb());
   const response = await app.inject({
     method: "POST",
     url: "/admin/data/export",
     payload: { orgId: "org-123", email: "subject@example.com" },
     headers: {
-      authorization: buildToken({
-        id: "user-1",
-        orgId: "org-123",
-        role: "user",
-        email: "user@example.com",
-      }),
+      authorization: "Bearer wrong-token",
     },
   });
-  assert.equal(response.statusCode, 403);
+  assert.equal(response.statusCode, 401);
   await app.close();
 });
 
@@ -129,12 +125,7 @@ test("404 when subject is missing", async () => {
     url: "/admin/data/export",
     payload: { orgId: "org-123", email: "missing@example.com" },
     headers: {
-      authorization: buildToken({
-        id: "admin-1",
-        orgId: "org-123",
-        role: "admin",
-        email: "admin@example.com",
-      }),
+      authorization: buildToken(),
     },
   });
   assert.equal(response.statusCode, 404);
@@ -168,12 +159,7 @@ test("200 returns expected export bundle", async () => {
     url: "/admin/data/export",
     payload: { orgId: "org-123", email: "subject@example.com" },
     headers: {
-      authorization: buildToken({
-        id: "admin-1",
-        orgId: "org-123",
-        role: "admin",
-        email: "admin@example.com",
-      }),
+      authorization: buildToken(),
     },
   });
 
@@ -190,7 +176,7 @@ test("200 returns expected export bundle", async () => {
     data: {
       event: "data_export",
       orgId: "org-123",
-      principalId: "admin-1",
+      principalId: ADMIN_PRINCIPAL_ID,
       subjectEmail: "subject@example.com",
     },
   });
@@ -198,7 +184,7 @@ test("200 returns expected export bundle", async () => {
   assert.deepEqual(secLogCalls[0], {
     event: "data_export",
     orgId: "org-123",
-    principal: "admin-1",
+    principal: ADMIN_PRINCIPAL_ID,
     subjectEmail: "subject@example.com",
   });
 

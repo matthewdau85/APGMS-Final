@@ -13,6 +13,9 @@ import { adminDataDeleteResponseSchema } from "../src/schemas/admin.data";
 process.env.DATABASE_URL ??= "postgresql://user:pass@localhost:5432/test";
 process.env.SHADOW_DATABASE_URL ??= "postgresql://user:pass@localhost:5432/test-shadow";
 
+const ADMIN_TOKEN = "admin-delete-token";
+const ADMIN_PRINCIPAL_ID = "admin-1";
+
 type PrismaUser = {
   id: string;
   email: string;
@@ -36,6 +39,9 @@ describe("POST /admin/data/delete", () => {
   let securityLogs: SecurityLogPayload[] = [];
 
   beforeEach(async () => {
+    process.env.ADMIN_TOKEN = ADMIN_TOKEN;
+    process.env.ADMIN_PRINCIPAL_ID = ADMIN_PRINCIPAL_ID;
+
     app = Fastify({ logger: false });
     await app.register(cors, { origin: true });
     securityLogs = [];
@@ -59,8 +65,7 @@ describe("POST /admin/data/delete", () => {
     await app.close();
   });
 
-  const buildToken = (role: string, orgId: string, principalId = "principal") =>
-    `Bearer ${role}:${principalId}:${orgId}`;
+  const buildToken = () => `Bearer ${ADMIN_TOKEN}`;
 
   const defaultPayload = {
     orgId: "org-123",
@@ -78,7 +83,7 @@ describe("POST /admin/data/delete", () => {
     assert.equal(response.statusCode, 401);
   });
 
-  it("rejects non-admin principals", async () => {
+  it("returns 401 when token does not match admin token", async () => {
     let findCalled = false;
     prismaStub.user.findFirst = (async (...args: any[]) => {
       findCalled = true;
@@ -90,11 +95,11 @@ describe("POST /admin/data/delete", () => {
       url: "/admin/data/delete",
       payload: defaultPayload,
       headers: {
-        authorization: buildToken("member", defaultPayload.orgId),
+        authorization: "Bearer invalid-token",
       },
     });
 
-    assert.equal(response.statusCode, 403);
+    assert.equal(response.statusCode, 401);
     assert.equal(findCalled, false);
   });
 
@@ -104,7 +109,7 @@ describe("POST /admin/data/delete", () => {
       url: "/admin/data/delete",
       payload: { ...defaultPayload, confirm: "nope" },
       headers: {
-        authorization: buildToken("admin", defaultPayload.orgId),
+        authorization: buildToken(),
       },
     });
 
@@ -119,7 +124,7 @@ describe("POST /admin/data/delete", () => {
       url: "/admin/data/delete",
       payload: defaultPayload,
       headers: {
-        authorization: buildToken("admin", defaultPayload.orgId),
+        authorization: buildToken(),
       },
     });
 
@@ -167,7 +172,7 @@ describe("POST /admin/data/delete", () => {
       url: "/admin/data/delete",
       payload: defaultPayload,
       headers: {
-        authorization: buildToken("admin", defaultPayload.orgId, "admin-1"),
+        authorization: buildToken(),
       },
     });
 
@@ -191,7 +196,7 @@ describe("POST /admin/data/delete", () => {
     assert.deepEqual(lastLog, {
       event: "data_delete",
       orgId: defaultPayload.orgId,
-      principal: "admin-1",
+      principal: ADMIN_PRINCIPAL_ID,
       subjectUserId: user.id,
       mode: "anonymized",
     });
@@ -226,7 +231,7 @@ describe("POST /admin/data/delete", () => {
       url: "/admin/data/delete",
       payload: defaultPayload,
       headers: {
-        authorization: buildToken("admin", defaultPayload.orgId),
+        authorization: buildToken(),
       },
     });
 
@@ -243,7 +248,7 @@ describe("POST /admin/data/delete", () => {
     assert.deepEqual(lastLog, {
       event: "data_delete",
       orgId: defaultPayload.orgId,
-      principal: "principal",
+      principal: ADMIN_PRINCIPAL_ID,
       subjectUserId: user.id,
       mode: "deleted",
     });
