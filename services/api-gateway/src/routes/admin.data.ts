@@ -1,58 +1,192 @@
-﻿<<<<<<< HEAD
 import { createHash } from "node:crypto";
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
+import { z } from "zod";
+
 import {
   adminDataDeleteRequestSchema,
   adminDataDeleteResponseSchema,
-  type AdminDataDeleteRequest,
-  type AdminDataDeleteResponse,
+  subjectDataExportRequestSchema,
+  subjectDataExportResponseSchema,
 } from "../schemas/admin.data";
+import { hashPassword } from "@apgms/shared";
 
-interface Principal {
+const PASSWORD_PLACEHOLDER = "__deleted__";
+const LEGACY_BEARER = /^Bearer\s+(.+)$/i;
+
+interface LegacyPrincipal {
   id: string;
   role: string;
   orgId: string;
-  token: string;
 }
 
 export interface SecurityLogPayload {
-  event: "data_delete";
+  event: "data_delete" | "data_export";
   orgId: string;
   principal: string;
-  subjectUserId: string;
-  mode: "anonymized" | "deleted";
+  subjectUserId?: string;
+  subjectEmail?: string;
+  mode?: "anonymized" | "deleted";
 }
 
-const PASSWORD_PLACEHOLDER = "__deleted__";
-
 type SharedDbModule = typeof import("../../../../shared/src/db.js");
-type PrismaClientLike = Pick<SharedDbModule["prisma"], "user" | "bankLine">;
+
+type PrismaClientLike = Pick<
+  SharedDbModule["prisma"],
+  "user" | "bankLine" | "org" | "orgTombstone" | "auditLog"
+>;
 
 interface AdminDataRouteDeps {
   prisma?: PrismaClientLike;
   secLog?: (payload: SecurityLogPayload) => Promise<void> | void;
+  auditLog?: (payload: SecurityLogPayload & { occurredAt: string }) => Promise<void> | void;
+  hash?: (password: string) => Promise<string>;
+}
+
+async function buildDefaultPrisma(): Promise<PrismaClientLike> {
+  const module = (await import("../../../../shared/src/db.js")) as SharedDbModule;
+  return module.prisma;
 }
 
 export async function registerAdminDataRoutes(
   app: FastifyInstance,
-  deps: AdminDataRouteDeps = {}
-) {
-  const prisma = deps.prisma ?? (await getDefaultPrisma());
-  const securityLogger =
+  deps: AdminDataRouteDeps = {},
+): Promise<void> {
+  const prisma = deps.prisma ?? (await buildDefaultPrisma());
+  const secLog =
     deps.secLog ??
     (async (payload: SecurityLogPayload) => {
       app.log.info({ security: payload }, "security_event");
     });
+  const auditLogger =
+    deps.auditLog ??
+    (prisma.auditLog && prisma.auditLog.create
+      ? async (payload: SecurityLogPayload & { occurredAt: string }) => {
+          await prisma.auditLog.create({
+            data: {
+              orgId: payload.orgId,
+              actorId: payload.principal,
+              action: payload.event,
+              metadata: {
+                ...(payload.subjectUserId ? { subjectUserId: payload.subjectUserId } : {}),
+                ...(payload.subjectEmail ? { subjectEmail: payload.subjectEmail } : {}),
+                ...(payload.mode ? { mode: payload.mode } : {}),
+              },
+              createdAt: new Date(payload.occurredAt),
+            },
+          });
+        }
+      : undefined);
+  const hash = deps.hash ?? hashPassword;
+  const recordSecurityEvent = async (payload: SecurityLogPayload) => {
+    await secLog(payload);
+    if (app.metrics) {
+      app.metrics.recordSecurityEvent(payload.event);
+    }
+  };
 
-  app.post("/admin/data/delete", async (request, reply) => {
-    const principal = parseAuthorization(request);
-=======
-import { FastifyPluginAsync, FastifyRequest } from "fastify";
-import { z } from "zod";
-import {
-  subjectDataExportRequestSchema,
-  subjectDataExportResponseSchema,
-} from "../schemas/admin.data";
+
+  app.post("/admin/data/delete", async (req, reply) => {
+    const principal = parseLegacyPrincipal(req);
+    if (!principal) {
+      app.metrics?.recordSecurityEvent("auth.unauthorized");
+      void reply.code(401).send({ error: "unauthorized" });
+      return;
+    }
+    if (principal.role !== "admin") {
+      app.metrics?.recordSecurityEvent("auth.forbidden");
+      void reply.code(403).send({ error: "forbidden" });
+      return;
+    }
+
+    const parsed = adminDataDeleteRequestSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      void reply.code(400).send({ error: "invalid_request", details: parsed.error.flatten() });
+      return;
+    }
+    const payload = parsed.data;
+    if (payload.orgId !== principal.orgId) {
+      app.metrics?.recordSecurityEvent("auth.forbidden");
+      void reply.code(403).send({ error: "forbidden" });
+      return;
+    }
+
+    const targetUser = await prisma.user.findFirst({
+      where: { email: payload.email, orgId: payload.orgId },
+    });
+    if (!targetUser) {
+      void reply.code(404).send({ error: "user_not_found" });
+      return;
+    }
+
+    const referencedLines = await prisma.bankLine.count({
+      where: { orgId: payload.orgId },
+    });
+
+    const occurredAt = new Date().toISOString();
+    if (referencedLines > 0) {
+      const anonymizedEmail = anonymizeEmail(targetUser.email, targetUser.id);
+      const hashedPlaceholder = await hash(PASSWORD_PLACEHOLDER);
+      await prisma.user.update({
+        where: { id: targetUser.id },
+        data: {
+          email: anonymizedEmail,
+          password: hashedPlaceholder,
+        },
+      });
+
+      await recordSecurityEvent({
+        event: "data_delete",
+        orgId: payload.orgId,
+        principal: principal.id,
+        subjectUserId: targetUser.id,
+        mode: "anonymized",
+      });
+      if (auditLogger) {
+        await auditLogger({
+          event: "data_delete",
+          orgId: payload.orgId,
+          principal: principal.id,
+          subjectUserId: targetUser.id,
+          mode: "anonymized",
+          occurredAt,
+        });
+      }
+
+      const response = {
+        action: "anonymized" as const,
+        userId: targetUser.id,
+        occurredAt,
+      };
+      void reply.code(202).send(response);
+      return;
+    }
+
+    await prisma.user.delete({ where: { id: targetUser.id } });
+    await recordSecurityEvent({
+      event: "data_delete",
+      orgId: payload.orgId,
+      principal: principal.id,
+      subjectUserId: targetUser.id,
+      mode: "deleted",
+    });
+    if (auditLogger) {
+      await auditLogger({
+        event: "data_delete",
+        orgId: payload.orgId,
+        principal: principal.id,
+        subjectUserId: targetUser.id,
+        mode: "deleted",
+        occurredAt,
+      });
+    }
+    const response = {
+      action: "deleted" as const,
+      userId: targetUser.id,
+      occurredAt,
+    };
+    void reply.code(202).send(response);
+  });
+}
 
 const principalSchema = z.object({
   id: z.string(),
@@ -61,236 +195,74 @@ const principalSchema = z.object({
   email: z.string().email(),
 });
 
-type Principal = z.infer<typeof principalSchema>;
-
-type DbClient = {
-  user: {
-    findFirst: (args: {
-      where: { email: string; orgId: string };
-      select: {
-        id: true;
-        email: true;
-        createdAt: true;
-        org: { select: { id: true; name: true } };
-      };
-    }) => Promise<
-      | {
-          id: string;
-          email: string;
-          createdAt: Date;
-          org: { id: string; name: string };
-        }
-      | null
-    >;
-  };
-  bankLine: {
-    count: (args: { where: { orgId: string } }) => Promise<number>;
-  };
-  accessLog?: {
-    create: (args: {
-      data: {
-        event: string;
-        orgId: string;
-        principalId: string;
-        subjectEmail: string;
-      };
-    }) => Promise<unknown>;
-  };
-};
-
-type SecLogFn = (payload: {
-  event: string;
-  orgId: string;
-  principal: string;
-  subjectEmail: string;
-}) => void;
-
-const parsePrincipal = (req: FastifyRequest): Principal | null => {
-  const header = req.headers.authorization;
-  if (!header) return null;
-  const match = /^Bearer\s+(.+)$/i.exec(header);
-  if (!match) return null;
-  try {
-    const decoded = Buffer.from(match[1], "base64url").toString("utf8");
-    const parsed = JSON.parse(decoded);
-    return principalSchema.parse(parsed);
-  } catch {
-    return null;
-  }
-};
+type ExportPrincipal = z.infer<typeof principalSchema>;
 
 const adminDataRoutes: FastifyPluginAsync = async (app) => {
-  const db: DbClient | undefined = (app as any).db;
+  const db = (app as unknown as { db?: unknown }).db as
+    | {
+        user: {
+          findFirst: (args: {
+            where: { email: string; orgId: string };
+            select: {
+              id: true;
+              email: true;
+              createdAt: true;
+              org: { select: { id: true; name: true } };
+            };
+          }) => Promise<
+            | {
+                id: string;
+                email: string;
+                createdAt: Date;
+                org: { id: string; name: string };
+              }
+            | null
+          >;
+        };
+        bankLine: {
+          count: (args: { where: { orgId: string } }) => Promise<number>;
+        };
+        accessLog?: {
+          create: (args: {
+            data: { event: string; orgId: string; principalId: string; subjectEmail: string };
+          }) => Promise<unknown>;
+        };
+      }
+    | undefined;
+
   if (!db) {
-    throw new Error("database client not registered");
+    throw new Error("admin data export routes require app.db to be decorated");
   }
 
-  const log: SecLogFn =
-    (app as any).secLog ??
-    ((entry) => {
-      app.log.info({ event: entry.event, ...entry }, "security_event");
-    });
+  const secLog = (app as unknown as { secLog?: (payload: SecurityLogPayload) => void }).secLog;
 
-  app.post("/admin/data/export", async (req, reply) => {
-    const bodyResult = subjectDataExportRequestSchema.safeParse(req.body);
-    if (!bodyResult.success) {
-      return reply.code(400).send({ error: "invalid_request" });
-    }
-
-    const body = bodyResult.data;
-
-    const principal = parsePrincipal(req);
->>>>>>> origin/codex/add-admin-gated-subject-data-export-endpoint
+  app.post("/admin/data/export", async (request, reply) => {
+    const principal = parseExportPrincipal(request);
     if (!principal) {
-      return reply.code(401).send({ error: "unauthorized" });
+      app.metrics?.recordSecurityEvent("auth.unauthorized");
+      void reply.code(401).send({ error: "unauthorized" });
+      return;
     }
-
     if (principal.role !== "admin") {
-      return reply.code(403).send({ error: "forbidden" });
+      app.metrics?.recordSecurityEvent("auth.forbidden");
+      void reply.code(403).send({ error: "forbidden" });
+      return;
     }
 
-<<<<<<< HEAD
-    const parsed = adminDataDeleteRequestSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: "invalid_request" });
+    const payloadParse = subjectDataExportRequestSchema.safeParse(request.body ?? {});
+    if (!payloadParse.success) {
+      void reply.code(400).send({ error: "invalid_request", details: payloadParse.error.flatten() });
+      return;
+    }
+    const payload = payloadParse.data;
+    if (payload.orgId !== principal.orgId) {
+      app.metrics?.recordSecurityEvent("auth.forbidden");
+      void reply.code(403).send({ error: "forbidden" });
+      return;
     }
 
-    const body = parsed.data;
-
-=======
->>>>>>> origin/codex/add-admin-gated-subject-data-export-endpoint
-    if (principal.orgId !== body.orgId) {
-      return reply.code(403).send({ error: "forbidden" });
-    }
-
-<<<<<<< HEAD
-    const subject = await prisma.user.findFirst({
-      where: { orgId: body.orgId, email: body.email },
-    });
-
-    if (!subject) {
-      return reply.code(404).send({ error: "not_found" });
-    }
-
-    const hasConstraintRisk = await detectForeignKeyRisk(
-      prisma,
-      subject.id,
-      subject.email,
-      subject.orgId
-    );
-
-    const occurredAt = new Date().toISOString();
-    let response: AdminDataDeleteResponse;
-
-    if (hasConstraintRisk) {
-      const anonymizedEmail = anonymizeEmail(subject.email, subject.id);
-      await prisma.user.update({
-        where: { id: subject.id },
-        data: {
-          email: anonymizedEmail,
-          password: PASSWORD_PLACEHOLDER,
-        },
-      });
-
-      response = adminDataDeleteResponseSchema.parse({
-        action: "anonymized",
-        userId: subject.id,
-        occurredAt,
-      });
-    } else {
-      await prisma.user.delete({ where: { id: subject.id } });
-      response = adminDataDeleteResponseSchema.parse({
-        action: "deleted",
-        userId: subject.id,
-        occurredAt,
-      });
-    }
-
-    await securityLogger({
-      event: "data_delete",
-      orgId: body.orgId,
-      principal: principal.id,
-      subjectUserId: subject.id,
-      mode: response.action,
-    });
-
-    return reply.code(202).send(response);
-  });
-}
-
-function parseAuthorization(request: FastifyRequest): Principal | null {
-  const header = request.headers["authorization"] ?? request.headers["Authorization" as keyof typeof request.headers];
-  if (!header || typeof header !== "string") {
-    return null;
-  }
-
-  const match = /^Bearer\s+(.+)$/i.exec(header.trim());
-  if (!match) {
-    return null;
-  }
-
-  const token = match[1];
-  const [role, principalId, orgId] = token.split(":");
-  if (!role || !principalId || !orgId) {
-    return null;
-  }
-
-  return {
-    id: principalId,
-    role,
-    orgId,
-    token,
-  };
-}
-
-async function detectForeignKeyRisk(
-  prisma: PrismaClientLike,
-  userId: string,
-  email: string,
-  orgId: string
-): Promise<boolean> {
-  const relatedLines = await prisma.bankLine.count({
-    where: {
-      orgId,
-      payee: email,
-    },
-  });
-
-  if (relatedLines > 0) {
-    return true;
-  }
-
-  const otherRefs = await prisma.bankLine.count({
-    where: {
-      orgId,
-      desc: {
-        contains: userId,
-      },
-    },
-  });
-
-  return otherRefs > 0;
-}
-
-function anonymizeEmail(email: string, userId: string): string {
-  const hash = createHash("sha256").update(`${email}:${userId}`).digest("hex");
-  return `deleted+${hash.slice(0, 12)}@example.com`;
-}
-
-let cachedDefaultPrisma: PrismaClientLike | null = null;
-
-async function getDefaultPrisma(): Promise<PrismaClientLike> {
-  if (!cachedDefaultPrisma) {
-    const module = (await import("../../../../shared/src/db.js")) as SharedDbModule;
-    cachedDefaultPrisma = module.prisma;
-  }
-  return cachedDefaultPrisma;
-}
-
-export type { AdminDataDeleteRequest, AdminDataDeleteResponse };
-=======
     const userRecord = await db.user.findFirst({
-      where: { email: body.email, orgId: body.orgId },
+      where: { email: payload.email, orgId: payload.orgId },
       select: {
         id: true,
         email: true,
@@ -298,33 +270,29 @@ export type { AdminDataDeleteRequest, AdminDataDeleteResponse };
         org: { select: { id: true, name: true } },
       },
     });
-
     if (!userRecord) {
-      return reply.code(404).send({ error: "not_found" });
+      void reply.code(404).send({ error: "user_not_found" });
+      return;
     }
 
-    const bankLinesCount = await db.bankLine.count({
-      where: { orgId: body.orgId },
-    });
-
+    const bankLinesCount = await db.bankLine.count({ where: { orgId: payload.orgId } });
     const exportedAt = new Date().toISOString();
 
     if (db.accessLog?.create) {
       await db.accessLog.create({
         data: {
           event: "data_export",
-          orgId: body.orgId,
+          orgId: payload.orgId,
           principalId: principal.id,
-          subjectEmail: body.email,
+          subjectEmail: payload.email,
         },
       });
     }
-
-    log({
+    await recordSecurityEvent({
       event: "data_export",
-      orgId: body.orgId,
+      orgId: payload.orgId,
       principal: principal.id,
-      subjectEmail: body.email,
+      subjectEmail: payload.email,
     });
 
     const responsePayload = {
@@ -344,11 +312,54 @@ export type { AdminDataDeleteRequest, AdminDataDeleteResponse };
     };
 
     const validated = subjectDataExportResponseSchema.parse(responsePayload);
-
-    return reply.send(validated);
+    void reply.send(validated);
   });
 };
 
 export default adminDataRoutes;
->>>>>>> origin/codex/add-admin-gated-subject-data-export-endpoint
+
+function parseLegacyPrincipal(req: FastifyRequest): LegacyPrincipal | null {
+  const header =
+    req.headers.authorization ??
+    req.headers["Authorization" as keyof typeof req.headers];
+  const value = Array.isArray(header) ? header?.[0] : header;
+  if (!value) {
+    return null;
+  }
+  const match = LEGACY_BEARER.exec(value.trim());
+  if (!match) {
+    return null;
+  }
+  const token = match[1];
+  const [role, id, orgId] = token.split(":");
+  if (!role || !id || !orgId) {
+    return null;
+  }
+  return { role, id, orgId };
+}
+
+function parseExportPrincipal(req: FastifyRequest): ExportPrincipal | null {
+  const header =
+    req.headers.authorization ??
+    req.headers["Authorization" as keyof typeof req.headers];
+  const value = Array.isArray(header) ? header?.[0] : header;
+  if (!value) {
+    return null;
+  }
+  const match = LEGACY_BEARER.exec(value.trim());
+  if (!match) {
+    return null;
+  }
+  try {
+    const decoded = Buffer.from(match[1], "base64url").toString("utf8");
+    return principalSchema.parse(JSON.parse(decoded));
+  } catch {
+    return null;
+  }
+}
+
+function anonymizeEmail(email: string, userId: string): string {
+  const hash = createHash("sha256").update(`${email}:${userId}`).digest("hex");
+  return `deleted+${hash.slice(0, 12)}@example.com`;
+}
 

@@ -33,8 +33,10 @@ model BankLine {
   orgId           String
   date            DateTime
   amount          Decimal   // consider scale/precision if needed, e.g. @db.Decimal(18, 2) for Postgres
-  payee           String
-  desc            String
+  payeeCiphertext String
+  payeeKid        String
+  descCiphertext  String
+  descKid         String
   createdAt       DateTime  @default(now())
 
   // For idempotency:
@@ -51,4 +53,16 @@ model OrgTombstone {
   orgId     String
   payload   Json
   createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  orgId     String
+  actorId   String
+  action    String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([orgId, createdAt])
+  @@index([actorId, createdAt])
 }
