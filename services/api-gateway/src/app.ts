@@ -1,5 +1,6 @@
-﻿import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
 import { z } from "zod";
 import { Prisma, type Org, type User, type BankLine, type PrismaClient } from "@prisma/client";
 
@@ -63,7 +64,31 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   const prisma = (options.prisma as PrismaLike | undefined) ?? (await loadDefaultPrisma());
 
   const app = Fastify({ logger: true });
-  app.register(cors, { origin: true });
+  const dev = process.env.NODE_ENV !== "production";
+  const ALLOWLIST: true | string[] = dev
+    ? true
+    : (process.env.CORS_ALLOWLIST || "")
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter((origin) => origin.length > 0);
+
+  await app.register(helmet, {
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:"],
+        connectSrc: ["'self'", ...(dev ? ["http://localhost:5173"] : [])],
+        frameAncestors: ["'none'"],
+      },
+    },
+    hsts: dev ? false : { maxAge: 15552000, includeSubDomains: true, preload: true },
+    frameguard: { action: "deny" },
+    xssFilter: true,
+  });
+
+  await app.register(cors, { origin: ALLOWLIST, credentials: true });
 
   app.log.info(maskObject({ DATABASE_URL: process.env.DATABASE_URL }), "loaded env");
 
