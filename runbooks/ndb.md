@@ -61,7 +61,8 @@ Heads-up: we have declared an NDB incident (INC-<number>). All external communic
 ## 5. Execute notifications
 - Send regulator notification within 72 hours of confirmation.
 - Email impacted customers after legal review and before public disclosure.
-- Update the status page template with an incident summary and remediation steps.
+- Coordinate with the status page controller to publish and maintain customer updates according to the [status page runbook](./status-page.md).
+- Ensure customer communications reflect the same timestamps and mitigation progress posted to the status page.
 
 ## 6. Post-incident activities
 - Run the full retrospective within 7 days.
