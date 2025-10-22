@@ -1,11 +1,12 @@
-﻿import './BankLines.css';
+import './BankLines.css';
+import { fmtCurrency, fmtPct } from '../lib/format';
 
 type LineStatus = 'Active' | 'Pending' | 'Monitoring';
 
 type BankLine = {
   bank: string;
-  limit: string;
-  utilization: string;
+  limit: number;
+  utilization: number;
   status: LineStatus;
   updated: string;
   notes: string;
@@ -14,24 +15,24 @@ type BankLine = {
 const bankLines: BankLine[] = [
   {
     bank: 'Commonwealth Bank',
-    limit: '$1.2B',
-    utilization: '64%',
+    limit: 1_200_000_000,
+    utilization: 64,
     status: 'Active',
     updated: 'Today 10:24',
     notes: 'Term sheet expansion approved for Helios storage facility.'
   },
   {
     bank: 'Northwind Credit Union',
-    limit: '$820M',
-    utilization: '71%',
+    limit: 820_000_000,
+    utilization: 71,
     status: 'Monitoring',
     updated: 'Yesterday',
     notes: 'Utilization trending upward ahead of portfolio rebalance.'
   },
   {
     bank: 'First Harbor Partners',
-    limit: '$640M',
-    utilization: '48%',
+    limit: 640_000_000,
+    utilization: 48,
     status: 'Pending',
     updated: '2 days ago',
     notes: 'Awaiting revised covenants from legal after counterparty feedback.'
@@ -77,14 +78,14 @@ export default function BankLinesPage() {
             {bankLines.map((line) => (
               <tr key={line.bank}>
                 <th scope="row">{line.bank}</th>
-                <td>{line.limit}</td>
+                <td>{fmtCurrency(line.limit)}</td>
                 <td>
                   <div className="bank-lines__utilization">
-                    <span>{line.utilization}</span>
+                    <span>{fmtPct(line.utilization, 0)}</span>
                     <div className="bank-lines__utilization-track" aria-hidden="true">
                       <div
                         className="bank-lines__utilization-fill"
-                        style={{ width: line.utilization }}
+                        style={{ width: `${line.utilization}%` }}
                       />
                     </div>
                   </div>
