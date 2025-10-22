@@ -1,4 +1,4 @@
-﻿import assert from "node:assert/strict";
+import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
 import cors from "@fastify/cors";
@@ -180,12 +180,12 @@ describe("POST /admin/data/delete", () => {
 
     assert.equal(findCalls, 1);
     assert.equal(countCalls.length, 1);
-    assert.equal(countCalls[0].where.payee, user.email);
+    assert.deepEqual(countCalls[0].where, { orgId: defaultPayload.orgId });
     assert.equal(deleteCalled, false);
     assert.equal(updateCalls.length, 1);
     const updateArgs = updateCalls[0];
     assert.match(updateArgs.data.email, /^deleted\+[a-f0-9]{12}@example.com$/);
-    assert.equal(updateArgs.data.password, "__deleted__");
+    assert.match(updateArgs.data.password, /^\$argon2id\$/);
 
     const lastLog = securityLogs.at(-1);
     assert.deepEqual(lastLog, {

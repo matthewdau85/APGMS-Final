@@ -2,10 +2,6 @@ name: CI
 
 on: [push, pull_request]
 
-defaults:
-  run:
-    working-directory: apgms
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -18,11 +14,19 @@ jobs:
         with:
           node-version: '18'
           cache: 'pnpm'
-          cache-dependency-path: apgms/pnpm-lock.yaml
-      - run: pnpm install
-      - run: pnpm exec playwright install --with-deps
-      - run: pnpm -r build
-      - run: pnpm -r test
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install Playwright deps
+        run: pnpm exec playwright install --with-deps
+      - name: Build packages
+        run: pnpm -r build
+      - name: Run tests
+        run: pnpm -r test
+      - name: Prisma drift check
+        run: pnpm --filter @apgms/shared exec prisma migrate status --schema shared/prisma/schema.prisma
+      - name: Conflict marker guard
+        run: git grep -n '<<<<<<<\|=======\|>>>>>>>' -- ':!*.lock'
 
   axe:
     needs: build
@@ -36,8 +40,8 @@ jobs:
         with:
           node-version: '18'
           cache: 'pnpm'
-          cache-dependency-path: apgms/pnpm-lock.yaml
-      - run: pnpm install
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps
       - run: pnpm --filter @apgms/webapp test:axe
 
@@ -53,12 +57,12 @@ jobs:
         with:
           node-version: '18'
           cache: 'pnpm'
-          cache-dependency-path: apgms/pnpm-lock.yaml
-      - run: pnpm install
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @apgms/webapp build
       - name: Lighthouse CI
         uses: treosh/lighthouse-ci-action@v10
         with:
-          configPath: ./apgms/lighthouserc.json
+          configPath: ./lighthouserc.json
           runs: 1
           uploadArtifacts: true

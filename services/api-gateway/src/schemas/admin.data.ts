@@ -1,6 +1,5 @@
-﻿import { z } from "zod";
+import { z } from "zod";
 
-<<<<<<< HEAD
 export const adminDataDeleteRequestSchema = z.object({
   orgId: z.string().min(1, "orgId is required"),
   email: z.string().email("email must be valid"),
@@ -19,7 +18,7 @@ export const adminDataDeleteResponseSchema = z.object({
 
 export type AdminDataDeleteRequest = z.infer<typeof adminDataDeleteRequestSchema>;
 export type AdminDataDeleteResponse = z.infer<typeof adminDataDeleteResponseSchema>;
-=======
+
 export const subjectDataExportRequestSchema = z.object({
   orgId: z.string().min(1),
   email: z.string().email(),
@@ -47,12 +46,6 @@ export const subjectDataExportResponseSchema = z.object({
   exportedAt: z.string(),
 });
 
-export type SubjectDataExportRequest = z.infer<
-  typeof subjectDataExportRequestSchema
->;
-
-export type SubjectDataExportResponse = z.infer<
-  typeof subjectDataExportResponseSchema
->;
->>>>>>> origin/codex/add-admin-gated-subject-data-export-endpoint
+export type SubjectDataExportRequest = z.infer<typeof subjectDataExportRequestSchema>;
+export type SubjectDataExportResponse = z.infer<typeof subjectDataExportResponseSchema>;
 
