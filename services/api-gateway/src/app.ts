@@ -303,8 +303,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   app.get("/ready", async (_req, reply) => {
     try {
       await prisma.$queryRaw`SELECT 1`;
+      app.metrics?.recordSecurityEvent("readiness.ok");
       return reply.code(200).send({ ready: true });
-    } catch {
+    } catch (error) {
+      app.log.warn({ err: maskError(error) }, "readiness check failed");
+      app.metrics?.recordSecurityEvent("readiness.fail");
       return reply.code(503).send({ ready: false });
     }
   });
