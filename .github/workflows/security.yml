@@ -1,8 +1,55 @@
-﻿name: Security
-on: [push]
+name: Security Scans
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+  push:
+    paths:
+      - '**/*.js'
+      - '**/*.ts'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/security.yml'
+
 jobs:
-  scan:
+  security:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: echo scanning
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Dependency audit (high+)
+        run: pnpm audit --audit-level high
+      - name: Generate SBOM (CycloneDX)
+        run: pnpm dlx @cyclonedx/cyclonedx-npm --output-format json --output-file sbom.json
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-json
+          path: sbom.json
+      - name: Semgrep SAST
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: "p/owasp-top-ten"
+      - name: Gitleaks Secret Scan
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          args: --no-git --redact
+      - name: Trivy FS Scan
+        uses: aquasecurity/trivy-action@0.12.0
+        with:
+          scan-type: fs
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+      - name: Prisma drift check
+        run: pnpm --filter @apgms/shared exec prisma migrate status --schema shared/prisma/schema.prisma
