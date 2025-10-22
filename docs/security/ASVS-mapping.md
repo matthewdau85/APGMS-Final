@@ -1,1 +1,8 @@
-﻿# OWASP ASVS L2
+# OWASP ASVS L2
+
+| Control | Current | Planned | Evidence (file/line) |
+| --- | --- | --- | --- |
+| **V2.1.1 – Enforce authentication for admin interfaces** | Admin export/delete APIs reject requests without the configured admin token header. | Replace shared token with short-lived, per-admin credentials issued via an identity provider. | [services/api-gateway/src/app.ts](../../services/api-gateway/src/app.ts#L109-L190)<br>[services/api-gateway/test/privacy.spec.ts](../../services/api-gateway/test/privacy.spec.ts#L33-L84) |
+| **V3.4.2 – Capture security-relevant events** | Admin PII decryption emits structured audit events without leaking payload contents. | Forward audit events to centralized SIEM with retention policies. | [services/api-gateway/src/lib/pii.ts](../../services/api-gateway/src/lib/pii.ts#L115-L147)<br>[services/api-gateway/test/pii.spec.ts](../../services/api-gateway/test/pii.spec.ts#L54-L101) |
+| **V6.3.2 – Protect sensitive data at rest** | TFNs are tokenized with keyed HMACs and PII is encrypted using AES-256-GCM keys from the configured KMS interface. | Automate key rotation and enforce envelope encryption using cloud KMS. | [services/api-gateway/src/lib/pii.ts](../../services/api-gateway/src/lib/pii.ts#L47-L106) |
+| **V8.2.1 – Validate and sanitize inputs** | Admin data workflows validate payloads with Zod schemas before hitting the database. | Extend schema validation to all Fastify routes and generate shared types for clients. | [services/api-gateway/src/routes/admin.data.ts](../../services/api-gateway/src/routes/admin.data.ts#L134-L156)<br>[services/api-gateway/src/schemas/admin.data.ts](../../services/api-gateway/src/schemas/admin.data.ts#L1-L36)<br>[services/api-gateway/test/admin.data.export.spec.ts](../../services/api-gateway/test/admin.data.export.spec.ts#L88-L183) |
