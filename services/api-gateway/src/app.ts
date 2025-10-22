@@ -4,6 +4,18 @@ import type { Org, User, BankLine, PrismaClient } from "@prisma/client";
 
 import { maskError, maskObject } from "@apgms/shared";
 
+import { createMetrics, type Metrics } from "./metrics";
+
+declare module "fastify" {
+  interface FastifyInstance {
+    metrics: Metrics;
+  }
+
+  interface FastifyRequest {
+    metricsStart?: bigint;
+  }
+}
+
 const ADMIN_HEADER = "x-admin-token";
 
 export interface CreateAppOptions {
@@ -41,6 +53,8 @@ type PrismaLike = Pick<
   | "bankLine"
   | "orgTombstone"
   | "$transaction"
+  | "$queryRaw"
+  | "$disconnect"
 >;
 
 let cachedPrisma: PrismaClient | null = null;
@@ -58,11 +72,50 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 
   const app = Fastify({ logger: true });
 
+  const metrics = createMetrics();
+  app.decorate("metrics", metrics);
+
   app.register(cors, { origin: true });
 
   app.log.info(maskObject({ DATABASE_URL: process.env.DATABASE_URL }), "loaded env");
 
+  app.addHook("onRequest", async (req) => {
+    req.metricsStart = process.hrtime.bigint();
+  });
+
+  app.addHook("onResponse", async (req, reply) => {
+    const route =
+      (reply.context?.config as { url?: string } | undefined)?.url ?? req.routerPath ?? req.url;
+    const labels = {
+      method: req.method,
+      route,
+      status_code: reply.statusCode.toString(),
+    };
+    metrics.httpRequestsTotal.inc(labels);
+    if (req.metricsStart) {
+      const durationNs = process.hrtime.bigint() - req.metricsStart;
+      const durationSeconds = Number(durationNs) / 1_000_000_000;
+      metrics.httpRequestDurationSeconds.observe(labels, durationSeconds);
+    }
+  });
+
   app.get("/health", async () => ({ ok: true, service: "api-gateway" }));
+
+  app.get("/ready", async (_req, reply) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      return reply.send({ ok: true });
+    } catch (err) {
+      app.log.error({ err: maskError(err) }, "readiness check failed");
+      return reply.code(503).send({ ok: false });
+    }
+  });
+
+  app.get("/metrics", async (_req, reply) => {
+    const body = await metrics.register.metrics();
+    reply.header("content-type", metrics.register.contentType);
+    return reply.send(body);
+  });
 
   app.get("/users", async () => {
     const users = await prisma.user.findMany({
@@ -166,6 +219,10 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 
   app.ready(() => {
     app.log.info(app.printRoutes());
+  });
+
+  app.addHook("onClose", async () => {
+    await prisma.$disconnect();
   });
 
   return app;

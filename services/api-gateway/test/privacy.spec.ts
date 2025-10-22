@@ -208,6 +208,8 @@ function createPrismaStub(initial?: Partial<State>): Stub {
     $transaction: async <T>(callback: TransactionCallback<T>) => {
       return callback(client);
     },
+    $queryRaw: async () => 1,
+    $disconnect: async () => {},
   } as unknown as PrismaLike;
 
   return { client, state };
