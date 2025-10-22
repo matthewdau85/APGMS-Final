@@ -2,43 +2,36 @@ name: CI
 
 on: [push, pull_request]
 
-defaults:
-  run:
-    working-directory: apgms
-
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       - uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'pnpm'
-          cache-dependency-path: apgms/pnpm-lock.yaml
-      - run: pnpm install
-      - run: pnpm exec playwright install --with-deps
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install
       - run: pnpm -r build
       - run: pnpm -r test
+      - name: Fail on merge markers
+        run: |
+          git grep -n '<<<<<<<\|=======\|>>>>>>>' -- ':!*.lock' && { echo "merge markers found"; exit 1; } || true
 
   axe:
     needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       - uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'pnpm'
-          cache-dependency-path: apgms/pnpm-lock.yaml
-      - run: pnpm install
-      - run: pnpm exec playwright install --with-deps
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install
       - run: pnpm --filter @apgms/webapp test:axe
 
   lighthouse:
@@ -46,19 +39,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
       - uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'pnpm'
-          cache-dependency-path: apgms/pnpm-lock.yaml
-      - run: pnpm install
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @apgms/webapp build
       - name: Lighthouse CI
         uses: treosh/lighthouse-ci-action@v10
         with:
-          configPath: ./apgms/lighthouserc.json
+          configPath: ./lighthouserc.json
           runs: 1
           uploadArtifacts: true

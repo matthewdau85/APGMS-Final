@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "tsx src/index.ts",
-    "test": "tsx --test test/privacy.spec.ts"
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@apgms/shared": "workspace:*",
