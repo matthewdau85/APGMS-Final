@@ -52,3 +52,16 @@ model OrgTombstone {
   payload   Json
   createdAt DateTime @default(now())
 }
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String
+  action    String
+  orgId     String?
+  subjectId String?
+  payload   Json
+  timestamp DateTime
+  prevHash  String?
+  hash      String   @unique
+  createdAt DateTime @default(now())
+}

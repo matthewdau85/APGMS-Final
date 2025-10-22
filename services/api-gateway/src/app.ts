@@ -1,14 +1,17 @@
-﻿import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
 import { z } from "zod";
 import { Prisma, type Org, type User, type BankLine, type PrismaClient } from "@prisma/client";
 
 import { maskError, maskObject } from "@apgms/shared";
+import { createAuditLogger, type AuditLogger } from "./lib/audit";
 
 const ADMIN_HEADER = "x-admin-token";
+const ADMIN_ACTOR_HEADER = "x-admin-actor";
 
 export interface CreateAppOptions {
   prisma?: PrismaClient;
+  auditLogger?: AuditLogger;
 }
 
 export interface AdminOrgExport {
@@ -37,7 +40,7 @@ type ExportableOrg = Org & { users: User[]; lines: BankLine[] };
 
 type PrismaLike = Pick<
   PrismaClient,
-  "org" | "user" | "bankLine" | "orgTombstone" | "$transaction" | "$queryRaw"
+  "org" | "user" | "bankLine" | "orgTombstone" | "auditLog" | "$transaction" | "$queryRaw"
 >;
 
 let cachedPrisma: PrismaClient | null = null;
@@ -61,6 +64,7 @@ const CreateLine = z.object({
 
 export async function createApp(options: CreateAppOptions = {}): Promise<FastifyInstance> {
   const prisma = (options.prisma as PrismaLike | undefined) ?? (await loadDefaultPrisma());
+  const auditLogger = options.auditLogger ?? createAuditLogger(prisma);
 
   const app = Fastify({ logger: true });
   app.register(cors, { origin: true });
@@ -168,6 +172,24 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     }
 
     const exportPayload = buildOrgExport(org as ExportableOrg);
+    const actorId = resolveActor(req);
+    try {
+      await auditLogger.record({
+        actorId,
+        action: "admin.org.export",
+        orgId,
+        subjectId: orgId,
+        timestamp: new Date().toISOString(),
+        payload: {
+          userCount: exportPayload.users.length,
+          bankLineCount: exportPayload.bankLines.length,
+        },
+      });
+    } catch (error) {
+      req.log.error({ err: maskError(error) }, "failed to record export audit log");
+      return rep.code(500).send({ error: "internal_server_error" });
+    }
+
     return rep.send({ export: exportPayload });
   });
 
@@ -194,20 +216,38 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       org: { ...exportPayload.org, deletedAt: deletedAt.toISOString() },
     };
 
-    await prisma.$transaction(async (tx) => {
+    const transactionResult = await prisma.$transaction(async (tx) => {
       await tx.org.update({
         where: { id: orgId },
         data: { deletedAt },
       });
       await tx.user.deleteMany({ where: { orgId } });
       await tx.bankLine.deleteMany({ where: { orgId } });
-      await tx.orgTombstone.create({
+      const tombstone = await tx.orgTombstone.create({
         data: {
           orgId,
           payload: tombstonePayload,
         },
       });
+      return { tombstoneId: tombstone.id };
     });
+
+    const actorId = resolveActor(req);
+    try {
+      await auditLogger.record({
+        actorId,
+        action: "admin.org.delete",
+        orgId,
+        subjectId: orgId,
+        timestamp: new Date().toISOString(),
+        payload: {
+          tombstoneId: transactionResult.tombstoneId,
+        },
+      });
+    } catch (error) {
+      req.log.error({ err: maskError(error) }, "failed to record delete audit log");
+      return rep.code(500).send({ error: "internal_server_error" });
+    }
 
     return rep.send({ status: "deleted", deletedAt: deletedAt.toISOString() });
   });
@@ -235,6 +275,14 @@ function requireAdmin(req: FastifyRequest, rep: FastifyReply): boolean {
     return false;
   }
   return true;
+}
+
+function resolveActor(req: FastifyRequest): string {
+  const provided = req.headers[ADMIN_ACTOR_HEADER] ?? req.headers[ADMIN_ACTOR_HEADER.toUpperCase() as keyof typeof req.headers];
+  if (!provided) {
+    return "admin";
+  }
+  return Array.isArray(provided) ? provided[0] : provided;
 }
 
 function buildOrgExport(org: ExportableOrg): AdminOrgExport {

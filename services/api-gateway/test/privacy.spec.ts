@@ -6,6 +6,7 @@ import type { FastifyInstance } from "fastify";
 import type { BankLine, Org, PrismaClient, User } from "@prisma/client";
 
 import { createApp, type AdminOrgExport } from "../src/app";
+import type { AuditEvent, AuditLogger } from "../src/lib/audit";
 
 const ADMIN_TOKEN = "test-admin-token";
 
@@ -26,6 +27,7 @@ type PrismaLike = Pick<
   | "user"
   | "bankLine"
   | "orgTombstone"
+  | "auditLog"
   | "$transaction"
 >;
 
@@ -34,13 +36,24 @@ type Stub = {
   state: State;
 };
 
+type AuditStub = {
+  events: AuditEvent[];
+  failWith?: Error;
+  logger: AuditLogger;
+};
+
 let app: FastifyInstance;
 let stub: Stub;
+let audit: AuditStub;
 
 beforeEach(async () => {
   process.env.ADMIN_TOKEN = ADMIN_TOKEN;
   stub = createPrismaStub();
-  app = await createApp({ prisma: stub.client as unknown as PrismaClient });
+  audit = createAuditLoggerStub();
+  app = await createApp({
+    prisma: stub.client as unknown as PrismaClient,
+    auditLogger: audit.logger,
+  });
   await app.ready();
 });
 
@@ -52,6 +65,7 @@ test("admin export requires a valid admin token", async (t) => {
   const response = await app.inject({
     method: "GET",
     url: "/admin/export/example-org",
+    headers: { "x-admin-actor": "auditor" },
   });
   assert.equal(response.statusCode, 403);
 });
@@ -66,7 +80,7 @@ test("admin export returns organisation data without secrets", async (t) => {
   const response = await app.inject({
     method: "GET",
     url: "/admin/export/org-123",
-    headers: { "x-admin-token": ADMIN_TOKEN },
+    headers: { "x-admin-token": ADMIN_TOKEN, "x-admin-actor": "auditor" },
   });
 
   assert.equal(response.statusCode, 200);
@@ -83,6 +97,15 @@ test("admin export returns organisation data without secrets", async (t) => {
   assert.equal(body.export.bankLines[0].amount, 1200);
   assert.equal(body.export.bankLines[0].date, stub.state.bankLines[0].date.toISOString());
   assert.equal(body.export.org.deletedAt, null);
+  assert.equal(audit.events.length, 1);
+  const event = audit.events[0];
+  assert.equal(event.actorId, "auditor");
+  assert.equal(event.action, "admin.org.export");
+  assert.equal(event.orgId, "org-123");
+  assert.equal(event.subjectId, "org-123");
+  assert.ok(typeof event.timestamp === "string");
+  assert.equal(event.payload?.userCount, 1);
+  assert.equal(event.payload?.bankLineCount, 1);
 });
 
 test("deleting an organisation soft-deletes data and records a tombstone", async (t) => {
@@ -95,7 +118,7 @@ test("deleting an organisation soft-deletes data and records a tombstone", async
   const response = await app.inject({
     method: "DELETE",
     url: "/admin/delete/delete-me",
-    headers: { "x-admin-token": ADMIN_TOKEN },
+    headers: { "x-admin-token": ADMIN_TOKEN, "x-admin-actor": "auditor" },
   });
 
   assert.equal(response.statusCode, 200);
@@ -115,6 +138,36 @@ test("deleting an organisation soft-deletes data and records a tombstone", async
   assert.equal(tombstone.payload.org.id, "delete-me");
   assert.equal(typeof tombstone.payload.org.deletedAt, "string");
   assert.ok(tombstone.payload.org.deletedAt && Date.parse(tombstone.payload.org.deletedAt));
+
+  assert.equal(audit.events.length, 1);
+  const event = audit.events[0];
+  assert.equal(event.action, "admin.org.delete");
+  assert.equal(event.actorId, "auditor");
+  assert.equal(event.orgId, "delete-me");
+  assert.equal(event.subjectId, "delete-me");
+  assert.ok(event.payload?.tombstoneId);
+  assert.equal(typeof event.timestamp, "string");
+});
+
+test("audit failures surface masked errors", async () => {
+  seedOrgWithData(stub.state, {
+    orgId: "org-fail",
+    userId: "user-fail",
+    lineId: "line-fail",
+  });
+
+  audit.failWith = new Error("boom");
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/admin/export/org-fail",
+    headers: { "x-admin-token": ADMIN_TOKEN, "x-admin-actor": "auditor" },
+  });
+
+  assert.equal(response.statusCode, 500);
+  const body = response.json() as { error: string };
+  assert.equal(body.error, "internal_server_error");
+  assert.equal(audit.events.length, 0);
 });
 
 function createPrismaStub(initial?: Partial<State>): Stub {
@@ -205,12 +258,33 @@ function createPrismaStub(initial?: Partial<State>): Stub {
         return record;
       },
     },
+    auditLog: {
+      findFirst: async () => null,
+      create: async () => {
+        throw new Error("not implemented");
+      },
+    },
     $transaction: async <T>(callback: TransactionCallback<T>) => {
       return callback(client);
     },
   } as unknown as PrismaLike;
 
   return { client, state };
+}
+
+function createAuditLoggerStub(): AuditStub {
+  const stub: AuditStub = {
+    events: [],
+    logger: {
+      async record(event: AuditEvent) {
+        if (stub.failWith) {
+          throw stub.failWith;
+        }
+        stub.events.push(event);
+      },
+    },
+  };
+  return stub;
 }
 
 function seedOrgWithData(state: State, ids: { orgId: string; userId: string; lineId: string }) {
