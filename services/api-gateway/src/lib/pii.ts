@@ -1,6 +1,8 @@
 ﻿import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
+import { logger, withRedaction } from "@apgms/shared/logging";
+
 const AES_ALGORITHM = "aes-256-gcm";
 const AES_IV_LENGTH = 12;
 const AES_AUTH_TAG_LENGTH = 16;
@@ -137,6 +139,18 @@ export function registerPIIRoutes(app: FastifyInstance, guard: AdminGuard): void
           action: "pii.decrypt",
           timestamp: new Date().toISOString(),
           metadata: { kid: body.kid },
+        });
+        const auditTs = new Date().toISOString();
+        logger.info({
+          type: "audit",
+          action: "pii.decrypt",
+          orgId: (request.headers["x-org-id"] as string | undefined) ?? null,
+          by: decision.actorId,
+          target: body.kid,
+          before: withRedaction({ kid: body.kid }),
+          after: { status: "decrypted" },
+          ts: auditTs,
+          corrId: request.id,
         });
         return reply.code(200).send({ value });
       } catch (error) {

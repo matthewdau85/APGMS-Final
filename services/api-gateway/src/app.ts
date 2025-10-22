@@ -4,6 +4,7 @@ import { z } from "zod";
 import { Prisma, type Org, type User, type BankLine, type PrismaClient } from "@prisma/client";
 
 import { maskError, maskObject } from "@apgms/shared";
+import { logger, withRedaction } from "@apgms/shared/logging";
 
 const ADMIN_HEADER = "x-admin-token";
 
@@ -207,6 +208,28 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
           payload: tombstonePayload,
         },
       });
+    });
+
+    const auditTs = new Date().toISOString();
+    logger.info({
+      type: "audit",
+      action: "org.delete",
+      orgId,
+      by: ADMIN_HEADER,
+      target: orgId,
+      before: withRedaction({
+        org: {
+          id: org.id,
+          name: org.name,
+          createdAt: org.createdAt.toISOString(),
+          deletedAt: org.deletedAt ? org.deletedAt.toISOString() : null,
+        },
+        userCount: org.users.length,
+        bankLineCount: org.lines.length,
+      }),
+      after: { status: "deleted", deletedAt: deletedAt.toISOString() },
+      ts: auditTs,
+      corrId: req.id,
     });
 
     return rep.send({ status: "deleted", deletedAt: deletedAt.toISOString() });
