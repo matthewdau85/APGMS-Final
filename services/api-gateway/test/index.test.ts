@@ -1,0 +1,10 @@
+import "./auth.spec.ts";
+import "./privacy.spec.ts";
+import "./pii.spec.ts";
+import "./ready.spec.ts";
+import "./metrics.spec.ts";
+import "./telemetry.spec.ts";
+import "./admin.data.export.spec.ts";
+import "./admin.data.delete.spec.ts";
+import "./synthetic.probe.ts";
+import "./load-shedding.spec.ts";

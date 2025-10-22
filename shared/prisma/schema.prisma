@@ -15,6 +15,7 @@ model Org {
   deletedAt  DateTime?
   users      User[]
   lines      BankLine[]
+  auditLogs  AdminAuditLog[]
   tombstones OrgTombstone[]
 }
 
@@ -51,4 +52,19 @@ model OrgTombstone {
   orgId     String
   payload   Json
   createdAt DateTime @default(now())
+}
+
+model AdminAuditLog {
+  id           String   @id @default(cuid())
+  org          Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId        String
+  principalId  String
+  event        String
+  payload      Json
+  occurredAt   DateTime
+  hash         String
+  prevHash     String?
+  createdAt    DateTime @default(now())
+
+  @@index([orgId, createdAt])
 }

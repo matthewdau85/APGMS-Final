@@ -7,7 +7,7 @@ import type { BankLine, Org, PrismaClient, User } from "@prisma/client";
 
 import { createApp, type AdminOrgExport } from "../src/app";
 
-const ADMIN_TOKEN = "test-admin-token";
+const ADMIN_EMAIL = "admin@example.com";
 
 type OrgState = Org & { deletedAt: Date | null };
 
@@ -38,7 +38,8 @@ let app: FastifyInstance;
 let stub: Stub;
 
 beforeEach(async () => {
-  process.env.ADMIN_TOKEN = ADMIN_TOKEN;
+  process.env.JWT_SECRET = "test-secret";
+  process.env.ADMIN_EMAIL_ALLOWLIST = ADMIN_EMAIL;
   stub = createPrismaStub();
   app = await createApp({ prisma: stub.client as unknown as PrismaClient });
   await app.ready();
@@ -48,12 +49,18 @@ afterEach(async () => {
   await app.close();
 });
 
+const issueAdminToken = async (orgId: string) =>
+  app.jwt.sign(
+    { id: "admin-user", sub: "admin-user", orgId, email: ADMIN_EMAIL, role: "admin" },
+    { audience: orgId, issuer: "apgms-api", expiresIn: "15m" }
+  );
+
 test("admin export requires a valid admin token", async (t) => {
   const response = await app.inject({
     method: "GET",
     url: "/admin/export/example-org",
   });
-  assert.equal(response.statusCode, 403);
+  assert.equal(response.statusCode, 401);
 });
 
 test("admin export returns organisation data without secrets", async (t) => {
@@ -63,10 +70,11 @@ test("admin export returns organisation data without secrets", async (t) => {
     lineId: "line-789",
   });
 
+  const token = await issueAdminToken("org-123");
   const response = await app.inject({
     method: "GET",
     url: "/admin/export/org-123",
-    headers: { "x-admin-token": ADMIN_TOKEN },
+    headers: { authorization: `Bearer ${token}` },
   });
 
   assert.equal(response.statusCode, 200);
@@ -92,10 +100,11 @@ test("deleting an organisation soft-deletes data and records a tombstone", async
     lineId: "delete-line",
   });
 
+  const token = await issueAdminToken("delete-me");
   const response = await app.inject({
     method: "DELETE",
     url: "/admin/delete/delete-me",
-    headers: { "x-admin-token": ADMIN_TOKEN },
+    headers: { authorization: `Bearer ${token}` },
   });
 
   assert.equal(response.statusCode, 200);
@@ -127,7 +136,7 @@ function createPrismaStub(initial?: Partial<State>): Stub {
 
   const client: PrismaLike = {
     org: {
-      findUnique: async ({ where, include }) => {
+      findUnique: async ({ where, include }: any) => {
         const org = state.orgs.find((o) => o.id === where.id);
         if (!org) return null;
         if (include?.users || include?.lines) {
@@ -139,7 +148,7 @@ function createPrismaStub(initial?: Partial<State>): Stub {
         }
         return { ...org } as Org;
       },
-      update: async ({ where, data }) => {
+      update: async ({ where, data }: any) => {
         const org = state.orgs.find((o) => o.id === where.id);
         if (!org) throw new Error("Org not found");
         Object.assign(org, data);
@@ -147,24 +156,27 @@ function createPrismaStub(initial?: Partial<State>): Stub {
       },
     },
     user: {
-      findMany: async ({ select, orderBy }) => {
+      findMany: async ({ select, orderBy, take }: any) => {
         let users = [...state.users];
         if (orderBy?.createdAt === "desc") {
           users.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        }
+        if (typeof take === "number") {
+          users = users.slice(0, take);
         }
         if (select) {
           return users.map((user) => pick(user, select));
         }
         return users;
       },
-      deleteMany: async ({ where }) => {
+      deleteMany: async ({ where }: any) => {
         const initialLength = state.users.length;
         state.users = state.users.filter((user) => user.orgId !== where?.orgId);
         return { count: initialLength - state.users.length };
       },
     },
     bankLine: {
-      findMany: async ({ orderBy, take }) => {
+      findMany: async ({ orderBy, take }: any) => {
         let lines = [...state.bankLines];
         if (orderBy?.date === "desc") {
           lines.sort((a, b) => b.date.getTime() - a.date.getTime());
@@ -174,27 +186,27 @@ function createPrismaStub(initial?: Partial<State>): Stub {
         }
         return lines;
       },
-      create: async ({ data }) => {
+      create: async ({ data }: any) => {
         const created = {
           id: data.id ?? randomUUID(),
           orgId: data.orgId!,
-          date: data.date as Date,
-          amount: data.amount as any,
+          date: data.date instanceof Date ? data.date : new Date(data.date as Date | string),
+          amount: typeof data.amount === "number" ? data.amount : Number(data.amount),
           payee: data.payee!,
           desc: data.desc!,
-          createdAt: data.createdAt ?? new Date(),
+          createdAt: data.createdAt instanceof Date ? data.createdAt : new Date(data.createdAt ?? Date.now()),
         } as unknown as BankLine;
         state.bankLines.push(created);
         return created;
       },
-      deleteMany: async ({ where }) => {
+      deleteMany: async ({ where }: any) => {
         const initialLength = state.bankLines.length;
         state.bankLines = state.bankLines.filter((line) => line.orgId !== where?.orgId);
         return { count: initialLength - state.bankLines.length };
       },
     },
     orgTombstone: {
-      create: async ({ data }) => {
+      create: async ({ data }: any) => {
         const record = {
           id: data.id ?? randomUUID(),
           orgId: data.orgId!,
