@@ -125,7 +125,10 @@ function createPrismaStub(initial?: Partial<State>): Stub {
     tombstones: initial?.tombstones ?? [],
   };
 
-  const client: PrismaLike = {
+  const client: PrismaLike & {
+    $queryRaw: PrismaClient["$queryRaw"];
+    $disconnect: PrismaClient["$disconnect"];
+  } = {
     org: {
       findUnique: async ({ where, include }) => {
         const org = state.orgs.find((o) => o.id === where.id);
@@ -208,7 +211,14 @@ function createPrismaStub(initial?: Partial<State>): Stub {
     $transaction: async <T>(callback: TransactionCallback<T>) => {
       return callback(client);
     },
-  } as unknown as PrismaLike;
+    $queryRaw: async () => 1,
+    $disconnect: async () => {
+      // no-op for tests
+    },
+  } as unknown as PrismaLike & {
+    $queryRaw: PrismaClient["$queryRaw"];
+    $disconnect: PrismaClient["$disconnect"];
+  };
 
   return { client, state };
 }

@@ -34,7 +34,7 @@ export interface AdminOrgExport {
 
 type ExportableOrg = Org & { users: User[]; lines: BankLine[] };
 
-type PrismaLike = Pick<
+type PrismaSubset = Pick<
   PrismaClient,
   | "org"
   | "user"
@@ -42,6 +42,17 @@ type PrismaLike = Pick<
   | "orgTombstone"
   | "$transaction"
 >;
+
+type PrismaLike = PrismaSubset & {
+  $queryRaw: PrismaClient["$queryRaw"];
+  $disconnect?: PrismaClient["$disconnect"];
+};
+
+declare module "fastify" {
+  interface FastifyInstance {
+    prisma: PrismaLike;
+  }
+}
 
 let cachedPrisma: PrismaClient | null = null;
 
@@ -57,12 +68,69 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   const prisma = (options.prisma as PrismaLike | undefined) ?? (await loadDefaultPrisma());
 
   const app = Fastify({ logger: true });
+  app.decorate("prisma", prisma);
 
   app.register(cors, { origin: true });
 
   app.log.info(maskObject({ DATABASE_URL: process.env.DATABASE_URL }), "loaded env");
 
+  type MetricLabels = {
+    method: string;
+    route: string;
+    status_code: string;
+  };
+
+  const requestCounts = new Map<string, { labels: MetricLabels; count: number }>();
+
+  app.addHook("onResponse", (request, reply, done) => {
+    const route =
+      request.routerPath ??
+      request.routeOptions?.url ??
+      request.raw.url ??
+      "unknown";
+    const labels: MetricLabels = {
+      method: request.method,
+      route,
+      status_code: String(reply.statusCode),
+    };
+    const key = JSON.stringify(labels);
+    const existing = requestCounts.get(key);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      requestCounts.set(key, { labels, count: 1 });
+    }
+    done();
+  });
+
+  app.get("/metrics", async (_, reply) => {
+    const lines = [
+      "# HELP api_gateway_http_requests_total Total number of HTTP requests received by the API gateway",
+      "# TYPE api_gateway_http_requests_total counter",
+    ];
+    for (const { labels, count } of requestCounts.values()) {
+      const labelString = Object.entries(labels)
+        .map(([name, val]) => `${name}="${val.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`)
+        .join(",");
+      lines.push(`api_gateway_http_requests_total{${labelString}} ${count}`);
+    }
+    lines.push("# EOF");
+    reply.header("Content-Type", "text/plain; version=0.0.4");
+    return reply.send(lines.join("\n") + "\n");
+  });
+
   app.get("/health", async () => ({ ok: true, service: "api-gateway" }));
+
+  app.get("/ready", async (req, rep) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      return rep.code(200).send({ ready: true });
+    } catch (error) {
+      req.log.error({ err: maskError(error) }, "readiness check failed");
+      const reason = error instanceof Error ? error.message : "unknown";
+      return rep.code(503).send({ ready: false, reason });
+    }
+  });
 
   app.get("/users", async () => {
     const users = await prisma.user.findMany({
