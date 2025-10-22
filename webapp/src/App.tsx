@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import HomePage from './pages/Home';
 import BankLinesPage from './pages/BankLines';
+import ObligationsPage from './pages/Obligations';
 import './App.css';
 
 type Theme = 'light' | 'dark';
@@ -44,6 +45,9 @@ export default function App() {
           <NavLink className="app__nav-link" to="/" end>
             Overview
           </NavLink>
+          <NavLink className="app__nav-link" to="/obligations">
+            Obligations
+          </NavLink>
           <NavLink className="app__nav-link" to="/bank-lines">
             Bank lines
           </NavLink>
@@ -60,6 +64,7 @@ export default function App() {
       <main className="app__content">
         <Routes>
           <Route path="/" element={<HomePage />} />
+          <Route path="/obligations" element={<ObligationsPage />} />
           <Route path="/bank-lines" element={<BankLinesPage />} />
         </Routes>
       </main>
