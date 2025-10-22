@@ -1,6 +1,8 @@
-﻿import './BankLines.css';
+import StatusChip, { type StatusChipVariant } from '../components/StatusChip';
 
-type LineStatus = 'Active' | 'Pending' | 'Monitoring';
+import './BankLines.css';
+
+type LineStatus = 'Active' | 'Pending' | 'Monitor';
 
 type BankLine = {
   bank: string;
@@ -24,7 +26,7 @@ const bankLines: BankLine[] = [
     bank: 'Northwind Credit Union',
     limit: '$820M',
     utilization: '71%',
-    status: 'Monitoring',
+    status: 'Monitor',
     updated: 'Yesterday',
     notes: 'Utilization trending upward ahead of portfolio rebalance.'
   },
@@ -41,7 +43,13 @@ const bankLines: BankLine[] = [
 const statusLabels: Record<LineStatus, string> = {
   Active: 'Operational',
   Pending: 'Requires approval',
-  Monitoring: 'Watch closely'
+  Monitor: 'Watch closely'
+};
+
+const statusVariants: Record<LineStatus, StatusChipVariant> = {
+  Active: 'active',
+  Pending: 'pending',
+  Monitor: 'monitor'
 };
 
 export default function BankLinesPage() {
@@ -90,10 +98,10 @@ export default function BankLinesPage() {
                   </div>
                 </td>
                 <td>
-                  <span className={`status-badge status-badge--${line.status.toLowerCase()}`}>
-                    <span className="status-badge__label">{line.status}</span>
-                    <span className="status-badge__hint">{statusLabels[line.status]}</span>
-                  </span>
+                  <div className="bank-lines__status">
+                    <StatusChip variant={statusVariants[line.status]}>{line.status}</StatusChip>
+                    <span className="bank-lines__status-hint">{statusLabels[line.status]}</span>
+                  </div>
                 </td>
                 <td>{line.updated}</td>
                 <td>{line.notes}</td>
