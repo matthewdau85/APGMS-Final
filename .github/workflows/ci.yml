@@ -2,15 +2,17 @@ name: CI
 
 on: [push, pull_request]
 
-defaults:
-  run:
-    working-directory: apgms
-
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check for merge conflict markers
+        run: |
+          if git grep -n '<<<<<<<\|=======\|>>>>>>>' -- ':!*.lock'; then
+            echo 'Error: merge conflict markers detected.'
+            exit 1
+          fi
       - uses: pnpm/action-setup@v4
         with:
           version: 9
@@ -18,8 +20,8 @@ jobs:
         with:
           node-version: '18'
           cache: 'pnpm'
-          cache-dependency-path: apgms/pnpm-lock.yaml
-      - run: pnpm install
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps
       - run: pnpm -r build
       - run: pnpm -r test
@@ -29,6 +31,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check for merge conflict markers
+        run: |
+          if git grep -n '<<<<<<<\|=======\|>>>>>>>' -- ':!*.lock'; then
+            echo 'Error: merge conflict markers detected.'
+            exit 1
+          fi
       - uses: pnpm/action-setup@v4
         with:
           version: 9
@@ -36,8 +44,8 @@ jobs:
         with:
           node-version: '18'
           cache: 'pnpm'
-          cache-dependency-path: apgms/pnpm-lock.yaml
-      - run: pnpm install
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps
       - run: pnpm --filter @apgms/webapp test:axe
 
@@ -46,6 +54,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check for merge conflict markers
+        run: |
+          if git grep -n '<<<<<<<\|=======\|>>>>>>>' -- ':!*.lock'; then
+            echo 'Error: merge conflict markers detected.'
+            exit 1
+          fi
       - uses: pnpm/action-setup@v4
         with:
           version: 9
@@ -53,12 +67,12 @@ jobs:
         with:
           node-version: '18'
           cache: 'pnpm'
-          cache-dependency-path: apgms/pnpm-lock.yaml
-      - run: pnpm install
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @apgms/webapp build
       - name: Lighthouse CI
         uses: treosh/lighthouse-ci-action@v10
         with:
-          configPath: ./apgms/lighthouserc.json
+          configPath: ./lighthouserc.json
           runs: 1
           uploadArtifacts: true
