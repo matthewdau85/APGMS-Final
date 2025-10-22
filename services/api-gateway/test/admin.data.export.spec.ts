@@ -1,6 +1,9 @@
-﻿import { test } from "node:test";
+import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import Fastify from "fastify";
+
+import { __resetAdminAuthConfigForTests } from "../src/config";
 import adminDataRoutes from "../src/routes/admin.data";
 import { subjectDataExportResponseSchema } from "../src/schemas/admin.data";
 
@@ -45,6 +48,58 @@ type DbClient = {
   };
 };
 
+const TEST_ISSUER = "https://issuer.test";
+const TEST_AUDIENCE = "apgms-admin";
+const TEST_SECRET = "export-secret";
+
+let signingKey = Buffer.from(TEST_SECRET, "utf8");
+
+const configureAdminAuth = () => {
+  process.env.ADMIN_JWT_ISSUER = TEST_ISSUER;
+  process.env.ADMIN_JWT_AUDIENCE = TEST_AUDIENCE;
+  process.env.ADMIN_JWT_ALGORITHM = "HS256";
+  process.env.ADMIN_JWT_SECRET = TEST_SECRET;
+  __resetAdminAuthConfigForTests();
+  signingKey = Buffer.from(TEST_SECRET, "utf8");
+};
+
+configureAdminAuth();
+
+const buildToken = async (
+  principal: {
+    id: string;
+    orgId: string;
+    role: "admin" | "user";
+    email: string;
+  },
+  options: {
+    audience?: string;
+    issuer?: string;
+    expiresAt?: number;
+    secret?: Uint8Array;
+  } = {}
+) => {
+  const issuedAt = Math.floor(Date.now() / 1000);
+  const payload = {
+    role: principal.role,
+    orgId: principal.orgId,
+    email: principal.email,
+    sub: principal.id,
+    iss: options.issuer ?? TEST_ISSUER,
+    aud: options.audience ?? TEST_AUDIENCE,
+    iat: issuedAt,
+    exp: options.expiresAt ?? issuedAt + 300,
+  };
+  const header = { alg: "HS256", typ: "JWT" };
+  const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  const unsigned = `${encode(header)}.${encode(payload)}`;
+  const signature = createHmac("sha256", options.secret ?? signingKey)
+    .update(unsigned)
+    .digest("base64url");
+
+  return `Bearer ${unsigned}.${signature}`;
+};
+
 const buildTestDb = (overrides: DbOverrides = {}): DbClient => ({
   user: {
     findFirst:
@@ -64,13 +119,6 @@ const buildTestDb = (overrides: DbOverrides = {}): DbClient => ({
   },
 });
 
-const buildToken = (principal: {
-  id: string;
-  orgId: string;
-  role: "admin" | "user";
-  email: string;
-}) => `Bearer ${Buffer.from(JSON.stringify(principal)).toString("base64url")}`;
-
 const buildApp = async (
   db: DbClient,
   secLog: (entry: {
@@ -80,6 +128,7 @@ const buildApp = async (
     subjectEmail: string;
   }) => void = () => {}
 ) => {
+  configureAdminAuth();
   const app = Fastify();
   app.decorate("db", db);
   app.decorate("secLog", secLog);
@@ -99,6 +148,28 @@ test("401 without token", async () => {
   await app.close();
 });
 
+test("401 when token signature is invalid", async () => {
+  const app = await buildApp(buildTestDb());
+  const response = await app.inject({
+    method: "POST",
+    url: "/admin/data/export",
+    payload: { orgId: "org-123", email: "subject@example.com" },
+    headers: {
+      authorization: await buildToken(
+        {
+          id: "admin-1",
+          orgId: "org-123",
+          role: "admin",
+          email: "admin@example.com",
+        },
+        { secret: Buffer.from("wrong-secret", "utf8") }
+      ),
+    },
+  });
+  assert.equal(response.statusCode, 401);
+  await app.close();
+});
+
 test("403 when principal is not admin", async () => {
   const app = await buildApp(buildTestDb());
   const response = await app.inject({
@@ -106,7 +177,7 @@ test("403 when principal is not admin", async () => {
     url: "/admin/data/export",
     payload: { orgId: "org-123", email: "subject@example.com" },
     headers: {
-      authorization: buildToken({
+      authorization: await buildToken({
         id: "user-1",
         orgId: "org-123",
         role: "user",
@@ -129,7 +200,7 @@ test("404 when subject is missing", async () => {
     url: "/admin/data/export",
     payload: { orgId: "org-123", email: "missing@example.com" },
     headers: {
-      authorization: buildToken({
+      authorization: await buildToken({
         id: "admin-1",
         orgId: "org-123",
         role: "admin",
@@ -168,7 +239,7 @@ test("200 returns expected export bundle", async () => {
     url: "/admin/data/export",
     payload: { orgId: "org-123", email: "subject@example.com" },
     headers: {
-      authorization: buildToken({
+      authorization: await buildToken({
         id: "admin-1",
         orgId: "org-123",
         role: "admin",

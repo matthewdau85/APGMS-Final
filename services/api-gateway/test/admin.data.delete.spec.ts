@@ -1,9 +1,12 @@
-﻿import assert from "node:assert/strict";
+import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
+
+import { createHmac } from "node:crypto";
 
 import cors from "@fastify/cors";
 import Fastify from "fastify";
 
+import { __resetAdminAuthConfigForTests } from "../src/config";
 import {
   registerAdminDataRoutes,
   type SecurityLogPayload,
@@ -21,6 +24,10 @@ type PrismaUser = {
   orgId: string;
 };
 
+const TEST_ISSUER = "https://issuer.test";
+const TEST_AUDIENCE = "apgms-admin";
+const TEST_SECRET = "test-secret";
+
 describe("POST /admin/data/delete", () => {
   let app: ReturnType<typeof Fastify>;
   const prismaStub = {
@@ -34,8 +41,57 @@ describe("POST /admin/data/delete", () => {
     },
   };
   let securityLogs: SecurityLogPayload[] = [];
+  let signingKey: Buffer;
+
+  const buildBearerToken = async (
+    role: string,
+    orgId: string,
+    principalId = "principal",
+    options: {
+      email?: string;
+      issuer?: string;
+      audience?: string;
+      expiresAt?: number;
+      secret?: Buffer;
+      extraClaims?: Record<string, unknown>;
+    } = {}
+  ) => {
+    const issuedAt = Math.floor(Date.now() / 1000);
+    const payload = {
+      role,
+      orgId,
+      email: options.email ?? "admin@example.com",
+      sub: principalId,
+      iss: options.issuer ?? TEST_ISSUER,
+      aud: options.audience ?? TEST_AUDIENCE,
+      iat: issuedAt,
+      exp: options.expiresAt ?? issuedAt + 300,
+      ...(options.extraClaims ?? {}),
+    };
+    const header = { alg: "HS256", typ: "JWT" };
+    const encode = (value: unknown) =>
+      Buffer.from(JSON.stringify(value)).toString("base64url");
+    const unsigned = `${encode(header)}.${encode(payload)}`;
+    const signature = createHmac("sha256", options.secret ?? signingKey)
+      .update(unsigned)
+      .digest("base64url");
+    return `Bearer ${unsigned}.${signature}`;
+  };
+
+  const defaultPayload = {
+    orgId: "org-123",
+    email: "user@example.com",
+    confirm: "DELETE",
+  } as const;
 
   beforeEach(async () => {
+    process.env.ADMIN_JWT_ISSUER = TEST_ISSUER;
+    process.env.ADMIN_JWT_AUDIENCE = TEST_AUDIENCE;
+    process.env.ADMIN_JWT_ALGORITHM = "HS256";
+    process.env.ADMIN_JWT_SECRET = TEST_SECRET;
+    __resetAdminAuthConfigForTests();
+
+    signingKey = Buffer.from(TEST_SECRET, "utf8");
     app = Fastify({ logger: false });
     await app.register(cors, { origin: true });
     securityLogs = [];
@@ -59,15 +115,6 @@ describe("POST /admin/data/delete", () => {
     await app.close();
   });
 
-  const buildToken = (role: string, orgId: string, principalId = "principal") =>
-    `Bearer ${role}:${principalId}:${orgId}`;
-
-  const defaultPayload = {
-    orgId: "org-123",
-    email: "user@example.com",
-    confirm: "DELETE",
-  } as const;
-
   it("returns 401 without bearer token", async () => {
     const response = await app.inject({
       method: "POST",
@@ -76,6 +123,38 @@ describe("POST /admin/data/delete", () => {
     });
 
     assert.equal(response.statusCode, 401);
+  });
+
+  it("rejects expired tokens", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/admin/data/delete",
+      payload: defaultPayload,
+      headers: {
+        authorization: await buildBearerToken("admin", defaultPayload.orgId, "admin-1", {
+          expiresAt: Math.floor(Date.now() / 1000) - 10,
+        }),
+      },
+    });
+
+    assert.equal(response.statusCode, 401);
+    assert.equal(securityLogs.length, 0);
+  });
+
+  it("rejects tokens signed with the wrong key", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/admin/data/delete",
+      payload: defaultPayload,
+      headers: {
+        authorization: await buildBearerToken("admin", defaultPayload.orgId, "admin-1", {
+          secret: Buffer.from("not-the-secret", "utf8"),
+        }),
+      },
+    });
+
+    assert.equal(response.statusCode, 401);
+    assert.equal(securityLogs.length, 0);
   });
 
   it("rejects non-admin principals", async () => {
@@ -90,7 +169,7 @@ describe("POST /admin/data/delete", () => {
       url: "/admin/data/delete",
       payload: defaultPayload,
       headers: {
-        authorization: buildToken("member", defaultPayload.orgId),
+        authorization: await buildBearerToken("member", defaultPayload.orgId),
       },
     });
 
@@ -104,7 +183,7 @@ describe("POST /admin/data/delete", () => {
       url: "/admin/data/delete",
       payload: { ...defaultPayload, confirm: "nope" },
       headers: {
-        authorization: buildToken("admin", defaultPayload.orgId),
+        authorization: await buildBearerToken("admin", defaultPayload.orgId),
       },
     });
 
@@ -119,7 +198,7 @@ describe("POST /admin/data/delete", () => {
       url: "/admin/data/delete",
       payload: defaultPayload,
       headers: {
-        authorization: buildToken("admin", defaultPayload.orgId),
+        authorization: await buildBearerToken("admin", defaultPayload.orgId),
       },
     });
 
@@ -167,7 +246,7 @@ describe("POST /admin/data/delete", () => {
       url: "/admin/data/delete",
       payload: defaultPayload,
       headers: {
-        authorization: buildToken("admin", defaultPayload.orgId, "admin-1"),
+        authorization: await buildBearerToken("admin", defaultPayload.orgId, "admin-1"),
       },
     });
 
@@ -226,7 +305,7 @@ describe("POST /admin/data/delete", () => {
       url: "/admin/data/delete",
       payload: defaultPayload,
       headers: {
-        authorization: buildToken("admin", defaultPayload.orgId),
+        authorization: await buildBearerToken("admin", defaultPayload.orgId),
       },
     });
 
