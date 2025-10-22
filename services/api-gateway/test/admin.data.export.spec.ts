@@ -1,206 +1,128 @@
-import { test } from "node:test";
 import assert from "node:assert/strict";
+import { afterEach, beforeEach, test } from "node:test";
+
 import Fastify from "fastify";
-import adminDataRoutes from "../src/routes/admin.data";
-import { subjectDataExportResponseSchema } from "../src/schemas/admin.data";
 
-type DbOverrides = {
-  userFindFirst?: DbClient["user"]["findFirst"];
-  bankLineCount?: DbClient["bankLine"]["count"];
-  accessLogCreate?: NonNullable<DbClient["accessLog"]>["create"];
-};
+import adminDataRoutes, {
+  type AdminDataPluginOptions,
+} from "../src/routes/admin.data";
+import {
+  adminDataExportRequestSchema,
+  adminDataExportResponseSchema,
+} from "../src/schemas/admin.data";
 
-type DbClient = {
-  user: {
-    findFirst: (args: {
-      where: { email: string; orgId: string };
-      select: {
-        id: true;
-        email: true;
-        createdAt: true;
-        org: { select: { id: true; name: true } };
-      };
-    }) => Promise<
-      | {
-          id: string;
-          email: string;
-          createdAt: Date;
-          org: { id: string; name: string };
-        }
-      | null
-    >;
-  };
-  bankLine: {
-    count: (args: { where: { orgId: string } }) => Promise<number>;
-  };
-  accessLog: {
-    create: (args: {
-      data: {
-        event: string;
-        orgId: string;
-        principalId: string;
-        subjectEmail: string;
-      };
-    }) => Promise<unknown>;
-  };
-};
+const ADMIN_TOKEN = "super-secret-admin";
 
-const buildTestDb = (overrides: DbOverrides = {}): DbClient => ({
-  user: {
-    findFirst:
-      overrides.userFindFirst ??
-      (async () => ({
-        id: "user-1",
-        email: "subject@example.com",
-        createdAt: new Date("2023-01-01T00:00:00.000Z"),
-        org: { id: "org-123", name: "Example Org" },
-      })),
-  },
-  bankLine: {
-    count: overrides.bankLineCount ?? (async () => 0),
-  },
-  accessLog: {
-    create: overrides.accessLogCreate ?? (async () => ({})),
-  },
-});
-
-const buildToken = (principal: {
-  id: string;
-  orgId: string;
-  role: "admin" | "user";
-  email: string;
-}) => `Bearer ${Buffer.from(JSON.stringify(principal)).toString("base64url")}`;
+const validHeaders = { authorization: `Bearer ${ADMIN_TOKEN}` } as const;
 
 const buildApp = async (
-  db: DbClient,
-  secLog: (entry: {
-    event: string;
-    orgId: string;
-    principal: string;
-    subjectEmail: string;
-  }) => void = () => {}
-) => {
-  const app = Fastify();
-  app.decorate("db", db);
-  app.decorate("secLog", secLog);
-  await app.register(adminDataRoutes);
+  options: Partial<AdminDataPluginOptions> = {}
+): Promise<ReturnType<typeof Fastify>> => {
+  const app = Fastify({ logger: false });
+  await app.register(adminDataRoutes, { adminToken: ADMIN_TOKEN, ...options });
   await app.ready();
   return app;
 };
 
-test("401 without token", async () => {
-  const app = await buildApp(buildTestDb());
+let app: ReturnType<typeof Fastify>;
+
+beforeEach(async () => {
+  app = await buildApp();
+});
+
+afterEach(async () => {
+  await app.close();
+});
+
+test("401 when authorization header is missing", async () => {
   const response = await app.inject({
     method: "POST",
     url: "/admin/data/export",
-    payload: { orgId: "org-123", email: "subject@example.com" },
+    payload: { subjectId: "subject-1" },
   });
+
   assert.equal(response.statusCode, 401);
-  await app.close();
+  assert.deepEqual(response.json(), { error: "unauthorized" });
 });
 
-test("403 when principal is not admin", async () => {
-  const app = await buildApp(buildTestDb());
+test("401 when authorization header is incorrect", async () => {
   const response = await app.inject({
     method: "POST",
     url: "/admin/data/export",
-    payload: { orgId: "org-123", email: "subject@example.com" },
-    headers: {
-      authorization: buildToken({
-        id: "user-1",
-        orgId: "org-123",
-        role: "user",
-        email: "user@example.com",
-      }),
-    },
+    payload: { subjectId: "subject-1" },
+    headers: { authorization: "Bearer wrong-token" },
   });
-  assert.equal(response.statusCode, 403);
-  await app.close();
+
+  assert.equal(response.statusCode, 401);
+  assert.deepEqual(response.json(), { error: "unauthorized" });
 });
 
-test("404 when subject is missing", async () => {
-  const app = await buildApp(
-    buildTestDb({
-      userFindFirst: async () => null,
-    })
-  );
+test("400 for invalid request payload", async () => {
   const response = await app.inject({
     method: "POST",
     url: "/admin/data/export",
-    payload: { orgId: "org-123", email: "missing@example.com" },
-    headers: {
-      authorization: buildToken({
-        id: "admin-1",
-        orgId: "org-123",
-        role: "admin",
-        email: "admin@example.com",
-      }),
-    },
+    payload: { subjectId: "" },
+    headers: validHeaders,
   });
+
+  assert.equal(response.statusCode, 400);
+  assert.deepEqual(response.json(), { error: "invalid_request" });
+});
+
+test("404 when export handler cannot find subject", async () => {
+  await app.close();
+  app = await buildApp({
+    exportHandler: async () => null,
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/admin/data/export",
+    payload: { subjectId: "missing-subject" },
+    headers: validHeaders,
+  });
+
   assert.equal(response.statusCode, 404);
-  await app.close();
+  assert.deepEqual(response.json(), { error: "not_found" });
 });
 
-test("200 returns expected export bundle", async () => {
-  const accessLogCalls: unknown[] = [];
-  const secLogCalls: unknown[] = [];
-  const app = await buildApp(
-    buildTestDb({
-      bankLineCount: async () => 5,
-      userFindFirst: async () => ({
-        id: "user-99",
-        email: "subject@example.com",
-        createdAt: new Date("2022-05-05T00:00:00.000Z"),
-        org: { id: "org-123", name: "Example Org" },
-      }),
-      accessLogCreate: async (args) => {
-        accessLogCalls.push(args);
-        return {};
-      },
-    }),
-    (entry) => {
-      secLogCalls.push(entry);
-    }
-  );
+test("200 returns validated export bundle", async () => {
+  await app.close();
+  const exportedAt = "2024-01-02T12:34:56.000Z";
+  const calls: string[] = [];
+  app = await buildApp({
+    exportHandler: async (subjectId) => {
+      calls.push(subjectId);
+      return {
+        version: "2024-01-01",
+        subjectId,
+        exportedAt,
+        data: {
+          relationships: [
+            { type: "membership", id: "relationship-1" },
+            { type: "account", id: "relationship-2" },
+          ],
+        },
+      };
+    },
+  });
+
+  const requestPayload = { subjectId: "subject-42" };
+  assert.doesNotThrow(() => adminDataExportRequestSchema.parse(requestPayload));
 
   const response = await app.inject({
     method: "POST",
     url: "/admin/data/export",
-    payload: { orgId: "org-123", email: "subject@example.com" },
-    headers: {
-      authorization: buildToken({
-        id: "admin-1",
-        orgId: "org-123",
-        role: "admin",
-        email: "admin@example.com",
-      }),
-    },
+    payload: requestPayload,
+    headers: validHeaders,
   });
 
   assert.equal(response.statusCode, 200);
   const json = response.json();
-  const parsed = subjectDataExportResponseSchema.parse(json);
-  assert.equal(parsed.org.id, "org-123");
-  assert.equal(parsed.user.id, "user-99");
-  assert.equal(parsed.relationships.bankLinesCount, 5);
-  assert.ok(Date.parse(parsed.user.createdAt));
-  assert.ok(Date.parse(parsed.exportedAt));
-  assert.equal(accessLogCalls.length, 1);
-  assert.deepEqual(accessLogCalls[0], {
-    data: {
-      event: "data_export",
-      orgId: "org-123",
-      principalId: "admin-1",
-      subjectEmail: "subject@example.com",
-    },
-  });
-  assert.equal(secLogCalls.length, 1);
-  assert.deepEqual(secLogCalls[0], {
-    event: "data_export",
-    orgId: "org-123",
-    principal: "admin-1",
-    subjectEmail: "subject@example.com",
-  });
-
-  await app.close();
+  const parsed = adminDataExportResponseSchema.parse(json);
+  assert.equal(parsed.subjectId, requestPayload.subjectId);
+  assert.equal(parsed.version, "2024-01-01");
+  assert.equal(parsed.exportedAt, exportedAt);
+  assert.equal(parsed.data.relationships.length, 2);
+  assert.deepEqual(calls, [requestPayload.subjectId]);
 });

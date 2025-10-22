@@ -1,57 +1,128 @@
 import { z } from "zod";
 
-<<<<<<< HEAD
-export const adminDataDeleteRequestSchema = z.object({
-  orgId: z.string().min(1, "orgId is required"),
-  email: z.string().email("email must be valid"),
-  confirm: z.literal("DELETE"),
-});
+const relationshipsItemSchema = z
+  .object({
+    type: z.string().min(1),
+    id: z.string().min(1),
+  })
+  .strict();
 
-export const adminDataDeleteResponseSchema = z.object({
-  action: z.union([z.literal("anonymized"), z.literal("deleted")]),
-  userId: z.string().min(1),
-  occurredAt: z
-    .string()
-    .refine((value) => !Number.isNaN(Date.parse(value)), {
-      message: "occurredAt must be ISO string",
-    }),
-});
+const relationshipsSchema = z
+  .object({
+    relationships: z.array(relationshipsItemSchema),
+  })
+  .strict();
 
+export const adminDataExportRequestSchema = z
+  .object({
+    subjectId: z.string().min(1),
+  })
+  .strict();
+
+export const adminDataExportResponseSchema = z
+  .object({
+    version: z.string().min(1),
+    subjectId: z.string().min(1),
+    exportedAt: z.string().datetime(),
+    data: relationshipsSchema,
+  })
+  .strict();
+
+export const adminDataDeleteRequestSchema = z
+  .object({
+    subjectId: z.string().min(1),
+  })
+  .strict();
+
+export const adminDataDeleteResponseSchema = z
+  .object({
+    status: z.literal("deleted"),
+    subjectId: z.string().min(1),
+    deletedAt: z.string().datetime(),
+  })
+  .strict();
+
+export const adminDataErrorResponseSchema = z
+  .object({
+    error: z.string(),
+  })
+  .strict();
+
+export type AdminDataExportRequest = z.infer<typeof adminDataExportRequestSchema>;
+export type AdminDataExportResponse = z.infer<typeof adminDataExportResponseSchema>;
 export type AdminDataDeleteRequest = z.infer<typeof adminDataDeleteRequestSchema>;
 export type AdminDataDeleteResponse = z.infer<typeof adminDataDeleteResponseSchema>;
-=======
-export const subjectDataExportRequestSchema = z.object({
-  orgId: z.string().min(1),
-  email: z.string().email(),
-});
+export type AdminDataErrorResponse = z.infer<typeof adminDataErrorResponseSchema>;
 
-const orgSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-});
+export const adminDataExportRequestJsonSchema = {
+  $id: "AdminDataExportRequest",
+  type: "object",
+  additionalProperties: false,
+  required: ["subjectId"],
+  properties: {
+    subjectId: { type: "string", minLength: 1 },
+  },
+} as const;
 
-const userSchema = z.object({
-  id: z.string(),
-  email: z.string().email(),
-  createdAt: z.string(),
-});
+export const adminDataExportResponseJsonSchema = {
+  $id: "AdminDataExportResponse",
+  type: "object",
+  additionalProperties: false,
+  required: ["version", "subjectId", "exportedAt", "data"],
+  properties: {
+    version: { type: "string", minLength: 1 },
+    subjectId: { type: "string", minLength: 1 },
+    exportedAt: { type: "string", format: "date-time" },
+    data: {
+      type: "object",
+      additionalProperties: false,
+      required: ["relationships"],
+      properties: {
+        relationships: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["type", "id"],
+            properties: {
+              type: { type: "string", minLength: 1 },
+              id: { type: "string", minLength: 1 },
+            },
+          },
+        },
+      },
+    },
+  },
+} as const;
 
-const relationshipsSchema = z.object({
-  bankLinesCount: z.number().int(),
-});
+export const adminDataDeleteRequestJsonSchema = {
+  $id: "AdminDataDeleteRequest",
+  type: "object",
+  additionalProperties: false,
+  required: ["subjectId"],
+  properties: {
+    subjectId: { type: "string", minLength: 1 },
+  },
+} as const;
 
-export const subjectDataExportResponseSchema = z.object({
-  org: orgSchema,
-  user: userSchema,
-  relationships: relationshipsSchema,
-  exportedAt: z.string(),
-});
+export const adminDataDeleteResponseJsonSchema = {
+  $id: "AdminDataDeleteResponse",
+  type: "object",
+  additionalProperties: false,
+  required: ["status", "subjectId", "deletedAt"],
+  properties: {
+    status: { const: "deleted" },
+    subjectId: { type: "string", minLength: 1 },
+    deletedAt: { type: "string", format: "date-time" },
+  },
+} as const;
 
-export type SubjectDataExportRequest = z.infer<
-  typeof subjectDataExportRequestSchema
->;
-
-export type SubjectDataExportResponse = z.infer<
-  typeof subjectDataExportResponseSchema
->;
->>>>>>> origin/codex/add-admin-gated-subject-data-export-endpoint
+export const adminDataErrorResponseJsonSchema = {
+  $id: "AdminDataErrorResponse",
+  type: "object",
+  additionalProperties: false,
+  required: ["error"],
+  properties: {
+    error: { type: "string" },
+  },
+} as const;
