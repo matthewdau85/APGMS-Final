@@ -44,10 +44,10 @@ export default function HomePage() {
   return (
     <div className="page">
       <header className="page__header">
-        <h1>Portfolio pulse</h1>
+        <h1>Obligations</h1>
         <p>
-          Monitor capital utilization, track live mandates, and surface emerging risk signals
-          across your institutional banking relationships.
+          Monitor upcoming lodgements, statutory reporting, and operational follow-ups across
+          every government obligation in a single workspace.
         </p>
       </header>
 

@@ -1,9 +1,8 @@
-﻿import AxeBuilder from '@axe-core/playwright';
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
+import { ACCESSIBILITY_ROUTES } from './routes';
 
-const routes = ['/', '/bank-lines'] as const;
-
-for (const route of routes) {
+for (const route of ACCESSIBILITY_ROUTES) {
   test.describe(`Accessibility for ${route}`, () => {
     test(`should have no detectable Axe violations on ${route}`, async ({ page }) => {
       await page.goto(route);
