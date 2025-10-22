@@ -1,0 +1,67 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - '*'
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  NODE_VERSION: '18'
+
+steps:
+  - checkout: self
+    clean: true
+
+  - task: NodeTool@0
+    inputs:
+      versionSpec: $(NODE_VERSION)
+
+  - script: npm install -g pnpm@9
+    displayName: Install pnpm
+
+  - script: pnpm install --frozen-lockfile
+    displayName: Install dependencies
+
+  - script: pnpm exec playwright install --with-deps
+    displayName: Install Playwright browsers
+
+  - script: |
+      if git grep -n '<<<<<<<\|=======\|>>>>>>>' -- ':!*.lock'; then
+        echo 'Merge conflict markers detected. Failing build.'
+        exit 1
+      else
+        echo 'No merge conflict markers found.'
+      fi
+    displayName: Check for merge conflict markers
+
+  - script: pnpm -r build
+    displayName: Build workspaces
+
+  - script: pnpm -r test
+    displayName: Run tests
+
+  - script: pnpm --filter @apgms/webapp test:axe
+    displayName: Run accessibility tests
+
+  - script: |
+      if find . -name "schema.prisma" -print -quit | grep -q .; then
+        echo 'Prisma schema detected. Checking migrate status...'
+        output=$(pnpm -r exec prisma migrate status 2>&1) || status=$?
+        echo "$output"
+        if [ -n "${status:-}" ] && [ "${status}" -ne 0 ]; then
+          if echo "$output" | grep -qiE 'not found|ENOENT'; then
+            echo 'Warning: Prisma CLI not available; skipping migrate status.'
+          else
+            exit "${status}"
+          fi
+        fi
+      else
+        echo 'No Prisma schema found. Skipping Prisma migrate status.'
+      fi
+    displayName: Prisma migrate status

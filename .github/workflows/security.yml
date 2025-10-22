@@ -1,8 +1,62 @@
-﻿name: Security
-on: [push]
+name: Security Scans
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
 jobs:
-  scan:
+  security:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
-      - uses: actions/checkout@v4
-      - run: echo scanning
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate CycloneDX SBOM
+        run: pnpm dlx @cyclonedx/cyclonedx-npm --spec-version 1.4 --output-format json --output-path sbom.json --include-dev
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyclone-dx-sbom
+          path: sbom.json
+          if-no-files-found: error
+
+      - name: Audit production dependencies
+        run: pnpm audit --prod --severity-level high
+
+      - name: Run Gitleaks secret scan
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          args: detect --source . --no-git --redact
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.22.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
