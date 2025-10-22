@@ -81,20 +81,29 @@ tbody tr + tr {
   color: var(--color-text);
 }
 
-.bank-lines__utilization-track {
-  position: relative;
-  height: 0.4rem;
-  background-color: var(--color-surface-muted);
+.bank-lines__utilization-meter {
+  --meter-height: 0.5rem;
+  width: 100%;
+  height: var(--meter-height);
   border-radius: var(--radius-pill);
+  background: var(--color-surface-muted);
   overflow: hidden;
 }
 
-.bank-lines__utilization-fill {
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
+.bank-lines__utilization-meter::-webkit-meter-bar {
+  background: none;
+  border: none;
+  border-radius: var(--radius-pill);
+}
+
+.bank-lines__utilization-meter::-webkit-meter-optimum-value {
   background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-success) 100%);
+  border-radius: var(--radius-pill);
+}
+
+.bank-lines__utilization-meter::-moz-meter-bar {
+  background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-success) 100%);
+  border-radius: var(--radius-pill);
 }
 
 .status-badge {

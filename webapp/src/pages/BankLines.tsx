@@ -5,7 +5,7 @@ type LineStatus = 'Active' | 'Pending' | 'Monitoring';
 type BankLine = {
   bank: string;
   limit: string;
-  utilization: string;
+  utilization: number;
   status: LineStatus;
   updated: string;
   notes: string;
@@ -15,7 +15,7 @@ const bankLines: BankLine[] = [
   {
     bank: 'Commonwealth Bank',
     limit: '$1.2B',
-    utilization: '64%',
+    utilization: 64,
     status: 'Active',
     updated: 'Today 10:24',
     notes: 'Term sheet expansion approved for Helios storage facility.'
@@ -23,7 +23,7 @@ const bankLines: BankLine[] = [
   {
     bank: 'Northwind Credit Union',
     limit: '$820M',
-    utilization: '71%',
+    utilization: 71,
     status: 'Monitoring',
     updated: 'Yesterday',
     notes: 'Utilization trending upward ahead of portfolio rebalance.'
@@ -31,7 +31,7 @@ const bankLines: BankLine[] = [
   {
     bank: 'First Harbor Partners',
     limit: '$640M',
-    utilization: '48%',
+    utilization: 48,
     status: 'Pending',
     updated: '2 days ago',
     notes: 'Awaiting revised covenants from legal after counterparty feedback.'
@@ -80,13 +80,16 @@ export default function BankLinesPage() {
                 <td>{line.limit}</td>
                 <td>
                   <div className="bank-lines__utilization">
-                    <span>{line.utilization}</span>
-                    <div className="bank-lines__utilization-track" aria-hidden="true">
-                      <div
-                        className="bank-lines__utilization-fill"
-                        style={{ width: line.utilization }}
-                      />
-                    </div>
+                    <span>{line.utilization}%</span>
+                    <meter
+                      className="bank-lines__utilization-meter"
+                      min={0}
+                      max={100}
+                      value={line.utilization}
+                      aria-label={`${line.bank} utilization`}
+                    >
+                      {line.utilization}%
+                    </meter>
                   </div>
                 </td>
                 <td>
