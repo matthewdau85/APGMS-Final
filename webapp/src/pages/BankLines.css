@@ -133,6 +133,56 @@ tbody tr + tr {
   color: var(--color-primary);
 }
 
+.bank-lines__message {
+  text-align: center;
+  padding: var(--spacing-xl) var(--spacing-lg);
+  color: var(--color-text-muted);
+}
+
+.bank-lines__message h2 {
+  margin-bottom: var(--spacing-xs);
+  color: var(--color-text);
+  font-size: var(--font-size-lg);
+}
+
+.bank-lines__message p {
+  margin: 0;
+  max-width: 36rem;
+  margin-inline: auto;
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-muted);
+  min-height: 1rem;
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.55),
+    transparent
+  );
+  animation: shimmer 1.6s infinite;
+}
+
+.skeleton--text {
+  width: 100%;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
