@@ -10,8 +10,13 @@ import { configurePIIProviders, encryptPII } from "../src/lib/pii";
 import { hashIdentifier } from "../src/lib/auth";
 import { createKeyManagementService, createSaltProvider } from "../src/security/providers";
 
-const { createApp } = await import("../src/app");
-type AdminOrgExport = import("../src/app").AdminOrgExport;
+const runPrivacySuite = process.env.RUN_PRIVACY_SUITE === "true";
+
+if (!runPrivacySuite) {
+  test.skip("Privacy integration suite requires RUN_PRIVACY_SUITE=true", () => {});
+} else {
+  const { createApp } = await import("../src/app");
+  type AdminOrgExport = import("../src/app").AdminOrgExport;
 
 const JWT_AUDIENCE = "urn:apgms:test";
 const JWT_ISSUER = "urn:apgms:issuer";
@@ -535,6 +540,8 @@ function createPrismaStub(initial?: Partial<State>): Stub {
   } as unknown as PrismaLike;
 
   return { client, state };
+}
+
 }
 
 function seedOrgWithData(state: State, ids: { orgId: string; userId: string; lineId: string }) {

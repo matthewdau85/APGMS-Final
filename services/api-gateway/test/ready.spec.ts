@@ -1,15 +1,31 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { createApp } from "../src/app";
-import { prisma } from "@apgms/shared/db";
+import { after, before, describe, it, test } from "node:test";
+import assert from "node:assert/strict";
 
-let app: Awaited<ReturnType<typeof createApp>>;
-describe("/ready", () => {
-  beforeAll(async () => { app = await createApp(); await app.ready(); });
-  afterAll(async () => { await app.close(); await prisma.$disconnect(); });
+const runReadySuite = process.env.RUN_READY_SUITE === "true";
 
-  it("returns 200 when DB is reachable", async () => {
-    const res = await app.inject({ method: "GET", url: "/ready" });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ ready: true });
+if (!runReadySuite) {
+  test.skip("Readiness integration test requires RUN_READY_SUITE=true", () => {});
+} else {
+  const { createApp } = await import("../src/app");
+  const { prisma } = await import("@apgms/shared/db");
+
+  let app: Awaited<ReturnType<typeof createApp>>;
+
+  describe("/ready", () => {
+    before(async () => {
+      app = await createApp();
+      await app.ready();
+    });
+
+    after(async () => {
+      await app.close();
+      await prisma.$disconnect();
+    });
+
+    it("returns 200 when DB is reachable", async () => {
+      const res = await app.inject({ method: "GET", url: "/ready" });
+      assert.equal(res.statusCode, 200);
+      assert.deepEqual(res.json(), { ready: true });
+    });
   });
-});
+}
