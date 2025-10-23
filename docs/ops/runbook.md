@@ -5,8 +5,8 @@
 - Dependencies: Postgres (DATABASE_URL), Redis (if configured), PII KMS providers.
 
 ## Start/Stop Procedures
-- **Start**: pnpm --filter @apgms/aapi-gateway dev
-- **Graceful shutdown**: send SIGTERM/SIGINT; handler drains and calls fastify.close() (services/aapi-gateway/src/index.ts).
+- **Start**: pnpm --filter @apgms/api-gateway dev
+- **Graceful shutdown**: send SIGTERM/SIGINT; handler drains and calls fastify.close() (services/api-gateway/src/index.ts).
 - Verify shutdown by checking logs api-gateway shut down cleanly.
 
 ## Health & Readiness
@@ -14,12 +14,12 @@
 - GET /ready performs DB connectivity check; returns 503 on failure.
 
 ## Logs & Correlation
-- Structured logs emitted with JSON, request IDs attached in Fastify hooks (services/aapi-gateway/src/app.ts).
+- Structured logs emitted with JSON, request IDs attached in Fastify hooks (services/api-gateway/src/app.ts).
 - Security events & audit trails log under security_event and audit_failed.
 - Search by x-request-id header.
 
 ## Metrics
-- Prometheus endpoint at /metrics exposing http_requests_total, security_events_total.
+- Prometheus endpoint at /metrics exposing http_requests_total, http_request_duration_seconds, security_events_total.
 - Check anomaly counter anomaly.auth for repeated auth failures.
 
 ## Alerts & SLOs
@@ -43,11 +43,11 @@
 - Secondary: Security Engineering (security@apgms.example)
 
 ## Smoke Test Checklist
-- [ ] `pnpm --filter @apgms/aapi-gateway dev` boots, logs listening message.
+- [ ] `pnpm --filter @apgms/api-gateway dev` boots, logs listening message.
 - [ ] `curl http://localhost:3000/ready` returns 200 under normal conditions.
 - [ ] Kill process with CTRL+C and confirm graceful shutdown log.
 - [ ] Bring DB down, `/ready` returns 503.
-- [ ] `curl http://localhost:3000/metrics` outputs Prometheus counters.
+- [ ] curl http://localhost:3000/metrics outputs Prometheus counters.\n- [ ] pnpm k6:smoke -- --env BASE_URL=http://localhost:3000 passes (requires k6).
 
 
 See `docs/ops/logging.md` for structured logging guidance.

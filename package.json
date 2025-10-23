@@ -14,7 +14,8 @@
                     "db:gen":  "pnpm --filter @apgms/shared exec prisma generate --schema prisma/schema.prisma",
                     "test":  "pnpm -r test",
                     "build":  "pnpm -r build",
-                    "typecheck":  "pnpm -r typecheck"
+                    "typecheck":  "pnpm -r typecheck",
+                    "k6:smoke":  "pnpm exec k6 run k6/smoke.js"
                 },
     "devDependencies":  {
                             "@types/node":  "^24.7.1",
