@@ -39,6 +39,7 @@
 - File follow-up tasks to improve automation or documentation.
 - Capture command evidence with `pnpm compliance:evidence --tag <incident-id>` and archive the output in `artifacts/compliance/`.
 - Populate `status/incidents/<incident-id>.md` using the template provided to keep public status in sync.
+- Run applicable chaos experiment from `docs/ops/chaos.md` after remediation to validate fixes.
 
 ## Contact
 - Primary: Platform Ops (ops@apgms.example)
@@ -49,7 +50,8 @@
 - [ ] `curl http://localhost:3000/ready` returns 200 under normal conditions.
 - [ ] Kill process with CTRL+C and confirm graceful shutdown log.
 - [ ] Bring DB down, `/ready` returns 503.
-- [ ] curl http://localhost:3000/metrics outputs Prometheus counters.\n- [ ] pnpm k6:smoke -- --env BASE_URL=http://localhost:3000 passes (requires k6).
+- [ ] curl http://localhost:3000/metrics outputs Prometheus counters.
+- [ ] pnpm k6:smoke -- --env BASE_URL=http://localhost:3000 passes (requires k6).
 
 
 See `docs/ops/logging.md` for structured logging guidance.
@@ -63,4 +65,6 @@ See `docs/ops/logging.md` for structured logging guidance.
 - Record outcomes in `status/README.md` with follow-up tasks.
 
 
-See docs/ops/alerts.md for alert routing and testing details.\n
+See docs/ops/alerts.md for alert routing and testing details.
+
+
