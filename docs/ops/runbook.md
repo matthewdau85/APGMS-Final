@@ -38,6 +38,7 @@
 - Record incident in status/README.md with timeline and resolution.
 - File follow-up tasks to improve automation or documentation.
 - Capture command evidence with `pnpm compliance:evidence --tag <incident-id>` and archive the output in `artifacts/compliance/`.
+- Populate `status/incidents/<incident-id>.md` using the template provided to keep public status in sync.
 
 ## Contact
 - Primary: Platform Ops (ops@apgms.example)
