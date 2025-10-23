@@ -21,4 +21,6 @@ pnpm k6:smoke -- --env BASE_URL=http://localhost:3000
 - Store any developer-provisioned KMS credentials in `artifacts/kms/`. The directory is
   tracked in git via a `.gitkeep`, while the JSON key material is ignored so local keys
   never end up in version control.
+- Rotate JWT/PII key material with `pnpm security:rotate-keys --write-env .env` (dry-run prints values).
+
 
