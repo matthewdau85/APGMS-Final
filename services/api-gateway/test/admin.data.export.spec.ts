@@ -94,7 +94,7 @@ const buildApp = async (
 test("401 without token", async () => {
   const app = await buildApp(
     buildTestDb(),
-    async (_req, reply) => {
+    async (_req: FastifyRequest, reply: FastifyReply) => {
       void reply.code(401).send({ error: "unauthorized" });
       return null;
     },
@@ -111,7 +111,7 @@ test("401 without token", async () => {
 test("403 when principal is not admin", async () => {
   const app = await buildApp(
     buildTestDb(),
-    async (_req, reply) => {
+    async (_req: FastifyRequest, reply: FastifyReply) => {
       void reply.code(403).send({ error: "forbidden" });
       return null;
     },
@@ -130,7 +130,7 @@ test("404 when subject is missing", async () => {
     buildTestDb({
       userFindFirst: async () => null,
     }),
-    async () => ({
+    async (_req: FastifyRequest, _reply: FastifyReply, _roles: ReadonlyArray<string>) => ({
       id: "admin-1",
       orgId: "org-123",
       roles: ["admin"],
@@ -163,7 +163,7 @@ test("200 returns expected export bundle", async () => {
         return {};
       },
     }),
-    async () => ({
+    async (_req: FastifyRequest, _reply: FastifyReply, _roles: ReadonlyArray<string>) => ({
       id: "admin-1",
       orgId: "org-123",
       roles: ["admin"],

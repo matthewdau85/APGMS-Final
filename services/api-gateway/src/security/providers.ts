@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { Buffer } from "node:buffer";
 import type { PrismaClient } from "@prisma/client";
 import type {
+  AuditEvent,
   AuditLogger,
   EncryptionKey,
   KeyManagementService,
@@ -105,16 +106,17 @@ class PrismaAuditLogger implements AuditLogger {
   constructor(private readonly prisma: PrismaClient) {}
 
   async record(event: Parameters<AuditLogger["record"]>[0]): Promise<void> {
+    const payload = event as AuditEvent;
     try {
       await this.prisma.auditLog.create({
         data: {
-          actorId: event.actorId,
-          action: event.action,
-          orgId: (event.metadata?.orgId as string | undefined) ?? "unknown",
-          metadata: event.metadata ?? {},
+          actorId: payload.actorId,
+          action: payload.action,
+          orgId: (payload.metadata?.orgId as string | undefined) ?? "unknown",
+          metadata: payload.metadata ?? {},
         },
       });
-    } catch (error) {
+    } catch (error: unknown) {
       // Failing closed to avoid leaking operations; log and continue
       console.error("unable to persist audit log", error);
       throw error;
@@ -148,7 +150,7 @@ function parseJsonEnv<T>(value: string | undefined, name: string): T | undefined
   }
   try {
     return JSON.parse(value) as T;
-  } catch (error) {
+  } catch (error: unknown) {
     throw new Error(`${name} must contain valid JSON`);
   }
 }
