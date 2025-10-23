@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
-import { z } from "zod";
 
 import {
   adminDataDeleteRequestSchema,
@@ -9,15 +8,14 @@ import {
   subjectDataExportResponseSchema,
 } from "../schemas/admin.data";
 import { hashPassword } from "@apgms/shared";
+import {
+  AuthError,
+  requireRole,
+  verifyRequest,
+  type Principal,
+} from "../lib/auth";
 
 const PASSWORD_PLACEHOLDER = "__deleted__";
-const LEGACY_BEARER = /^Bearer\s+(.+)$/i;
-
-interface LegacyPrincipal {
-  id: string;
-  role: string;
-  orgId: string;
-}
 
 export interface SecurityLogPayload {
   event: "data_delete" | "data_export";
@@ -28,6 +26,8 @@ export interface SecurityLogPayload {
   mode?: "anonymized" | "deleted";
 }
 
+type Role = Parameters<typeof requireRole>[1][number];
+
 type SharedDbModule = typeof import("../../../../shared/src/db.js");
 
 type PrismaClientLike = Pick<
@@ -35,8 +35,15 @@ type PrismaClientLike = Pick<
   "user" | "bankLine" | "org" | "orgTombstone" | "auditLog"
 >;
 
+type AuthenticateFn = (
+  req: FastifyRequest,
+  reply: FastifyReply,
+  roles: ReadonlyArray<Role>,
+) => Promise<Principal | null>;
+
 interface AdminDataRouteDeps {
   prisma?: PrismaClientLike;
+  authenticate?: AuthenticateFn;
   secLog?: (payload: SecurityLogPayload) => Promise<void> | void;
   auditLog?: (payload: SecurityLogPayload & { occurredAt: string }) => Promise<void> | void;
   hash?: (password: string) => Promise<string>;
@@ -52,48 +59,35 @@ export async function registerAdminDataRoutes(
   deps: AdminDataRouteDeps = {},
 ): Promise<void> {
   const prisma = deps.prisma ?? (await buildDefaultPrisma());
+  const authenticate = deps.authenticate ?? createDefaultAuthenticator(app);
   const secLog =
     deps.secLog ??
     (async (payload: SecurityLogPayload) => {
       app.log.info({ security: payload }, "security_event");
     });
-
   const hash = deps.hash ?? hashPassword;
-  const logAuditEvent = async (payload: SecurityLogPayload & { occurredAt?: string }) => {
+
+  const logAuditEvent = async (payload: SecurityLogPayload & { occurredAt: string }) => {
     if (deps.auditLog) {
-      if (payload.occurredAt) {
-        await deps.auditLog({ ...payload, occurredAt: payload.occurredAt });
-      }
+      await deps.auditLog(payload);
       return;
     }
-    if (payload.occurredAt && prisma.auditLog && typeof prisma.auditLog.create === "function") {
+    if (prisma.auditLog && typeof prisma.auditLog.create === "function") {
       await prisma.auditLog.create({
         data: {
           orgId: payload.orgId,
           actorId: payload.principal,
           action: payload.event,
-          metadata: {
-            ...(payload.subjectUserId ? { subjectUserId: payload.subjectUserId } : {}),
-            ...(payload.subjectEmail ? { subjectEmail: payload.subjectEmail } : {}),
-            ...(payload.mode ? { mode: payload.mode } : {}),
-          },
+          metadata: buildAuditMetadata(payload),
           createdAt: new Date(payload.occurredAt),
         },
       });
     }
   };
 
-
   app.post("/admin/data/delete", async (req, reply) => {
-    const principal = parseLegacyPrincipal(req);
+    const principal = await authenticate(req, reply, ["admin"]);
     if (!principal) {
-      app.metrics?.recordSecurityEvent("auth.unauthorized");
-      void reply.code(401).send({ error: "unauthorized" });
-      return;
-    }
-    if (principal.role !== "admin") {
-      app.metrics?.recordSecurityEvent("auth.forbidden");
-      void reply.code(403).send({ error: "forbidden" });
       return;
     }
 
@@ -189,64 +183,37 @@ export async function registerAdminDataRoutes(
   });
 }
 
-const principalSchema = z.object({
-  id: z.string(),
-  orgId: z.string(),
-  role: z.enum(["admin", "user"]),
-  email: z.string().email(),
-});
-
-type ExportPrincipal = z.infer<typeof principalSchema>;
-
 const adminDataRoutes: FastifyPluginAsync = async (app) => {
   const db = (app as unknown as { db?: unknown }).db as
-    | {
-        user: {
-          findFirst: (args: {
-            where: { email: string; orgId: string };
-            select: {
-              id: true;
-              email: true;
-              createdAt: true;
-              org: { select: { id: true; name: true } };
-            };
-          }) => Promise<
-            | {
-                id: string;
-                email: string;
-                createdAt: Date;
-                org: { id: string; name: string };
-              }
-            | null
-          >;
-        };
-        bankLine: {
-          count: (args: { where: { orgId: string } }) => Promise<number>;
-        };
+    | (PrismaClientLike & {
         accessLog?: {
           create: (args: {
-            data: { event: string; orgId: string; principalId: string; subjectEmail: string };
+            data: {
+              event: string;
+              orgId: string;
+              principalId: string;
+              subjectEmail: string;
+            };
           }) => Promise<unknown>;
         };
-      }
+      })
     | undefined;
 
   if (!db) {
     throw new Error("admin data export routes require app.db to be decorated");
   }
 
+  const authenticate =
+    (app as unknown as { adminDataAuth?: AuthenticateFn }).adminDataAuth ??
+    createDefaultAuthenticator(app);
   const secLog = (app as unknown as { secLog?: (payload: SecurityLogPayload) => void }).secLog;
+  const auditLog = (app as unknown as {
+    auditLog?: (payload: SecurityLogPayload & { occurredAt: string }) => Promise<void> | void;
+  }).auditLog;
 
   app.post("/admin/data/export", async (request, reply) => {
-    const principal = parseExportPrincipal(request);
+    const principal = await authenticate(request, reply, ["admin"]);
     if (!principal) {
-      app.metrics?.recordSecurityEvent("auth.unauthorized");
-      void reply.code(401).send({ error: "unauthorized" });
-      return;
-    }
-    if (principal.role !== "admin") {
-      app.metrics?.recordSecurityEvent("auth.forbidden");
-      void reply.code(403).send({ error: "forbidden" });
       return;
     }
 
@@ -298,7 +265,7 @@ const adminDataRoutes: FastifyPluginAsync = async (app) => {
       });
     }
     app.metrics?.recordSecurityEvent("data_export");
-    await logAuditEvent({
+    await logAuditForDb(db, auditLog, {
       event: "data_export",
       orgId: payload.orgId,
       principal: principal.id,
@@ -329,47 +296,60 @@ const adminDataRoutes: FastifyPluginAsync = async (app) => {
 
 export default adminDataRoutes;
 
-function parseLegacyPrincipal(req: FastifyRequest): LegacyPrincipal | null {
-  const header =
-    req.headers.authorization ??
-    req.headers["Authorization" as keyof typeof req.headers];
-  const value = Array.isArray(header) ? header?.[0] : header;
-  if (!value) {
-    return null;
-  }
-  const match = LEGACY_BEARER.exec(value.trim());
-  if (!match) {
-    return null;
-  }
-  const token = match[1];
-  const [role, id, orgId] = token.split(":");
-  if (!role || !id || !orgId) {
-    return null;
-  }
-  return { role, id, orgId };
-}
-
-function parseExportPrincipal(req: FastifyRequest): ExportPrincipal | null {
-  const header =
-    req.headers.authorization ??
-    req.headers["Authorization" as keyof typeof req.headers];
-  const value = Array.isArray(header) ? header?.[0] : header;
-  if (!value) {
-    return null;
-  }
-  const match = LEGACY_BEARER.exec(value.trim());
-  if (!match) {
-    return null;
-  }
-  try {
-    const decoded = Buffer.from(match[1], "base64url").toString("utf8");
-    return principalSchema.parse(JSON.parse(decoded));
-  } catch {
-    return null;
-  }
-}
-
 function anonymizeEmail(email: string, userId: string): string {
   const hash = createHash("sha256").update(`${email}:${userId}`).digest("hex");
   return `deleted+${hash.slice(0, 12)}@example.com`;
+}
+
+function buildAuditMetadata(payload: SecurityLogPayload) {
+  return {
+    ...(payload.subjectUserId ? { subjectUserId: payload.subjectUserId } : {}),
+    ...(payload.subjectEmail ? { subjectEmail: payload.subjectEmail } : {}),
+    ...(payload.mode ? { mode: payload.mode } : {}),
+  };
+}
+
+function createDefaultAuthenticator(app: FastifyInstance): AuthenticateFn {
+  return async (req, reply, roles) => {
+    try {
+      const principal = await verifyRequest(req, reply);
+      requireRole(principal, roles);
+      app.metrics?.recordSecurityEvent("auth.success");
+      return principal;
+    } catch (error) {
+      if (error instanceof AuthError) {
+        if (error.statusCode === 403) {
+          app.metrics?.recordSecurityEvent("auth.forbidden");
+        } else {
+          app.metrics?.recordSecurityEvent("auth.unauthorized");
+        }
+        const errorCode = error.code ?? "unauthorized";
+        void reply.code(error.statusCode).send({ error: errorCode });
+        return null;
+      }
+      throw error;
+    }
+  };
+}
+
+async function logAuditForDb(
+  db: PrismaClientLike | undefined,
+  auditLogFn: ((payload: SecurityLogPayload & { occurredAt: string }) => Promise<void> | void) | undefined,
+  payload: SecurityLogPayload & { occurredAt: string },
+): Promise<void> {
+  if (auditLogFn) {
+    await auditLogFn(payload);
+    return;
+  }
+  if (db?.auditLog && typeof db.auditLog.create === "function") {
+    await db.auditLog.create({
+      data: {
+        orgId: payload.orgId,
+        actorId: payload.principal,
+        action: payload.event,
+        metadata: buildAuditMetadata(payload),
+        createdAt: new Date(payload.occurredAt),
+      },
+    });
+  }
 }
