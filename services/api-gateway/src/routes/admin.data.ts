@@ -57,30 +57,29 @@ export async function registerAdminDataRoutes(
     (async (payload: SecurityLogPayload) => {
       app.log.info({ security: payload }, "security_event");
     });
-  const auditLogger =
-    deps.auditLog ??
-    (prisma.auditLog && prisma.auditLog.create
-      ? async (payload: SecurityLogPayload & { occurredAt: string }) => {
-          await prisma.auditLog.create({
-            data: {
-              orgId: payload.orgId,
-              actorId: payload.principal,
-              action: payload.event,
-              metadata: {
-                ...(payload.subjectUserId ? { subjectUserId: payload.subjectUserId } : {}),
-                ...(payload.subjectEmail ? { subjectEmail: payload.subjectEmail } : {}),
-                ...(payload.mode ? { mode: payload.mode } : {}),
-              },
-              createdAt: new Date(payload.occurredAt),
-            },
-          });
-        }
-      : undefined);
+
   const hash = deps.hash ?? hashPassword;
-  const recordSecurityEvent = async (payload: SecurityLogPayload) => {
-    await secLog(payload);
-    if (app.metrics) {
-      app.metrics.recordSecurityEvent(payload.event);
+  const logAuditEvent = async (payload: SecurityLogPayload & { occurredAt?: string }) => {
+    if (deps.auditLog) {
+      if (payload.occurredAt) {
+        await deps.auditLog({ ...payload, occurredAt: payload.occurredAt });
+      }
+      return;
+    }
+    if (payload.occurredAt && prisma.auditLog && typeof prisma.auditLog.create === "function") {
+      await prisma.auditLog.create({
+        data: {
+          orgId: payload.orgId,
+          actorId: payload.principal,
+          action: payload.event,
+          metadata: {
+            ...(payload.subjectUserId ? { subjectUserId: payload.subjectUserId } : {}),
+            ...(payload.subjectEmail ? { subjectEmail: payload.subjectEmail } : {}),
+            ...(payload.mode ? { mode: payload.mode } : {}),
+          },
+          createdAt: new Date(payload.occurredAt),
+        },
+      });
     }
   };
 
@@ -134,23 +133,24 @@ export async function registerAdminDataRoutes(
         },
       });
 
-      await recordSecurityEvent({
-        event: "data_delete",
-        orgId: payload.orgId,
-        principal: principal.id,
-        subjectUserId: targetUser.id,
-        mode: "anonymized",
-      });
-      if (auditLogger) {
-        await auditLogger({
+      if (secLog) {
+        await secLog({
           event: "data_delete",
           orgId: payload.orgId,
           principal: principal.id,
           subjectUserId: targetUser.id,
           mode: "anonymized",
-          occurredAt,
         });
       }
+      app.metrics?.recordSecurityEvent("data_delete");
+      await logAuditEvent({
+        event: "data_delete",
+        orgId: payload.orgId,
+        principal: principal.id,
+        subjectUserId: targetUser.id,
+        mode: "anonymized",
+        occurredAt,
+      });
 
       const response = {
         action: "anonymized" as const,
@@ -162,23 +162,24 @@ export async function registerAdminDataRoutes(
     }
 
     await prisma.user.delete({ where: { id: targetUser.id } });
-    await recordSecurityEvent({
-      event: "data_delete",
-      orgId: payload.orgId,
-      principal: principal.id,
-      subjectUserId: targetUser.id,
-      mode: "deleted",
-    });
-    if (auditLogger) {
-      await auditLogger({
+    if (secLog) {
+      await secLog({
         event: "data_delete",
         orgId: payload.orgId,
         principal: principal.id,
         subjectUserId: targetUser.id,
         mode: "deleted",
-        occurredAt,
       });
     }
+    app.metrics?.recordSecurityEvent("data_delete");
+    await logAuditEvent({
+      event: "data_delete",
+      orgId: payload.orgId,
+      principal: principal.id,
+      subjectUserId: targetUser.id,
+      mode: "deleted",
+      occurredAt,
+    });
     const response = {
       action: "deleted" as const,
       userId: targetUser.id,
@@ -288,11 +289,21 @@ const adminDataRoutes: FastifyPluginAsync = async (app) => {
         },
       });
     }
-    await recordSecurityEvent({
+    if (secLog) {
+      await secLog({
+        event: "data_export",
+        orgId: payload.orgId,
+        principal: principal.id,
+        subjectEmail: payload.email,
+      });
+    }
+    app.metrics?.recordSecurityEvent("data_export");
+    await logAuditEvent({
       event: "data_export",
       orgId: payload.orgId,
       principal: principal.id,
       subjectEmail: payload.email,
+      occurredAt: exportedAt,
     });
 
     const responsePayload = {
@@ -362,4 +373,3 @@ function anonymizeEmail(email: string, userId: string): string {
   const hash = createHash("sha256").update(`${email}:${userId}`).digest("hex");
   return `deleted+${hash.slice(0, 12)}@example.com`;
 }
-

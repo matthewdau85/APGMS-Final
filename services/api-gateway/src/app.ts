@@ -4,7 +4,8 @@ import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import { Span, SpanStatusCode, trace } from "@opentelemetry/api";
 import { z } from "zod";
-import { Prisma, type Org, type User, type BankLine, type PrismaClient } from "@prisma/client";
+import { PrismaClient, type Org, type User, type BankLine } from "@prisma/client";
+import { Decimal } from "@prisma/client/runtime/library";
 
 import { maskError, maskObject } from "@apgms/shared";
 import { configurePIIProviders, decryptPII, encryptPII } from "./lib/pii";
@@ -416,7 +417,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
             create: {
               orgId: principal.orgId,
               date: new Date(date),
-              amount: new Prisma.Decimal(amount),
+              amount: new Decimal(amount),
               payeeCiphertext: encryptedPayee.ciphertext,
               payeeKid: encryptedPayee.kid,
               descCiphertext: encryptedDesc.ciphertext,
@@ -446,7 +447,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
           data: {
             orgId: principal.orgId,
             date: new Date(date),
-            amount: new Prisma.Decimal(amount),
+            amount: new Decimal(amount),
             payeeCiphertext: encryptedPayee.ciphertext,
             payeeKid: encryptedPayee.kid,
             descCiphertext: encryptedDesc.ciphertext,
@@ -621,3 +622,4 @@ declare module "fastify" {
     traceSpan?: Span | null;
   }
 }
+
