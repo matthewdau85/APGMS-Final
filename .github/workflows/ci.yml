@@ -25,6 +25,28 @@ jobs:
         run: pnpm -r test
       - name: Typecheck
         run: pnpm -r typecheck
+      - name: Install k6
+        uses: grafana/setup-k6@v1
+      - name: Start API Gateway
+        run: |
+          pnpm --filter @apgms/api-gateway dev &
+          echo $! > gateway.pid
+      - name: Wait for API readiness
+        run: |
+          for i in {1..30}; do
+            if curl -sf http://localhost:3000/ready > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API gateway failed to become ready" >&2
+          kill $(cat gateway.pid)
+          exit 1
+      - name: Run k6 smoke test
+        run: pnpm k6:smoke -- --env BASE_URL=http://localhost:3000
+      - name: Stop API Gateway
+        if: always()
+        run: kill $(cat gateway.pid) || true
       - name: Prisma drift check
         run: pnpm --filter @apgms/shared exec prisma migrate status --schema prisma/schema.prisma
       - name: Conflict marker guard
