@@ -1,8 +1,15 @@
-﻿import { test } from "node:test";
+import { test } from "node:test";
 import assert from "node:assert/strict";
-import Fastify from "fastify";
+import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import adminDataRoutes from "../src/routes/admin.data";
 import { subjectDataExportResponseSchema } from "../src/schemas/admin.data";
+import type { Principal } from "../src/lib/auth";
+
+type AuthenticateFn = (
+  req: FastifyRequest,
+  reply: FastifyReply,
+  roles: ReadonlyArray<string>,
+) => Promise<Principal | null>;
 
 type DbOverrides = {
   userFindFirst?: DbClient["user"]["findFirst"];
@@ -21,7 +28,8 @@ type DbClient = {
         org: { select: { id: true; name: true } };
       };
     }) => Promise<
-      | {
+      |
+        {
           id: string;
           email: string;
           createdAt: Date;
@@ -64,32 +72,33 @@ const buildTestDb = (overrides: DbOverrides = {}): DbClient => ({
   },
 });
 
-const buildToken = (principal: {
-  id: string;
-  orgId: string;
-  role: "admin" | "user";
-  email: string;
-}) => `Bearer ${Buffer.from(JSON.stringify(principal)).toString("base64url")}`;
-
 const buildApp = async (
   db: DbClient,
+  authenticate: AuthenticateFn,
   secLog: (entry: {
     event: string;
     orgId: string;
     principal: string;
     subjectEmail: string;
-  }) => void = () => {}
+  }) => void = () => {},
 ) => {
   const app = Fastify();
   app.decorate("db", db);
   app.decorate("secLog", secLog);
+  app.decorate("adminDataAuth", authenticate);
   await app.register(adminDataRoutes);
   await app.ready();
   return app;
 };
 
 test("401 without token", async () => {
-  const app = await buildApp(buildTestDb());
+  const app = await buildApp(
+    buildTestDb(),
+    async (_req, reply) => {
+      void reply.code(401).send({ error: "unauthorized" });
+      return null;
+    },
+  );
   const response = await app.inject({
     method: "POST",
     url: "/admin/data/export",
@@ -100,19 +109,17 @@ test("401 without token", async () => {
 });
 
 test("403 when principal is not admin", async () => {
-  const app = await buildApp(buildTestDb());
+  const app = await buildApp(
+    buildTestDb(),
+    async (_req, reply) => {
+      void reply.code(403).send({ error: "forbidden" });
+      return null;
+    },
+  );
   const response = await app.inject({
     method: "POST",
     url: "/admin/data/export",
     payload: { orgId: "org-123", email: "subject@example.com" },
-    headers: {
-      authorization: buildToken({
-        id: "user-1",
-        orgId: "org-123",
-        role: "user",
-        email: "user@example.com",
-      }),
-    },
   });
   assert.equal(response.statusCode, 403);
   await app.close();
@@ -122,20 +129,18 @@ test("404 when subject is missing", async () => {
   const app = await buildApp(
     buildTestDb({
       userFindFirst: async () => null,
-    })
+    }),
+    async () => ({
+      id: "admin-1",
+      orgId: "org-123",
+      roles: ["admin"],
+      token: "token",
+    }),
   );
   const response = await app.inject({
     method: "POST",
     url: "/admin/data/export",
     payload: { orgId: "org-123", email: "missing@example.com" },
-    headers: {
-      authorization: buildToken({
-        id: "admin-1",
-        orgId: "org-123",
-        role: "admin",
-        email: "admin@example.com",
-      }),
-    },
   });
   assert.equal(response.statusCode, 404);
   await app.close();
@@ -158,23 +163,21 @@ test("200 returns expected export bundle", async () => {
         return {};
       },
     }),
+    async () => ({
+      id: "admin-1",
+      orgId: "org-123",
+      roles: ["admin"],
+      token: "token",
+    }),
     (entry) => {
       secLogCalls.push(entry);
-    }
+    },
   );
 
   const response = await app.inject({
     method: "POST",
     url: "/admin/data/export",
     payload: { orgId: "org-123", email: "subject@example.com" },
-    headers: {
-      authorization: buildToken({
-        id: "admin-1",
-        orgId: "org-123",
-        role: "admin",
-        email: "admin@example.com",
-      }),
-    },
   });
 
   assert.equal(response.statusCode, 200);

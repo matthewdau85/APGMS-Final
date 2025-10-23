@@ -2,7 +2,7 @@
 
 ## V1: Architecture, Design and Threat Modelling
 - JWT verification enforced with RS256 keys, audience/issuer validation, and role scoping (services/api-gateway/src/lib/auth.ts:12).
-- Strict CORS allow-list, Helmet CSP/HSTS, and rate limiting across the gateway (services/api-gateway/src/app.ts:170).
+- Strict, fail-closed CORS allow-list, Helmet CSP/HSTS, and rate limiting across the gateway (services/api-gateway/src/app.ts:224).
 
 ## V2: Authentication
 - Bearer tokens verified on every endpoint with replay protection and Argon2id hashed credentials in persistence (services/api-gateway/src/app.ts:73, shared/src/security/password.ts:1).
