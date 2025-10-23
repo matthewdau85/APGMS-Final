@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 import { createHash, timingSafeEqual } from "node:crypto";
-import type { FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   importJWK,
   jwtVerify,
@@ -11,7 +11,7 @@ import {
 
 const clockToleranceSeconds = Number(process.env.AUTH_CLOCK_TOLERANCE_S ?? "5");
 
-type Role = "admin" | "analyst" | "finance" | "auditor";
+export type Role = "admin" | "analyst" | "finance" | "auditor";
 
 export interface Principal {
   id: string;
@@ -22,7 +22,7 @@ export interface Principal {
 
 interface InternalKey {
   kid: string;
-  key: KeyLike;
+  key: KeyLike | Uint8Array;
   alg: string;
 }
 
@@ -188,4 +188,31 @@ export function requireRole(
 
 export function hashIdentifier(value: string): string {
   return createHash("sha256").update(value).digest("hex").slice(0, 16);
+}
+
+type MetricsRecorder = {
+  recordSecurityEvent: (event: string) => void;
+};
+
+export async function authenticateRequest(
+  app: FastifyInstance,
+  request: FastifyRequest,
+  reply: FastifyReply,
+  roles: ReadonlyArray<Role>,
+): Promise<Principal | null> {
+  const metrics = (app as FastifyInstance & { metrics?: MetricsRecorder }).metrics;
+  try {
+    const principal = await verifyRequest(request, reply);
+    requireRole(principal, roles);
+    metrics?.recordSecurityEvent("auth.success");
+    return principal;
+  } catch (error) {
+    if (error instanceof AuthError) {
+      const code = error.statusCode === 403 ? "auth.forbidden" : "auth.unauthorized";
+      metrics?.recordSecurityEvent(code);
+      void reply.code(error.statusCode).send({ error: error.code ?? "unauthorized" });
+      return null;
+    }
+    throw error;
+  }
 }

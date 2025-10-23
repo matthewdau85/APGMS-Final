@@ -3,6 +3,7 @@
 ## V1: Architecture, Design and Threat Modelling
 - JWT verification enforced with RS256 keys, audience/issuer validation, and role scoping (services/api-gateway/src/lib/auth.ts:12).
 - Strict, fail-closed CORS allow-list, Helmet CSP/HSTS, and rate limiting across the gateway (services/api-gateway/src/app.ts:224).
+- Startup rejects missing JWT/KMS secrets and invalid base64 material (services/api-gateway/src/config.ts:1).
 
 ## V2: Authentication
 - Bearer tokens verified on every endpoint with replay protection and Argon2id hashed credentials in persistence (services/api-gateway/src/app.ts:73, shared/src/security/password.ts:1).
@@ -30,4 +31,6 @@
 
 ## V14: Configuration
 - All secrets supplied via environment variables with sample .env.example documenting required keys and rate limits (.env.example:8).
+- Config loader validates URLs, base64 keys, and enforce strong defaults so the service fails closed (services/api-gateway/src/config.ts:1).
 - CI checks for Prisma drift and conflict markers to prevent unsafe deployments (.github/workflows/ci.yml:22).
+

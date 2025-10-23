@@ -1,5 +1,5 @@
 import { Counter, collectDefaultMetrics, register } from "prom-client";
-import type { FastifyInstance, FastifyPluginCallback } from "fastify";
+import type { FastifyInstance, FastifyPluginCallback, FastifyRequest } from "fastify";
 
 collectDefaultMetrics();
 
@@ -17,9 +17,13 @@ const securityEventsTotal = new Counter({
 
 const metricsPlugin: FastifyPluginCallback = (app, _opts, done) => {
   app.addHook("onResponse", (request, reply, doneHook) => {
+    const scopedRequest = request as FastifyRequest & {
+      routerPath?: string;
+      routeOptions?: { url?: string };
+    };
     httpRequestsTotal.inc({
       method: request.method,
-      route: request.routerPath ?? "unknown",
+      route: scopedRequest.routerPath ?? scopedRequest.routeOptions?.url ?? request.url ?? "unknown",
       status: reply.statusCode,
     });
     doneHook();
