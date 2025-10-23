@@ -1,4 +1,6 @@
-﻿import { PrismaClient } from "@prisma/client";
+import prismaPkg from "@prisma/client";
+
+const { PrismaClient } = prismaPkg as { PrismaClient: new (...args: any[]) => import("@prisma/client").PrismaClient };
 
 // Prefer runtime DATABASE_URL. Fail loudly if missing to avoid silent fallbacks.
 const url = process.env.DATABASE_URL;
@@ -13,3 +15,4 @@ export const prisma = new PrismaClient({
 
 // Re-export a convenience alias if you import { db } elsewhere
 export const db = prisma;
+
