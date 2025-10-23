@@ -9,17 +9,7 @@ import {
   type KeyLike,
 } from "jose";
 
-const AUDIENCE = process.env.AUTH_AUDIENCE;
-const ISSUER = process.env.AUTH_ISSUER;
-const JWKS_ENV = process.env.AUTH_JWKS;
-
 const clockToleranceSeconds = Number(process.env.AUTH_CLOCK_TOLERANCE_S ?? "5");
-
-if (!AUDIENCE || !ISSUER || !JWKS_ENV) {
-  throw new Error(
-    "AUTH_AUDIENCE, AUTH_ISSUER and AUTH_JWKS must be configured for JWT verification",
-  );
-}
 
 type Role = "admin" | "analyst" | "finance" | "auditor";
 
@@ -38,18 +28,33 @@ interface InternalKey {
 
 const keyCache = new Map<string, InternalKey>();
 
+export class AuthError extends Error {
+  public readonly statusCode: number;
+  public readonly code: string;
+
+  constructor(message: string, statusCode = 401, code = "unauthorized") {
+    super(message);
+    this.statusCode = statusCode;
+    this.code = code;
+  }
+}
+
 async function loadKeys(): Promise<void> {
   if (keyCache.size > 0) {
     return;
   }
+  const jwksEnv = process.env.AUTH_JWKS;
+  if (!jwksEnv) {
+    throw new AuthError("JWT configuration missing", 500, "jwt_config_missing");
+  }
   let parsed: { keys?: JWK[] };
   try {
-    parsed = JSON.parse(JWKS_ENV) as { keys?: JWK[] };
+    parsed = JSON.parse(jwksEnv) as { keys?: JWK[] };
   } catch (error) {
-    throw new Error("AUTH_JWKS must be valid JSON JWK Set");
+    throw new AuthError("Invalid JWT key set", 500, "jwt_config_invalid");
   }
   if (!parsed.keys || parsed.keys.length === 0) {
-    throw new Error("AUTH_JWKS must contain at least one key");
+    throw new AuthError("JWT key set is empty", 500, "jwt_config_invalid");
   }
   await Promise.all(
     parsed.keys.map(async (jwk) => {
@@ -64,8 +69,6 @@ async function loadKeys(): Promise<void> {
     }),
   );
 }
-
-await loadKeys();
 
 async function resolveKey(kid: string | undefined): Promise<InternalKey> {
   if (!kid) {
@@ -86,17 +89,6 @@ function normaliseRoles(raw: unknown): Role[] {
   return Array.from(new Set(roles));
 }
 
-export class AuthError extends Error {
-  public readonly statusCode: number;
-  public readonly code: string;
-
-  constructor(message: string, statusCode = 401, code = "unauthorized") {
-    super(message);
-    this.statusCode = statusCode;
-    this.code = code;
-  }
-}
-
 export async function verifyRequest(
   request: FastifyRequest,
   reply: FastifyReply,
@@ -104,6 +96,14 @@ export async function verifyRequest(
   const header =
     request.headers.authorization ??
     request.headers["Authorization" as keyof typeof request.headers];
+
+  const audience = process.env.AUTH_AUDIENCE;
+  const issuer = process.env.AUTH_ISSUER;
+  if (!audience || !issuer) {
+    throw new AuthError("JWT configuration missing", 500, "jwt_config_missing");
+  }
+
+  await loadKeys();
 
   const value = Array.isArray(header) ? header?.[0] : header;
   if (!value) {
@@ -122,8 +122,8 @@ export async function verifyRequest(
       const key = await resolveKey(kid);
       return key.key;
     }, {
-      audience: AUDIENCE,
-      issuer: ISSUER,
+      audience,
+      issuer,
       clockTolerance: clockToleranceSeconds,
     });
   } catch (error) {
@@ -189,4 +189,3 @@ export function requireRole(
 export function hashIdentifier(value: string): string {
   return createHash("sha256").update(value).digest("hex").slice(0, 16);
 }
-
