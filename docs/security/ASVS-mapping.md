@@ -19,6 +19,7 @@
 
 ## V6: Cryptography
 - Bank line payees/descriptions encrypted with envelope keys and salts managed via KMS provider (shared/prisma/schema.prisma:33, services/api-gateway/src/security/providers.ts:12).
+- Automated JWT/PII key rotation via `pnpm security:rotate-keys` with SOP guidance (docs/security/TFN-SOP.md).
 - PII decryption requires audit logger registration and emits tamper-resistant logs (services/api-gateway/src/lib/pii.ts:82).
 
 ## V7: Error Handling and Logging
@@ -33,4 +34,5 @@
 - All secrets supplied via environment variables with sample .env.example documenting required keys and rate limits (.env.example:8).
 - Config loader validates URLs, base64 keys, and enforce strong defaults so the service fails closed (services/api-gateway/src/config.ts:1).
 - CI checks for Prisma drift and conflict markers to prevent unsafe deployments (.github/workflows/ci.yml:22).
+
 

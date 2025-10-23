@@ -17,7 +17,8 @@
                     "typecheck":  "pnpm -r typecheck",
                     "k6:smoke":  "pnpm exec k6 run k6/smoke.js",
                     "lint:markdown":  "pnpm exec markdownlint **/*.md",
-                    "compliance:evidence":  "node scripts/collect-evidence.mjs"
+                    "compliance:evidence":  "node scripts/collect-evidence.mjs",
+                    "security:rotate-keys":  "node scripts/rotate-pii-keys.mjs"
                 },
     "devDependencies":  {
                             "@types/node":  "^24.7.1",
