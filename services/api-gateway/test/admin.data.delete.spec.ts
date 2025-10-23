@@ -41,7 +41,11 @@ describe("POST /admin/data/delete", () => {
     app = Fastify({ logger: false });
     await app.register(cors, { origin: true });
     securityLogs = [];
-    authenticateImpl = async () => ({
+    authenticateImpl = async (
+      _req: FastifyRequest,
+      _reply: FastifyReply,
+      _roles: ReadonlyArray<string>,
+    ) => ({
       id: "principal",
       orgId: defaultPayload.orgId,
       roles: ["admin"],
@@ -55,10 +59,10 @@ describe("POST /admin/data/delete", () => {
 
     await registerAdminDataRoutes(app, {
       prisma: prismaStub as any,
+      authenticate: async (req, reply, roles) => authenticateImpl(req, reply, roles),
       secLog: async (payload) => {
         securityLogs.push(payload);
       },
-      authenticate: async (req, reply, roles) => authenticateImpl(req, reply, roles),
     });
 
     await app.ready();
@@ -75,7 +79,11 @@ describe("POST /admin/data/delete", () => {
   } as const;
 
   it("returns 401 without bearer token", async () => {
-    authenticateImpl = async (_req, reply) => {
+    authenticateImpl = async (
+      _req: FastifyRequest,
+      reply: FastifyReply,
+      _roles: ReadonlyArray<string>,
+    ) => {
       void reply.code(401).send({ error: "unauthorized" });
       return null;
     };
@@ -90,7 +98,11 @@ describe("POST /admin/data/delete", () => {
   });
 
   it("rejects non-admin principals", async () => {
-    authenticateImpl = async (_req, reply) => {
+    authenticateImpl = async (
+      _req: FastifyRequest,
+      reply: FastifyReply,
+      _roles: ReadonlyArray<string>,
+    ) => {
       void reply.code(403).send({ error: "forbidden" });
       return null;
     };
@@ -112,7 +124,11 @@ describe("POST /admin/data/delete", () => {
   });
 
   it("validates confirm token", async () => {
-    authenticateImpl = async () => ({
+    authenticateImpl = async (
+      _req: FastifyRequest,
+      _reply: FastifyReply,
+      _roles: ReadonlyArray<string>,
+    ) => ({
       id: "principal",
       orgId: defaultPayload.orgId,
       roles: ["admin"],
@@ -129,7 +145,11 @@ describe("POST /admin/data/delete", () => {
   });
 
   it("returns 404 for unknown subject", async () => {
-    authenticateImpl = async () => ({
+    authenticateImpl = async (
+      _req: FastifyRequest,
+      _reply: FastifyReply,
+      _roles: ReadonlyArray<string>,
+    ) => ({
       id: "principal",
       orgId: defaultPayload.orgId,
       roles: ["admin"],
@@ -148,7 +168,11 @@ describe("POST /admin/data/delete", () => {
   });
 
   it("anonymizes user with constraint risk", async () => {
-    authenticateImpl = async () => ({
+    authenticateImpl = async (
+      _req: FastifyRequest,
+      _reply: FastifyReply,
+      _roles: ReadonlyArray<string>,
+    ) => ({
       id: "admin-1",
       orgId: defaultPayload.orgId,
       roles: ["admin"],
@@ -212,7 +236,7 @@ describe("POST /admin/data/delete", () => {
     assert.match(updateArgs.data.email, /^deleted\+[a-f0-9]{12}@example.com$/);
     assert.match(updateArgs.data.password, /^\$argon2id\$/);
 
-    const lastLog = securityLogs.at(-1);
+    const lastLog = securityLogs[securityLogs.length - 1] ?? null;
     assert.deepEqual(lastLog, {
       event: "data_delete",
       orgId: defaultPayload.orgId,
@@ -261,7 +285,7 @@ describe("POST /admin/data/delete", () => {
     assert.equal(updateCalled, false);
     assert.deepEqual(deleteArgs, { where: { id: user.id } });
 
-    const lastLog = securityLogs.at(-1);
+    const lastLog = securityLogs[securityLogs.length - 1] ?? null;
     assert.deepEqual(lastLog, {
       event: "data_delete",
       orgId: defaultPayload.orgId,

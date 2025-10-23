@@ -7,7 +7,8 @@
     "types":  "src/index.ts",
     "scripts":  {
                     "prisma:generate":  "prisma generate --schema=shared/prisma/schema.prisma",
-                    "build":  "echo building shared"
+                    "build":  "echo building shared",
+                    "typecheck":  "tsc --noEmit -p tsconfig.json"
                 },
     "dependencies":  {
                          "@prisma/client":  "6.17.1",

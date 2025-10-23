@@ -8,7 +8,8 @@
                     "build":  "vite build",
                     "preview":  "vite preview",
                     "test":  "playwright test",
-                    "test:axe":  "playwright test tests/axe.spec.ts"
+                    "test:axe":  "playwright test tests/axe.spec.ts",
+                    "typecheck":  "tsc --noEmit"
                 },
     "dependencies":  {
                          "react":  "^18.3.1",

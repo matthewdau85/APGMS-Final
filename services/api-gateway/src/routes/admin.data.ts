@@ -9,10 +9,9 @@ import {
 } from "../schemas/admin.data";
 import { hashPassword } from "@apgms/shared";
 import {
-  AuthError,
-  requireRole,
-  verifyRequest,
+  authenticateRequest,
   type Principal,
+  type Role,
 } from "../lib/auth";
 
 const PASSWORD_PLACEHOLDER = "__deleted__";
@@ -26,14 +25,9 @@ export interface SecurityLogPayload {
   mode?: "anonymized" | "deleted";
 }
 
-type Role = Parameters<typeof requireRole>[1][number];
-
 type SharedDbModule = typeof import("../../../../shared/src/db.js");
 
-type PrismaClientLike = Pick<
-  SharedDbModule["prisma"],
-  "user" | "bankLine" | "org" | "orgTombstone" | "auditLog"
->;
+type PrismaClientLike = any;
 
 type AuthenticateFn = (
   req: FastifyRequest,
@@ -59,7 +53,8 @@ export async function registerAdminDataRoutes(
   deps: AdminDataRouteDeps = {},
 ): Promise<void> {
   const prisma = deps.prisma ?? (await buildDefaultPrisma());
-  const authenticate = deps.authenticate ?? createDefaultAuthenticator(app);
+  const authenticate =
+    deps.authenticate ?? ((req, reply, roles) => authenticateRequest(app, req, reply, roles));
   const secLog =
     deps.secLog ??
     (async (payload: SecurityLogPayload) => {
@@ -205,7 +200,7 @@ const adminDataRoutes: FastifyPluginAsync = async (app) => {
 
   const authenticate =
     (app as unknown as { adminDataAuth?: AuthenticateFn }).adminDataAuth ??
-    createDefaultAuthenticator(app);
+    ((req, reply, roles) => authenticateRequest(app, req, reply, roles));
   const secLog = (app as unknown as { secLog?: (payload: SecurityLogPayload) => void }).secLog;
   const auditLog = (app as unknown as {
     auditLog?: (payload: SecurityLogPayload & { occurredAt: string }) => Promise<void> | void;
@@ -306,29 +301,6 @@ function buildAuditMetadata(payload: SecurityLogPayload) {
     ...(payload.subjectUserId ? { subjectUserId: payload.subjectUserId } : {}),
     ...(payload.subjectEmail ? { subjectEmail: payload.subjectEmail } : {}),
     ...(payload.mode ? { mode: payload.mode } : {}),
-  };
-}
-
-function createDefaultAuthenticator(app: FastifyInstance): AuthenticateFn {
-  return async (req, reply, roles) => {
-    try {
-      const principal = await verifyRequest(req, reply);
-      requireRole(principal, roles);
-      app.metrics?.recordSecurityEvent("auth.success");
-      return principal;
-    } catch (error) {
-      if (error instanceof AuthError) {
-        if (error.statusCode === 403) {
-          app.metrics?.recordSecurityEvent("auth.forbidden");
-        } else {
-          app.metrics?.recordSecurityEvent("auth.unauthorized");
-        }
-        const errorCode = error.code ?? "unauthorized";
-        void reply.code(error.statusCode).send({ error: errorCode });
-        return null;
-      }
-      throw error;
-    }
   };
 }
 
