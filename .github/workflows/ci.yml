@@ -24,7 +24,7 @@ jobs:
       - name: Run tests
         run: pnpm -r test
       - name: Prisma drift check
-        run: pnpm --filter @apgms/shared exec prisma migrate status --schema shared/prisma/schema.prisma
+        run: pnpm --filter @apgms/shared exec prisma migrate status --schema prisma/schema.prisma
       - name: Conflict marker guard
         run: git grep -n '<<<<<<<\|=======\|>>>>>>>' -- ':!*.lock'
 

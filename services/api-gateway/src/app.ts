@@ -245,18 +245,31 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     },
   });
 
+  const allowedOrigins = parseAllowedOrigins(process.env.CORS_ALLOWED_ORIGINS);
+  if (allowedOrigins.length === 0) {
+    app.log.warn(
+      "CORS_ALLOWED_ORIGINS is not configured; rejecting cross-origin browser requests",
+    );
+  }
+
   app.register(cors, {
     origin: (origin, cb) => {
-      const allowed = process.env.CORS_ALLOWED_ORIGINS;
-      if (!allowed) {
+      if (!origin) {
         cb(null, true);
         return;
       }
-      const allowedOrigins = allowed.split(",").map((item) => item.trim());
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (allowedOrigins.length === 0) {
+        app.metrics?.recordSecurityEvent("cors.reject");
+        app.log.warn({ origin }, "blocked CORS request - allow-list missing");
+        cb(new Error("Origin not allowed"), false);
+        return;
+      }
+      if (allowedOrigins.includes(origin)) {
         cb(null, true);
         return;
       }
+      app.metrics?.recordSecurityEvent("cors.reject");
+      app.log.warn({ origin }, "blocked CORS request - origin not permitted");
       cb(new Error("Origin not allowed"), false);
     },
     credentials: true,
@@ -614,6 +627,17 @@ function normaliseAmount(amount: unknown): number {
     }
   }
   return 0;
+}
+
+
+function parseAllowedOrigins(value: string | undefined): string[] {
+  if (!value) {
+    return [];
+  }
+  return value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
 }
 
 

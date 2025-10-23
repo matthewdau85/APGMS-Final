@@ -2,13 +2,14 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
 import cors from "@fastify/cors";
-import Fastify from "fastify";
+import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 
 import {
   registerAdminDataRoutes,
   type SecurityLogPayload,
 } from "../src/routes/admin.data";
 import { adminDataDeleteResponseSchema } from "../src/schemas/admin.data";
+import type { Principal } from "../src/lib/auth";
 
 process.env.DATABASE_URL ??= "postgresql://user:pass@localhost:5432/test";
 process.env.SHADOW_DATABASE_URL ??= "postgresql://user:pass@localhost:5432/test-shadow";
@@ -34,11 +35,18 @@ describe("POST /admin/data/delete", () => {
     },
   };
   let securityLogs: SecurityLogPayload[] = [];
+  let authenticateImpl: AuthenticateFn;
 
   beforeEach(async () => {
     app = Fastify({ logger: false });
     await app.register(cors, { origin: true });
     securityLogs = [];
+    authenticateImpl = async () => ({
+      id: "principal",
+      orgId: defaultPayload.orgId,
+      roles: ["admin"],
+      token: "token",
+    });
 
     prismaStub.user.findFirst = async () => null;
     prismaStub.user.update = async () => null;
@@ -50,6 +58,7 @@ describe("POST /admin/data/delete", () => {
       secLog: async (payload) => {
         securityLogs.push(payload);
       },
+      authenticate: async (req, reply, roles) => authenticateImpl(req, reply, roles),
     });
 
     await app.ready();
@@ -59,9 +68,6 @@ describe("POST /admin/data/delete", () => {
     await app.close();
   });
 
-  const buildToken = (role: string, orgId: string, principalId = "principal") =>
-    `Bearer ${role}:${principalId}:${orgId}`;
-
   const defaultPayload = {
     orgId: "org-123",
     email: "user@example.com",
@@ -69,6 +75,11 @@ describe("POST /admin/data/delete", () => {
   } as const;
 
   it("returns 401 without bearer token", async () => {
+    authenticateImpl = async (_req, reply) => {
+      void reply.code(401).send({ error: "unauthorized" });
+      return null;
+    };
+
     const response = await app.inject({
       method: "POST",
       url: "/admin/data/delete",
@@ -79,6 +90,11 @@ describe("POST /admin/data/delete", () => {
   });
 
   it("rejects non-admin principals", async () => {
+    authenticateImpl = async (_req, reply) => {
+      void reply.code(403).send({ error: "forbidden" });
+      return null;
+    };
+
     let findCalled = false;
     prismaStub.user.findFirst = (async (...args: any[]) => {
       findCalled = true;
@@ -89,9 +105,6 @@ describe("POST /admin/data/delete", () => {
       method: "POST",
       url: "/admin/data/delete",
       payload: defaultPayload,
-      headers: {
-        authorization: buildToken("member", defaultPayload.orgId),
-      },
     });
 
     assert.equal(response.statusCode, 403);
@@ -99,34 +112,49 @@ describe("POST /admin/data/delete", () => {
   });
 
   it("validates confirm token", async () => {
+    authenticateImpl = async () => ({
+      id: "principal",
+      orgId: defaultPayload.orgId,
+      roles: ["admin"],
+      token: "token",
+    });
+
     const response = await app.inject({
       method: "POST",
       url: "/admin/data/delete",
       payload: { ...defaultPayload, confirm: "nope" },
-      headers: {
-        authorization: buildToken("admin", defaultPayload.orgId),
-      },
     });
 
     assert.equal(response.statusCode, 400);
   });
 
   it("returns 404 for unknown subject", async () => {
+    authenticateImpl = async () => ({
+      id: "principal",
+      orgId: defaultPayload.orgId,
+      roles: ["admin"],
+      token: "token",
+    });
+
     prismaStub.user.findFirst = async () => null;
 
     const response = await app.inject({
       method: "POST",
       url: "/admin/data/delete",
       payload: defaultPayload,
-      headers: {
-        authorization: buildToken("admin", defaultPayload.orgId),
-      },
     });
 
     assert.equal(response.statusCode, 404);
   });
 
   it("anonymizes user with constraint risk", async () => {
+    authenticateImpl = async () => ({
+      id: "admin-1",
+      orgId: defaultPayload.orgId,
+      roles: ["admin"],
+      token: "token",
+    });
+
     const user: PrismaUser = {
       id: "user-1",
       email: defaultPayload.email,
@@ -166,9 +194,6 @@ describe("POST /admin/data/delete", () => {
       method: "POST",
       url: "/admin/data/delete",
       payload: defaultPayload,
-      headers: {
-        authorization: buildToken("admin", defaultPayload.orgId, "admin-1"),
-      },
     });
 
     assert.equal(response.statusCode, 202);
@@ -225,9 +250,6 @@ describe("POST /admin/data/delete", () => {
       method: "POST",
       url: "/admin/data/delete",
       payload: defaultPayload,
-      headers: {
-        authorization: buildToken("admin", defaultPayload.orgId),
-      },
     });
 
     assert.equal(response.statusCode, 202);
@@ -249,3 +271,9 @@ describe("POST /admin/data/delete", () => {
     });
   });
 });
+
+type AuthenticateFn = (
+  req: FastifyRequest,
+  reply: FastifyReply,
+  roles: ReadonlyArray<string>,
+) => Promise<Principal | null>;
