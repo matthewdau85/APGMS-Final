@@ -16,7 +16,8 @@
                     "build":  "pnpm -r build",
                     "typecheck":  "pnpm -r typecheck",
                     "k6:smoke":  "pnpm exec k6 run k6/smoke.js",
-                    "lint:markdown":  "pnpm exec markdownlint **/*.md"
+                    "lint:markdown":  "pnpm exec markdownlint **/*.md",
+                    "compliance:evidence":  "node scripts/collect-evidence.mjs"
                 },
     "devDependencies":  {
                             "@types/node":  "^24.7.1",

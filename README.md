@@ -7,6 +7,11 @@ docker compose up -d
 pnpm -r test
 pnpm -r typecheck
 pnpm -w exec playwright test
+pnpm k6:smoke -- --env BASE_URL=http://localhost:3000
+
+## Release compliance
+- Follow the checklist in `docs/compliance/checklist.md`; attach evidence for each run.
+- Publish dashboard links from `docs/ops/dashboards.md` in the status site when applicable.
 
 ## Operational smoke
 - Run `pnpm k6:smoke -- --env BASE_URL=http://localhost:3000` after starting the gateway to verify health/readiness endpoints.
