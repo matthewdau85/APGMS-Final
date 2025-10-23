@@ -16,6 +16,7 @@
 
 ## Controls & Monitoring
 - Helmet CSP/HSTS, a fail-closed CORS allow-list, and Playwright accessibility checks run in CI to guard regressions (services/api-gateway/src/app.ts:224, .github/workflows/ci.yml:36).
+- Tax-engine proxy inherits JWT enforcement and validates upstream responses before returning to clients (services/api-gateway/src/routes/tax.ts:1).
 - Security workflow runs SBOM generation, dependency SCA, Semgrep, Gitleaks, and Trivy scans on every push (.github/workflows/security.yml:23).
 - Metrics and audit events feed Prometheus (services/api-gateway/src/plugins/metrics.ts:4) enabling alerting when export/delete operations occur.
 

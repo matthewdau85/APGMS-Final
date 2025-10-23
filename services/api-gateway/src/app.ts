@@ -2,16 +2,17 @@ import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest }
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
-import { Span, SpanStatusCode, trace } from "@opentelemetry/api";
+import { Span, SpanStatusCode, trace, type Attributes } from "@opentelemetry/api";
 import { z } from "zod";
 import { PrismaClient, type Org, type User, type BankLine } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 
 import { maskError, maskObject } from "@apgms/shared";
 import { configurePIIProviders, decryptPII, encryptPII } from "./lib/pii";
-import { AuthError, hashIdentifier, requireRole, verifyRequest, type Principal } from "./lib/auth";
+import { authenticateRequest, hashIdentifier, type Principal, type Role } from "./lib/auth";
 import { createAuditLogger, createKeyManagementService, createSaltProvider } from "./security/providers";
 import metricsPlugin from "./plugins/metrics";
+import { loadConfig, type AppConfig } from "./config";
 
 export interface CreateAppOptions {
   prisma?: PrismaClient;
@@ -41,15 +42,12 @@ export interface AdminOrgExport {
 
 type ExportableOrg = Org & { users: User[]; lines: BankLine[] };
 
-type PrismaLike = Pick<
-  PrismaClient,
-  "org" | "user" | "bankLine" | "orgTombstone" | "$transaction" | "$queryRaw"
->;
+type PrismaLike = any;
 
 let cachedPrisma: PrismaClient | null = null;
 const tracer = trace.getTracer("apgms-api-gateway");
 const ANOMALY_WINDOW_MS = 60_000;
-const ANOMALY_THRESHOLD = Number(process.env.AUTH_FAILURE_THRESHOLD ?? "5");
+const DEFAULT_AUTH_FAILURE_THRESHOLD = 5;
 const anomalyCounters = new Map<string, { count: number; expiresAt: number }>();
 
 async function loadDefaultPrisma(): Promise<PrismaLike> {
@@ -73,10 +71,7 @@ const ListLinesQuery = z.object({
   take: z.coerce.number().int().min(1).max(200).default(20),
 });
 
-const DEFAULT_RATE_LIMIT = Number(process.env.API_RATE_LIMIT_MAX ?? "60");
-const DEFAULT_RATE_WINDOW = process.env.API_RATE_LIMIT_WINDOW ?? "1 minute";
-
-type AllowedRole = Parameters<typeof requireRole>[1][number];
+type AllowedRole = Role;
 
 async function requirePrincipal(
   app: FastifyInstance,
@@ -84,19 +79,11 @@ async function requirePrincipal(
   reply: FastifyReply,
   roles: ReadonlyArray<AllowedRole>,
 ): Promise<Principal | null> {
-  try {
-    const principal = await verifyRequest(req, reply);
-    requireRole(principal, roles);
-    app.metrics?.recordSecurityEvent("auth.success");
-    return principal;
-  } catch (error) {
-    if (error instanceof AuthError) {
-      app.metrics?.recordSecurityEvent(`auth.${error.code}`);
-      sendError(reply, error.statusCode, error.code, error.message);
-      return null;
-    }
-    throw error;
+  const principal = await authenticateRequest(app, req, reply, roles);
+  if (!principal) {
+    return null;
   }
+  return principal;
 }
 
 function sendError(
@@ -110,17 +97,26 @@ function sendError(
   const serverWithMetrics = reply.server as FastifyInstance & {
     metrics?: { recordSecurityEvent: (event: string) => void };
   };
+  const serverWithConfig = reply.server as FastifyInstance & { config?: AppConfig };
+  const anomalyThreshold =
+    serverWithConfig.config?.security.authFailureThreshold ?? DEFAULT_AUTH_FAILURE_THRESHOLD;
   const request = reply.request as FastifyRequest & { traceSpan?: Span | null };
 
   if (code === "unauthorized" || code === "forbidden") {
     const now = Date.now();
-    const key = `${request.ip}:${request.routerPath ?? request.url ?? "unknown"}`;
+    const requestWithRoute = request as FastifyRequest & {
+      routerPath?: string;
+      routeOptions?: { url?: string };
+    };
+    const route =
+      requestWithRoute.routerPath ?? requestWithRoute.routeOptions?.url ?? request.url ?? "unknown";
+    const key = `${request.ip}:${route}`;
     const existing = anomalyCounters.get(key);
     if (!existing || existing.expiresAt < now) {
       anomalyCounters.set(key, { count: 1, expiresAt: now + ANOMALY_WINDOW_MS });
     } else {
       existing.count += 1;
-      if (existing.count >= ANOMALY_THRESHOLD) {
+      if (existing.count >= anomalyThreshold) {
         reply.server.log.warn(
           { key, count: existing.count },
           "detected repeated authorization failures",
@@ -185,6 +181,7 @@ function sanitiseBankLine(line: {
 }
 
 export async function createApp(options: CreateAppOptions = {}): Promise<FastifyInstance> {
+  const config = loadConfig();
   const prisma = (options.prisma as PrismaLike | undefined) ?? (await loadDefaultPrisma());
 
   const kms = createKeyManagementService();
@@ -193,6 +190,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   configurePIIProviders({ kms, saltProvider, auditLogger });
 
   const app = Fastify({ logger: true });
+  app.decorate("config", config);
 
   app.decorateRequest("traceSpan", null);
 
@@ -200,6 +198,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     const span = tracer.startSpan(`http ${req.method} ${req.url}`);
     req.traceSpan = span;
     reply.header("x-request-id", req.id);
+    req.log = req.log.child({ requestId: req.id });
     done();
   });
 
@@ -209,11 +208,18 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     req.traceSpan = null;
     done();
   });
+
+  app.addHook("onError", (req, _reply, error, done) => {
+    req.traceSpan?.recordException(error as Error);
+    req.traceSpan?.setStatus({ code: SpanStatusCode.ERROR, message: error.message });
+    app.metrics?.recordSecurityEvent("http.error");
+    done();
+  });
   await app.register(metricsPlugin);
 
   await app.register(rateLimit, {
-    max: DEFAULT_RATE_LIMIT,
-    timeWindow: DEFAULT_RATE_WINDOW,
+    max: config.rateLimit.max,
+    timeWindow: config.rateLimit.window,
     addHeaders: {
       "x-ratelimit-limit": true,
       "x-ratelimit-remaining": true,
@@ -245,7 +251,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     },
   });
 
-  const allowedOrigins = parseAllowedOrigins(process.env.CORS_ALLOWED_ORIGINS);
+  const allowedOrigins = config.cors.allowedOrigins;
   if (allowedOrigins.length === 0) {
     app.log.warn(
       "CORS_ALLOWED_ORIGINS is not configured; rejecting cross-origin browser requests",
@@ -294,7 +300,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
           timestamp: new Date().toISOString(),
           metadata: { orgId: principal.orgId, ...metadata },
         });
-        req.traceSpan?.addEvent(action, metadata);
+        req.traceSpan?.addEvent(action, toSpanAttributes(metadata));
         app.metrics?.recordSecurityEvent(action);
         span.setStatus({ code: SpanStatusCode.OK });
         return true;
@@ -310,7 +316,13 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       }
     });
 
-  app.log.info(maskObject({ DATABASE_URL: process.env.DATABASE_URL }), "loaded env");
+  app.log.info(
+    maskObject({
+      DATABASE_URL: config.databaseUrl,
+      SHADOW_DATABASE_URL: config.shadowDatabaseUrl ?? null,
+    }),
+    "loaded env",
+  );
 
   app.get("/health", async () => ({ ok: true, service: "api-gateway" }));
 
@@ -337,11 +349,11 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
         return;
       }
 
-      const users = await prisma.user.findMany({
+      const users = (await prisma.user.findMany({
         where: { orgId: principal.orgId },
         select: { id: true, email: true, createdAt: true },
         orderBy: { createdAt: "desc" },
-      });
+      })) as Array<{ id: string; email: string; createdAt: Date }>;
 
       const payload = {
         users: users.map((user) => sanitiseUser(principal.orgId, user)),
@@ -373,7 +385,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       }
 
       const { take } = parsedQuery.data;
-      const lines = await prisma.bankLine.findMany({
+      const lines = (await prisma.bankLine.findMany({
         where: { orgId: principal.orgId },
         orderBy: { date: "desc" },
         take,
@@ -385,7 +397,14 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
           descKid: true,
           createdAt: true,
         },
-      });
+      })) as Array<{
+        id: string;
+        date: Date;
+        amount: unknown;
+        descCiphertext: string;
+        descKid: string;
+        createdAt: Date;
+      }>;
 
       const payload = {
         lines: lines.map(sanitiseBankLine),
@@ -559,7 +578,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
         org: { ...exportPayload.org, deletedAt: deletedAt.toISOString() },
       };
 
-      await prisma.$transaction(async (tx) => {
+      await prisma.$transaction(async (tx: typeof prisma) => {
         await tx.org.update({
           where: { id: orgId },
           data: { deletedAt },
@@ -597,12 +616,12 @@ function buildOrgExport(org: ExportableOrg): AdminOrgExport {
       createdAt: org.createdAt.toISOString(),
       deletedAt: org.deletedAt ? org.deletedAt.toISOString() : null,
     },
-    users: org.users.map((user) => ({
+    users: org.users.map((user: User) => ({
       id: user.id,
       email: user.email,
       createdAt: user.createdAt.toISOString(),
     })),
-    bankLines: org.lines.map((line) => ({
+    bankLines: org.lines.map((line: BankLine) => ({
       id: line.id,
       date: line.date.toISOString(),
       amount: normaliseAmount(line.amount),
@@ -630,20 +649,29 @@ function normaliseAmount(amount: unknown): number {
 }
 
 
-function parseAllowedOrigins(value: string | undefined): string[] {
-  if (!value) {
-    return [];
+function toSpanAttributes(input: Record<string, unknown>): Attributes {
+  const attributes: Attributes = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (value === undefined || value === null) {
+      continue;
+    }
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      attributes[key] = value;
+      continue;
+    }
+    attributes[key] = JSON.stringify(value);
   }
-  return value
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
+  return attributes;
 }
 
 
 declare module "fastify" {
   interface FastifyRequest {
     traceSpan?: Span | null;
+  }
+
+  interface FastifyInstance {
+    config: AppConfig;
   }
 }
 

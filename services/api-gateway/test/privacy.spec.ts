@@ -4,7 +4,6 @@ import { randomUUID } from "node:crypto";
 
 import { SignJWT, exportJWK, generateKeyPair } from "jose";
 import type { FastifyInstance } from "fastify";
-import type { BankLine, Org, PrismaClient, User } from "@prisma/client";
 
 import { configurePIIProviders, encryptPII } from "../src/lib/pii";
 import { hashIdentifier } from "../src/lib/auth";
@@ -17,6 +16,29 @@ if (!runPrivacySuite) {
 } else {
   const { createApp } = await import("../src/app");
   type AdminOrgExport = import("../src/app").AdminOrgExport;
+  type Org = {
+    id: string;
+    name: string;
+    createdAt: Date;
+    deletedAt: Date | null;
+  };
+  type User = {
+    id: string;
+    email: string;
+    createdAt: Date;
+    orgId: string;
+  };
+  type BankLine = {
+    id: string;
+    orgId: string;
+    date: Date;
+    amount: number;
+    payeeCiphertext: string;
+    payeeKid: string;
+    descCiphertext: string;
+    descKid: string;
+    createdAt: Date;
+  };
 
 const JWT_AUDIENCE = "urn:apgms:test";
 const JWT_ISSUER = "urn:apgms:issuer";
@@ -90,10 +112,7 @@ type State = {
 
 type TransactionCallback<T> = (tx: PrismaLike) => Promise<T>;
 
-type PrismaLike = Pick<
-  PrismaClient,
-  "org" | "user" | "bankLine" | "orgTombstone" | "auditLog" | "$transaction"
->;
+type PrismaLike = Record<string, any>;
 
 type Stub = {
   client: PrismaLike;
@@ -105,7 +124,7 @@ let stub: Stub;
 
 beforeEach(async () => {
   stub = createPrismaStub();
-  app = await createApp({ prisma: stub.client as unknown as PrismaClient });
+  app = await createApp({ prisma: stub.client as any });
   await app.ready();
 });
 
@@ -388,7 +407,8 @@ function createPrismaStub(initial?: Partial<State>): Stub {
 
   const client: PrismaLike = {
     org: {
-      findUnique: async ({ where, include }) => {
+      findUnique: async (args: any) => {
+        const { where, include } = args ?? {};
         const org = state.orgs.find((o) => o.id === where.id);
         if (!org) return null;
         if (include?.users || include?.lines) {
@@ -400,7 +420,8 @@ function createPrismaStub(initial?: Partial<State>): Stub {
         }
         return { ...org } as Org;
       },
-      update: async ({ where, data }) => {
+      update: async (args: any) => {
+        const { where, data } = args ?? {};
         const org = state.orgs.find((o) => o.id === where.id);
         if (!org) throw new Error("Org not found");
         Object.assign(org, data);
@@ -421,7 +442,8 @@ function createPrismaStub(initial?: Partial<State>): Stub {
         }
         return users;
       },
-      deleteMany: async ({ where }) => {
+      deleteMany: async (args: any) => {
+        const { where } = args ?? {};
         const initialLength = state.users.length;
         state.users = state.users.filter((user) => user.orgId !== where?.orgId);
         return { count: initialLength - state.users.length };
@@ -478,7 +500,8 @@ function createPrismaStub(initial?: Partial<State>): Stub {
         }
         return { count: data.length };
       },
-      deleteMany: async ({ where }) => {
+      deleteMany: async (args: any) => {
+        const { where } = args ?? {};
         const initialLength = state.bankLines.length;
         state.bankLines = state.bankLines.filter((line) => line.orgId !== where?.orgId);
         return { count: initialLength - state.bankLines.length };
@@ -509,7 +532,8 @@ function createPrismaStub(initial?: Partial<State>): Stub {
       },
     },
     orgTombstone: {
-      create: async ({ data }) => {
+      create: async (args: any) => {
+        const { data } = args ?? {};
         const record = {
           id: data.id ?? randomUUID(),
           orgId: data.orgId!,
@@ -521,7 +545,8 @@ function createPrismaStub(initial?: Partial<State>): Stub {
       },
     },
     auditLog: {
-      create: async ({ data }) => {
+      create: async (args: any) => {
+        const { data } = args ?? {};
         const entry: AuditEntry = {
           id: data.id ?? randomUUID(),
           orgId: data.orgId,
@@ -542,44 +567,43 @@ function createPrismaStub(initial?: Partial<State>): Stub {
   return { client, state };
 }
 
-}
-
-function seedOrgWithData(state: State, ids: { orgId: string; userId: string; lineId: string }) {
-  const createdAt = new Date("2024-01-01T00:00:00Z");
-  state.orgs.push({
-    id: ids.orgId,
-    name: "Example Org",
-    createdAt,
-    deletedAt: null,
-  } as OrgState);
-  state.users.push({
-    id: ids.userId,
-    email: "someone@example.com",
-    password: "hashed-password",
-    orgId: ids.orgId,
-    createdAt,
-  } as User);
-  const payee = encryptPII("Vendor");
-  const desc = encryptPII("Invoice");
-  state.bankLines.push({
-    id: ids.lineId,
-    orgId: ids.orgId,
-    date: new Date("2024-02-02T00:00:00Z"),
-    amount: 1200 as any,
-    payeeCiphertext: payee.ciphertext,
-    payeeKid: payee.kid,
-    descCiphertext: desc.ciphertext,
-    descKid: desc.kid,
-    createdAt,
-  } as BankLine);
-}
-
-function pick<T>(value: T, select: Record<string, boolean>): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  for (const [key, include] of Object.entries(select)) {
-    if (include && key in (value as any)) {
-      result[key] = (value as any)[key];
-    }
+  function seedOrgWithData(state: State, ids: { orgId: string; userId: string; lineId: string }) {
+    const createdAt = new Date("2024-01-01T00:00:00Z");
+    state.orgs.push({
+      id: ids.orgId,
+      name: "Example Org",
+      createdAt,
+      deletedAt: null,
+    } as OrgState);
+    state.users.push({
+      id: ids.userId,
+      email: "someone@example.com",
+      password: "hashed-password",
+      orgId: ids.orgId,
+      createdAt,
+    } as User);
+    const payee = encryptPII("Vendor");
+    const desc = encryptPII("Invoice");
+    state.bankLines.push({
+      id: ids.lineId,
+      orgId: ids.orgId,
+      date: new Date("2024-02-02T00:00:00Z"),
+      amount: 1200 as any,
+      payeeCiphertext: payee.ciphertext,
+      payeeKid: payee.kid,
+      descCiphertext: desc.ciphertext,
+      descKid: desc.kid,
+      createdAt,
+    } as BankLine);
   }
-  return result;
+
+  function pick<T>(value: T, select: Record<string, boolean>): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
+    for (const [key, include] of Object.entries(select)) {
+      if (include && key in (value as any)) {
+        result[key] = (value as any)[key];
+      }
+    }
+    return result;
+  }
 }
