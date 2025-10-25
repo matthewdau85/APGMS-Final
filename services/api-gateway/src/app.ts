@@ -184,8 +184,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   const config = loadConfig();
   const prisma = (options.prisma as PrismaLike | undefined) ?? (await loadDefaultPrisma());
 
-  const kms = createKeyManagementService();
-  const saltProvider = createSaltProvider();
+  const kms = await createKeyManagementService();
+  const saltProvider = await createSaltProvider();
   const auditLogger = createAuditLogger(prisma as PrismaClient);
   configurePIIProviders({ kms, saltProvider, auditLogger });
 

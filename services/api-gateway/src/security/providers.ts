@@ -1,6 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { Buffer } from "node:buffer";
 import type { PrismaClient } from "@prisma/client";
+
+import { createSecretManager, type SecretManager } from "@apgms/shared";
 import type {
   AuditEvent,
   AuditLogger,
@@ -128,29 +130,53 @@ export interface ProviderConfig {
   prisma: PrismaClient;
 }
 
-export function createKeyManagementService(): KeyManagementService {
-  const rawKeys = parseJsonEnv<RawKeyMaterial[]>(process.env.PII_KEYS, "PII_KEYS") ?? [];
+export async function createKeyManagementService(): Promise<KeyManagementService> {
+  const secretManager = createSecretManager();
+  const rawKeys = await readJsonSecret<RawKeyMaterial[]>(
+    secretManager,
+    "PII_KEYS",
+    process.env.PII_KEYS_SECRET_PATH,
+  );
   const activeKid = process.env.PII_ACTIVE_KEY;
-  return new EnvKeyManagementService(rawKeys, activeKid);
+  return new EnvKeyManagementService(rawKeys ?? [], activeKid);
 }
 
-export function createSaltProvider(): TokenSaltProvider {
-  const rawSalts = parseJsonEnv<RawSaltMaterial[]>(process.env.PII_SALTS, "PII_SALTS") ?? [];
+export async function createSaltProvider(): Promise<TokenSaltProvider> {
+  const secretManager = createSecretManager();
+  const rawSalts = await readJsonSecret<RawSaltMaterial[]>(
+    secretManager,
+    "PII_SALTS",
+    process.env.PII_SALTS_SECRET_PATH,
+  );
   const activeSid = process.env.PII_ACTIVE_SALT;
-  return new EnvSaltProvider(rawSalts, activeSid);
+  return new EnvSaltProvider(rawSalts ?? [], activeSid);
 }
 
 export function createAuditLogger(prisma: PrismaClient): AuditLogger {
   return new PrismaAuditLogger(prisma);
 }
 
-function parseJsonEnv<T>(value: string | undefined, name: string): T | undefined {
-  if (!value) {
-    return undefined;
+async function readJsonSecret<T>(
+  secretManager: SecretManager,
+  envName: string,
+  secretPath: string | undefined,
+): Promise<T | undefined> {
+  const identifier = secretPath ?? envName;
+  const secret = await secretManager.getSecret(identifier);
+  if (secret) {
+    return parseJson<T>(secret, identifier);
   }
+  const fallback = process.env[envName];
+  if (fallback) {
+    return parseJson<T>(fallback, envName);
+  }
+  return undefined;
+}
+
+function parseJson<T>(value: string, name: string): T {
   try {
     return JSON.parse(value) as T;
-  } catch (error: unknown) {
+  } catch (error) {
     throw new Error(`${name} must contain valid JSON`);
   }
 }

@@ -61,9 +61,11 @@ process.env.PII_ACTIVE_KEY = "test-pii";
 process.env.PII_SALTS = JSON.stringify([{ sid: "test-salt", secret: piiSaltMaterial }]);
 process.env.PII_ACTIVE_SALT = "test-salt";
 
+const kms = await createKeyManagementService();
+const saltProvider = await createSaltProvider();
 configurePIIProviders({
-  kms: createKeyManagementService(),
-  saltProvider: createSaltProvider(),
+  kms,
+  saltProvider,
   auditLogger: { record: async () => {} },
 });
 
