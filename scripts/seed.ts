@@ -11,9 +11,11 @@ async function main() {
   process.env.PII_SALTS ??= JSON.stringify([{ sid: "seed-salt", secret: Buffer.alloc(32, 6).toString("base64") }]);
   process.env.PII_ACTIVE_SALT ??= "seed-salt";
 
+  const kms = await createKeyManagementService();
+  const saltProvider = await createSaltProvider();
   configurePIIProviders({
-    kms: createKeyManagementService(),
-    saltProvider: createSaltProvider(),
+    kms,
+    saltProvider,
     auditLogger: {
       record: async () => {
         // Seeding audit logs is unnecessary; no-op.
