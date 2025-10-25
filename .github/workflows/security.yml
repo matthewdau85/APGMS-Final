@@ -45,7 +45,7 @@ jobs:
         with:
           args: --no-git --redact
       - name: Trivy FS Scan
-        uses: aquasecurity/trivy-action@0.12.0
+        uses: aquasecurity/trivy-action@0.33.1
         with:
           scan-type: fs
           format: table
