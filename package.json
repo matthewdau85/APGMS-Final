@@ -1,38 +1,47 @@
 {
-    "name":  "apgms",
-    "private":  true,
-    "version":  "0.1.0",
-    "workspaces":  [
-                       "services/*",
-                       "webapp",
-                       "shared",
-                       "worker"
-                   ],
-    "scripts":  {
-                    "db:migrate":  "pnpm --filter @apgms/shared exec prisma migrate dev --schema prisma/schema.prisma",
-                    "db:deploy":  "pnpm --filter @apgms/shared exec prisma migrate deploy --schema prisma/schema.prisma",
-                    "db:gen":  "pnpm --filter @apgms/shared exec prisma generate --schema prisma/schema.prisma",
-                    "test":  "pnpm -r test",
-                    "build":  "pnpm -r build",
-                    "typecheck":  "pnpm -r typecheck",
-                    "k6:smoke":  "pnpm exec k6 run k6/smoke.js",
-                    "lint:markdown":  "pnpm exec markdownlint **/*.md",
-                    "compliance:evidence":  "node scripts/collect-evidence.mjs",
-                    "security:rotate-keys":  "node scripts/rotate-pii-keys.mjs"
-                },
-    "devDependencies":  {
-                            "@types/node":  "^24.7.1",
-                            "prisma":  "6.17.1",
-                            "tsx":  "^4.20.6",
-                            "typescript":  "^5.9.3",
-                            "@axe-core/playwright":  "^4.9.2",
-                            "@playwright/test":  "^1.48.0"
-                        },
-    "dependencies":  {
-                         "@fastify/cors":  "^11.1.0",
-                         "@prisma/client":  "6.17.1",
-                         "fastify":  "^5.6.1",
-                         "argon2":  "^0.41.1",
-                         "zod":  "^4.1.12"
-                     }
+    "name": "apgms",
+    "private": true,
+    "version": "0.1.0",
+    "workspaces": [
+        "services/*",
+        "webapp",
+        "shared",
+        "worker",
+        "apps/*",
+        "packages/*"
+    ],
+    "scripts": {
+        "db:migrate": "pnpm --filter @apgms/shared exec prisma migrate dev --schema prisma/schema.prisma",
+        "db:deploy": "pnpm --filter @apgms/shared exec prisma migrate deploy --schema prisma/schema.prisma",
+        "db:gen": "pnpm --filter @apgms/shared exec prisma generate --schema prisma/schema.prisma",
+        "test": "pnpm -r test",
+        "jest": "jest",
+        "build": "pnpm -r build",
+        "typecheck": "pnpm -r typecheck",
+        "k6:smoke": "pnpm exec k6 run k6/smoke.js",
+        "lint:markdown": "pnpm exec markdownlint **/*.md",
+        "compliance:evidence": "node scripts/collect-evidence.mjs",
+        "security:rotate-keys": "node scripts/rotate-pii-keys.mjs"
+    },
+    "devDependencies": {
+        "@axe-core/playwright": "^4.9.2",
+        "@playwright/test": "^1.48.0",
+        "@types/jest": "^29.5.12",
+        "@types/node": "^24.7.1",
+        "jest": "^29.7.0",
+        "prisma": "6.17.1",
+        "ts-jest": "^29.2.5",
+        "ts-node": "^10.9.2",
+        "tsx": "^4.20.6",
+        "typescript": "^5.9.3"
+    },
+    "dependencies": {
+        "@fastify/cors": "^11.1.0",
+        "@prisma/client": "6.17.1",
+        "argon2": "^0.41.1",
+        "fastify": "^5.6.1",
+        "nats": "^2.18.0",
+        "uuid": "^10.0.0",
+        "zod": "^4.1.12"
+    }
 }

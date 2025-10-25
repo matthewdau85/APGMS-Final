@@ -8,7 +8,8 @@
     "scripts":  {
                     "prisma:generate":  "prisma generate --schema=shared/prisma/schema.prisma",
                     "build":  "echo building shared",
-                    "typecheck":  "tsc --noEmit -p tsconfig.json"
+                    "typecheck":  "tsc --noEmit -p tsconfig.json",
+                    "test":  "tsx --test ./test/event-bus.test.ts ./test/tax.test.ts"
                 },
     "dependencies":  {
                          "@prisma/client":  "6.17.1",
@@ -16,12 +17,19 @@
                      },
     "devDependencies":  {
                             "prisma":  "6.17.1",
+                            "tsx":  "^4.20.6",
                             "typescript":  "^5.9.3"
                         },
     "exports":  {
                     ".":  "./src/index.ts",
                     "./db":  "./src/db.ts",
                     "./masking":  "./src/masking.ts",
-                    "./security/password":  "./src/security/password.ts"
+                    "./security/password":  "./src/security/password.ts",
+                    "./security/secret-manager": "./src/security/secret-manager.ts",
+                    "./tax":  "./src/tax/index.ts",
+                    "./tax/tables": "./src/tax/tables.ts",
+                    "./messaging":  "./src/messaging/event-bus.ts",
+                    "./messaging/in-memory": "./src/messaging/in-memory-bus.ts",
+                    "./messaging/nats": "./src/messaging/nats-bus.ts"
                 }
 }

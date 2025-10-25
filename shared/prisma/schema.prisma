@@ -8,6 +8,220 @@ datasource db {
   shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
+enum AccountType {
+  ASSET
+  LIABILITY
+  INCOME
+  EXPENSE
+  EQUITY
+}
+
+enum AccountSubtype {
+  BANK
+  PAYGW_BUFFER
+  GST_BUFFER
+  CLEARING
+  SUSPENSE
+  RECEIVABLE
+  PAYABLE
+}
+
+enum JournalType {
+  PAYROLL_HOLD
+  POS_GST
+  BANK_SETTLEMENT
+  BAS_RELEASE
+  ADJUSTMENT
+  REVERSAL
+}
+
+enum AlertStatus {
+  OPEN
+  ACKED
+  CLOSED
+}
+
+model Organization {
+  id        String    @id @default(uuid()) @db.Uuid
+  name      String
+  createdAt DateTime  @default(now())
+  accounts  Account[]
+  journals  Journal[]
+}
+
+model Account {
+  id         String         @id @default(uuid()) @db.Uuid
+  orgId      String         @db.Uuid
+  code       String
+  name       String
+  type       AccountType
+  subtype    AccountSubtype?
+  currency   String         @default("AUD")
+  isActive   Boolean        @default(true)
+  createdAt  DateTime       @default(now())
+  postings   Posting[]
+  balances   BalanceSnapshot[]
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, code])
+  @@index([orgId, subtype])
+}
+
+model Journal {
+  id          String       @id @default(uuid()) @db.Uuid
+  orgId       String       @db.Uuid
+  seq         BigInt       @db.BigInt
+  type        JournalType
+  eventId     String
+  dedupeId    String
+  occurredAt  DateTime
+  recordedAt  DateTime     @default(now())
+  source      String
+  description String?
+  hash        String?
+  prevHash    String?
+  postings    Posting[]
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, dedupeId])
+  @@unique([orgId, seq])
+  @@index([orgId, occurredAt])
+}
+
+model Posting {
+  id        String   @id @default(uuid()) @db.Uuid
+  orgId     String   @db.Uuid
+  journalId String   @db.Uuid
+  accountId String   @db.Uuid
+  amountCents BigInt @db.BigInt
+  memo      String?
+
+  journal Journal @relation(fields: [journalId], references: [id], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, accountId])
+  @@index([orgId, journalId])
+}
+
+model BalanceSnapshot {
+  id           String   @id @default(uuid()) @db.Uuid
+  orgId        String   @db.Uuid
+  accountId    String   @db.Uuid
+  asOfSeq      BigInt   @db.BigInt
+  balanceCents BigInt   @db.BigInt
+  createdAt    DateTime @default(now())
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, accountId, asOfSeq])
+}
+
+model EventEnvelope {
+  id            String   @id
+  orgId         String   @db.Uuid
+  eventType     String
+  key           String
+  ts            DateTime
+  schemaVersion String
+  source        String
+  traceId       String?
+  payload       Json
+  processedAt   DateTime?
+  status        String   @default("processed")
+  error         String?
+
+  @@index([orgId, ts])
+}
+
+model BankTransaction {
+  id               String @id @default(uuid()) @db.Uuid
+  orgId            String @db.Uuid
+  extRef           String?
+  accountName      String
+  txDate           DateTime
+  amountCents      BigInt @db.BigInt
+  description      String?
+  matchedJournalId String?
+
+  @@index([orgId, txDate])
+}
+
+model GstTransaction {
+  id          String   @id @default(uuid()) @db.Uuid
+  orgId       String   @db.Uuid
+  sourceRef   String?
+  txDate      DateTime
+  netCents    BigInt   @db.BigInt
+  gstCents    BigInt   @db.BigInt
+  code        String
+  basPeriodId String?
+
+  @@index([orgId, txDate])
+}
+
+model PayrollItem {
+  id              String   @id @default(uuid()) @db.Uuid
+  orgId           String   @db.Uuid
+  employeeId      String
+  payPeriodStart  DateTime
+  payPeriodEnd    DateTime
+  grossCents      BigInt   @db.BigInt
+  paygwCents      BigInt   @db.BigInt
+  stslCents       BigInt   @db.BigInt
+  journalId       String?
+
+  @@index([orgId, employeeId])
+}
+
+model BasPeriod {
+  id         String   @id @default(uuid()) @db.Uuid
+  orgId      String   @db.Uuid
+  start      DateTime
+  end        DateTime
+  status     String   @default("open")
+  readyAt    DateTime?
+  releasedAt DateTime?
+  lodgedAt   DateTime?
+  evidenceId String?
+
+  @@unique([orgId, start, end])
+}
+
+model ReconciliationAlert {
+  id         String      @id @default(uuid()) @db.Uuid
+  orgId      String      @db.Uuid
+  kind       String
+  openedAt   DateTime    @default(now())
+  status     AlertStatus @default(OPEN)
+  details    Json
+  resolvedAt DateTime?
+
+  @@index([orgId, status])
+}
+
+model EvidenceArtifact {
+  id        String   @id @default(uuid()) @db.Uuid
+  orgId     String   @db.Uuid
+  kind      String
+  wormUri   String
+  sha256    String
+  createdAt DateTime @default(now())
+
+  @@index([orgId, kind])
+}
+
+model IdempotencyKey {
+  id         String   @id @default(uuid()) @db.Uuid
+  orgId      String   @db.Uuid
+  key        String
+  firstSeenAt DateTime @default(now())
+  resource   String?
+  resourceId String?
+
+  @@unique([orgId, key])
+}
+
+/// Legacy models retained for compatibility with existing services
 model Org {
   id         String         @id @default(cuid())
   name       String
@@ -32,20 +246,17 @@ model BankLine {
   org             Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
   orgId           String
   date            DateTime
-  amount          Decimal   // consider scale/precision if needed, e.g. @db.Decimal(18, 2) for Postgres
+  amount          Decimal
   payeeCiphertext String
   payeeKid        String
   descCiphertext  String
   descKid         String
-  createdAt       DateTime  @default(now())
+  createdAt       DateTime @default(now())
+  idempotencyKey  String?
 
-  // For idempotency:
-  idempotencyKey  String?   // you can also constrain length per-DB, e.g. @db.VarChar(128) on Postgres
-
-  @@unique([orgId, idempotencyKey])   // replays with same key hit this
-  @@index([orgId])                    // helpful for org queries
+  @@unique([orgId, idempotencyKey])
+  @@index([orgId])
 }
-
 
 model OrgTombstone {
   id        String   @id @default(cuid())
@@ -66,3 +277,4 @@ model AuditLog {
   @@index([orgId, createdAt])
   @@index([actorId, createdAt])
 }
+
