@@ -7,30 +7,52 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: pnpm/action-setup@v4
         with:
           version: 9
+
       - uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'pnpm'
           cache-dependency-path: pnpm-lock.yaml
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
       - name: Install Playwright deps
         run: pnpm exec playwright install --with-deps
+
+      # 1. Build all packages/workspaces so TS has generated types, Prisma clients, etc.
       - name: Build packages
         run: pnpm -r build
-      - name: Run tests
-        run: pnpm -r test
+
+      # 2. 🔒 Quality 3.1: enforce type safety in CI
+      #    This is the "no merge with type errors" gate.
       - name: Typecheck
         run: pnpm -r typecheck
+
+      # 3. Tests + coverage gate
+      #    First run tests with coverage output...
+      - name: Test (with coverage)
+        run: pnpm -r test -- --coverage
+
+      #    ...then enforce coverage budget (>=85% lines, etc.).
+      #    check-coverage.mjs should read the coverage summary JSON and exit 1 if below threshold.
+      - name: Enforce coverage >=85%
+        run: |
+          node ./scripts/check-coverage.mjs
+
+      # 4. Bring up API gateway and perf smoke it with k6
       - name: Install k6
         uses: grafana/setup-k6@v1
+
       - name: Start API Gateway
         run: |
           pnpm --filter @apgms/api-gateway dev &
           echo $! > gateway.pid
+
       - name: Wait for API readiness
         run: |
           for i in {1..30}; do
@@ -42,31 +64,53 @@ jobs:
           echo "API gateway failed to become ready" >&2
           kill $(cat gateway.pid)
           exit 1
+
       - name: Run k6 smoke test
         run: pnpm k6:smoke -- --env BASE_URL=http://localhost:3000
+
       - name: Stop API Gateway
         if: always()
         run: kill $(cat gateway.pid) || true
-      - name: Prisma drift check
-        run: pnpm --filter @apgms/shared exec prisma migrate status --schema prisma/schema.prisma
+
+      # 5. Schema / merge hygiene gates
+      - name: Check Prisma migration drift
+        run: pnpm -w exec prisma migrate status
+
       - name: Conflict marker guard
         run: git grep -n '<<<<<<<\|=======\|>>>>>>>' -- ':!*.lock'
+
+      # 6. Secret scanning gate (Gitleaks)
+      #    Fails the build if any API keys/tokens/secrets are committed.
+      - name: Secret scan
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks-linux-amd64 -o gitleaks
+          chmod +x gitleaks
+          ./gitleaks detect --no-color --redact --exit-code 1
 
   axe:
     needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: pnpm/action-setup@v4
         with:
           version: 9
+
       - uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'pnpm'
           cache-dependency-path: pnpm-lock.yaml
+
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps
+
+      # Quick a11y smoke gate against critical UI (fast fail if it's totally broken)
+      - name: A11y smoke
+        run: pnpm -w exec playwright test webapp/tests/a11y.spec.ts
+
+      # Full WCAG axe scan (per-route, attaches violations to CI artifacts)
       - run: pnpm --filter @apgms/webapp test:axe
 
   lighthouse:
@@ -74,16 +118,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: pnpm/action-setup@v4
         with:
           version: 9
+
       - uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'pnpm'
-          cache-dependency-path: pnpm-lock.yaml
+        cache: 'pnpm'
+        cache-dependency-path: pnpm-lock.yaml
+
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @apgms/webapp build
+
       - name: Lighthouse CI
         uses: treosh/lighthouse-ci-action@v10
         with:
