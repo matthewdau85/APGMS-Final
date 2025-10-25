@@ -76,10 +76,7 @@ const tracer = trace.getTracer("apgms-api-gateway");
 
 const ANOMALY_WINDOW_MS = 60_000;
 const DEFAULT_AUTH_FAILURE_THRESHOLD = 5;
-const anomalyCounters = new Map<
-  string,
-  { count: number; expiresAt: number }
->();
+const anomalyCounters = new Map<string, { count: number; expiresAt: number }>();
 
 async function loadDefaultPrisma(): Promise<PrismaLike> {
   if (!cachedPrisma) {
@@ -133,18 +130,25 @@ function sendError(
     error: { code, message, ...(details ? { details } : {}) },
   };
 
+  // extend metrics typing here so TS knows about helpers
   const serverWithMetrics = reply.server as FastifyInstance & {
-    metrics?: { recordSecurityEvent: (event: string) => void };
+    metrics?: {
+      recordSecurityEvent: (event: string) => void;
+      incAuthFailure: (orgId: string) => void;
+    };
   };
+
   const serverWithConfig = reply.server as FastifyInstance & {
     config?: AppConfig;
   };
+
   const anomalyThreshold =
     serverWithConfig.config?.security.authFailureThreshold ??
     DEFAULT_AUTH_FAILURE_THRESHOLD;
 
   const request = reply.request as FastifyRequest & {
     traceSpan?: Span | null;
+    user?: { orgId?: string };
   };
 
   if (code === "unauthorized" || code === "forbidden") {
@@ -174,17 +178,24 @@ function sendError(
           { key, count: existing.count },
           "detected repeated authorization failures"
         );
-        serverWithMetrics.metrics?.recordSecurityEvent(
-          "anomaly.auth"
-        );
+
+        serverWithMetrics.metrics?.recordSecurityEvent("anomaly.auth");
+
         // reset the counter window
         existing.count = 0;
         existing.expiresAt = now + ANOMALY_WINDOW_MS;
       }
     }
+
+    // NEW: increment auth_failures_total for SOC/oncall visibility
+    const orgIdForMetric = request.user?.orgId ?? "unknown_org";
+    serverWithMetrics.metrics?.incAuthFailure(orgIdForMetric);
   }
 
+  // Always record security event for this error code
   serverWithMetrics.metrics?.recordSecurityEvent(`error.${code}`);
+
+  // Attach to trace
   request.traceSpan?.addEvent(`error.${code}`, { statusCode });
 
   void reply.code(statusCode).send(payload);
@@ -252,10 +263,19 @@ export async function createApp(
   // central config
   const config = loadConfig();
 
+  // NEW: hard fail if core security config is missing/misconfigured
+  if (!config.cors?.allowedOrigins || config.cors.allowedOrigins.length === 0) {
+    throw new Error("CORS_ALLOWED_ORIGINS is not configured. Refusing to start.");
+  }
+
+  if (!config.security?.kmsKeysetLoaded) {
+    // If we can't encrypt/decrypt PII safely, we should not even boot the API.
+    throw new Error("KMS keys not loaded. Refusing to start.");
+  }
+
   // prisma handle (cached if not injected)
   const prisma =
-    (options.prisma as PrismaLike | undefined) ??
-    (await loadDefaultPrisma());
+    (options.prisma as PrismaLike | undefined) ?? (await loadDefaultPrisma());
 
   // security / crypto providers
   const kms = await createKeyManagementService();
@@ -285,10 +305,7 @@ export async function createApp(
 
   // close trace span and annotate status code
   app.addHook("onResponse", (req, reply, done) => {
-    req.traceSpan?.setAttribute(
-      "http.status_code",
-      reply.statusCode
-    );
+    req.traceSpan?.setAttribute("http.status_code", reply.statusCode);
     req.traceSpan?.end();
     req.traceSpan = null;
     done();
@@ -305,7 +322,7 @@ export async function createApp(
     done();
   });
 
-  // /metrics endpoint & recordSecurityEvent() live here
+  // /metrics endpoint & metrics helpers live here
   await app.register(metricsPlugin);
 
   // global rate limiter
@@ -346,11 +363,6 @@ export async function createApp(
 
   // CORS allowlist from config
   const allowedOrigins = config.cors.allowedOrigins;
-  if (allowedOrigins.length === 0) {
-    app.log.warn(
-      "CORS_ALLOWED_ORIGINS is not configured; rejecting cross-origin browser requests"
-    );
-  }
 
   await app.register(cors, {
     origin: (origin, cb) => {
@@ -361,6 +373,8 @@ export async function createApp(
       }
 
       if (allowedOrigins.length === 0) {
+        // should not happen in prod because we throw above, but keep for dev safety
+        app.metrics?.incCorsReject(origin);
         app.metrics?.recordSecurityEvent("cors.reject");
         app.log.warn(
           { origin },
@@ -375,6 +389,8 @@ export async function createApp(
         return;
       }
 
+      // origin not allowed
+      app.metrics?.incCorsReject(origin);
       app.metrics?.recordSecurityEvent("cors.reject");
       app.log.warn(
         { origin },
@@ -407,10 +423,7 @@ export async function createApp(
           metadata: { orgId: principal.orgId, ...metadata },
         });
 
-        req.traceSpan?.addEvent(
-          action,
-          toSpanAttributes(metadata)
-        );
+        req.traceSpan?.addEvent(action, toSpanAttributes(metadata));
         app.metrics?.recordSecurityEvent(action);
 
         span.setStatus({ code: SpanStatusCode.OK });
@@ -419,18 +432,10 @@ export async function createApp(
         span.recordException(error as Error);
         span.setStatus({ code: SpanStatusCode.ERROR });
 
-        req.log.error(
-          { err: maskError(error) },
-          "audit_failed"
-        );
+        req.log.error({ err: maskError(error) }, "audit_failed");
         app.metrics?.recordSecurityEvent("audit_failed");
 
-        sendError(
-          reply,
-          500,
-          "audit_failed",
-          "Unable to record audit trail"
-        );
+        sendError(reply, 500, "audit_failed", "Unable to record audit trail");
         return false;
       } finally {
         span.end();
@@ -441,8 +446,7 @@ export async function createApp(
   app.log.info(
     maskObject({
       DATABASE_URL: config.databaseUrl,
-      SHADOW_DATABASE_URL:
-        config.shadowDatabaseUrl ?? null,
+      SHADOW_DATABASE_URL: config.shadowDatabaseUrl ?? null,
     }),
     "loaded env"
   );
@@ -463,10 +467,7 @@ export async function createApp(
       app.metrics?.recordSecurityEvent("readiness.ok");
       return reply.code(200).send({ ready: true });
     } catch (error) {
-      app.log.warn(
-        { err: maskError(error) },
-        "readiness check failed"
-      );
+      app.log.warn({ err: maskError(error) }, "readiness check failed");
       app.metrics?.recordSecurityEvent("readiness.fail");
       return reply.code(503).send({ ready: false });
     }
@@ -485,12 +486,7 @@ export async function createApp(
       },
     },
     async (req, reply) => {
-      const principal = await requirePrincipal(
-        app,
-        req,
-        reply,
-        ["admin"]
-      );
+      const principal = await requirePrincipal(app, req, reply, ["admin"]);
       if (!principal) return;
 
       const users = (await prisma.user.findMany({
@@ -508,9 +504,7 @@ export async function createApp(
       }>;
 
       const payload = {
-        users: users.map((user) =>
-          sanitiseUser(principal.orgId, user)
-        ),
+        users: users.map((user) => sanitiseUser(principal.orgId, user)),
       };
 
       if (
@@ -534,17 +528,14 @@ export async function createApp(
       },
     },
     async (req, reply) => {
-      const principal = await requirePrincipal(
-        app,
-        req,
-        reply,
-        ["admin", "analyst", "finance"]
-      );
+      const principal = await requirePrincipal(app, req, reply, [
+        "admin",
+        "analyst",
+        "finance",
+      ]);
       if (!principal) return;
 
-      const parsedQuery = ListLinesQuery.safeParse(
-        req.query ?? {}
-      );
+      const parsedQuery = ListLinesQuery.safeParse(req.query ?? {});
       if (!parsedQuery.success) {
         sendError(
           reply,
@@ -584,13 +575,9 @@ export async function createApp(
       };
 
       if (
-        !(await recordAudit(
-          req,
-          reply,
-          principal,
-          "bank-lines.list",
-          { count: payload.lines.length }
-        ))
+        !(await recordAudit(req, reply, principal, "bank-lines.list", {
+          count: payload.lines.length,
+        }))
       ) {
         return;
       }
@@ -608,12 +595,7 @@ export async function createApp(
       },
     },
     async (req, reply) => {
-      const principal = await requirePrincipal(
-        app,
-        req,
-        reply,
-        ["admin"]
-      );
+      const principal = await requirePrincipal(app, req, reply, ["admin"]);
       if (!principal) return;
 
       const parsed = CreateLine.safeParse(req.body ?? {});
@@ -631,13 +613,8 @@ export async function createApp(
       const { date, amount, payee, desc } = parsed.data;
 
       // support idempotency-key header for replay protection
-      const keyHeader = (
-        req.headers["idempotency-key"] as string | undefined
-      )?.trim();
-      const idemKey =
-        keyHeader && keyHeader.length > 0
-          ? keyHeader
-          : undefined;
+      const keyHeader = (req.headers["idempotency-key"] as string | undefined)?.trim();
+      const idemKey = keyHeader && keyHeader.length > 0 ? keyHeader : undefined;
 
       // encrypt PII before save
       const encryptedPayee = encryptPII(payee);
@@ -678,20 +655,15 @@ export async function createApp(
           reply.header("Idempotency-Status", "reused");
 
           if (
-            !(await recordAudit(
-              req,
-              reply,
-              principal,
-              "bank-lines.create",
-              { reused: true, id: sanitized.id }
-            ))
+            !(await recordAudit(req, reply, principal, "bank-lines.create", {
+              reused: true,
+              id: sanitized.id,
+            }))
           ) {
             return;
           }
 
-          return reply
-            .code(200)
-            .send({ line: sanitized });
+          return reply.code(200).send({ line: sanitized });
         }
 
         const created = await prisma.bankLine.create({
@@ -717,36 +689,23 @@ export async function createApp(
         const sanitized = sanitiseBankLine(created);
 
         if (
-          !(await recordAudit(
-            req,
-            reply,
-            principal,
-            "bank-lines.create",
-            { reused: false, id: sanitized.id }
-          ))
+          !(await recordAudit(req, reply, principal, "bank-lines.create", {
+            reused: false,
+            id: sanitized.id,
+          }))
         ) {
           return;
         }
 
-        return reply
-          .code(201)
-          .send({ line: sanitized });
+        return reply.code(201).send({ line: sanitized });
       } catch (error) {
-        req.log.error(
-          { err: maskError(error) },
-          "failed to create bank line"
-        );
-        sendError(
-          reply,
-          400,
-          "bad_request",
-          "Unable to create bank line"
-        );
+        req.log.error({ err: maskError(error) }, "failed to create bank line");
+        sendError(reply, 400, "bad_request", "Unable to create bank line");
       }
     }
   );
 
-  // Export org data (RBAC = admin), includes tombstone/delete logic
+  // Export org data (RBAC = admin)
   app.get(
     "/admin/export/:orgId",
     {
@@ -755,23 +714,13 @@ export async function createApp(
       },
     },
     async (req, reply) => {
-      const principal = await requirePrincipal(
-        app,
-        req,
-        reply,
-        ["admin"]
-      );
+      const principal = await requirePrincipal(app, req, reply, ["admin"]);
       if (!principal) return;
 
       const { orgId } = req.params as { orgId: string };
 
       if (principal.orgId !== orgId) {
-        sendError(
-          reply,
-          403,
-          "forbidden",
-          "Cannot export another organisation"
-        );
+        sendError(reply, 403, "forbidden", "Cannot export another organisation");
         return;
       }
 
@@ -780,27 +729,16 @@ export async function createApp(
         include: { users: true, lines: true },
       });
       if (!org) {
-        sendError(
-          reply,
-          404,
-          "org_not_found",
-          "Organisation not found"
-        );
+        sendError(reply, 404, "org_not_found", "Organisation not found");
         return;
       }
 
-      const exportPayload = buildOrgExport(
-        org as ExportableOrg
-      );
+      const exportPayload = buildOrgExport(org as ExportableOrg);
 
       if (
-        !(await recordAudit(
-          req,
-          reply,
-          principal,
-          "admin.org.export",
-          { orgId }
-        ))
+        !(await recordAudit(req, reply, principal, "admin.org.export", {
+          orgId,
+        }))
       ) {
         return;
       }
@@ -818,23 +756,13 @@ export async function createApp(
       },
     },
     async (req, reply) => {
-      const principal = await requirePrincipal(
-        app,
-        req,
-        reply,
-        ["admin"]
-      );
+      const principal = await requirePrincipal(app, req, reply, ["admin"]);
       if (!principal) return;
 
       const { orgId } = req.params as { orgId: string };
 
       if (principal.orgId !== orgId) {
-        sendError(
-          reply,
-          403,
-          "forbidden",
-          "Cannot delete another organisation"
-        );
+        sendError(reply, 403, "forbidden", "Cannot delete another organisation");
         return;
       }
 
@@ -843,28 +771,16 @@ export async function createApp(
         include: { users: true, lines: true },
       });
       if (!org) {
-        sendError(
-          reply,
-          404,
-          "org_not_found",
-          "Organisation not found"
-        );
+        sendError(reply, 404, "org_not_found", "Organisation not found");
         return;
       }
 
       if (org.deletedAt) {
-        sendError(
-          reply,
-          409,
-          "already_deleted",
-          "Organisation already deleted"
-        );
+        sendError(reply, 409, "already_deleted", "Organisation already deleted");
         return;
       }
 
-      const exportPayload = buildOrgExport(
-        org as ExportableOrg
-      );
+      const exportPayload = buildOrgExport(org as ExportableOrg);
 
       const deletedAt = new Date();
       const tombstonePayload: AdminOrgExport = {
@@ -893,13 +809,9 @@ export async function createApp(
       });
 
       if (
-        !(await recordAudit(
-          req,
-          reply,
-          principal,
-          "admin.org.delete",
-          { orgId }
-        ))
+        !(await recordAudit(req, reply, principal, "admin.org.delete", {
+          orgId,
+        }))
       ) {
         return;
       }
@@ -926,9 +838,7 @@ function buildOrgExport(org: ExportableOrg): AdminOrgExport {
       id: org.id,
       name: org.name,
       createdAt: org.createdAt.toISOString(),
-      deletedAt: org.deletedAt
-        ? org.deletedAt.toISOString()
-        : null,
+      deletedAt: org.deletedAt ? org.deletedAt.toISOString() : null,
     },
     users: org.users.map((user: User) => ({
       id: user.id,
@@ -973,9 +883,7 @@ function normaliseAmount(amount: unknown): number {
 }
 
 // Turn arbitrary metadata into span attributes for tracing
-function toSpanAttributes(
-  input: Record<string, unknown>
-): Attributes {
+function toSpanAttributes(input: Record<string, unknown>): Attributes {
   const attributes: Attributes = {};
 
   for (const [key, value] of Object.entries(input)) {
@@ -1002,9 +910,15 @@ function toSpanAttributes(
 declare module "fastify" {
   interface FastifyRequest {
     traceSpan?: Span | null;
+    user?: { orgId?: string }; // added so sendError can read orgId for metrics
   }
 
   interface FastifyInstance {
     config: AppConfig;
+    metrics?: {
+      recordSecurityEvent: (event: string) => void;
+      incAuthFailure: (orgId: string) => void;
+      incCorsReject: (origin?: string) => void;
+    };
   }
 }
