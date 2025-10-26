@@ -1,4 +1,10 @@
-import { createApp } from "./app";
+// services/api-gateway/src/index.ts
+
+import { createApp } from "./app.js";
+import {
+  type FastifyRequest,
+  type FastifyReply,
+} from "fastify";
 
 let draining = false;
 
@@ -9,27 +15,32 @@ async function main() {
   //
   // /ready: readiness + drain state + DB probe
   //
-  app.get("/ready", async (_req, reply) => {
-    if (draining) {
-      app.metrics?.recordSecurityEvent("readiness.draining");
-      return reply.code(503).send({ ready: false, draining: true });
-    }
-
-    try {
-      // dependency liveness (DB ping)
-      if (app.prisma) {
-        // lightweight "is DB alive?" probe
-        await app.prisma.$queryRaw`SELECT 1`;
+  app.get(
+    "/ready",
+    async (_req: FastifyRequest, reply: FastifyReply) => {
+      if (draining) {
+        app.metrics?.recordSecurityEvent("readiness.draining");
+        return reply
+          .code(503)
+          .send({ ready: false, draining: true });
       }
 
-      app.metrics?.recordSecurityEvent("readiness.ok");
-      return reply.code(200).send({ ready: true });
-    } catch (err) {
-      app.log.warn({ err }, "readiness check failed");
-      app.metrics?.recordSecurityEvent("readiness.fail");
-      return reply.code(503).send({ ready: false });
+      try {
+        // dependency liveness (DB ping)
+        if ((app as any).prisma) {
+          // lightweight "is DB alive?" probe
+          await (app as any).prisma.$queryRaw`SELECT 1`;
+        }
+
+        app.metrics?.recordSecurityEvent("readiness.ok");
+        return reply.code(200).send({ ready: true });
+      } catch (err) {
+        app.log.warn({ err }, "readiness check failed");
+        app.metrics?.recordSecurityEvent("readiness.fail");
+        return reply.code(503).send({ ready: false });
+      }
     }
-  });
+  );
 
   //
   // NOTE: /health is already registered in createApp()
