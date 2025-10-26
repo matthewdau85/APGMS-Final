@@ -1,3 +1,5 @@
+// services/api-gateway/src/app.ts
+
 import Fastify, {
   type FastifyInstance,
   type FastifyReply,
@@ -21,25 +23,25 @@ import {
 } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 
-import { maskError, maskObject } from "@apgms/shared";
+import { maskError, maskObject } from "./lib/masking.js";
 import {
   configurePIIProviders,
   decryptPII,
   encryptPII,
-} from "./lib/pii";
+} from "./lib/pii.js";
 import {
   authenticateRequest,
   hashIdentifier,
   type Principal,
   type Role,
-} from "./lib/auth";
+} from "./lib/auth.js";
 import {
   createAuditLogger,
   createKeyManagementService,
   createSaltProvider,
-} from "./security/providers";
-import metricsPlugin from "./plugins/metrics";
-import { loadConfig, type AppConfig } from "./config";
+} from "./security/providers.js";
+import metricsPlugin from "./plugins/metrics.js";
+import { loadConfig, type AppConfig } from "./config.js";
 
 export interface CreateAppOptions {
   prisma?: PrismaClient;
@@ -179,7 +181,9 @@ function sendError(
           { key, count: existing.count },
           "detected repeated authorization failures"
         );
-        serverWithMetrics.metrics?.recordSecurityEvent("anomaly.auth");
+        serverWithMetrics.metrics?.recordSecurityEvent(
+          "anomaly.auth"
+        );
         // reset window
         existing.count = 0;
         existing.expiresAt = now + ANOMALY_WINDOW_MS;
@@ -315,7 +319,10 @@ export async function createApp(
 
   // close span, attach status code
   app.addHook("onResponse", (req, reply, doneCb) => {
-    req.traceSpan?.setAttribute("http.status_code", reply.statusCode);
+    req.traceSpan?.setAttribute(
+      "http.status_code",
+      reply.statusCode
+    );
     req.traceSpan?.end();
     req.traceSpan = null;
     doneCb();
@@ -438,7 +445,10 @@ export async function createApp(
         span.recordException(error as Error);
         span.setStatus({ code: SpanStatusCode.ERROR });
 
-        req.log.error({ err: maskError(error) }, "audit_failed");
+        req.log.error(
+          { err: maskError(error) },
+          "audit_failed"
+        );
         app.metrics?.recordSecurityEvent("audit_failed");
 
         sendError(
@@ -459,14 +469,15 @@ export async function createApp(
   app.log.info(
     maskObject({
       DATABASE_URL: config.databaseUrl,
-      SHADOW_DATABASE_URL: config.shadowDatabaseUrl ?? null,
+      SHADOW_DATABASE_URL:
+        config.shadowDatabaseUrl ?? null,
     }),
     "loaded env"
   );
 
   //
   // 12. Liveness
-  // (Readiness with draining is handled in server.ts, not here.)
+  // (Readiness with draining is handled in index.ts)
   //
   app.get("/health", async () => ({
     ok: true,
@@ -486,7 +497,9 @@ export async function createApp(
       },
     },
     async (req, reply) => {
-      const principal = await requirePrincipal(app, req, reply, ["admin"]);
+      const principal = await requirePrincipal(app, req, reply, [
+        "admin",
+      ]);
       if (!principal) return;
 
       const users = (await prisma.user.findMany({
@@ -504,7 +517,9 @@ export async function createApp(
       }>;
 
       const payload = {
-        users: users.map((user) => sanitiseUser(principal.orgId, user)),
+        users: users.map((user) =>
+          sanitiseUser(principal.orgId, user)
+        ),
       };
 
       if (
@@ -535,7 +550,9 @@ export async function createApp(
       ]);
       if (!principal) return;
 
-      const parsedQuery = ListLinesQuery.safeParse(req.query ?? {});
+      const parsedQuery = ListLinesQuery.safeParse(
+        req.query ?? {}
+      );
       if (!parsedQuery.success) {
         sendError(
           reply,
@@ -575,9 +592,15 @@ export async function createApp(
       };
 
       if (
-        !(await recordAudit(req, reply, principal, "bank-lines.list", {
-          count: payload.lines.length,
-        }))
+        !(await recordAudit(
+          req,
+          reply,
+          principal,
+          "bank-lines.list",
+          {
+            count: payload.lines.length,
+          }
+        ))
       ) {
         return;
       }
@@ -595,7 +618,9 @@ export async function createApp(
       },
     },
     async (req, reply) => {
-      const principal = await requirePrincipal(app, req, reply, ["admin"]);
+      const principal = await requirePrincipal(app, req, reply, [
+        "admin",
+      ]);
       if (!principal) return;
 
       const parsed = CreateLine.safeParse(req.body ?? {});
@@ -614,10 +639,14 @@ export async function createApp(
 
       // optional replay-protection
       const keyHeader = (
-        req.headers["idempotency-key"] as string | undefined
+        req.headers["idempotency-key"] as
+          | string
+          | undefined
       )?.trim();
       const idemKey =
-        keyHeader && keyHeader.length > 0 ? keyHeader : undefined;
+        keyHeader && keyHeader.length > 0
+          ? keyHeader
+          : undefined;
 
       // encrypt PII before saving
       const encryptedPayee = encryptPII(payee);
@@ -637,9 +666,11 @@ export async function createApp(
               orgId: principal.orgId,
               date: new Date(date),
               amount: new Decimal(amount),
-              payeeCiphertext: encryptedPayee.ciphertext,
+              payeeCiphertext:
+                encryptedPayee.ciphertext,
               payeeKid: encryptedPayee.kid,
-              descCiphertext: encryptedDesc.ciphertext,
+              descCiphertext:
+                encryptedDesc.ciphertext,
               descKid: encryptedDesc.kid,
               idempotencyKey: idemKey,
             },
@@ -659,15 +690,23 @@ export async function createApp(
           reply.header("Idempotency-Status", "reused");
 
           if (
-            !(await recordAudit(req, reply, principal, "bank-lines.create", {
-              reused: true,
-              id: sanitized.id,
-            }))
+            !(await recordAudit(
+              req,
+              reply,
+              principal,
+              "bank-lines.create",
+              {
+                reused: true,
+                id: sanitized.id,
+              }
+            ))
           ) {
             return;
           }
 
-          return reply.code(200).send({ line: sanitized });
+          return reply
+            .code(200)
+            .send({ line: sanitized });
         }
 
         // normal create
@@ -694,15 +733,23 @@ export async function createApp(
         const sanitized = sanitiseBankLine(created);
 
         if (
-          !(await recordAudit(req, reply, principal, "bank-lines.create", {
-            reused: false,
-            id: sanitized.id,
-          }))
+          !(await recordAudit(
+            req,
+            reply,
+            principal,
+            "bank-lines.create",
+            {
+              reused: false,
+              id: sanitized.id,
+            }
+          ))
         ) {
           return;
         }
 
-        return reply.code(201).send({ line: sanitized });
+        return reply
+          .code(201)
+          .send({ line: sanitized });
       } catch (error) {
         req.log.error(
           { err: maskError(error) },
@@ -727,7 +774,12 @@ export async function createApp(
       },
     },
     async (req, reply) => {
-      const principal = await requirePrincipal(app, req, reply, ["admin"]);
+      const principal = await requirePrincipal(
+        app,
+        req,
+        reply,
+        ["admin"]
+      );
       if (!principal) return;
 
       const { orgId } = req.params as { orgId: string };
@@ -756,12 +808,18 @@ export async function createApp(
         return;
       }
 
-      const exportPayload = buildOrgExport(org as ExportableOrg);
+      const exportPayload = buildOrgExport(
+        org as ExportableOrg
+      );
 
       if (
-        !(await recordAudit(req, reply, principal, "admin.org.export", {
-          orgId,
-        }))
+        !(await recordAudit(
+          req,
+          reply,
+          principal,
+          "admin.org.export",
+          { orgId }
+        ))
       ) {
         return;
       }
@@ -779,7 +837,12 @@ export async function createApp(
       },
     },
     async (req, reply) => {
-      const principal = await requirePrincipal(app, req, reply, ["admin"]);
+      const principal = await requirePrincipal(
+        app,
+        req,
+        reply,
+        ["admin"]
+      );
       if (!principal) return;
 
       const { orgId } = req.params as { orgId: string };
@@ -818,7 +881,9 @@ export async function createApp(
         return;
       }
 
-      const exportPayload = buildOrgExport(org as ExportableOrg);
+      const exportPayload = buildOrgExport(
+        org as ExportableOrg
+      );
 
       const deletedAt = new Date();
       const tombstonePayload: AdminOrgExport = {
@@ -835,8 +900,12 @@ export async function createApp(
           data: { deletedAt },
         });
 
-        await tx.user.deleteMany({ where: { orgId } });
-        await tx.bankLine.deleteMany({ where: { orgId } });
+        await tx.user.deleteMany({
+          where: { orgId },
+        });
+        await tx.bankLine.deleteMany({
+          where: { orgId },
+        });
 
         await tx.orgTombstone.create({
           data: {
@@ -847,9 +916,13 @@ export async function createApp(
       });
 
       if (
-        !(await recordAudit(req, reply, principal, "admin.org.delete", {
-          orgId,
-        }))
+        !(await recordAudit(
+          req,
+          reply,
+          principal,
+          "admin.org.delete",
+          { orgId }
+        ))
       ) {
         return;
       }
@@ -880,7 +953,9 @@ function buildOrgExport(org: ExportableOrg): AdminOrgExport {
       id: org.id,
       name: org.name,
       createdAt: org.createdAt.toISOString(),
-      deletedAt: org.deletedAt ? org.deletedAt.toISOString() : null,
+      deletedAt: org.deletedAt
+        ? org.deletedAt.toISOString()
+        : null,
     },
     users: org.users.map((user: User) => ({
       id: user.id,
@@ -915,7 +990,10 @@ function normaliseAmount(amount: unknown): number {
     return Number.isNaN(parsed) ? 0 : parsed;
   }
 
-  if (amount && typeof (amount as any).toNumber === "function") {
+  if (
+    amount &&
+    typeof (amount as any).toNumber === "function"
+  ) {
     try {
       return (amount as any).toNumber();
     } catch {
@@ -961,11 +1039,11 @@ declare module "fastify" {
   }
 
   interface FastifyInstance {
-    // prisma handle (we attach this in createApp so server.ts / readiness can poke the DB)
+    // prisma handle (we attach this in createApp so index.ts / readiness can poke the DB)
     prisma?: any;
 
     // central runtime config
-    config: import("./config").AppConfig;
+    config: import("./config.js").AppConfig;
 
     // metrics helpers from metricsPlugin
     metrics?: {
