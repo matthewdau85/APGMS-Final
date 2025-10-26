@@ -2,8 +2,10 @@
   "compilerOptions": {
     "target": "ES2023",
     "lib": ["ES2023"],
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
+
+    // Important: make TS compile like real Node ESM
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
 
     "strict": true,
     "esModuleInterop": true,
@@ -14,6 +16,7 @@
 
     "outDir": "dist",
 
+    // we'll keep your workspace aliasing so @apgms/shared still resolves
     "baseUrl": "../../",
     "paths": {
       "@apgms/shared": ["shared/src/index.ts"],
