@@ -1,20 +1,32 @@
-FROM node:20-alpine AS deps
+# ---------- deps/build stage ----------
+FROM node:20-alpine AS build
 WORKDIR /app
-RUN corepack enable
-COPY ../../pnpm-workspace.yaml ./
-COPY ../../package.json ./
-COPY ../../pnpm-lock.yaml ./
-RUN pnpm fetch
-COPY ../../ ./
-RUN pnpm -w install --frozen-lockfile
 
-FROM deps AS build
+# enable pnpm
+RUN corepack enable
+
+# copy the whole mono-repo in so pnpm can resolve workspaces
+COPY . .
+
+# install all workspace deps (includes webapp, shared, ledger, etc.)
+RUN pnpm install --frozen-lockfile
+
+# optional: run a typecheck/build so we fail early instead of at runtime
+# this will run whatever "build" script webapp has; it's okay if it's a no-op
 WORKDIR /app/apps/webapp
 RUN pnpm build || true
 
-FROM node:20-alpine AS runner
-WORKDIR /app/apps/webapp
+# ---------- runtime (dev) stage ----------
+FROM node:20-alpine AS runtime
+WORKDIR /app
+
 ENV NODE_ENV=development
-COPY --from=deps /app .
+
+# bring in node_modules and source code
+COPY --from=build /app /app
+
+# expose Vite dev port from inside the container
 EXPOSE 5173
+
+# run the dev server bound to all interfaces
 CMD ["pnpm", "dev", "--host", "0.0.0.0", "--port", "5173"]

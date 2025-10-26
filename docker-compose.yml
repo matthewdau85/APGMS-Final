@@ -1,5 +1,5 @@
-version: "3.9"
 name: apgms
+
 services:
   db:
     image: postgres:16
@@ -7,46 +7,97 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: apgms
-    ports: ["5432:5432"]
-    volumes: [ "dbdata:/var/lib/postgresql/data" ]
-    networks: [ apgmsnet ]
+    ports:
+      - "5432:5432"        # host 5432 -> container 5432
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    networks:
+      - apgmsnet
 
   redis:
     image: redis:7
-    ports: ["6379:6379"]
-    networks: [ apgmsnet ]
+    ports:
+      - "6379:6379"        # host 6379 -> container 6379
+    networks:
+      - apgmsnet
 
   api-gateway:
     build:
       context: .
       dockerfile: services/api-gateway/Dockerfile
-    env_file: [ .env ]
+    env_file:
+      - .env
     environment:
       NODE_ENV: development
+      PORT: "3000"
+
+      # internal connectivity
       DATABASE_URL: ${DATABASE_URL}
-    depends_on: [ db ]
-    ports: ["3000:3000"]
-    networks: [ apgmsnet ]
+      SHADOW_DATABASE_URL: ${SHADOW_DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      TAX_ENGINE_URL: ${TAX_ENGINE_URL}
+
+      # config.ts expectations
+      AUTH_AUDIENCE: ${AUTH_AUDIENCE}
+      AUTH_ISSUER: ${AUTH_ISSUER}
+      AUTH_JWKS: ${AUTH_JWKS}
+
+      PII_KEYS: ${PII_KEYS}
+      PII_ACTIVE_KEY: ${PII_ACTIVE_KEY}
+      PII_SALTS: ${PII_SALTS}
+      PII_ACTIVE_SALT: ${PII_ACTIVE_SALT}
+
+      PASSWORD_PEPPER: ${PASSWORD_PEPPER}
+      PASSWORD_MEM_KIB: ${PASSWORD_MEM_KIB}
+      PASSWORD_TIME_COST: ${PASSWORD_TIME_COST}
+      PASSWORD_PARALLELISM: ${PASSWORD_PARALLELISM}
+
+      AUTH_FAILURE_THRESHOLD: ${AUTH_FAILURE_THRESHOLD}
+
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+
+      # rate limit names as read by loadConfig()
+      API_RATE_LIMIT_MAX: ${API_RATE_LIMIT_MAX}
+      API_RATE_LIMIT_WINDOW: ${API_RATE_LIMIT_WINDOW}
+
+      # prod-only gate is skipped in dev, but keep this to be explicit
+      KMS_KEYSET_LOADED: ${KMS_KEYSET_LOADED}
+    depends_on:
+      - db
+      - redis
+      - tax-engine
+    ports:
+      - "3000:3000"        # expose Fastify to host so curl works
+    networks:
+      - apgmsnet
 
   tax-engine:
     build:
       context: .
       dockerfile: services/tax-engine/Dockerfile
-    env_file: [ .env ]
+    env_file:
+      - .env
     environment:
       TAX_ENGINE_PORT: "8000"
-    depends_on: [ db ]
-    ports: ["8000:8000"]
-    networks: [ apgmsnet ]
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"        # host 8000 -> container 8000
+    networks:
+      - apgmsnet
 
   webapp:
     build:
       context: .
       dockerfile: apps/webapp/Dockerfile
-    env_file: [ .env ]
-    depends_on: [ api-gateway ]
-    ports: ["5173:5173"]
-    networks: [ apgmsnet ]
+    env_file:
+      - .env
+    depends_on:
+      - api-gateway
+    ports:
+      - "5173:5173"   # host 5173 -> container 5173 (Vite dev server)
+    networks:
+      - apgmsnet
 
 volumes:
   dbdata:
