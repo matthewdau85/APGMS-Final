@@ -4,11 +4,16 @@
     "lib": ["ES2023"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
+
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
+
     "resolveJsonModule": true,
     "types": ["node"],
+
+    "outDir": "dist",
+
     "baseUrl": "../../",
     "paths": {
       "@apgms/shared": ["shared/src/index.ts"],
@@ -16,5 +21,19 @@
       "@apgms/shared-au/*": ["shared/au/*"]
     }
   },
-  "include": ["src", "test", "src/schemas", "types"]
+
+  "include": [
+    "src/**/*.ts",
+    "src/schemas/**/*.ts",
+    "types/**/*.ts"
+  ],
+
+  "exclude": [
+    "dist",
+
+    // 🔥 legacy / pre-refactor files we are not using in the new secured gateway:
+    "src/plugins/auth.ts",
+    "src/routes/**",
+    "src/utils/orgScope.ts"
+  ]
 }
