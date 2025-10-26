@@ -1,4 +1,4 @@
-// shared/src/security/secret-manager.ts
+﻿// services/api-gateway/src/security/secret-manager.ts
 
 import assert from "node:assert/strict";
 
@@ -29,6 +29,7 @@ export function createSecretManager(): SecretManager {
       token,
       process.env.VAULT_NAMESPACE
     );
+    // NOTE: VAULT_NAMESPACE is optional
   }
 
   return new EnvSecretManager();
@@ -94,7 +95,7 @@ function extractVaultData(body: { data?: unknown }): unknown {
     return undefined;
   }
 
-  // Vault KV v2 returns { data: { data: {...}, metadata: {...} } }
+  // Vault KV v2 wraps secrets like { data: { data: {...}, metadata: {...} } }
   if (
     typeof body.data === "object" &&
     body.data !== null &&
