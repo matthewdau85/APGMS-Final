@@ -1,106 +1,86 @@
-name: apgms
+
 
 services:
   db:
     image: postgres:16
+    container_name: apgms-db
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: apgms
     ports:
-      - "5432:5432"        # host 5432 -> container 5432
+      - "5432:5432"
     volumes:
-      - dbdata:/var/lib/postgresql/data
+      # persistent PG data volume
+      - apgms-final_pgdata:/var/lib/postgresql/data
+      # bootstrap schema + seed on FIRST startup of a new volume
+      - ./db/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
     networks:
       - apgmsnet
 
   redis:
     image: redis:7
+    container_name: apgms-redis
+    restart: unless-stopped
     ports:
-      - "6379:6379"        # host 6379 -> container 6379
-    networks:
-      - apgmsnet
-
-  api-gateway:
-    build:
-      context: .
-      dockerfile: services/api-gateway/Dockerfile
-    env_file:
-      - .env
-    environment:
-      NODE_ENV: development
-      PORT: "3000"
-
-      # internal connectivity
-      DATABASE_URL: ${DATABASE_URL}
-      SHADOW_DATABASE_URL: ${SHADOW_DATABASE_URL}
-      REDIS_URL: ${REDIS_URL}
-      TAX_ENGINE_URL: ${TAX_ENGINE_URL}
-
-      # config.ts expectations
-      AUTH_AUDIENCE: ${AUTH_AUDIENCE}
-      AUTH_ISSUER: ${AUTH_ISSUER}
-      AUTH_JWKS: ${AUTH_JWKS}
-
-      PII_KEYS: ${PII_KEYS}
-      PII_ACTIVE_KEY: ${PII_ACTIVE_KEY}
-      PII_SALTS: ${PII_SALTS}
-      PII_ACTIVE_SALT: ${PII_ACTIVE_SALT}
-
-      PASSWORD_PEPPER: ${PASSWORD_PEPPER}
-      PASSWORD_MEM_KIB: ${PASSWORD_MEM_KIB}
-      PASSWORD_TIME_COST: ${PASSWORD_TIME_COST}
-      PASSWORD_PARALLELISM: ${PASSWORD_PARALLELISM}
-
-      AUTH_FAILURE_THRESHOLD: ${AUTH_FAILURE_THRESHOLD}
-
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
-
-      # rate limit names as read by loadConfig()
-      API_RATE_LIMIT_MAX: ${API_RATE_LIMIT_MAX}
-      API_RATE_LIMIT_WINDOW: ${API_RATE_LIMIT_WINDOW}
-
-      # prod-only gate is skipped in dev, but keep this to be explicit
-      KMS_KEYSET_LOADED: ${KMS_KEYSET_LOADED}
-    depends_on:
-      - db
-      - redis
-      - tax-engine
-    ports:
-      - "3000:3000"        # expose Fastify to host so curl works
+      - "6379:6379"
     networks:
       - apgmsnet
 
   tax-engine:
-    build:
-      context: .
-      dockerfile: services/tax-engine/Dockerfile
-    env_file:
-      - .env
-    environment:
-      TAX_ENGINE_PORT: "8000"
-    depends_on:
-      - db
-    ports:
-      - "8000:8000"        # host 8000 -> container 8000
+    image: apgms-tax-engine
+    container_name: apgms-tax-engine
+    restart: unless-stopped
     networks:
       - apgmsnet
 
-  webapp:
-    build:
-      context: .
-      dockerfile: apps/webapp/Dockerfile
-    env_file:
-      - .env
+  api-gateway:
+    image: apgms-final-api-gateway:latest
+    container_name: apgms-api-gateway
     depends_on:
-      - api-gateway
+      - db
+      - redis
+      - tax-engine
+    restart: unless-stopped
+    environment:
+      # --- DB URLs ---
+      DATABASE_URL: "postgresql://postgres:postgres@db:5432/apgms?schema=public"
+      SHADOW_DATABASE_URL: "postgresql://postgres:postgres@db:5432/apgms?schema=public"
+
+      # --- Auth / JWT placeholders ---
+      AUTH_AUDIENCE: "apgms-local"
+      AUTH_ISSUER: "http://auth.local.test"
+      AUTH_JWKS: >-
+        {"keys":[{"kid":"dev-key-1","alg":"RS256"}]}
+
+      # --- PII crypto material ---
+      PII_KEYS: >-
+        [{"kid":"dev-key-1","material":"GPHZGdDjE+r7X6S6zQA8KRU34GRXPeePjRGN8dkgk00="}]
+      PII_ACTIVE_KEY: "dev-key-1"
+
+      PII_SALTS: >-
+        [{"sid":"dev-salt-1","secret":"BN10EUaMmjdthpHf3WGjdHrBuXNL4TkzQNg0KALHEB4="}]
+      PII_ACTIVE_SALT: "dev-salt-1"
+
+      # --- rate limit / security knobs ---
+      API_RATE_LIMIT_MAX: "60"
+      API_RATE_LIMIT_WINDOW: "1 minute"
+      AUTH_FAILURE_THRESHOLD: "5"
+
+      # --- CORS ---
+      CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://localhost:3000"
+
+      # --- internal service wiring ---
+      TAX_ENGINE_URL: "http://tax-engine:8000"
+
     ports:
-      - "5173:5173"   # host 5173 -> container 5173 (Vite dev server)
+      - "3000:3000"
     networks:
       - apgmsnet
 
 volumes:
-  dbdata:
+  apgms-final_pgdata:
 
 networks:
   apgmsnet:
