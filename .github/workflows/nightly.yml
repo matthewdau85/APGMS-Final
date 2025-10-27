@@ -50,7 +50,7 @@ jobs:
         run: kill $(cat gateway.pid) || true
       - name: Upload compliance artefacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: compliance-nightly
           path: artifacts/compliance/nightly-*.md
