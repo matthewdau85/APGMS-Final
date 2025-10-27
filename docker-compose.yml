@@ -1,4 +1,4 @@
-
+version: "3.9"
 
 services:
   db:
@@ -12,10 +12,10 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      # persistent PG data volume
+      # persistent PG data on your machine
       - apgms-final_pgdata:/var/lib/postgresql/data
-      # bootstrap schema + seed on FIRST startup of a new volume
-      - ./db/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+      # bootstrap schema + seed admin user on first run
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
       - apgmsnet
 
@@ -48,13 +48,18 @@ services:
       DATABASE_URL: "postgresql://postgres:postgres@db:5432/apgms?schema=public"
       SHADOW_DATABASE_URL: "postgresql://postgres:postgres@db:5432/apgms?schema=public"
 
-      # --- Auth / JWT placeholders ---
+      # --- Auth / JWT config ---
       AUTH_AUDIENCE: "apgms-local"
       AUTH_ISSUER: "http://auth.local.test"
+
+      # symmetric signing secret for local HS256 JWTs
+      AUTH_DEV_SECRET: "local-dev-shared-secret-change-me"
+
+      # keep this to satisfy config.AUTH_JWKS parsing
       AUTH_JWKS: >-
         {"keys":[{"kid":"dev-key-1","alg":"RS256"}]}
 
-      # --- PII crypto material ---
+      # --- PII crypto material (matches what you've been using) ---
       PII_KEYS: >-
         [{"kid":"dev-key-1","material":"GPHZGdDjE+r7X6S6zQA8KRU34GRXPeePjRGN8dkgk00="}]
       PII_ACTIVE_KEY: "dev-key-1"
@@ -63,19 +68,33 @@ services:
         [{"sid":"dev-salt-1","secret":"BN10EUaMmjdthpHf3WGjdHrBuXNL4TkzQNg0KALHEB4="}]
       PII_ACTIVE_SALT: "dev-salt-1"
 
-      # --- rate limit / security knobs ---
+      # --- optional security knobs ---
       API_RATE_LIMIT_MAX: "60"
       API_RATE_LIMIT_WINDOW: "1 minute"
       AUTH_FAILURE_THRESHOLD: "5"
 
-      # --- CORS ---
+      # --- CORS allow list for browser app ---
       CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://localhost:3000"
 
       # --- internal service wiring ---
       TAX_ENGINE_URL: "http://tax-engine:8000"
-
     ports:
       - "3000:3000"
+    networks:
+      - apgmsnet
+
+  webapp:
+    build:
+      context: ./webapp
+      dockerfile: Dockerfile
+    container_name: apgms-webapp
+    environment:
+      # this is what api.ts in the React app uses
+      VITE_API_BASE_URL: "http://localhost:3000"
+    depends_on:
+      - api-gateway
+    ports:
+      - "5173:5173"
     networks:
       - apgmsnet
 
