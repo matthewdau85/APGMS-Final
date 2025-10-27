@@ -1,42 +1,35 @@
 {
   "compilerOptions": {
-    "target": "ES2023",
-    "lib": ["ES2023"],
-
-    // Important: make TS compile like real Node ESM
+    "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    "lib": ["ES2023"],
+    "rootDir": "src",
+    "outDir": "dist",
 
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
 
+    "sourceMap": true,
     "resolveJsonModule": true,
-    "types": ["node"],
-
-    "outDir": "dist",
-
-    // we'll keep your workspace aliasing so @apgms/shared still resolves
-    "baseUrl": "../../",
-    "paths": {
-      "@apgms/shared": ["shared/src/index.ts"],
-      "@apgms/shared/*": ["shared/src/*"],
-      "@apgms/shared-au/*": ["shared/au/*"]
-    }
+    "types": ["node"]
   },
 
   "include": [
-    "src/**/*.ts",
-    "src/schemas/**/*.ts",
-    "types/**/*.ts"
+    "src/app.ts",
+    "src/index.ts",
+    "src/config.ts",
+    "src/lib/**/*.ts",
+    "src/security/**/*.ts",
+    "src/types/**/*.d.ts"
   ],
 
   "exclude": [
-    "dist",
-
-    // 🔥 legacy / pre-refactor files we are not using in the new secured gateway:
-    "src/plugins/auth.ts",
-    "src/routes/**",
-    "src/utils/orgScope.ts"
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "node_modules",
+    "dist"
   ]
 }

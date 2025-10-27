@@ -1,74 +1,73 @@
 import { createApp } from "./app.js";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 let draining = false;
 
-async function main() {
-  // Build the Fastify instance + plugins + routes
-  const app = await createApp();
+async function main(): Promise<void> {
+  // build the Fastify app (this does Prisma, CORS, rate-limit, routes, etc)
+  const app: FastifyInstance = await createApp();
 
   //
-  // /ready: readiness + drain state + DB probe
+  // Add /ready here (we keep /health inside createApp)
   //
-  app.get("/ready", async (_req, reply) => {
-    if (draining) {
-      app.metrics?.recordSecurityEvent("readiness.draining");
-      return reply.code(503).send({ ready: false, draining: true });
-    }
-
-    try {
-      // dependency liveness (DB ping)
-      if (app.prisma) {
-        // lightweight "is DB alive?" query
-        await app.prisma.$queryRaw`SELECT 1`;
+  app.get(
+    "/ready",
+    async (_req: FastifyRequest, reply: FastifyReply) => {
+      if (draining) {
+        app.metrics?.recordSecurityEvent?.("readiness.draining");
+        return reply.code(503).send({ ready: false, draining: true });
       }
 
-      app.metrics?.recordSecurityEvent("readiness.ok");
-      return reply.code(200).send({ ready: true });
-    } catch (err) {
-      app.log.warn({ err }, "readiness check failed");
-      app.metrics?.recordSecurityEvent("readiness.fail");
-      return reply.code(503).send({ ready: false });
+      // basic DB probe so k8s/docker can tell if we're actually usable
+      try {
+        await (app as any).prisma?.$queryRaw`SELECT 1`;
+      } catch (err) {
+        app.log.error({ err }, "readiness_db_check_failed");
+        return reply.code(503).send({ ready: false, db: false });
+      }
+
+      return reply.send({ ready: true, draining: false, db: true });
     }
-  });
+  );
 
   //
-  // NOTE: /health is already defined inside createApp()
-  //   GET /health -> { ok: true, service: "api-gateway" }
+  // start server
   //
+  const port = Number(process.env.PORT ?? 3000);
+  const host = process.env.HOST ?? "0.0.0.0";
 
-  // pick up PORT from env, fallback -> 3000
-  const port = process.env.PORT ? Number(process.env.PORT) : 3000;
-
-  // CRUCIAL: bind to 0.0.0.0, not 127.0.0.1
-  // Otherwise Docker can’t publish the port to Windows host
-  await app.listen({ port, host: "0.0.0.0" });
-
-  app.log.info(`api-gateway listening on :${port}`);
+  try {
+    await app.listen({ port, host });
+    app.log.info({ port, host }, "listening");
+  } catch (err) {
+    app.log.error({ err }, "fatal_boot_error");
+    process.exit(1);
+  }
 
   //
-  // graceful shutdown / drain
+  // graceful shutdown
   //
-  const shutdown = async () => {
-    if (draining) return;
+  async function shutdown(signal: string) {
+    if (draining) {
+      // already in progress
+      return;
+    }
+
     draining = true;
-    app.log.info("draining_start");
-    try {
-      // Fastify will stop accepting new reqs and finish in-flight ones
-      await app.close();
-      app.log.info("draining_complete");
-      process.exit(0);
-    } catch (err) {
-      app.log.error({ err }, "draining_failed");
-      process.exit(1);
-    }
-  };
+    app.log.warn({ signal }, "received_shutdown_signal");
 
-  process.on("SIGTERM", shutdown);
-  process.on("SIGINT", shutdown);
+    try {
+      await app.close();
+      app.log.info("fastify_closed");
+    } catch (err) {
+      app.log.error({ err }, "shutdown_error");
+    } finally {
+      process.exit(0);
+    }
+  }
+
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+  process.on("SIGINT", () => void shutdown("SIGINT"));
 }
 
-main().catch((err) => {
-  // eslint-disable-next-line no-console
-  console.error("fatal_boot_error", err);
-  process.exit(1);
-});
+void main();
