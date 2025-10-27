@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx src/server.ts",
-    "start": "node dist/server.js",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/src/index.js",
     "build": "tsc -p tsconfig.json",
     "test": "tsx --test test/run.ts",
     "typecheck": "tsc --noEmit"

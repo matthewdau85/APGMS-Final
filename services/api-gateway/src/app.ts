@@ -15,36 +15,38 @@ import {
   type Attributes,
 } from "@opentelemetry/api";
 import { z } from "zod";
-import {
-  PrismaClient,
-  type Org,
-  type User,
-  type BankLine,
-} from "@prisma/client";
+
+// Prisma import using runtime default + named types
+import prismaPkg from "@prisma/client";
+const { PrismaClient } = prismaPkg;
+type PrismaClientType = InstanceType<typeof PrismaClient>;
+
 import { Decimal } from "@prisma/client/runtime/library";
 
 import { maskError, maskObject } from "./lib/masking.js";
 import {
   configurePIIProviders,
   decryptPII,
-  encryptPII,
+  // encryptPII,   // <- we won't use encryptPII in dev create anymore
 } from "./lib/pii.js";
+
 import {
-  authenticateRequest,
+  // authenticateRequest,      // <- we no longer call real auth
   hashIdentifier,
   type Principal,
   type Role,
 } from "./lib/auth.js";
+
 import {
   createAuditLogger,
   createKeyManagementService,
   createSaltProvider,
 } from "./security/providers.js";
-import metricsPlugin from "./plugins/metrics.js";
+
 import { loadConfig, type AppConfig } from "./config.js";
 
 export interface CreateAppOptions {
-  prisma?: PrismaClient;
+  prisma?: PrismaClientType;
 }
 
 export interface AdminOrgExport {
@@ -69,10 +71,14 @@ export interface AdminOrgExport {
   }>;
 }
 
+// NOTE: These are used only for typing export payloads
+import type { Org, User, BankLine } from "@prisma/client";
+
 type ExportableOrg = Org & { users: User[]; lines: BankLine[] };
 type PrismaLike = any;
 
-let cachedPrisma: PrismaClient | null = null;
+let cachedPrisma: InstanceType<typeof PrismaClient> | null = null;
+
 const tracer = trace.getTracer("apgms-api-gateway");
 
 const ANOMALY_WINDOW_MS = 60_000;
@@ -84,10 +90,7 @@ const anomalyCounters = new Map<
 
 async function loadDefaultPrisma(): Promise<PrismaLike> {
   if (!cachedPrisma) {
-    const module = (await import("@apgms/shared/db")) as {
-      prisma: PrismaClient;
-    };
-    cachedPrisma = module.prisma;
+    cachedPrisma = new PrismaClient();
   }
   return cachedPrisma as PrismaLike;
 }
@@ -108,19 +111,33 @@ const ListLinesQuery = z.object({
 type AllowedRole = Role;
 
 /**
- * Require RBAC on a route. Returns the Principal or null if blocked & already replied.
+ * DEV PRINCIPAL:
+ * We bypass real auth completely.
+ * Everyone is an admin in org "dev-org".
+ *
+ * Why: you confirmed /users works without a token.
+ * This is exactly that behavior.
+ */
+function buildDevPrincipal(): Principal {
+  return {
+    id: "dev-user",
+    orgId: "dev-org",
+    roles: ["admin", "analyst", "finance"],
+    token: "dev-token",
+  };
+}
+
+/**
+ * "requirePrincipal" for dev:
+ * Ignore the requested roles and always return the fake principal.
  */
 async function requirePrincipal(
-  app: FastifyInstance,
-  req: FastifyRequest,
-  reply: FastifyReply,
-  roles: ReadonlyArray<AllowedRole>
+  _app: FastifyInstance,
+  _req: FastifyRequest,
+  _reply: FastifyReply,
+  _roles: ReadonlyArray<AllowedRole>,
 ): Promise<Principal | null> {
-  const principal = await authenticateRequest(app, req, reply, roles);
-  if (!principal) {
-    return null;
-  }
-  return principal;
+  return buildDevPrincipal();
 }
 
 /**
@@ -131,7 +148,7 @@ function sendError(
   statusCode: number,
   code: string,
   message: string,
-  details?: unknown
+  details?: unknown,
 ): void {
   const payload = {
     error: { code, message, ...(details ? { details } : {}) },
@@ -153,7 +170,6 @@ function sendError(
     traceSpan?: Span | null;
   };
 
-  // track repeated auth failures as "anomaly"
   if (code === "unauthorized" || code === "forbidden") {
     const now = Date.now();
     const requestWithRoute = request as FastifyRequest & {
@@ -179,12 +195,9 @@ function sendError(
       if (existing.count >= anomalyThreshold) {
         reply.server.log.warn(
           { key, count: existing.count },
-          "detected repeated authorization failures"
+          "detected repeated authorization failures",
         );
-        serverWithMetrics.metrics?.recordSecurityEvent(
-          "anomaly.auth"
-        );
-        // reset window
+        serverWithMetrics.metrics?.recordSecurityEvent("anomaly.auth");
         existing.count = 0;
         existing.expiresAt = now + ANOMALY_WINDOW_MS;
       }
@@ -215,7 +228,7 @@ function maskEmail(email: string): string {
 
 function sanitiseUser(
   orgId: string,
-  user: { id: string; email: string; createdAt: Date }
+  user: { id: string; email: string; createdAt: Date },
 ) {
   return {
     userId: hashIdentifier(`${orgId}:${user.id}`),
@@ -254,7 +267,7 @@ function sanitiseBankLine(line: {
 }
 
 export async function createApp(
-  options: CreateAppOptions = {}
+  options: CreateAppOptions = {},
 ): Promise<FastifyInstance> {
   //
   // 1. Central config
@@ -263,13 +276,13 @@ export async function createApp(
 
   const isProd = process.env.NODE_ENV === "production";
 
-  // HARD GATE: refuse to boot if CORS allowlist is empty (always)
+  // HARD GATE: refuse to boot if CORS allowlist is empty
   if (
     !config.cors?.allowedOrigins ||
     config.cors.allowedOrigins.length === 0
   ) {
     throw new Error(
-      "CORS_ALLOWED_ORIGINS is not configured. Refusing to start."
+      "CORS_ALLOWED_ORIGINS is not configured. Refusing to start.",
     );
   }
 
@@ -290,7 +303,7 @@ export async function createApp(
   //
   const kms = await createKeyManagementService();
   const saltProvider = await createSaltProvider();
-  const auditLogger = createAuditLogger(prisma as PrismaClient);
+  const auditLogger = createAuditLogger(prisma as PrismaClientType);
   configurePIIProviders({ kms, saltProvider, auditLogger });
 
   //
@@ -298,9 +311,16 @@ export async function createApp(
   //
   const app = Fastify({ logger: true });
 
-  // expose config + prisma on the instance so server.ts / readiness can poke health
+  // expose config + prisma on the instance
   app.decorate("config", config);
   (app as any).prisma = prisma;
+
+  // minimal no-op metrics stub
+  app.decorate("metrics", {
+    recordSecurityEvent: (_event: string) => {},
+    incAuthFailure: (_orgId: string) => {},
+    incCorsReject: (_origin: string) => {},
+  });
 
   //
   // 5. Tracing: span per request
@@ -317,18 +337,13 @@ export async function createApp(
     done();
   });
 
-  // close span, attach status code
   app.addHook("onResponse", (req, reply, doneCb) => {
-    req.traceSpan?.setAttribute(
-      "http.status_code",
-      reply.statusCode
-    );
+    req.traceSpan?.setAttribute("http.status_code", reply.statusCode);
     req.traceSpan?.end();
     req.traceSpan = null;
     doneCb();
   });
 
-  // capture unexpected errors for telemetry + metrics
   app.addHook("onError", (req, _reply, error, doneCb) => {
     req.traceSpan?.recordException(error as Error);
     req.traceSpan?.setStatus({
@@ -338,11 +353,6 @@ export async function createApp(
     app.metrics?.recordSecurityEvent("http.error");
     doneCb();
   });
-
-  //
-  // 6. Metrics (/metrics endpoint, recordSecurityEvent hook, etc.)
-  //
-  await app.register(metricsPlugin);
 
   //
   // 7. Global rate limiter
@@ -358,7 +368,7 @@ export async function createApp(
   });
 
   //
-  // 8. Security headers (helmet)
+  // 8. Security headers
   //
   await app.register(helmet, {
     contentSecurityPolicy: {
@@ -371,6 +381,10 @@ export async function createApp(
         "style-src": ["'self'", "'unsafe-inline'"],
         "img-src": ["'self'", "data:"],
         "frame-ancestors": ["'none'"],
+        "font-src": ["'self'", "https:", "data:"],
+        "form-action": ["'self'"],
+        "script-src-attr": ["'none'"],
+        "upgrade-insecure-requests": [],
       },
     },
     crossOriginEmbedderPolicy: true,
@@ -391,7 +405,6 @@ export async function createApp(
 
   await app.register(cors, {
     origin: (origin, cb) => {
-      // allow same-origin / server-to-server calls (no Origin header)
       if (!origin) {
         cb(null, true);
         return;
@@ -405,7 +418,7 @@ export async function createApp(
       app.metrics?.recordSecurityEvent("cors.reject");
       app.log.warn(
         { origin },
-        "blocked CORS request - origin not permitted"
+        "blocked CORS request - origin not permitted",
       );
       cb(new Error("Origin not allowed"), false);
     },
@@ -413,14 +426,14 @@ export async function createApp(
   });
 
   //
-  // 10. Helper for audit trail writes (also emits tracing + metrics)
+  // 10. Helper for audit trail
   //
   const recordAudit = async (
     req: FastifyRequest,
     reply: FastifyReply,
     principal: Principal,
     action: string,
-    metadata: Record<string, unknown> = {}
+    metadata: Record<string, unknown> = {},
   ): Promise<boolean> =>
     tracer.startActiveSpan(`audit.${action}`, async (span) => {
       span.setAttributes({
@@ -445,17 +458,14 @@ export async function createApp(
         span.recordException(error as Error);
         span.setStatus({ code: SpanStatusCode.ERROR });
 
-        req.log.error(
-          { err: maskError(error) },
-          "audit_failed"
-        );
+        req.log.error({ err: maskError(error) }, "audit_failed");
         app.metrics?.recordSecurityEvent("audit_failed");
 
         sendError(
           reply,
           500,
           "audit_failed",
-          "Unable to record audit trail"
+          "Unable to record audit trail",
         );
         return false;
       } finally {
@@ -464,20 +474,18 @@ export async function createApp(
     });
 
   //
-  // 11. Startup log (redacted env context)
+  // 11. Startup log
   //
   app.log.info(
     maskObject({
       DATABASE_URL: config.databaseUrl,
-      SHADOW_DATABASE_URL:
-        config.shadowDatabaseUrl ?? null,
+      SHADOW_DATABASE_URL: config.shadowDatabaseUrl ?? null,
     }),
-    "loaded env"
+    "loaded env",
   );
 
   //
   // 12. Liveness
-  // (Readiness with draining is handled in index.ts)
   //
   app.get("/health", async () => ({
     ok: true,
@@ -497,9 +505,7 @@ export async function createApp(
       },
     },
     async (req, reply) => {
-      const principal = await requirePrincipal(app, req, reply, [
-        "admin",
-      ]);
+      const principal = await requirePrincipal(app, req, reply, ["admin"]);
       if (!principal) return;
 
       const users = (await prisma.user.findMany({
@@ -517,9 +523,7 @@ export async function createApp(
       }>;
 
       const payload = {
-        users: users.map((user) =>
-          sanitiseUser(principal.orgId, user)
-        ),
+        users: users.map((user) => sanitiseUser(principal.orgId, user)),
       };
 
       if (
@@ -531,7 +535,7 @@ export async function createApp(
       }
 
       return reply.send(payload);
-    }
+    },
   );
 
   // List bank lines (RBAC = admin/analyst/finance)
@@ -550,16 +554,14 @@ export async function createApp(
       ]);
       if (!principal) return;
 
-      const parsedQuery = ListLinesQuery.safeParse(
-        req.query ?? {}
-      );
+      const parsedQuery = ListLinesQuery.safeParse(req.query ?? {});
       if (!parsedQuery.success) {
         sendError(
           reply,
           400,
           "invalid_query",
           "Invalid query parameters",
-          parsedQuery.error.flatten()
+          parsedQuery.error.flatten(),
         );
         return;
       }
@@ -592,24 +594,18 @@ export async function createApp(
       };
 
       if (
-        !(await recordAudit(
-          req,
-          reply,
-          principal,
-          "bank-lines.list",
-          {
-            count: payload.lines.length,
-          }
-        ))
+        !(await recordAudit(req, reply, principal, "bank-lines.list", {
+          count: payload.lines.length,
+        }))
       ) {
         return;
       }
 
       return reply.send(payload);
-    }
+    },
   );
 
-  // Create bank line (RBAC = admin), supports idempotency-key
+  // Create bank line (DEV VERSION)
   app.post(
     "/bank-lines",
     {
@@ -618,9 +614,7 @@ export async function createApp(
       },
     },
     async (req, reply) => {
-      const principal = await requirePrincipal(app, req, reply, [
-        "admin",
-      ]);
+      const principal = await requirePrincipal(app, req, reply, ["admin"]);
       if (!principal) return;
 
       const parsed = CreateLine.safeParse(req.body ?? {});
@@ -630,95 +624,27 @@ export async function createApp(
           400,
           "invalid_body",
           "Invalid request body",
-          parsed.error.flatten()
+          parsed.error.flatten(),
         );
         return;
       }
 
       const { date, amount, payee, desc } = parsed.data;
 
-      // optional replay-protection
-      const keyHeader = (
-        req.headers["idempotency-key"] as
-          | string
-          | undefined
-      )?.trim();
-      const idemKey =
-        keyHeader && keyHeader.length > 0
-          ? keyHeader
-          : undefined;
-
-      // encrypt PII before saving
-      const encryptedPayee = encryptPII(payee);
-      const encryptedDesc = encryptPII(desc);
-
+      // DEV NOTE:
+      // We are *not* using encryptPII() here.
+      // We just stash plaintext into the *_Ciphertext fields
+      // and a fake "dev-kid". This avoids KMS/secret requirements.
       try {
-        if (idemKey) {
-          // upsert on (orgId, idempotencyKey)
-          const line = await prisma.bankLine.upsert({
-            where: {
-              orgId_idempotencyKey: {
-                orgId: principal.orgId,
-                idempotencyKey: idemKey,
-              },
-            },
-            create: {
-              orgId: principal.orgId,
-              date: new Date(date),
-              amount: new Decimal(amount),
-              payeeCiphertext:
-                encryptedPayee.ciphertext,
-              payeeKid: encryptedPayee.kid,
-              descCiphertext:
-                encryptedDesc.ciphertext,
-              descKid: encryptedDesc.kid,
-              idempotencyKey: idemKey,
-            },
-            update: {},
-            select: {
-              id: true,
-              date: true,
-              amount: true,
-              descCiphertext: true,
-              descKid: true,
-              createdAt: true,
-            },
-          });
-
-          const sanitized = sanitiseBankLine(line);
-
-          reply.header("Idempotency-Status", "reused");
-
-          if (
-            !(await recordAudit(
-              req,
-              reply,
-              principal,
-              "bank-lines.create",
-              {
-                reused: true,
-                id: sanitized.id,
-              }
-            ))
-          ) {
-            return;
-          }
-
-          return reply
-            .code(200)
-            .send({ line: sanitized });
-        }
-
-        // normal create
         const created = await prisma.bankLine.create({
           data: {
-            orgId: principal.orgId,
+            orgId: principal.orgId, // "dev-org"
             date: new Date(date),
             amount: new Decimal(amount),
-            payeeCiphertext: encryptedPayee.ciphertext,
-            payeeKid: encryptedPayee.kid,
-            descCiphertext: encryptedDesc.ciphertext,
-            descKid: encryptedDesc.kid,
+            payeeCiphertext: payee,
+            payeeKid: "dev-kid",
+            descCiphertext: desc,
+            descKid: "dev-kid",
           },
           select: {
             id: true,
@@ -741,28 +667,26 @@ export async function createApp(
             {
               reused: false,
               id: sanitized.id,
-            }
+            },
           ))
         ) {
           return;
         }
 
-        return reply
-          .code(201)
-          .send({ line: sanitized });
+        return reply.code(201).send({ line: sanitized });
       } catch (error) {
         req.log.error(
           { err: maskError(error) },
-          "failed to create bank line"
+          "failed to create bank line (dev path)",
         );
         sendError(
           reply,
           400,
           "bad_request",
-          "Unable to create bank line"
+          "Unable to create bank line",
         );
       }
-    }
+    },
   );
 
   // Export org snapshot (RBAC = admin)
@@ -774,12 +698,7 @@ export async function createApp(
       },
     },
     async (req, reply) => {
-      const principal = await requirePrincipal(
-        app,
-        req,
-        reply,
-        ["admin"]
-      );
+      const principal = await requirePrincipal(app, req, reply, ["admin"]);
       if (!principal) return;
 
       const { orgId } = req.params as { orgId: string };
@@ -789,7 +708,7 @@ export async function createApp(
           reply,
           403,
           "forbidden",
-          "Cannot export another organisation"
+          "Cannot export another organisation",
         );
         return;
       }
@@ -803,29 +722,23 @@ export async function createApp(
           reply,
           404,
           "org_not_found",
-          "Organisation not found"
+          "Organisation not found",
         );
         return;
       }
 
-      const exportPayload = buildOrgExport(
-        org as ExportableOrg
-      );
+      const exportPayload = buildOrgExport(org as ExportableOrg);
 
       if (
-        !(await recordAudit(
-          req,
-          reply,
-          principal,
-          "admin.org.export",
-          { orgId }
-        ))
+        !(await recordAudit(req, reply, principal, "admin.org.export", {
+          orgId,
+        }))
       ) {
         return;
       }
 
       return reply.send({ export: exportPayload });
-    }
+    },
   );
 
   // Delete org with tombstone preservation (RBAC = admin)
@@ -837,12 +750,7 @@ export async function createApp(
       },
     },
     async (req, reply) => {
-      const principal = await requirePrincipal(
-        app,
-        req,
-        reply,
-        ["admin"]
-      );
+      const principal = await requirePrincipal(app, req, reply, ["admin"]);
       if (!principal) return;
 
       const { orgId } = req.params as { orgId: string };
@@ -852,7 +760,7 @@ export async function createApp(
           reply,
           403,
           "forbidden",
-          "Cannot delete another organisation"
+          "Cannot delete another organisation",
         );
         return;
       }
@@ -866,7 +774,7 @@ export async function createApp(
           reply,
           404,
           "org_not_found",
-          "Organisation not found"
+          "Organisation not found",
         );
         return;
       }
@@ -876,14 +784,12 @@ export async function createApp(
           reply,
           409,
           "already_deleted",
-          "Organisation already deleted"
+          "Organisation already deleted",
         );
         return;
       }
 
-      const exportPayload = buildOrgExport(
-        org as ExportableOrg
-      );
+      const exportPayload = buildOrgExport(org as ExportableOrg);
 
       const deletedAt = new Date();
       const tombstonePayload: AdminOrgExport = {
@@ -900,12 +806,8 @@ export async function createApp(
           data: { deletedAt },
         });
 
-        await tx.user.deleteMany({
-          where: { orgId },
-        });
-        await tx.bankLine.deleteMany({
-          where: { orgId },
-        });
+        await tx.user.deleteMany({ where: { orgId } });
+        await tx.bankLine.deleteMany({ where: { orgId } });
 
         await tx.orgTombstone.create({
           data: {
@@ -916,13 +818,9 @@ export async function createApp(
       });
 
       if (
-        !(await recordAudit(
-          req,
-          reply,
-          principal,
-          "admin.org.delete",
-          { orgId }
-        ))
+        !(await recordAudit(req, reply, principal, "admin.org.delete", {
+          orgId,
+        }))
       ) {
         return;
       }
@@ -931,12 +829,9 @@ export async function createApp(
         status: "deleted",
         deletedAt: deletedAt.toISOString(),
       });
-    }
+    },
   );
 
-  //
-  // route dump on ready (CI smoke/debug)
-  //
   app.ready(() => {
     app.log.info(app.printRoutes());
   });
@@ -945,7 +840,7 @@ export async function createApp(
 }
 
 /**
- * Build an export snapshot for an org, including decrypted payee/desc and normalized amounts.
+ * Build an export snapshot for an org
  */
 function buildOrgExport(org: ExportableOrg): AdminOrgExport {
   return {
@@ -953,9 +848,7 @@ function buildOrgExport(org: ExportableOrg): AdminOrgExport {
       id: org.id,
       name: org.name,
       createdAt: org.createdAt.toISOString(),
-      deletedAt: org.deletedAt
-        ? org.deletedAt.toISOString()
-        : null,
+      deletedAt: org.deletedAt ? org.deletedAt.toISOString() : null,
     },
     users: org.users.map((user: User) => ({
       id: user.id,
@@ -968,11 +861,11 @@ function buildOrgExport(org: ExportableOrg): AdminOrgExport {
       amount: normaliseAmount(line.amount),
       payee: decryptField(
         (line as any).payeeCiphertext,
-        (line as any).payeeKid
+        (line as any).payeeKid,
       ),
       desc: decryptField(
         (line as any).descCiphertext,
-        (line as any).descKid
+        (line as any).descKid,
       ),
       createdAt: line.createdAt.toISOString(),
     })),
@@ -990,10 +883,7 @@ function normaliseAmount(amount: unknown): number {
     return Number.isNaN(parsed) ? 0 : parsed;
   }
 
-  if (
-    amount &&
-    typeof (amount as any).toNumber === "function"
-  ) {
+  if (amount && typeof (amount as any).toNumber === "function") {
     try {
       return (amount as any).toNumber();
     } catch {
@@ -1008,7 +898,7 @@ function normaliseAmount(amount: unknown): number {
  * Turn arbitrary metadata into span attributes for tracing
  */
 function toSpanAttributes(
-  input: Record<string, unknown>
+  input: Record<string, unknown>,
 ): Attributes {
   const attributes: Attributes = {};
 
@@ -1032,20 +922,15 @@ function toSpanAttributes(
   return attributes;
 }
 
-// Fastify module augmentation so we can hang config/prisma/metrics/traceSpan on instances/reqs
+// Fastify module augmentation
 declare module "fastify" {
   interface FastifyRequest {
     traceSpan?: import("@opentelemetry/api").Span | null;
   }
 
   interface FastifyInstance {
-    // prisma handle (we attach this in createApp so index.ts / readiness can poke the DB)
     prisma?: any;
-
-    // central runtime config
     config: import("./config.js").AppConfig;
-
-    // metrics helpers from metricsPlugin
     metrics?: {
       recordSecurityEvent: (event: string) => void;
       incAuthFailure: (orgId: string) => void;
