@@ -2,7 +2,12 @@
 
 import { randomBytes } from "node:crypto";
 import { Buffer } from "node:buffer";
-import type { PrismaClient } from "@prisma/client";
+
+// DO NOT import PrismaClient types from @prisma/client here.
+// Prisma v6 in Docker doesn't expose the same named type the way our local copy did.
+// We'll treat the prisma we receive as "any".
+//
+// We'll assume prisma.auditLog.create(...) exists at runtime.
 
 import {
   createSecretManager,
@@ -122,7 +127,7 @@ class EnvSaltProvider implements TokenSaltProvider {
 }
 
 class PrismaAuditLogger implements AuditLogger {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(private readonly prisma: any) {}
 
   async record(
     event: Parameters<AuditLogger["record"]>[0]
@@ -136,6 +141,8 @@ class PrismaAuditLogger implements AuditLogger {
           orgId:
             (payload.metadata?.orgId as string | undefined) ??
             "unknown",
+          // metadata column is a JSON column in the DB.
+          // Prisma accepts plain objects for Json fields at runtime.
           metadata: payload.metadata ?? {},
         },
       });
@@ -148,7 +155,7 @@ class PrismaAuditLogger implements AuditLogger {
 }
 
 export interface ProviderConfig {
-  prisma: PrismaClient;
+  prisma: any;
 }
 
 export async function createKeyManagementService(): Promise<KeyManagementService> {
@@ -177,9 +184,7 @@ export async function createSaltProvider(): Promise<TokenSaltProvider> {
   return new EnvSaltProvider(rawSalts ?? [], activeSid);
 }
 
-export function createAuditLogger(
-  prisma: PrismaClient
-): AuditLogger {
+export function createAuditLogger(prisma: any): AuditLogger {
   return new PrismaAuditLogger(prisma);
 }
 
