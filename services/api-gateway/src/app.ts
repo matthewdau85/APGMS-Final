@@ -1,13 +1,14 @@
-// services/api-gateway/src/app.ts
 import Fastify, { FastifyInstance } from "fastify";
+import cors from "@fastify/cors";
 import { PrismaClient } from "@prisma/client";
-import { config } from "./config";
-import { authGuard } from "./auth";
-import { registerAuthRoutes } from "./routes/auth";
+import crypto from "node:crypto";
 
-// NOTE: you probably already had similar startup code that did waiting-for-Postgres,
-// rate limits, CORS, etc. Keep that if you have it.
-// Below is a minimal working shape.
+// NOTE: make sure config.ts exports what we discussed earlier,
+// including cors.allowedOrigins: string[]
+import { config } from "./config.js";
+
+import { authGuard } from "./auth.js";
+import { registerAuthRoutes } from "./routes/auth.js";
 
 const prisma = new PrismaClient();
 
@@ -16,17 +17,40 @@ export async function buildServer(): Promise<FastifyInstance> {
     logger: true,
   });
 
-  // health is public
+  // --- CORS REGISTRATION ---
+  // Allow frontend at http://localhost:5173 to call us at http://localhost:3000
+  await app.register(cors, {
+    origin: (origin, cb) => {
+      // Browser will pass origin like "http://localhost:5173"
+      // Non-browser clients (curl, PowerShell) might send no origin.
+      if (!origin) {
+        // allow same-network tools like curl / Invoke-WebRequest
+        return cb(null, true);
+      }
+
+      const allowed = config.cors.allowedOrigins;
+      if (allowed.includes(origin)) {
+        return cb(null, true);
+      }
+
+      // not allowed
+      cb(new Error("CORS not allowed"), false);
+    },
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  });
+
+  // simple public healthcheck
   app.get("/health", async () => {
     return { ok: true, service: "api-gateway" };
   });
 
-  // auth/login (public)
+  // /auth/login (public)
   await registerAuthRoutes(app);
 
-  // protect everything below this line ---------------------------------
+  // ---- Everything below this point requires auth ----
 
-  // list users for current org (masked email etc.)
+  // GET /users
   app.get(
     "/users",
     { preHandler: authGuard },
@@ -34,7 +58,6 @@ export async function buildServer(): Promise<FastifyInstance> {
       const userClaims: any = (request as any).user;
       const orgId = userClaims.orgId;
 
-      // get users in same org
       const users = await prisma.user.findMany({
         where: { orgId },
         select: {
@@ -44,19 +67,17 @@ export async function buildServer(): Promise<FastifyInstance> {
         },
       });
 
-      // light masking of email for demo: "de*@example.com"
       const masked = users.map((u) => {
         const [local, domain] = u.email.split("@");
         const safeLocal =
           local.length <= 2 ? local[0] + "*" : local.slice(0, 2) + "*";
         return {
-          userId: u.id.slice(0, 16), // short id for UI
+          userId: u.id,
           email: `${safeLocal}@${domain}`,
           createdAt: u.createdAt,
         };
       });
 
-      // audit log insert (best effort)
       try {
         await prisma.auditLog.create({
           data: {
@@ -66,15 +87,13 @@ export async function buildServer(): Promise<FastifyInstance> {
             metadata: {},
           },
         });
-      } catch (e) {
-        // swallow errors to not break prod
-      }
+      } catch (_) {}
 
       reply.send({ users: masked });
     }
   );
 
-  // GET /bank-lines (list lines for your org)
+  // GET /bank-lines
   app.get(
     "/bank-lines",
     { preHandler: authGuard },
@@ -94,19 +113,14 @@ export async function buildServer(): Promise<FastifyInstance> {
         },
       });
 
-      // what we return to client:
-      // - "postedAt" (date)
-      // - "amount"
-      // - "description" masked (***)
       const shaped = lines.map((ln) => ({
-        id: ln.id.slice(0, 16),
+        id: ln.id,
         postedAt: ln.date,
         amount: Number(ln.amount),
-        description: "***", // redacted PII
+        description: "***",
         createdAt: ln.createdAt,
       }));
 
-      // audit
       try {
         await prisma.auditLog.create({
           data: {
@@ -122,7 +136,7 @@ export async function buildServer(): Promise<FastifyInstance> {
     }
   );
 
-  // POST /bank-lines (add one)
+  // POST /bank-lines
   app.post(
     "/bank-lines",
     { preHandler: authGuard },
@@ -130,7 +144,6 @@ export async function buildServer(): Promise<FastifyInstance> {
       const userClaims: any = (request as any).user;
       const orgId = userClaims.orgId;
 
-      // validate body
       const body = request.body as {
         date?: string;
         amount?: string;
@@ -153,11 +166,14 @@ export async function buildServer(): Promise<FastifyInstance> {
         return;
       }
 
-      // In real code you'd encrypt payee/desc using PII_KEYS.
-      // For now we store them as ciphertext="***" with kid="dev".
+      const cryptoSafeId = crypto
+        .randomUUID()
+        .replace(/-/g, "")
+        .slice(0, 16);
+
       const newLine = await prisma.bankLine.create({
         data: {
-          id: crypto.randomUUID().replace(/-/g, "").slice(0, 16),
+          id: cryptoSafeId,
           orgId,
           date: new Date(body.date),
           amount: body.amount,
@@ -169,7 +185,6 @@ export async function buildServer(): Promise<FastifyInstance> {
         },
       });
 
-      // audit
       try {
         await prisma.auditLog.create({
           data: {
@@ -193,7 +208,7 @@ export async function buildServer(): Promise<FastifyInstance> {
     }
   );
 
-  // admin export
+  // GET /admin/export/:orgId
   app.get(
     "/admin/export/:orgId",
     { preHandler: authGuard },
@@ -201,7 +216,6 @@ export async function buildServer(): Promise<FastifyInstance> {
       const userClaims: any = (request as any).user;
       const { orgId } = request.params as { orgId: string };
 
-      // simple authz check: must match your own org
       if (orgId !== userClaims.orgId) {
         reply.code(403).send({
           error: { code: "forbidden", message: "Cross-org export denied" },
@@ -234,7 +248,6 @@ export async function buildServer(): Promise<FastifyInstance> {
         },
       });
 
-      // audit
       try {
         await prisma.auditLog.create({
           data: {
@@ -258,8 +271,8 @@ export async function buildServer(): Promise<FastifyInstance> {
             id: b.id,
             date: b.date,
             amount: Number(b.amount),
-            payee: b.payeeCiphertext, // still masked/enc
-            desc: b.descCiphertext,   // still masked/enc
+            payee: b.payeeCiphertext,
+            desc: b.descCiphertext,
             createdAt: b.createdAt,
           })),
         },
@@ -268,13 +281,4 @@ export async function buildServer(): Promise<FastifyInstance> {
   );
 
   return app;
-}
-
-// If you start server directly from node dist/index.js or similar:
-if (require.main === module) {
-  (async () => {
-    const app = await buildServer();
-    await app.listen({ port: 3000, host: "0.0.0.0" });
-    app.log.info("api-gateway listening on 3000");
-  })();
 }
