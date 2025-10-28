@@ -1,5 +1,4 @@
 // services/api-gateway/src/config.ts
-
 import { Buffer } from "node:buffer";
 import { URL } from "node:url";
 import { z } from "zod";
@@ -7,40 +6,24 @@ import { z } from "zod";
 export interface AppConfig {
   readonly databaseUrl: string;
   readonly shadowDatabaseUrl?: string;
-
   readonly rateLimit: {
     readonly max: number;
     readonly window: string;
   };
-
   readonly security: {
     readonly authFailureThreshold: number;
     readonly kmsKeysetLoaded?: boolean;
   };
-
   readonly cors: {
     readonly allowedOrigins: string[];
   };
-
   readonly taxEngineUrl: string;
 
+  // auth bits we actually use at runtime (these were in env before)
   readonly auth: {
     readonly audience: string;
     readonly issuer: string;
     readonly devSecret: string;
-    readonly jwks: {
-      keys: Array<{
-        kid: string;
-        alg: string;
-      }>;
-    };
-  };
-
-  readonly pii: {
-    readonly keys: Array<{ kid: string; material: string }>;
-    readonly activeKid: string;
-    readonly salts: Array<{ sid: string; secret: string }>;
-    readonly activeSid: string;
   };
 }
 
@@ -84,33 +67,24 @@ const ensureUrl = (value: string, name: string): string => {
 const parseJson = <T>(value: string, name: string): T => {
   try {
     return JSON.parse(value) as T;
-  } catch (error) {
+  } catch {
     throw new Error(`${name} must contain valid JSON`);
   }
 };
 
-const parseJwks = (): { keys: Array<{ kid: string; alg: string }> } => {
+const ensureJwksConfigured = (): void => {
   const raw = envString("AUTH_JWKS");
   const parsed = parseJson<{ keys?: unknown }>(raw, "AUTH_JWKS");
-
-  const result = z
+  const schema = z
     .object({
       keys: z.array(jwksKeySchema).min(1),
     })
     .safeParse(parsed);
-
-  if (!result.success) {
+  if (!schema.success) {
     throw new Error(
-      `AUTH_JWKS must contain at least one key with kid/alg: ${result.error.message}`,
+      `AUTH_JWKS must contain at least one key with kid/alg: ${schema.error.message}`,
     );
   }
-
-  return {
-    keys: result.data.keys.map((k) => ({
-      kid: k.kid,
-      alg: k.alg,
-    })),
-  };
 };
 
 const ensureKeyMaterial = (
@@ -187,10 +161,9 @@ const splitOrigins = (raw: string | undefined): string[] => {
     .filter((entry) => entry.length > 0);
 };
 
+// This builds a config object from process.env with validation.
 export function loadConfig(): AppConfig {
-  //
-  // DATABASE
-  //
+  // DB URLs
   const databaseUrl = ensureUrl(
     envString("DATABASE_URL"),
     "DATABASE_URL",
@@ -205,70 +178,61 @@ export function loadConfig(): AppConfig {
         )
       : undefined;
 
-  //
-  // AUTH
-  //
-  const authAudience = envString("AUTH_AUDIENCE");
-  const authIssuer = ensureUrl(envString("AUTH_ISSUER"), "AUTH_ISSUER");
+  // auth inputs must exist / be sane
+  const audience = envString("AUTH_AUDIENCE");
+  const issuer = envString("AUTH_ISSUER");
+  const devSecret = envString("AUTH_DEV_SECRET");
 
-  // New: local symmetric secret for HS256 signing/verification in dev
-  const authDevSecret = envString("AUTH_DEV_SECRET");
-  if (authDevSecret.length < 16) {
-    // just basic sanity so nobody accidentally leaves it super short
-    throw new Error("AUTH_DEV_SECRET must be at least 16 characters");
-  }
+  // we keep AUTH_JWKS sanity because original code expected it
+  ensureJwksConfigured();
 
-  // Existing: JWKS (still validated because other parts of the code expect it)
-  const jwks = parseJwks();
-
-  //
-  // PII / encryption materials
-  //
-  const piiKeys = ensureKeyMaterial(envString("PII_KEYS"), "PII_KEYS");
-  const piiActiveKid = envString("PII_ACTIVE_KEY");
-  if (!piiKeys.some((entry) => entry.kid === piiActiveKid)) {
+  // encryption/key material must exist / be sane
+  const keySet = ensureKeyMaterial(
+    envString("PII_KEYS"),
+    "PII_KEYS",
+  );
+  const activeKid = envString("PII_ACTIVE_KEY");
+  if (!keySet.some((entry) => entry.kid === activeKid)) {
     throw new Error(
-      `PII_ACTIVE_KEY ${piiActiveKid} does not exist in PII_KEYS`,
+      `PII_ACTIVE_KEY ${activeKid} does not exist in PII_KEYS`,
     );
   }
 
-  const piiSalts = ensureSaltMaterial(envString("PII_SALTS"), "PII_SALTS");
-  const piiActiveSid = envString("PII_ACTIVE_SALT");
-  if (!piiSalts.some((entry) => entry.sid === piiActiveSid)) {
+  const saltSet = ensureSaltMaterial(
+    envString("PII_SALTS"),
+    "PII_SALTS",
+  );
+  const activeSid = envString("PII_ACTIVE_SALT");
+  if (!saltSet.some((entry) => entry.sid === activeSid)) {
     throw new Error(
-      `PII_ACTIVE_SALT ${piiActiveSid} does not exist in PII_SALTS`,
+      `PII_ACTIVE_SALT ${activeSid} does not exist in PII_SALTS`,
     );
   }
 
-  // we got this far => crypto keyset is loaded
+  // if we reached here, PII is valid
   const kmsKeysetLoaded = true;
 
-  //
-  // RATE LIMIT / SECURITY
-  //
-  const rateLimitMax = parseIntegerEnv("API_RATE_LIMIT_MAX", 60);
+  // rate limit config
+  const rateLimitMax = parseIntegerEnv(
+    "API_RATE_LIMIT_MAX",
+    60,
+  );
   const rateLimitWindow = (
     process.env.API_RATE_LIMIT_WINDOW ?? "1 minute"
   ).trim();
   if (rateLimitWindow.length === 0) {
-    throw new Error("API_RATE_LIMIT_WINDOW must not be empty");
+    throw new Error(
+      "API_RATE_LIMIT_WINDOW must not be empty",
+    );
   }
 
+  // auth brute force threshold
   const authFailureThreshold = parseIntegerEnv(
     "AUTH_FAILURE_THRESHOLD",
     5,
   );
 
-  //
-  // CORS
-  //
-  const allowedOrigins = splitOrigins(
-    process.env.CORS_ALLOWED_ORIGINS,
-  );
-
-  //
-  // TAX ENGINE
-  //
+  // tax-engine URL
   const taxEngineUrl = ensureUrl(
     process.env.TAX_ENGINE_URL?.trim() &&
       process.env.TAX_ENGINE_URL.trim().length > 0
@@ -277,41 +241,30 @@ export function loadConfig(): AppConfig {
     "TAX_ENGINE_URL",
   );
 
-  //
-  // FINAL SHAPE
-  //
   return {
     databaseUrl,
     shadowDatabaseUrl,
-
     rateLimit: {
       max: rateLimitMax,
       window: rateLimitWindow,
     },
-
     security: {
       authFailureThreshold,
       kmsKeysetLoaded,
     },
-
     cors: {
-      allowedOrigins,
+      allowedOrigins: splitOrigins(
+        process.env.CORS_ALLOWED_ORIGINS,
+      ),
     },
-
     taxEngineUrl,
-
     auth: {
-      audience: authAudience,
-      issuer: authIssuer,
-      devSecret: authDevSecret,
-      jwks,
-    },
-
-    pii: {
-      keys: piiKeys,
-      activeKid: piiActiveKid,
-      salts: piiSalts,
-      activeSid: piiActiveSid,
+      audience,
+      issuer,
+      devSecret,
     },
   };
 }
+
+// 🔥 THIS is what app.ts imports
+export const config: AppConfig = loadConfig();

@@ -1,80 +1,74 @@
 // services/api-gateway/src/auth.ts
-import { FastifyReply, FastifyRequest } from "fastify";
+import { FastifyRequest, FastifyReply } from "fastify";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
-import { config } from "./config";
+import { PrismaClient } from "@prisma/client";
 
-export interface JwtClaims {
-  sub: string;     // user id
-  orgId: string;
-  role: string;    // "admin"
-  aud: string;
-  iss: string;
-  iat?: number;
-  exp?: number;
-}
+const prisma = new PrismaClient();
 
-// helper to issue a JWT after successful login
-export function issueJwt(user: {
+// ✅ pull from env directly instead of importing ./config
+const AUD = process.env.AUTH_AUDIENCE!;
+const ISS = process.env.AUTH_ISSUER!;
+const SECRET = process.env.AUTH_DEV_SECRET!; // HS256 key
+
+export function signToken(user: {
   id: string;
   orgId: string;
   role?: string;
 }) {
-  const claims: JwtClaims = {
-    sub: user.id,
-    orgId: user.orgId,
-    role: user.role ?? "admin",
-    aud: config.AUTH_AUDIENCE,
-    iss: config.AUTH_ISSUER,
-  };
-
-  // sign HS256 for dev
-  const token = jwt.sign(claims, config.AUTH_DEV_SECRET, {
-    algorithm: "HS256",
-    expiresIn: "1h",
-    audience: config.AUTH_AUDIENCE,
-    issuer: config.AUTH_ISSUER,
-  });
-
-  return token;
+  return jwt.sign(
+    {
+      sub: user.id,
+      orgId: user.orgId,
+      role: user.role ?? "admin",
+      aud: AUD,
+      iss: ISS,
+    },
+    SECRET,
+    { algorithm: "HS256", expiresIn: "1h" }
+  );
 }
 
-// Fastify preHandler to protect routes
 export async function authGuard(
   request: FastifyRequest,
   reply: FastifyReply
 ) {
   const header = request.headers.authorization;
-  if (!header || !header.startsWith("Bearer ")) {
+  if (!header?.startsWith("Bearer ")) {
     reply.code(401).send({
-      error: { code: "unauthorized", message: "Missing Authorization header" },
+      error: { code: "unauthorized", message: "Missing bearer token" },
     });
     return;
   }
 
-  const token = header.slice("Bearer ".length);
+  const token = header.substring("Bearer ".length).trim();
 
   try {
-    const decoded = jwt.verify(token, config.AUTH_DEV_SECRET, {
+    const decoded = jwt.verify(token, SECRET, {
       algorithms: ["HS256"],
-      audience: config.AUTH_AUDIENCE,
-      issuer: config.AUTH_ISSUER,
-    }) as JwtClaims;
-
-    // attach user info to request for downstream handlers
-    (request as any).user = decoded;
-  } catch (err) {
-    reply.code(401).send({
-      error: { code: "unauthorized", message: "Invalid or expired token" },
+      audience: AUD,
+      issuer: ISS,
     });
-    return;
+
+    (request as any).user = decoded;
+  } catch {
+    reply.code(401).send({
+      error: { code: "unauthorized", message: "Invalid token" },
+    });
   }
 }
 
-// utility to compare a plaintext password vs bcrypt hash
-export async function verifyPassword(
-  plain: string,
-  hashed: string
-): Promise<boolean> {
-  return bcrypt.compare(plain, hashed);
+export async function verifyCredentials(
+  email: string,
+  pw: string
+) {
+  const user = await prisma.user.findUnique({
+    where: { email },
+  });
+  if (!user) return null;
+
+  const ok = await bcrypt.compare(pw, user.password);
+  if (!ok) return null;
+
+  return user;
 }
