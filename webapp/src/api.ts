@@ -1,18 +1,10 @@
-// services/webapp/src/api.ts
+// webapp/src/api.ts
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000";
 
-const API_BASE =
-  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000";
-
-export interface LoginResult {
-  token: string;
-}
-
-export async function login(email: string, password: string): Promise<LoginResult> {
+export async function login(email: string, password: string) {
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
 
@@ -20,52 +12,55 @@ export async function login(email: string, password: string): Promise<LoginResul
     throw new Error("Login failed");
   }
 
-  return res.json();
+  return res.json() as Promise<{ token: string }>;
 }
 
-export interface BankLine {
-  id: string;
-  postedAt: string;
-  amount: number;
-  description: string; // will be "***"
-  createdAt: string;
+export async function fetchUsers(token: string) {
+  const res = await fetch(`${API_BASE}/users`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!res.ok) throw new Error("unauthorized");
+  return res.json() as Promise<{
+    users: Array<{
+      userId: string;
+      email: string;
+      createdAt: string;
+    }>;
+  }>;
 }
 
-export async function fetchBankLines(token: string): Promise<BankLine[]> {
+export async function fetchBankLines(token: string) {
   const res = await fetch(`${API_BASE}/bank-lines`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
-  if (!res.ok) {
-    throw new Error("Failed to fetch bank lines");
-  }
-  const data = await res.json();
-  return data.lines ?? [];
+  if (!res.ok) throw new Error("unauthorized");
+  return res.json() as Promise<{
+    lines: Array<{
+      id: string;
+      postedAt: string;
+      amount: number;
+      description: string; // "***"
+      createdAt: string;
+    }>;
+  }>;
 }
 
 export async function createBankLine(
   token: string,
-  payload: { date: string; amount: string; payee: string; desc: string },
-): Promise<BankLine> {
+  line: { date: string; amount: string; payee: string; desc: string }
+) {
   const res = await fetch(`${API_BASE}/bank-lines`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      date: payload.date,
-      amount: payload.amount,
-      payee: payload.payee,
-      desc: payload.desc,
-    }),
+    body: JSON.stringify(line),
   });
-
-  if (!res.ok) {
-    throw new Error("Failed to create bank line");
-  }
-
-  const data = await res.json();
-  return data.line;
+  if (!res.ok) throw new Error("create failed");
+  return res.json();
 }
