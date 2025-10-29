@@ -66,6 +66,18 @@ export default function CompliancePage() {
               <span style={summaryLabelStyle}>Resolved This Quarter</span>
               <span style={summaryValueStyle}>{report.alertsSummary.resolvedThisQuarter}</span>
             </div>
+            <div style={summaryCardStyle}>
+              <span style={summaryLabelStyle}>PAYGW Secured</span>
+              <span style={summaryValueStyle}>
+                {currencyFormatter.format(report.designatedTotals.paygw)}
+              </span>
+            </div>
+            <div style={summaryCardStyle}>
+              <span style={summaryLabelStyle}>GST Secured</span>
+              <span style={summaryValueStyle}>
+                {currencyFormatter.format(report.designatedTotals.gst)}
+              </span>
+            </div>
           </section>
 
           <section style={cardStyle}>
@@ -106,6 +118,8 @@ export default function CompliancePage() {
     </div>
   );
 }
+
+const currencyFormatter = new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" });
 
 const pageTitleStyle: React.CSSProperties = {
   fontSize: "24px",

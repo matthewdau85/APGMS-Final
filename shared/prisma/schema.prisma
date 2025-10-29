@@ -333,6 +333,8 @@ model Org {
   tombstones OrgTombstone[]
   alerts     Alert[]
   basCycles  BasCycle[]
+  designatedAccounts DesignatedAccount[]
+  designatedTransfers DesignatedTransfer[]
 
   // payroll backrefs
   employees  Employee[]
@@ -381,6 +383,32 @@ model BasCycle {
 
   @@index([orgId, periodStart, periodEnd])
   @@index([orgId, lodgedAt])
+}
+
+model DesignatedAccount {
+  id        String   @id @default(cuid())
+  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId     String
+  type      String
+  balance   Decimal  @default(0)
+  updatedAt DateTime @default(now())
+
+  transfers DesignatedTransfer[]
+
+  @@index([orgId, type])
+}
+
+model DesignatedTransfer {
+  id        String             @id @default(cuid())
+  org       Org                @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId     String
+  account   DesignatedAccount  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId String
+  amount    Decimal
+  source    String
+  createdAt DateTime           @default(now())
+
+  @@index([orgId, accountId, createdAt])
 }
 
 model BankLine {

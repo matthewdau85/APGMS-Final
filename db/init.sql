@@ -78,6 +78,30 @@ CREATE INDEX "BasCycle_orgId_periodStart_periodEnd_idx"
 CREATE INDEX "BasCycle_orgId_lodgedAt_idx"
   ON "BasCycle"("orgId","lodgedAt");
 
+-- Designated holding accounts
+CREATE TABLE "DesignatedAccount" (
+  "id" TEXT PRIMARY KEY,
+  "orgId" TEXT NOT NULL REFERENCES "Org"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  "type" TEXT NOT NULL,
+  "balance" DECIMAL(65,30) NOT NULL DEFAULT 0,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX "DesignatedAccount_orgId_type_idx"
+  ON "DesignatedAccount"("orgId","type");
+
+CREATE TABLE "DesignatedTransfer" (
+  "id" TEXT PRIMARY KEY,
+  "orgId" TEXT NOT NULL REFERENCES "Org"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  "accountId" TEXT NOT NULL REFERENCES "DesignatedAccount"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  "amount" DECIMAL(65,30) NOT NULL,
+  "source" TEXT NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX "DesignatedTransfer_orgId_accountId_createdAt_idx"
+  ON "DesignatedTransfer"("orgId","accountId","createdAt");
+
 -- Audit log
 CREATE TABLE "AuditLog" (
   "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -132,6 +156,16 @@ INSERT INTO "BasCycle" (
   9876.54,
   'BLOCKED'
 );
+
+-- Seed designated accounts and recent transfers
+INSERT INTO "DesignatedAccount" ("id","orgId","type","balance","updatedAt") VALUES
+  ('acct-paygw-dev','dev-org','PAYGW',12000.00,CURRENT_TIMESTAMP - INTERVAL '30 minutes'),
+  ('acct-gst-dev','dev-org','GST',9876.54,CURRENT_TIMESTAMP - INTERVAL '15 minutes');
+
+INSERT INTO "DesignatedTransfer" ("id","orgId","accountId","amount","source","createdAt") VALUES
+  ('xfer-paygw-1','dev-org','acct-paygw-dev',6000.00,'PAYROLL_CAPTURE',CURRENT_TIMESTAMP - INTERVAL '3 days'),
+  ('xfer-paygw-2','dev-org','acct-paygw-dev',6000.00,'MANUAL_TOP_UP',CURRENT_TIMESTAMP - INTERVAL '1 day'),
+  ('xfer-gst-1','dev-org','acct-gst-dev',9876.54,'GST_CAPTURE',CURRENT_TIMESTAMP - INTERVAL '18 hours');
 
 -- Seed alerts referencing the shortfalls
 INSERT INTO "Alert" (
