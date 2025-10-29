@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { fetchBasPreview } from "./api";
+import { fetchBasPreview, lodgeBas } from "./api";
 import { getToken } from "./auth";
 
 type BasPreview = Awaited<ReturnType<typeof fetchBasPreview>>;
@@ -9,27 +9,62 @@ export default function BasPage() {
   const [preview, setPreview] = useState<BasPreview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const loadPreview = async () => {
+    if (!token) return;
+    setError(null);
+    try {
+      const data = await fetchBasPreview(token);
+      setPreview(data);
+    } catch (err) {
+      console.error(err);
+      setError("Unable to load BAS preview");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!token) {
       return;
     }
-    (async () => {
-      try {
-        const data = await fetchBasPreview(token);
-        setPreview(data);
-      } catch (err) {
-        console.error(err);
-        setError("Unable to load BAS preview");
-      } finally {
-        setLoading(false);
-      }
-    })();
+    void loadPreview();
   }, [token]);
+
+  async function handleLodge() {
+    if (!token) return;
+    setSubmitting(true);
+    setSuccess(null);
+    setError(null);
+
+    try {
+      const result = await lodgeBas(token);
+      setSuccess(
+        `BAS lodged at ${new Date(result.basCycle.lodgedAt).toLocaleString()}`
+      );
+      await loadPreview();
+    } catch (err) {
+      console.error(err);
+      setError("BAS could not be lodged. Check blockers and try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   if (!token) {
     return null;
   }
+
+  const hasActiveCycle =
+    preview && preview.periodStart && preview.periodEnd ? true : false;
+  const periodStart = hasActiveCycle
+    ? new Date(preview!.periodStart!).toLocaleDateString()
+    : null;
+  const periodEnd = hasActiveCycle
+    ? new Date(preview!.periodEnd!).toLocaleDateString()
+    : null;
 
   return (
     <div style={{ display: "grid", gap: "24px" }}>
@@ -42,8 +77,9 @@ export default function BasPage() {
 
       {loading && <div style={infoTextStyle}>Loading BAS preview...</div>}
       {error && <div style={errorTextStyle}>{error}</div>}
+      {success && <div style={successTextStyle}>{success}</div>}
 
-      {preview && !error && (
+      {preview && !error && hasActiveCycle && (
         <>
           <section style={overviewCardStyle}>
             <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
@@ -52,13 +88,23 @@ export default function BasPage() {
               </span>
               <div>
                 <div style={overviewTitleStyle}>
-                  BAS period {preview.periodStart} → {preview.periodEnd}
+                  BAS period {periodStart} → {periodEnd}
                 </div>
                 <div style={metaTextStyle}>
                   The ATO payment is automatically triggered if all obligations are secured.
                 </div>
               </div>
             </div>
+            {preview.overallStatus === "READY" && (
+              <button
+                type="button"
+                style={lodgeButtonStyle}
+                onClick={handleLodge}
+                disabled={submitting}
+              >
+                {submitting ? "Lodging…" : "Lodge BAS now"}
+              </button>
+            )}
           </section>
 
           <section style={gridTwoColumns}>
@@ -79,6 +125,16 @@ export default function BasPage() {
             </section>
           )}
         </>
+      )}
+      {preview && !error && !hasActiveCycle && (
+        <section style={overviewCardStyle}>
+          <div style={{ fontSize: "16px", fontWeight: 600 }}>
+            No active BAS cycle
+          </div>
+          <p style={{ fontSize: "14px", color: "#4b5563", margin: 0 }}>
+            All BAS cycles are lodged. Seed a new period in the database to continue the demo.
+          </p>
+        </section>
       )}
     </div>
   );
@@ -174,6 +230,11 @@ const errorTextStyle: React.CSSProperties = {
   color: "#b91c1c",
 };
 
+const successTextStyle: React.CSSProperties = {
+  fontSize: "14px",
+  color: "#047857",
+};
+
 const overviewCardStyle: React.CSSProperties = {
   backgroundColor: "#ffffff",
   borderRadius: "12px",
@@ -201,6 +262,18 @@ const statusBadgeStyle = (status: string): React.CSSProperties => ({
   backgroundColor: status === "READY" ? "rgba(16, 185, 129, 0.12)" : "rgba(239, 68, 68, 0.12)",
   color: status === "READY" ? "#047857" : "#b91c1c",
 });
+
+const lodgeButtonStyle: React.CSSProperties = {
+  marginTop: "16px",
+  padding: "10px 16px",
+  borderRadius: "8px",
+  border: "none",
+  backgroundColor: "#111827",
+  color: "#ffffff",
+  fontSize: "14px",
+  fontWeight: 600,
+  cursor: "pointer",
+};
 
 const gridTwoColumns: React.CSSProperties = {
   display: "grid",
