@@ -1,9 +1,15 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { fetchBankLines, fetchCurrentObligations, createBankLine } from "./api";
+import {
+  fetchBankLines,
+  fetchCurrentObligations,
+  createBankLine,
+  fetchDesignatedAccounts,
+} from "./api";
 import { getToken } from "./auth";
 
 type Obligations = Awaited<ReturnType<typeof fetchCurrentObligations>>;
 type BankLine = Awaited<ReturnType<typeof fetchBankLines>>["lines"][number];
+type DesignatedAccounts = Awaited<ReturnType<typeof fetchDesignatedAccounts>>;
 
 const currencyFormatter = new Intl.NumberFormat("en-AU", {
   style: "currency",
@@ -15,8 +21,10 @@ export default function DashboardPage() {
   const token = getToken();
   const [obligations, setObligations] = useState<Obligations | null>(null);
   const [bankLines, setBankLines] = useState<BankLine[]>([]);
+  const [designated, setDesignated] = useState<DesignatedAccounts | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [designatedError, setDesignatedError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [formState, setFormState] = useState({
     date: "2025-10-20T00:00:00.000Z",
@@ -31,6 +39,7 @@ export default function DashboardPage() {
     }
 
     (async () => {
+      setLoading(true);
       try {
         const [obligationsResponse, bankLinesResponse] = await Promise.all([
           fetchCurrentObligations(token),
@@ -41,9 +50,19 @@ export default function DashboardPage() {
       } catch (err) {
         console.error(err);
         setError("Unable to load dashboard data");
-      } finally {
         setLoading(false);
+        return;
       }
+
+      try {
+        const designatedResponse = await fetchDesignatedAccounts(token);
+        setDesignated(designatedResponse);
+        setDesignatedError(null);
+      } catch (designatedErr) {
+        console.error(designatedErr);
+        setDesignatedError("Unable to load designated account balances");
+      }
+      setLoading(false);
     })();
   }, [token]);
 
@@ -61,6 +80,22 @@ export default function DashboardPage() {
     if (!obligations?.nextBasDue) return "Not scheduled";
     return new Date(obligations.nextBasDue).toLocaleString();
   }, [obligations]);
+
+  const paygwDesignatedAccount = useMemo(
+    () =>
+      designated?.accounts.find(
+        (account) => account.type.toUpperCase() === "PAYGW"
+      ) ?? null,
+    [designated]
+  );
+
+  const gstDesignatedAccount = useMemo(
+    () =>
+      designated?.accounts.find(
+        (account) => account.type.toUpperCase() === "GST"
+      ) ?? null,
+    [designated]
+  );
 
   async function handleCreateLine(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -121,6 +156,35 @@ export default function DashboardPage() {
               </p>
             </div>
           </section>
+
+          {(designated || designatedError) && (
+            <section style={designatedSectionStyle}>
+              <div style={designatedHeaderStyle}>
+                <h2 style={designatedTitleStyle}>Designated Accounts</h2>
+                <p style={designatedSubtitleStyle}>
+                  PAYGW and GST cash is ringfenced in inbound-only accounts. Shortfalls appear here before BAS lodgment.
+                </p>
+              </div>
+              {designatedError && <div style={errorTextStyle}>{designatedError}</div>}
+              {!designated && !designatedError && (
+                <div style={infoTextStyle}>Loading designated account balances...</div>
+              )}
+              {designated && (
+                <div style={designatedGridStyle}>
+                  <DesignatedAccountCard
+                    title="PAYGW Holding Account"
+                    account={paygwDesignatedAccount}
+                    required={obligations.paygw.required}
+                  />
+                  <DesignatedAccountCard
+                    title="GST Holding Account"
+                    account={gstDesignatedAccount}
+                    required={obligations.gst.required}
+                  />
+                </div>
+              )}
+            </section>
+          )}
 
           <section style={ledgerCardStyle}>
             <div style={ledgerHeaderStyle}>
@@ -221,6 +285,69 @@ export default function DashboardPage() {
   );
 }
 
+function DesignatedAccountCard({
+  title,
+  account,
+  required,
+}: {
+  title: string;
+  account: DesignatedAccounts["accounts"][number] | null;
+  required: number;
+}) {
+  const balance = account?.balance ?? 0;
+  const shortfall = Math.max(0, required - balance);
+  const status =
+    account === null
+      ? "Not provisioned"
+      : shortfall <= 0
+      ? "Sufficient"
+      : `Shortfall ${currencyFormatter.format(shortfall)}`;
+  const palette = designatedStatusPalette(
+    account === null ? "missing" : shortfall <= 0 ? "ready" : "short"
+  );
+  return (
+    <div style={designatedCardStyle}>
+      <div style={designatedCardHeaderStyle}>
+        <h3 style={designatedCardTitleStyle}>{title}</h3>
+        <span
+          style={{
+            ...designationStatusChipBase,
+            backgroundColor: palette.background,
+            color: palette.text,
+          }}
+        >
+          {status}
+        </span>
+      </div>
+      <div style={designatedBalanceStyle}>{currencyFormatter.format(balance)}</div>
+      <div style={designatedCaptionStyle}>
+        Required this BAS: {currencyFormatter.format(required)}
+      </div>
+      <div>
+        <div style={designatedTransfersTitleStyle}>Last transfers</div>
+        {account && account.transfers.length > 0 ? (
+          <ul style={designatedTransfersListStyle}>
+            {account.transfers.map((transfer) => (
+              <li key={transfer.id} style={designatedTransferItemStyle}>
+                <div>{currencyFormatter.format(transfer.amount)}</div>
+                <div style={designatedTransferMetaStyle}>
+                  {transfer.source} • {new Date(transfer.createdAt).toLocaleString()}
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div style={infoTextStyle}>
+            {account
+              ? "No transfers recorded yet."
+              : "Account has not been provisioned in this demo."}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ObligationSummary(props: {
   title: string;
   required: number;
@@ -282,6 +409,18 @@ function statusPalette(status: string) {
     default:
       return { background: "rgba(251, 191, 36, 0.18)", text: "#92400e" };
   }
+}
+
+function designatedStatusPalette(
+  state: "ready" | "short" | "missing"
+): { background: string; text: string } {
+  if (state === "ready") {
+    return { background: "rgba(16, 185, 129, 0.12)", text: "#047857" };
+  }
+  if (state === "short") {
+    return { background: "rgba(239, 68, 68, 0.12)", text: "#b91c1c" };
+  }
+  return { background: "rgba(148, 163, 184, 0.18)", text: "#334155" };
 }
 
 const pageTitleStyle: React.CSSProperties = {
@@ -376,6 +515,113 @@ const nextBasDescriptionStyle: React.CSSProperties = {
   margin: 0,
   opacity: 0.85,
   lineHeight: 1.5,
+};
+
+const designatedSectionStyle: React.CSSProperties = {
+  backgroundColor: "#ffffff",
+  borderRadius: "12px",
+  border: "1px solid #e2e8f0",
+  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.08)",
+  padding: "24px",
+  display: "grid",
+  gap: "16px",
+};
+
+const designatedHeaderStyle: React.CSSProperties = {
+  display: "grid",
+  gap: "4px",
+};
+
+const designatedTitleStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: "20px",
+  fontWeight: 600,
+};
+
+const designatedSubtitleStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: "14px",
+  color: "#4b5563",
+  maxWidth: "640px",
+};
+
+const designatedGridStyle: React.CSSProperties = {
+  display: "grid",
+  gap: "16px",
+  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+};
+
+const designatedCardStyle: React.CSSProperties = {
+  backgroundColor: "#f8fafc",
+  borderRadius: "12px",
+  padding: "20px",
+  border: "1px solid #dbeafe",
+  display: "grid",
+  gap: "16px",
+};
+
+const designatedCardHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "12px",
+};
+
+const designatedCardTitleStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: "16px",
+  fontWeight: 600,
+};
+
+const designationStatusChipBase: React.CSSProperties = {
+  padding: "4px 12px",
+  borderRadius: "999px",
+  fontSize: "12px",
+  fontWeight: 600,
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
+};
+
+const designatedBalanceStyle: React.CSSProperties = {
+  fontSize: "24px",
+  fontWeight: 700,
+  color: "#0f172a",
+};
+
+const designatedCaptionStyle: React.CSSProperties = {
+  fontSize: "13px",
+  color: "#475569",
+};
+
+const designatedTransfersTitleStyle: React.CSSProperties = {
+  fontSize: "13px",
+  fontWeight: 600,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  color: "#64748b",
+  marginBottom: "8px",
+};
+
+const designatedTransfersListStyle: React.CSSProperties = {
+  listStyle: "none",
+  margin: 0,
+  padding: 0,
+  display: "grid",
+  gap: "10px",
+};
+
+const designatedTransferItemStyle: React.CSSProperties = {
+  backgroundColor: "#ffffff",
+  borderRadius: "10px",
+  padding: "12px",
+  border: "1px solid #e2e8f0",
+  display: "grid",
+  gap: "4px",
+};
+
+const designatedTransferMetaStyle: React.CSSProperties = {
+  fontSize: "12px",
+  color: "#6b7280",
 };
 
 const ledgerCardStyle: React.CSSProperties = {

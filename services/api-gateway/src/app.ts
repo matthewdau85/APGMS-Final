@@ -5,6 +5,8 @@ import {
   Prisma,
   Alert as AlertModel,
   BasCycle as BasCycleModel,
+  DesignatedAccount as DesignatedAccountModel,
+  DesignatedTransfer as DesignatedTransferModel,
 } from "@prisma/client";
 import crypto from "node:crypto";
 
@@ -23,6 +25,27 @@ function decimalToNumber(value: Prisma.Decimal | number | null | undefined): num
   return Number(value);
 }
 
+type DesignatedAccountView = {
+  id: string;
+  type: string;
+  balance: number;
+  updatedAt: string;
+  transfers: Array<{
+    id: string;
+    amount: number;
+    source: string;
+    createdAt: string;
+  }>;
+};
+
+type DesignatedAccountContext = {
+  accounts: DesignatedAccountView[];
+  totals: {
+    paygw: number;
+    gst: number;
+  };
+};
+
 function shapeAlert(alert: AlertModel) {
   return {
     id: alert.id,
@@ -36,16 +59,20 @@ function shapeAlert(alert: AlertModel) {
   };
 }
 
-function shapeBasPreview(cycle: BasCycleModel | null) {
+function shapeBasPreview(
+  cycle: BasCycleModel | null,
+  balances?: { paygw: number; gst: number }
+) {
   if (!cycle) {
     return null;
   }
 
   const paygwRequired = decimalToNumber(cycle.paygwRequired);
-  const paygwSecured = decimalToNumber(cycle.paygwSecured);
+  const paygwSecured =
+    balances?.paygw ?? decimalToNumber(cycle.paygwSecured);
   const paygwShortfall = Math.max(0, paygwRequired - paygwSecured);
   const gstRequired = decimalToNumber(cycle.gstRequired);
-  const gstSecured = decimalToNumber(cycle.gstSecured);
+  const gstSecured = balances?.gst ?? decimalToNumber(cycle.gstSecured);
   const gstShortfall = Math.max(0, gstRequired - gstSecured);
 
   const paygwStatus = paygwShortfall <= 0 ? "READY" : "BLOCKED";
@@ -94,6 +121,80 @@ function formatBasPeriod(start: Date, end: Date): string {
   const year = start.getUTCFullYear();
   const quarter = Math.floor(start.getUTCMonth() / 3) + 1;
   return `${year} Q${quarter}`;
+}
+
+async function loadDesignatedAccountContext(orgId: string): Promise<DesignatedAccountContext> {
+  const accounts = await prisma.designatedAccount.findMany({
+    where: { orgId },
+    orderBy: { type: "asc" },
+    include: {
+      transfers: {
+        orderBy: { createdAt: "desc" },
+        take: 5,
+      },
+    },
+  });
+
+  const shaped: DesignatedAccountView[] = accounts.map(
+    (account: DesignatedAccountModel & { transfers: DesignatedTransferModel[] }) => ({
+      id: account.id,
+      type: account.type.toUpperCase(),
+      balance: decimalToNumber(account.balance),
+      updatedAt: account.updatedAt.toISOString(),
+      transfers: account.transfers.map((transfer) => ({
+        id: transfer.id,
+        amount: decimalToNumber(transfer.amount),
+        source: transfer.source,
+        createdAt: transfer.createdAt.toISOString(),
+      })),
+    })
+  );
+
+  const totals = shaped.reduce(
+    (acc, account) => {
+      if (account.type === "PAYGW") {
+        acc.paygw += account.balance;
+      } else if (account.type === "GST") {
+        acc.gst += account.balance;
+      }
+      return acc;
+    },
+    { paygw: 0, gst: 0 }
+  );
+
+  return { accounts: shaped, totals };
+}
+
+async function syncBasCycleSecured(
+  cycle: BasCycleModel,
+  balances: { paygw: number; gst: number }
+): Promise<BasCycleModel> {
+  const paygwRequired = decimalToNumber(cycle.paygwRequired);
+  const gstRequired = decimalToNumber(cycle.gstRequired);
+  const paygwStatus = balances.paygw >= paygwRequired ? "READY" : "BLOCKED";
+  const gstStatus = balances.gst >= gstRequired ? "READY" : "BLOCKED";
+  const overallStatus =
+    paygwStatus === "READY" && gstStatus === "READY" ? "READY" : "BLOCKED";
+
+  const currentPaygw = decimalToNumber(cycle.paygwSecured);
+  const currentGst = decimalToNumber(cycle.gstSecured);
+  const shouldUpdate =
+    Math.abs(currentPaygw - balances.paygw) > 0.01 ||
+    Math.abs(currentGst - balances.gst) > 0.01 ||
+    cycle.overallStatus !== overallStatus;
+
+  if (!shouldUpdate) {
+    return cycle;
+  }
+
+  return prisma.basCycle.update({
+    where: { id: cycle.id },
+    data: {
+      paygwSecured: balances.paygw,
+      gstSecured: balances.gst,
+      overallStatus,
+    },
+  });
 }
 
 export async function buildServer(): Promise<FastifyInstance> {
@@ -371,12 +472,18 @@ export async function buildServer(): Promise<FastifyInstance> {
       const userClaims: any = (request as any).user;
       const orgId = userClaims.orgId;
 
-      const cycle = await prisma.basCycle.findFirst({
+      const designatedContext = await loadDesignatedAccountContext(orgId);
+
+      let cycle = await prisma.basCycle.findFirst({
         where: { orgId, lodgedAt: null },
         orderBy: { periodEnd: "desc" },
       });
 
-      const preview = shapeBasPreview(cycle);
+      if (cycle) {
+        cycle = await syncBasCycleSecured(cycle, designatedContext.totals);
+      }
+
+      const preview = shapeBasPreview(cycle, designatedContext.totals);
       const response = preview
         ? {
             basPeriodStart: preview.periodStart,
@@ -427,6 +534,33 @@ export async function buildServer(): Promise<FastifyInstance> {
       } catch (_) {}
 
       reply.send(response);
+    }
+  );
+
+  app.get(
+    "/org/designated-accounts",
+    { preHandler: authGuard },
+    async (request, reply) => {
+      const userClaims: any = (request as any).user;
+      const orgId = userClaims.orgId;
+
+      const context = await loadDesignatedAccountContext(orgId);
+
+      try {
+        await prisma.auditLog.create({
+          data: {
+            orgId,
+            actorId: userClaims.sub,
+            action: "org.designatedAccounts.list",
+            metadata: {},
+          },
+        });
+      } catch (_) {}
+
+      reply.send({
+        accounts: context.accounts,
+        totals: context.totals,
+      });
     }
   );
 
@@ -605,12 +739,18 @@ export async function buildServer(): Promise<FastifyInstance> {
       const userClaims: any = (request as any).user;
       const orgId = userClaims.orgId;
 
-      const cycle = await prisma.basCycle.findFirst({
+      const context = await loadDesignatedAccountContext(orgId);
+
+      let cycle = await prisma.basCycle.findFirst({
         where: { orgId, lodgedAt: null },
         orderBy: { periodEnd: "desc" },
       });
 
-      const preview = shapeBasPreview(cycle);
+      if (cycle) {
+        cycle = await syncBasCycleSecured(cycle, context.totals);
+      }
+
+      const preview = shapeBasPreview(cycle, context.totals);
       const payload = preview
         ? {
             periodStart: preview.periodStart,
@@ -659,7 +799,9 @@ export async function buildServer(): Promise<FastifyInstance> {
       const userClaims: any = (request as any).user;
       const orgId = userClaims.orgId;
 
-      const cycle = await prisma.basCycle.findFirst({
+      const context = await loadDesignatedAccountContext(orgId);
+
+      let cycle = await prisma.basCycle.findFirst({
         where: { orgId, lodgedAt: null },
         orderBy: { periodEnd: "desc" },
       });
@@ -674,7 +816,8 @@ export async function buildServer(): Promise<FastifyInstance> {
         return;
       }
 
-      const preview = shapeBasPreview(cycle);
+      cycle = await syncBasCycleSecured(cycle, context.totals);
+      const preview = shapeBasPreview(cycle, context.totals);
       if (!preview || preview.overallStatus !== "READY") {
         reply.code(409).send({
           error: {
@@ -721,7 +864,7 @@ export async function buildServer(): Promise<FastifyInstance> {
     async (request, reply) => {
       const userClaims: any = (request as any).user;
       const orgId = userClaims.orgId;
-      const [basCycles, alerts] = await Promise.all([
+      const [basCycles, alerts, designatedContext] = await Promise.all([
         prisma.basCycle.findMany({
           where: { orgId },
           orderBy: { periodStart: "desc" },
@@ -731,10 +874,18 @@ export async function buildServer(): Promise<FastifyInstance> {
           where: { orgId },
           orderBy: { createdAt: "desc" },
         }),
+        loadDesignatedAccountContext(orgId),
       ]);
 
-      const activeCycle =
-        basCycles.find((cycle) => cycle.lodgedAt === null) ?? null;
+      const activeIndex = basCycles.findIndex((cycle) => cycle.lodgedAt === null);
+      if (activeIndex >= 0) {
+        basCycles[activeIndex] = await syncBasCycleSecured(
+          basCycles[activeIndex],
+          designatedContext.totals
+        );
+      }
+
+      const activeCycle = activeIndex >= 0 ? basCycles[activeIndex] : null;
 
       const now = new Date();
       const currentQuarter = Math.floor(now.getMonth() / 3);
@@ -773,6 +924,7 @@ export async function buildServer(): Promise<FastifyInstance> {
           ).length,
         },
         nextBasDue: activeCycle?.periodEnd.toISOString() ?? null,
+        designatedTotals: designatedContext.totals,
       };
 
       try {
