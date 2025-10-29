@@ -335,6 +335,7 @@ model Org {
   basCycles  BasCycle[]
   designatedAccounts DesignatedAccount[]
   designatedTransfers DesignatedTransfer[]
+  paymentPlanRequests PaymentPlanRequest[]
 
   // payroll backrefs
   employees  Employee[]
@@ -380,6 +381,7 @@ model BasCycle {
   gstSecured    Decimal
   overallStatus String
   lodgedAt      DateTime?
+  paymentPlanRequests PaymentPlanRequest[]
 
   @@index([orgId, periodStart, periodEnd])
   @@index([orgId, lodgedAt])
@@ -409,6 +411,22 @@ model DesignatedTransfer {
   createdAt DateTime           @default(now())
 
   @@index([orgId, accountId, createdAt])
+}
+
+model PaymentPlanRequest {
+  id          String    @id @default(cuid())
+  org         Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId       String
+  basCycle    BasCycle  @relation(fields: [basCycleId], references: [id], onDelete: Cascade)
+  basCycleId  String
+  requestedAt DateTime  @default(now())
+  reason      String
+  status      String    @default("SUBMITTED")
+  detailsJson Json
+  resolvedAt  DateTime?
+
+  @@index([orgId, basCycleId])
+  @@index([orgId, status])
 }
 
 model BankLine {
