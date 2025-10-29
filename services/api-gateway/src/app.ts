@@ -280,5 +280,270 @@ export async function buildServer(): Promise<FastifyInstance> {
     }
   );
 
+  app.get(
+    "/org/obligations/current",
+    { preHandler: authGuard },
+    async (request, reply) => {
+      const userClaims: any = (request as any).user;
+      const orgId = userClaims.orgId;
+
+      const data = {
+        basPeriodStart: "2025-10-01",
+        basPeriodEnd: "2025-10-31",
+        paygw: {
+          required: 12345.67,
+          secured: 12000,
+          shortfall: 345.67,
+          status: "SHORTFALL",
+        },
+        gst: {
+          required: 9876.54,
+          secured: 9876.54,
+          shortfall: 0,
+          status: "READY",
+        },
+        nextBasDue: "2025-11-21T00:00:00Z",
+      };
+
+      try {
+        await prisma.auditLog.create({
+          data: {
+            orgId,
+            actorId: userClaims.sub,
+            action: "org.obligations.current",
+            metadata: {},
+          },
+        });
+      } catch (_) {}
+
+      reply.send(data);
+    }
+  );
+
+  app.get(
+    "/feeds/payroll",
+    { preHandler: authGuard },
+    async (request, reply) => {
+      const userClaims: any = (request as any).user;
+      const orgId = userClaims.orgId;
+
+      const data = {
+        runs: [
+          {
+            id: "run-2025-10-15",
+            date: "2025-10-15",
+            grossWages: 45000,
+            paygwCalculated: 8200,
+            paygwSecured: 8000,
+            status: "PARTIAL",
+          },
+        ],
+      };
+
+      try {
+        await prisma.auditLog.create({
+          data: {
+            orgId,
+            actorId: userClaims.sub,
+            action: "feeds.payroll.list",
+            metadata: {},
+          },
+        });
+      } catch (_) {}
+
+      reply.send(data);
+    }
+  );
+
+  app.get(
+    "/feeds/gst",
+    { preHandler: authGuard },
+    async (request, reply) => {
+      const userClaims: any = (request as any).user;
+      const orgId = userClaims.orgId;
+
+      const data = {
+        days: [
+          {
+            date: "2025-10-15",
+            salesTotal: 12000,
+            gstCalculated: 1090,
+            gstSecured: 1090,
+            status: "OK",
+          },
+          {
+            date: "2025-10-16",
+            salesTotal: 9000,
+            gstCalculated: 818,
+            gstSecured: 600,
+            status: "SHORT",
+          },
+        ],
+      };
+
+      try {
+        await prisma.auditLog.create({
+          data: {
+            orgId,
+            actorId: userClaims.sub,
+            action: "feeds.gst.list",
+            metadata: {},
+          },
+        });
+      } catch (_) {}
+
+      reply.send(data);
+    }
+  );
+
+  app.get(
+    "/alerts",
+    { preHandler: authGuard },
+    async (request, reply) => {
+      const userClaims: any = (request as any).user;
+      const orgId = userClaims.orgId;
+
+      const data = {
+        alerts: [
+          {
+            id: "alrt-1",
+            type: "GST_SHORTFALL",
+            severity: "HIGH",
+            message: "GST secured is lower than GST calculated",
+            createdAt: "2025-10-16T10:00:00Z",
+            resolved: false,
+          },
+        ],
+      };
+
+      try {
+        await prisma.auditLog.create({
+          data: {
+            orgId,
+            actorId: userClaims.sub,
+            action: "alerts.list",
+            metadata: {},
+          },
+        });
+      } catch (_) {}
+
+      reply.send(data);
+    }
+  );
+
+  app.get(
+    "/bas/preview",
+    { preHandler: authGuard },
+    async (request, reply) => {
+      const userClaims: any = (request as any).user;
+      const orgId = userClaims.orgId;
+
+      const data = {
+        periodStart: "2025-10-01",
+        periodEnd: "2025-10-31",
+        paygw: {
+          required: 12345.67,
+          secured: 12000,
+          status: "BLOCKED",
+        },
+        gst: {
+          required: 9876.54,
+          secured: 9876.54,
+          status: "READY",
+        },
+        overallStatus: "BLOCKED",
+        blockers: [
+          "PAYGW not fully funded. $345.67 short. Transfer to ATO is halted until funded or plan requested.",
+        ],
+      };
+
+      try {
+        await prisma.auditLog.create({
+          data: {
+            orgId,
+            actorId: userClaims.sub,
+            action: "bas.preview",
+            metadata: {},
+          },
+        });
+      } catch (_) {}
+
+      reply.send(data);
+    }
+  );
+
+  app.get(
+    "/compliance/report",
+    { preHandler: authGuard },
+    async (request, reply) => {
+      const userClaims: any = (request as any).user;
+      const orgId = userClaims.orgId;
+
+      const data = {
+        orgId,
+        basHistory: [
+          {
+            period: "2025 Q3",
+            lodgedAt: "2025-10-28T01:00:00Z",
+            status: "ON_TIME",
+            notes: "All obligations secured pre-lodgment",
+          },
+        ],
+        alertsSummary: {
+          openHighSeverity: 1,
+          resolvedThisQuarter: 3,
+        },
+        nextBasDue: "2025-11-21T00:00:00Z",
+      };
+
+      try {
+        await prisma.auditLog.create({
+          data: {
+            orgId,
+            actorId: userClaims.sub,
+            action: "compliance.report",
+            metadata: {},
+          },
+        });
+      } catch (_) {}
+
+      reply.send(data);
+    }
+  );
+
+  app.get(
+    "/security/users",
+    { preHandler: authGuard },
+    async (request, reply) => {
+      const userClaims: any = (request as any).user;
+      const orgId = userClaims.orgId;
+
+      const data = {
+        users: [
+          {
+            id: "dev-user",
+            email: "dev@example.com",
+            role: "admin",
+            mfaEnabled: false,
+            lastLogin: "2025-10-28T00:00:00Z",
+          },
+        ],
+      };
+
+      try {
+        await prisma.auditLog.create({
+          data: {
+            orgId,
+            actorId: userClaims.sub,
+            action: "security.users.list",
+            metadata: {},
+          },
+        });
+      } catch (_) {}
+
+      reply.send(data);
+    }
+  );
+
   return app;
 }
