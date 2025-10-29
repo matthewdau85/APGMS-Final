@@ -69,3 +69,6 @@ VALUES (
 );
 
 -- no seed rows for BankLine; you'll add via POST /bank-lines after login
+
+-- bring in payroll tables
+\i /docker-entrypoint-initdb.d/payroll.sql
