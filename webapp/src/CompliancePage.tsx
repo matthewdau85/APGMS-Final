@@ -4,6 +4,8 @@ import { getToken } from "./auth";
 
 type ComplianceReport = Awaited<ReturnType<typeof fetchComplianceReport>>;
 
+type PaymentPlan = ComplianceReport["paymentPlans"][number];
+
 export default function CompliancePage() {
   const token = getToken();
   const [report, setReport] = useState<ComplianceReport | null>(null);
@@ -50,34 +52,45 @@ export default function CompliancePage() {
       {report && !error && (
         <>
           <section style={summaryCardsWrapper}>
-            <div style={summaryCardStyle}>
-              <span style={summaryLabelStyle}>Next BAS Due</span>
-              <span style={summaryValueStyle}>
-                {report.nextBasDue
-                  ? new Date(report.nextBasDue).toLocaleDateString()
-                  : "Not scheduled"}
-              </span>
-            </div>
-            <div style={summaryCardStyle}>
-              <span style={summaryLabelStyle}>Open High Severity Alerts</span>
-              <span style={summaryValueStyle}>{report.alertsSummary.openHighSeverity}</span>
-            </div>
-            <div style={summaryCardStyle}>
-              <span style={summaryLabelStyle}>Resolved This Quarter</span>
-              <span style={summaryValueStyle}>{report.alertsSummary.resolvedThisQuarter}</span>
-            </div>
-            <div style={summaryCardStyle}>
-              <span style={summaryLabelStyle}>PAYGW Secured</span>
-              <span style={summaryValueStyle}>
-                {currencyFormatter.format(report.designatedTotals.paygw)}
-              </span>
-            </div>
-            <div style={summaryCardStyle}>
-              <span style={summaryLabelStyle}>GST Secured</span>
-              <span style={summaryValueStyle}>
-                {currencyFormatter.format(report.designatedTotals.gst)}
-              </span>
-            </div>
+            <SummaryCard label="Next BAS Due" value={report.nextBasDue ? new Date(report.nextBasDue).toLocaleDateString() : "Not scheduled"} />
+            <SummaryCard label="Open High Severity Alerts" value={report.alertsSummary.openHighSeverity.toString()} />
+            <SummaryCard label="Resolved This Quarter" value={report.alertsSummary.resolvedThisQuarter.toString()} />
+            <SummaryCard label="PAYGW Secured" value={currencyFormatter.format(report.designatedTotals.paygw)} />
+            <SummaryCard label="GST Secured" value={currencyFormatter.format(report.designatedTotals.gst)} />
+          </section>
+
+          <section style={cardStyle}>
+            <h2 style={sectionTitleStyle}>Payment Plans & Requests</h2>
+            {report.paymentPlans.length === 0 ? (
+              <div style={infoTextStyle}>No payment plan activity recorded.</div>
+            ) : (
+              <table style={tableStyle}>
+                <thead>
+                  <tr>
+                    <th style={thStyle}>BAS Cycle</th>
+                    <th style={thStyle}>Status</th>
+                    <th style={thStyle}>Reason</th>
+                    <th style={thStyle}>Weekly Amount</th>
+                    <th style={thStyle}>Start Date</th>
+                    <th style={thStyle}>Requested</th>
+                    <th style={thStyle}>Resolved</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.paymentPlans.map((plan) => (
+                    <tr key={plan.id}>
+                      <td style={tdStyle}>{plan.basCycleId}</td>
+                      <td style={tdStyle}>{plan.status}</td>
+                      <td style={tdStyle}>{plan.reason}</td>
+                      <td style={tdStyle}>{formatWeeklyAmount(plan)}</td>
+                      <td style={tdStyle}>{formatPlanStartDate(plan)}</td>
+                      <td style={tdStyle}>{new Date(plan.requestedAt).toLocaleString()}</td>
+                      <td style={tdStyle}>{plan.resolvedAt ? new Date(plan.resolvedAt).toLocaleString() : "Pending"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </section>
 
           <section style={cardStyle}>
@@ -100,23 +113,59 @@ export default function CompliancePage() {
                 {report.basHistory.map((entry) => (
                   <tr key={entry.period}>
                     <td style={tdStyle}>{entry.period}</td>
-                    <td style={tdStyle}>
-                      {entry.lodgedAt ? new Date(entry.lodgedAt).toLocaleString() : "Not lodged"}
-                    </td>
+                    <td style={tdStyle}>{entry.lodgedAt ? new Date(entry.lodgedAt).toLocaleString() : "Not lodged"}</td>
                     <td style={tdStyle}>{entry.status}</td>
                     <td style={tdStyle}>{entry.notes}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {report.basHistory.length === 0 && (
-              <div style={infoTextStyle}>No BAS events recorded yet.</div>
-            )}
+            {report.basHistory.length === 0 && <div style={infoTextStyle}>No BAS events recorded yet.</div>}
           </section>
         </>
       )}
     </div>
   );
+}
+
+type SummaryCardProps = {
+  label: string;
+  value: string;
+};
+
+function SummaryCard({ label, value }: SummaryCardProps) {
+  return (
+    <div style={summaryCardStyle}>
+      <span style={summaryLabelStyle}>{label}</span>
+      <span style={summaryValueStyle}>{value}</span>
+    </div>
+  );
+}
+
+function formatWeeklyAmount(plan: PaymentPlan): string {
+  const raw = plan.details["weeklyAmount"];
+  if (typeof raw === "number") {
+    return currencyFormatter.format(raw);
+  }
+  if (typeof raw === "string") {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed)) {
+      return currencyFormatter.format(parsed);
+    }
+  }
+  return "N/A";
+}
+
+function formatPlanStartDate(plan: PaymentPlan): string {
+  const raw = plan.details["startDate"];
+  if (typeof raw === "string" && raw.trim().length > 0) {
+    const parsed = new Date(raw);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toLocaleDateString();
+    }
+    return raw;
+  }
+  return "N/A";
 }
 
 const currencyFormatter = new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD" });
