@@ -102,6 +102,23 @@ CREATE TABLE "DesignatedTransfer" (
 CREATE INDEX "DesignatedTransfer_orgId_accountId_createdAt_idx"
   ON "DesignatedTransfer"("orgId","accountId","createdAt");
 
+CREATE TABLE "PaymentPlanRequest" (
+  "id" TEXT PRIMARY KEY,
+  "orgId" TEXT NOT NULL REFERENCES "Org"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  "basCycleId" TEXT NOT NULL REFERENCES "BasCycle"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  "requestedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "reason" TEXT NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'SUBMITTED',
+  "detailsJson" JSONB NOT NULL,
+  "resolvedAt" TIMESTAMP(3)
+);
+
+CREATE INDEX "PaymentPlanRequest_orgId_basCycleId_idx"
+  ON "PaymentPlanRequest"("orgId","basCycleId");
+
+CREATE INDEX "PaymentPlanRequest_orgId_status_idx"
+  ON "PaymentPlanRequest"("orgId","status");
+
 -- Audit log
 CREATE TABLE "AuditLog" (
   "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -166,6 +183,25 @@ INSERT INTO "DesignatedTransfer" ("id","orgId","accountId","amount","source","cr
   ('xfer-paygw-1','dev-org','acct-paygw-dev',6000.00,'PAYROLL_CAPTURE',CURRENT_TIMESTAMP - INTERVAL '3 days'),
   ('xfer-paygw-2','dev-org','acct-paygw-dev',6000.00,'MANUAL_TOP_UP',CURRENT_TIMESTAMP - INTERVAL '1 day'),
   ('xfer-gst-1','dev-org','acct-gst-dev',9876.54,'GST_CAPTURE',CURRENT_TIMESTAMP - INTERVAL '18 hours');
+
+-- Seed payment plan request for current BAS cycle
+INSERT INTO "PaymentPlanRequest" (
+  "id",
+  "orgId",
+  "basCycleId",
+  "requestedAt",
+  "reason",
+  "status",
+  "detailsJson"
+) VALUES (
+  'plan-cycle-2025-10',
+  'dev-org',
+  'cycle-2025-10',
+  CURRENT_TIMESTAMP - INTERVAL '6 hours',
+  'CASHFLOW_SHORTFALL',
+  'SUBMITTED',
+  '{"weeklyAmount":1500,"startDate":"2025-11-05","notes":"ATO relief while receivables clear"}'
+);
 
 -- Seed alerts referencing the shortfalls
 INSERT INTO "Alert" (

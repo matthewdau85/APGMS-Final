@@ -7,6 +7,7 @@ import {
   BasCycle as BasCycleModel,
   DesignatedAccount as DesignatedAccountModel,
   DesignatedTransfer as DesignatedTransferModel,
+  PaymentPlanRequest as PaymentPlanRequestModel,
 } from "@prisma/client";
 import crypto from "node:crypto";
 
@@ -44,6 +45,16 @@ type DesignatedAccountContext = {
     paygw: number;
     gst: number;
   };
+};
+
+type PaymentPlanSummary = {
+  id: string;
+  basCycleId: string;
+  requestedAt: string;
+  status: string;
+  reason: string;
+  details: Record<string, unknown>;
+  resolvedAt: string | null;
 };
 
 function shapeAlert(alert: AlertModel) {
@@ -97,6 +108,7 @@ function shapeBasPreview(
   }
 
   return {
+    id: cycle.id,
     periodStart: cycle.periodStart.toISOString(),
     periodEnd: cycle.periodEnd.toISOString(),
     paygw: {
@@ -114,6 +126,28 @@ function shapeBasPreview(
     overallStatus,
     blockers,
     lodgedAt: cycle.lodgedAt ?? null,
+  };
+}
+
+function shapePaymentPlan(request: PaymentPlanRequestModel): PaymentPlanSummary {
+  let parsedDetails: Record<string, unknown> = {};
+  try {
+    parsedDetails =
+      typeof request.detailsJson === "object" && request.detailsJson !== null
+        ? (request.detailsJson as Record<string, unknown>)
+        : JSON.parse(String(request.detailsJson));
+  } catch (error) {
+    parsedDetails = { raw: request.detailsJson, parseError: String(error) };
+  }
+
+  return {
+    id: request.id,
+    basCycleId: request.basCycleId,
+    requestedAt: request.requestedAt.toISOString(),
+    status: request.status,
+    reason: request.reason,
+    details: parsedDetails,
+    resolvedAt: request.resolvedAt ? request.resolvedAt.toISOString() : null,
   };
 }
 
@@ -486,6 +520,7 @@ export async function buildServer(): Promise<FastifyInstance> {
       const preview = shapeBasPreview(cycle, designatedContext.totals);
       const response = preview
         ? {
+            basCycleId: preview.id,
             basPeriodStart: preview.periodStart,
             basPeriodEnd: preview.periodEnd,
             paygw: {
@@ -505,6 +540,7 @@ export async function buildServer(): Promise<FastifyInstance> {
             nextBasDue: preview.periodEnd,
           }
         : {
+            basCycleId: null,
             basPeriodStart: null,
             basPeriodEnd: null,
             paygw: {
@@ -753,6 +789,7 @@ export async function buildServer(): Promise<FastifyInstance> {
       const preview = shapeBasPreview(cycle, context.totals);
       const payload = preview
         ? {
+            basCycleId: preview.id,
             periodStart: preview.periodStart,
             periodEnd: preview.periodEnd,
             paygw: {
@@ -769,6 +806,7 @@ export async function buildServer(): Promise<FastifyInstance> {
             blockers: preview.blockers,
           }
         : {
+            basCycleId: null,
             periodStart: null,
             periodEnd: null,
             paygw: { required: 0, secured: 0, status: "READY" },
@@ -789,6 +827,51 @@ export async function buildServer(): Promise<FastifyInstance> {
       } catch (_) {}
 
       reply.send(payload);
+    }
+  );
+
+  app.get(
+    "/bas/payment-plan-request",
+    { preHandler: authGuard },
+    async (request, reply) => {
+      const userClaims: any = (request as any).user;
+      const orgId = userClaims.orgId;
+      const { basCycleId } = request.query as { basCycleId?: string };
+
+      let targetCycleId = basCycleId ?? null;
+
+      if (!targetCycleId) {
+        const active = await prisma.basCycle.findFirst({
+          where: { orgId, lodgedAt: null },
+          orderBy: { periodEnd: "desc" },
+        });
+        targetCycleId = active?.id ?? null;
+      }
+
+      if (!targetCycleId) {
+        reply.send({ request: null });
+        return;
+      }
+
+      const plan = await prisma.paymentPlanRequest.findFirst({
+        where: { orgId, basCycleId: targetCycleId },
+        orderBy: { requestedAt: "desc" },
+      });
+
+      try {
+        await prisma.auditLog.create({
+          data: {
+            orgId,
+            actorId: userClaims.sub,
+            action: "bas.paymentPlan.view",
+            metadata: { basCycleId: targetCycleId },
+          },
+        });
+      } catch (_) {}
+
+      reply.send({
+        request: plan ? shapePaymentPlan(plan) : null,
+      });
     }
   );
 
@@ -858,13 +941,101 @@ export async function buildServer(): Promise<FastifyInstance> {
     }
   );
 
+  app.post(
+    "/bas/payment-plan-request",
+    { preHandler: authGuard },
+    async (request, reply) => {
+      const userClaims: any = (request as any).user;
+      const orgId = userClaims.orgId;
+      const body = request.body as {
+        basCycleId?: string;
+        reason?: string;
+        weeklyAmount?: number;
+        startDate?: string;
+        notes?: string;
+      } | null;
+
+      if (
+        !body?.basCycleId ||
+        !body.reason ||
+        typeof body.weeklyAmount !== "number" ||
+        Number.isNaN(body.weeklyAmount) ||
+        !body.startDate
+      ) {
+        reply.code(400).send({
+          error: {
+            code: "invalid_body",
+            message: "basCycleId, reason, weeklyAmount, and startDate are required",
+          },
+        });
+        return;
+      }
+
+      const cycle = await prisma.basCycle.findUnique({
+        where: { id: body.basCycleId },
+      });
+
+      if (!cycle || cycle.orgId !== orgId) {
+        reply.code(404).send({
+          error: { code: "bas_cycle_not_found", message: "No matching BAS cycle" },
+        });
+        return;
+      }
+
+      const existing = await prisma.paymentPlanRequest.findFirst({
+        where: {
+          orgId,
+          basCycleId: body.basCycleId,
+          resolvedAt: null,
+        },
+      });
+
+      if (existing) {
+        reply.code(409).send({
+          error: {
+            code: "plan_exists",
+            message: "A payment plan request already exists for this BAS cycle",
+          },
+        });
+        return;
+      }
+
+      const created = await prisma.paymentPlanRequest.create({
+        data: {
+          orgId,
+          basCycleId: body.basCycleId,
+          reason: body.reason,
+          status: "SUBMITTED",
+          detailsJson: {
+            weeklyAmount: body.weeklyAmount,
+            startDate: body.startDate,
+            notes: body.notes ?? null,
+          },
+        },
+      });
+
+      try {
+        await prisma.auditLog.create({
+          data: {
+            orgId,
+            actorId: userClaims.sub,
+            action: "bas.paymentPlan.requested",
+            metadata: { basCycleId: body.basCycleId },
+          },
+        });
+      } catch (_) {}
+
+      reply.code(201).send({ request: shapePaymentPlan(created) });
+    }
+  );
+
   app.get(
     "/compliance/report",
     { preHandler: authGuard },
     async (request, reply) => {
       const userClaims: any = (request as any).user;
       const orgId = userClaims.orgId;
-      const [basCycles, alerts, designatedContext] = await Promise.all([
+      const [basCycles, alerts, planRequests, designatedContext] = await Promise.all([
         prisma.basCycle.findMany({
           where: { orgId },
           orderBy: { periodStart: "desc" },
@@ -873,6 +1044,10 @@ export async function buildServer(): Promise<FastifyInstance> {
         prisma.alert.findMany({
           where: { orgId },
           orderBy: { createdAt: "desc" },
+        }),
+        prisma.paymentPlanRequest.findMany({
+          where: { orgId },
+          orderBy: { requestedAt: "desc" },
         }),
         loadDesignatedAccountContext(orgId),
       ]);
@@ -915,6 +1090,7 @@ export async function buildServer(): Promise<FastifyInstance> {
             notes: readinessNote,
           };
         }),
+        paymentPlans: planRequests.map((plan) => shapePaymentPlan(plan)),
         alertsSummary: {
           openHighSeverity: alerts.filter(
             (alert) => alert.severity === "HIGH" && !alert.resolvedAt

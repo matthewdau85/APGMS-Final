@@ -1,20 +1,34 @@
 import React, { useEffect, useState } from "react";
-import { fetchBasPreview, lodgeBas, fetchDesignatedAccounts } from "./api";
+import {
+  fetchBasPreview,
+  lodgeBas,
+  fetchDesignatedAccounts,
+  fetchPaymentPlanRequest,
+  createPaymentPlanRequest,
+} from "./api";
 import { getToken } from "./auth";
 
-type BasPreview = Awaited<ReturnType<typeof fetchBasPreview>>;
-type DesignatedAccounts = Awaited<ReturnType<typeof fetchDesignatedAccounts>>;
-type DesignatedAccountView = DesignatedAccounts["accounts"][number];
+type BasPreviewResponse = Awaited<ReturnType<typeof fetchBasPreview>>;
+type DesignatedAccountsResponse = Awaited<ReturnType<typeof fetchDesignatedAccounts>>;
+type DesignatedAccountView = DesignatedAccountsResponse["accounts"][number];
+type PaymentPlanResponse = Awaited<ReturnType<typeof fetchPaymentPlanRequest>>["request"];
 
 export default function BasPage() {
   const token = getToken();
-  const [preview, setPreview] = useState<BasPreview | null>(null);
+  const [preview, setPreview] = useState<BasPreviewResponse | null>(null);
+  const [designated, setDesignated] = useState<DesignatedAccountsResponse | null>(null);
+  const [paymentPlan, setPaymentPlan] = useState<PaymentPlanResponse | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [designated, setDesignated] = useState<DesignatedAccounts | null>(null);
   const [designatedError, setDesignatedError] = useState<string | null>(null);
+  const [planError, setPlanError] = useState<string | null>(null);
+  const [planSuccess, setPlanSuccess] = useState<string | null>(null);
+  const [planLoading, setPlanLoading] = useState(false);
+
+  const basCycleId = preview?.basCycleId ?? null;
 
   const loadPreview = async () => {
     if (!token) return;
@@ -22,25 +36,34 @@ export default function BasPage() {
     setDesignatedError(null);
     setLoading(true);
     try {
-      const data = await fetchBasPreview(token);
-      setPreview(data);
+      const [previewData, designatedData] = await Promise.all([
+        fetchBasPreview(token),
+        fetchDesignatedAccounts(token),
+      ]);
+      setPreview(previewData);
+      setDesignated(designatedData);
     } catch (err) {
       console.error(err);
       setError("Unable to load BAS preview");
+    } finally {
       setLoading(false);
-      return;
     }
+  };
 
+  const loadPaymentPlan = async (cycleId: string) => {
+    if (!token) return;
+    setPlanError(null);
+    setPlanSuccess(null);
+    setPlanLoading(true);
     try {
-      const designatedData = await fetchDesignatedAccounts(token);
-      setDesignated(designatedData);
-    } catch (designatedErr) {
-      console.error(designatedErr);
-      setDesignated(null);
-      setDesignatedError("Unable to load designated holding accounts");
+      const response = await fetchPaymentPlanRequest(token, cycleId);
+      setPaymentPlan(response.request);
+    } catch (err) {
+      console.error(err);
+      setPlanError("Unable to load payment plan status");
+    } finally {
+      setPlanLoading(false);
     }
-
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -49,6 +72,19 @@ export default function BasPage() {
     }
     void loadPreview();
   }, [token]);
+
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+    if (basCycleId) {
+      void loadPaymentPlan(basCycleId);
+    } else {
+      setPaymentPlan(null);
+      setPlanError(null);
+      setPlanSuccess(null);
+    }
+  }, [token, basCycleId]);
 
   async function handleLodge() {
     if (!token) return;
@@ -60,11 +96,56 @@ export default function BasPage() {
       const result = await lodgeBas(token);
       setSuccess(`BAS lodged at ${new Date(result.basCycle.lodgedAt).toLocaleString()}`);
       await loadPreview();
+      if (result.basCycle.id) {
+        await loadPaymentPlan(result.basCycle.id);
+      }
     } catch (err) {
       console.error(err);
       setError("BAS could not be lodged. Check blockers and try again.");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleCreatePaymentPlan() {
+    if (!token || !basCycleId) return;
+    const reason = window.prompt("Reason for payment plan", "CASHFLOW_SHORTFALL");
+    if (!reason || reason.trim() === "") {
+      return;
+    }
+    const weeklyAmountInput = window.prompt("Weekly amount (AUD)", "1500");
+    if (!weeklyAmountInput) {
+      return;
+    }
+    const weeklyAmount = Number(weeklyAmountInput);
+    if (!Number.isFinite(weeklyAmount) || weeklyAmount <= 0) {
+      setPlanError("Weekly amount must be a positive number");
+      return;
+    }
+    const startDate = window.prompt("Proposed start date (YYYY-MM-DD)", new Date().toISOString().slice(0, 10));
+    if (!startDate) {
+      return;
+    }
+    const notes = window.prompt("Additional notes (optional)") ?? undefined;
+
+    setPlanError(null);
+    setPlanSuccess(null);
+    setPlanLoading(true);
+    try {
+      const response = await createPaymentPlanRequest(token, {
+        basCycleId,
+        reason: reason.trim(),
+        weeklyAmount,
+        startDate,
+        notes,
+      });
+      setPaymentPlan(response.request);
+      setPlanSuccess("Payment plan request submitted and logged");
+    } catch (err) {
+      console.error(err);
+      setPlanError("Unable to submit payment plan request");
+    } finally {
+      setPlanLoading(false);
     }
   }
 
@@ -161,6 +242,48 @@ export default function BasPage() {
               <HoldingAccountCard title="PAYGW holding account" account={paygwAccount} />
               <HoldingAccountCard title="GST holding account" account={gstAccount} />
             </div>
+          )}
+        </section>
+      )}
+
+      {(basCycleId && preview && (preview.overallStatus !== "READY" || paymentPlan)) && (
+        <section style={planCardStyle}>
+          <div style={planHeaderStyle}>
+            <h2 style={planTitleStyle}>Payment plan request</h2>
+            <span style={planStatusBadgeStyle(paymentPlan?.status ?? "NONE")}>{paymentPlan ? paymentPlan.status : "NONE"}</span>
+          </div>
+          <p style={planSubtitleStyle}>
+            Shortfalls can be escalated to the ATO early. Request a structured payment plan so the evidence trail shows good faith remediation.
+          </p>
+          {planError && <div style={errorTextStyle}>{planError}</div>}
+          {planSuccess && <div style={successTextStyle}>{planSuccess}</div>}
+          {planLoading && <div style={infoTextStyle}>Checking payment plan status...</div>}
+          {paymentPlan ? (
+            <div style={planDetailsGridStyle}>
+              <div>
+                <div style={planDetailLabelStyle}>Requested</div>
+                <div style={planDetailValueStyle}>{new Date(paymentPlan.requestedAt).toLocaleString()}</div>
+              </div>
+              <div>
+                <div style={planDetailLabelStyle}>Reason</div>
+                <div style={planDetailValueStyle}>{paymentPlan.reason}</div>
+              </div>
+              <div>
+                <div style={planDetailLabelStyle}>Details</div>
+                <div style={planDetailValueStyle}>
+                  {JSON.stringify(paymentPlan.details)}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              style={planRequestButtonStyle}
+              onClick={handleCreatePaymentPlan}
+              disabled={planLoading}
+            >
+              Request payment plan
+            </button>
           )}
         </section>
       )}
@@ -522,4 +645,80 @@ const accountsTransferItemStyle: React.CSSProperties = {
 const accountsTransferMetaStyle: React.CSSProperties = {
   fontSize: "12px",
   color: "#64748b",
+};
+
+const planCardStyle: React.CSSProperties = {
+  backgroundColor: "#ffffff",
+  borderRadius: "12px",
+  border: "1px solid #e2e8f0",
+  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.08)",
+  padding: "24px",
+  display: "grid",
+  gap: "16px",
+};
+
+const planHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "12px",
+  flexWrap: "wrap",
+};
+
+const planTitleStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: "20px",
+  fontWeight: 600,
+};
+
+const planStatusBadgeStyle = (status: string): React.CSSProperties => {
+  switch (status.toUpperCase()) {
+    case "APPROVED":
+      return { backgroundColor: "rgba(16, 185, 129, 0.12)", color: "#047857", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" };
+    case "UNDER_REVIEW":
+    case "SUBMITTED":
+      return { backgroundColor: "rgba(250, 204, 21, 0.18)", color: "#92400e", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" };
+    case "REJECTED":
+      return { backgroundColor: "rgba(239, 68, 68, 0.12)", color: "#b91c1c", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" };
+    default:
+      return { backgroundColor: "rgba(148, 163, 184, 0.18)", color: "#334155", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" };
+  }
+};
+
+const planSubtitleStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: "14px",
+  color: "#4b5563",
+  maxWidth: "640px",
+};
+
+const planDetailsGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: "16px",
+};
+
+const planDetailLabelStyle: React.CSSProperties = {
+  fontSize: "12px",
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+  color: "#64748b",
+};
+
+const planDetailValueStyle: React.CSSProperties = {
+  fontSize: "14px",
+  fontWeight: 600,
+  color: "#111827",
+};
+
+const planRequestButtonStyle: React.CSSProperties = {
+  padding: "10px 16px",
+  borderRadius: "8px",
+  border: "1px solid #1d4ed8",
+  backgroundColor: "#1d4ed8",
+  color: "#ffffff",
+  fontSize: "14px",
+  fontWeight: 600,
+  cursor: "pointer",
+  alignSelf: "start",
 };

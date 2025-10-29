@@ -74,6 +74,7 @@ export async function fetchCurrentObligations(token: string) {
   });
   if (!res.ok) throw new Error("failed_obligations");
   return res.json() as Promise<{
+    basCycleId: string | null;
     basPeriodStart: string;
     basPeriodEnd: string;
     paygw: {
@@ -88,7 +89,7 @@ export async function fetchCurrentObligations(token: string) {
       shortfall: number;
       status: string;
     };
-    nextBasDue: string;
+    nextBasDue: string | null;
   }>;
 }
 
@@ -171,6 +172,7 @@ export async function fetchBasPreview(token: string) {
   });
   if (!res.ok) throw new Error("failed_bas_preview");
   return res.json() as Promise<{
+    basCycleId: string | null;
     periodStart: string | null;
     periodEnd: string | null;
     paygw: { required: number; secured: number; status: string };
@@ -213,6 +215,15 @@ export async function fetchComplianceReport(token: string) {
       paygw: number;
       gst: number;
     };
+    paymentPlans: Array<{
+      id: string;
+      basCycleId: string;
+      requestedAt: string;
+      status: string;
+      reason: string;
+      details: Record<string, unknown>;
+      resolvedAt: string | null;
+    }>;
   }>;
 }
 
@@ -255,5 +266,61 @@ export async function fetchDesignatedAccounts(token: string) {
         createdAt: string;
       }>;
     }>;
+  }>;
+}
+
+export async function fetchPaymentPlanRequest(
+  token: string,
+  basCycleId?: string
+) {
+  const url =
+    basCycleId === undefined
+      ? `${API_BASE}/bas/payment-plan-request`
+      : `${API_BASE}/bas/payment-plan-request?basCycleId=${encodeURIComponent(
+          basCycleId
+        )}`;
+  const res = await fetch(url, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error("failed_payment_plan_fetch");
+  return res.json() as Promise<{
+    request: {
+      id: string;
+      basCycleId: string;
+      requestedAt: string;
+      status: string;
+      reason: string;
+      details: Record<string, unknown>;
+      resolvedAt: string | null;
+    } | null;
+  }>;
+}
+
+export async function createPaymentPlanRequest(
+  token: string,
+  payload: {
+    basCycleId: string;
+    reason: string;
+    weeklyAmount: number;
+    startDate: string;
+    notes?: string;
+  }
+) {
+  const res = await fetch(`${API_BASE}/bas/payment-plan-request`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("failed_payment_plan_create");
+  return res.json() as Promise<{
+    request: {
+      id: string;
+      basCycleId: string;
+      requestedAt: string;
+      status: string;
+      reason: string;
+      details: Record<string, unknown>;
+      resolvedAt: string | null;
+    };
   }>;
 }
