@@ -8,6 +8,10 @@ datasource db {
   shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
+// =========================
+// Enums
+// =========================
+
 enum AccountType {
   ASSET
   LIABILITY
@@ -41,47 +45,136 @@ enum AlertStatus {
   CLOSED
 }
 
+// =========================
+// Payroll domain
+// =========================
+//
+// IDs are String to align with current Org/User tables.
+// baseRate, superRate etc. use Decimal with @db.Decimal now.
+// =========================
+
+model Employee {
+  id                 String    @id
+  orgId              String
+  org                Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  fullNameCiphertext String
+  fullNameKid        String
+  tfnProvided        Boolean   @default(false)
+
+  // "full_time" | "part_time" | "contractor" | etc.
+  employmentType     String
+
+  // hourly rate or derived salary rate
+  baseRate           Decimal   @db.Decimal(12, 2) @default("0")
+
+  // superannuation %, e.g. 11.00
+  superRate          Decimal   @db.Decimal(5, 2)  @default("11.0")
+
+  status             String    @default("active")
+  createdAt          DateTime  @default(now())
+
+  payslips           Payslip[]
+
+  @@index([orgId], map: "Employee_orgId_idx")
+}
+
+model PayRun {
+  id           String    @id
+  orgId        String
+  org          Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  periodStart  DateTime
+  periodEnd    DateTime
+  paymentDate  DateTime
+
+  // "draft" | "committed"
+  status       String    @default("draft")
+
+  createdAt    DateTime  @default(now())
+
+  payslips     Payslip[]
+
+  @@index([orgId], map: "PayRun_orgId_idx")
+}
+
+model Payslip {
+  id              String    @id
+
+  payRunId        String
+  payRun          PayRun    @relation(fields: [payRunId], references: [id], onDelete: Cascade)
+
+  employeeId      String
+  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  grossPay        Decimal   @db.Decimal(12, 2)
+  paygWithheld    Decimal   @db.Decimal(12, 2)
+  superAccrued    Decimal   @db.Decimal(12, 2)
+
+  notesCiphertext String
+  notesKid        String
+
+  createdAt       DateTime  @default(now())
+
+  @@index([payRunId], map: "Payslip_payRunId_idx")
+  @@index([employeeId], map: "Payslip_employeeId_idx")
+}
+
+// =========================
+// Core ledger / compliance
+// =========================
+//
+// Production ledger covering:
+// - GST collection
+// - PAYGW / STSL accrual
+// - BAS evidence trails
+// =========================
+
 model Organization {
-  id        String    @id @default(uuid()) @db.Uuid
-  name      String
-  createdAt DateTime  @default(now())
-  accounts  Account[]
-  journals  Journal[]
+  id          String            @id @default(uuid()) @db.Uuid
+  name        String
+  createdAt   DateTime          @default(now())
+
+  accounts    Account[]
+  journals    Journal[]
 }
 
 model Account {
-  id         String         @id @default(uuid()) @db.Uuid
-  orgId      String         @db.Uuid
-  code       String
-  name       String
-  type       AccountType
-  subtype    AccountSubtype?
-  currency   String         @default("AUD")
-  isActive   Boolean        @default(true)
-  createdAt  DateTime       @default(now())
-  postings   Posting[]
-  balances   BalanceSnapshot[]
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  id            String            @id @default(uuid()) @db.Uuid
+  orgId         String            @db.Uuid
+  code          String
+  name          String
+  type          AccountType
+  subtype       AccountSubtype?
+  currency      String            @default("AUD")
+  isActive      Boolean           @default(true)
+  createdAt     DateTime          @default(now())
+
+  postings      Posting[]
+  balances      BalanceSnapshot[]
+
+  organization  Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@unique([orgId, code])
   @@index([orgId, subtype])
 }
 
 model Journal {
-  id          String       @id @default(uuid()) @db.Uuid
-  orgId       String       @db.Uuid
-  seq         BigInt       @db.BigInt
-  type        JournalType
-  eventId     String
-  dedupeId    String
-  occurredAt  DateTime
-  recordedAt  DateTime     @default(now())
-  source      String
-  description String?
-  hash        String?
-  prevHash    String?
-  postings    Posting[]
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  id            String        @id @default(uuid()) @db.Uuid
+  orgId         String        @db.Uuid
+  seq           BigInt        @db.BigInt
+  type          JournalType
+  eventId       String
+  dedupeId      String
+  occurredAt    DateTime
+  recordedAt    DateTime      @default(now())
+  source        String
+  description   String?
+  hash          String?
+  prevHash      String?
+
+  postings      Posting[]
+  organization  Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@unique([orgId, dedupeId])
   @@unique([orgId, seq])
@@ -89,29 +182,29 @@ model Journal {
 }
 
 model Posting {
-  id        String   @id @default(uuid()) @db.Uuid
-  orgId     String   @db.Uuid
-  journalId String   @db.Uuid
-  accountId String   @db.Uuid
-  amountCents BigInt @db.BigInt
-  memo      String?
+  id          String   @id @default(uuid()) @db.Uuid
+  orgId       String   @db.Uuid
+  journalId   String   @db.Uuid
+  accountId   String   @db.Uuid
+  amountCents BigInt   @db.BigInt
+  memo        String?
 
-  journal Journal @relation(fields: [journalId], references: [id], onDelete: Cascade)
-  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  journal     Journal  @relation(fields: [journalId], references: [id], onDelete: Cascade)
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@index([orgId, accountId])
   @@index([orgId, journalId])
 }
 
 model BalanceSnapshot {
-  id           String   @id @default(uuid()) @db.Uuid
-  orgId        String   @db.Uuid
-  accountId    String   @db.Uuid
-  asOfSeq      BigInt   @db.BigInt
-  balanceCents BigInt   @db.BigInt
-  createdAt    DateTime @default(now())
+  id            String   @id @default(uuid()) @db.Uuid
+  orgId         String   @db.Uuid
+  accountId     String   @db.Uuid
+  asOfSeq       BigInt   @db.BigInt
+  balanceCents  BigInt   @db.BigInt
+  createdAt     DateTime @default(now())
 
-  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account       Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@unique([orgId, accountId, asOfSeq])
 }
@@ -134,12 +227,12 @@ model EventEnvelope {
 }
 
 model BankTransaction {
-  id               String @id @default(uuid()) @db.Uuid
-  orgId            String @db.Uuid
+  id               String   @id @default(uuid()) @db.Uuid
+  orgId            String   @db.Uuid
   extRef           String?
   accountName      String
   txDate           DateTime
-  amountCents      BigInt @db.BigInt
+  amountCents      BigInt   @db.BigInt
   description      String?
   matchedJournalId String?
 
@@ -160,15 +253,15 @@ model GstTransaction {
 }
 
 model PayrollItem {
-  id              String   @id @default(uuid()) @db.Uuid
-  orgId           String   @db.Uuid
-  employeeId      String
-  payPeriodStart  DateTime
-  payPeriodEnd    DateTime
-  grossCents      BigInt   @db.BigInt
-  paygwCents      BigInt   @db.BigInt
-  stslCents       BigInt   @db.BigInt
-  journalId       String?
+  id             String   @id @default(uuid()) @db.Uuid
+  orgId          String   @db.Uuid
+  employeeId     String
+  payPeriodStart DateTime
+  payPeriodEnd   DateTime
+  grossCents     BigInt   @db.BigInt
+  paygwCents     BigInt   @db.BigInt
+  stslCents      BigInt   @db.BigInt
+  journalId      String?
 
   @@index([orgId, employeeId])
 }
@@ -211,25 +304,37 @@ model EvidenceArtifact {
 }
 
 model IdempotencyKey {
-  id         String   @id @default(uuid()) @db.Uuid
-  orgId      String   @db.Uuid
-  key        String
+  id          String   @id @default(uuid()) @db.Uuid
+  orgId       String   @db.Uuid
+  key         String
   firstSeenAt DateTime @default(now())
-  resource   String?
-  resourceId String?
+  resource    String?
+  resourceId  String?
 
   @@unique([orgId, key])
 }
 
-/// Legacy models retained for compatibility with existing services
+// =========================
+// Legacy models still used by the live Fastify API
+// =========================
+//
+// These match what the running api-gateway expects today
+// (auth/login, /users, /bank-lines, /admin/export/:orgId).
+// =========================
+
 model Org {
   id         String         @id @default(cuid())
   name       String
   createdAt  DateTime       @default(now())
   deletedAt  DateTime?
+
   users      User[]
   lines      BankLine[]
   tombstones OrgTombstone[]
+
+  // payroll backrefs
+  employees  Employee[]
+  payRuns    PayRun[]
 }
 
 model User {
@@ -237,6 +342,7 @@ model User {
   email     String   @unique
   password  String
   createdAt DateTime @default(now())
+
   org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
   orgId     String
 }
@@ -277,4 +383,3 @@ model AuditLog {
   @@index([orgId, createdAt])
   @@index([actorId, createdAt])
 }
-
