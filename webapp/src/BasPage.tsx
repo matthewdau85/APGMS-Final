@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { fetchBasPreview, lodgeBas } from "./api";
+import { fetchBasPreview, lodgeBas, fetchDesignatedAccounts } from "./api";
 import { getToken } from "./auth";
 
 type BasPreview = Awaited<ReturnType<typeof fetchBasPreview>>;
+type DesignatedAccounts = Awaited<ReturnType<typeof fetchDesignatedAccounts>>;
+type DesignatedAccountView = DesignatedAccounts["accounts"][number];
 
 export default function BasPage() {
   const token = getToken();
@@ -11,19 +13,34 @@ export default function BasPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [designated, setDesignated] = useState<DesignatedAccounts | null>(null);
+  const [designatedError, setDesignatedError] = useState<string | null>(null);
 
   const loadPreview = async () => {
     if (!token) return;
     setError(null);
+    setDesignatedError(null);
+    setLoading(true);
     try {
       const data = await fetchBasPreview(token);
       setPreview(data);
     } catch (err) {
       console.error(err);
       setError("Unable to load BAS preview");
-    } finally {
       setLoading(false);
+      return;
     }
+
+    try {
+      const designatedData = await fetchDesignatedAccounts(token);
+      setDesignated(designatedData);
+    } catch (designatedErr) {
+      console.error(designatedErr);
+      setDesignated(null);
+      setDesignatedError("Unable to load designated holding accounts");
+    }
+
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -41,9 +58,7 @@ export default function BasPage() {
 
     try {
       const result = await lodgeBas(token);
-      setSuccess(
-        `BAS lodged at ${new Date(result.basCycle.lodgedAt).toLocaleString()}`
-      );
+      setSuccess(`BAS lodged at ${new Date(result.basCycle.lodgedAt).toLocaleString()}`);
       await loadPreview();
     } catch (err) {
       console.error(err);
@@ -57,14 +72,11 @@ export default function BasPage() {
     return null;
   }
 
-  const hasActiveCycle =
-    preview && preview.periodStart && preview.periodEnd ? true : false;
-  const periodStart = hasActiveCycle
-    ? new Date(preview!.periodStart!).toLocaleDateString()
-    : null;
-  const periodEnd = hasActiveCycle
-    ? new Date(preview!.periodEnd!).toLocaleDateString()
-    : null;
+  const hasActiveCycle = Boolean(preview?.periodStart && preview?.periodEnd);
+  const periodStart = hasActiveCycle && preview?.periodStart ? new Date(preview.periodStart).toLocaleDateString() : null;
+  const periodEnd = hasActiveCycle && preview?.periodEnd ? new Date(preview.periodEnd).toLocaleDateString() : null;
+  const paygwAccount = designated?.accounts.find((account) => account.type.toUpperCase() === "PAYGW") ?? null;
+  const gstAccount = designated?.accounts.find((account) => account.type.toUpperCase() === "GST") ?? null;
 
   return (
     <div style={{ display: "grid", gap: "24px" }}>
@@ -84,12 +96,10 @@ export default function BasPage() {
           <section style={overviewCardStyle}>
             <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
               <span style={statusBadgeStyle(preview.overallStatus)}>
-                {preview.overallStatus === "READY" ? "✅ READY" : "❌ BLOCKED"}
+                {preview.overallStatus === "READY" ? "READY" : "BLOCKED"}
               </span>
               <div>
-                <div style={overviewTitleStyle}>
-                  BAS period {periodStart} → {periodEnd}
-                </div>
+                <div style={overviewTitleStyle}>BAS period {periodStart} to {periodEnd}</div>
                 <div style={metaTextStyle}>
                   The ATO payment is automatically triggered if all obligations are secured.
                 </div>
@@ -102,7 +112,7 @@ export default function BasPage() {
                 onClick={handleLodge}
                 disabled={submitting}
               >
-                {submitting ? "Lodging…" : "Lodge BAS now"}
+                {submitting ? "Lodging..." : "Lodge BAS now"}
               </button>
             )}
           </section>
@@ -126,16 +136,88 @@ export default function BasPage() {
           )}
         </>
       )}
+
       {preview && !error && !hasActiveCycle && (
         <section style={overviewCardStyle}>
-          <div style={{ fontSize: "16px", fontWeight: 600 }}>
-            No active BAS cycle
-          </div>
+          <div style={{ fontSize: "16px", fontWeight: 600 }}>No active BAS cycle</div>
           <p style={{ fontSize: "14px", color: "#4b5563", margin: 0 }}>
             All BAS cycles are lodged. Seed a new period in the database to continue the demo.
           </p>
         </section>
       )}
+
+      {(designated || designatedError) && (
+        <section style={accountsCardStyle}>
+          <h2 style={accountsTitleStyle}>Designated holding accounts</h2>
+          <p style={accountsSubtitleStyle}>
+            The ATO transfer draws directly from these PAYGW and GST designated accounts when you lodge.
+          </p>
+          {designatedError && <div style={errorTextStyle}>{designatedError}</div>}
+          {!designated && !designatedError && (
+            <div style={infoTextStyle}>Loading holding account balances...</div>
+          )}
+          {designated && (
+            <div style={accountsGridStyle}>
+              <HoldingAccountCard title="PAYGW holding account" account={paygwAccount} />
+              <HoldingAccountCard title="GST holding account" account={gstAccount} />
+            </div>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
+
+function HoldingAccountCard({ title, account }: { title: string; account: DesignatedAccountView | null }) {
+  const balance = account?.balance ?? 0;
+  const palette = account
+    ? balance > 0
+      ? { background: "rgba(16, 185, 129, 0.12)", text: "#047857" }
+      : { background: "rgba(250, 204, 21, 0.18)", text: "#92400e" }
+    : { background: "rgba(148, 163, 184, 0.18)", text: "#334155" };
+
+  return (
+    <div style={accountsCardColumnStyle}>
+      <div style={accountsCardHeaderStyle}>
+        <h3 style={accountsCardTitleStyle}>{title}</h3>
+        <span
+          style={{
+            padding: "4px 10px",
+            borderRadius: "999px",
+            fontSize: "12px",
+            fontWeight: 600,
+            textTransform: "uppercase",
+            letterSpacing: "0.05em",
+            backgroundColor: palette.background,
+            color: palette.text,
+          }}
+        >
+          {account ? "Inbound only" : "Not provisioned"}
+        </span>
+      </div>
+      <div style={accountsBalanceStyle}>{currencyFormatter.format(balance)}</div>
+      <div style={accountsUpdatedStyle}>
+        {account ? `Updated ${new Date(account.updatedAt).toLocaleString()}` : "Configure in database seed"}
+      </div>
+      <div>
+        <div style={accountsTransfersTitleStyle}>Recent transfers</div>
+        {account && account.transfers.length > 0 ? (
+          <ul style={accountsTransfersListStyle}>
+            {account.transfers.map((transfer) => (
+              <li key={transfer.id} style={accountsTransferItemStyle}>
+                <div>{currencyFormatter.format(transfer.amount)}</div>
+                <div style={accountsTransferMetaStyle}>
+                  {transfer.source} - {new Date(transfer.createdAt).toLocaleString()}
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div style={infoTextStyle}>
+            {account ? "No transfers recorded yet." : "No account created yet."}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -348,4 +430,96 @@ const blockersListStyle: React.CSSProperties = {
 
 const blockerItemStyle: React.CSSProperties = {
   lineHeight: 1.5,
+};
+
+const accountsCardStyle: React.CSSProperties = {
+  backgroundColor: "#ffffff",
+  borderRadius: "12px",
+  border: "1px solid #e2e8f0",
+  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.08)",
+  padding: "24px",
+  display: "grid",
+  gap: "16px",
+};
+
+const accountsTitleStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: "20px",
+  fontWeight: 600,
+};
+
+const accountsSubtitleStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: "14px",
+  color: "#4b5563",
+  maxWidth: "620px",
+};
+
+const accountsGridStyle: React.CSSProperties = {
+  display: "grid",
+  gap: "16px",
+  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+};
+
+const accountsCardColumnStyle: React.CSSProperties = {
+  backgroundColor: "#f8fafc",
+  borderRadius: "12px",
+  border: "1px solid #dbeafe",
+  padding: "18px",
+  display: "grid",
+  gap: "12px",
+};
+
+const accountsCardHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "12px",
+};
+
+const accountsCardTitleStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: "16px",
+  fontWeight: 600,
+};
+
+const accountsBalanceStyle: React.CSSProperties = {
+  fontSize: "22px",
+  fontWeight: 700,
+  color: "#0f172a",
+};
+
+const accountsUpdatedStyle: React.CSSProperties = {
+  fontSize: "12px",
+  color: "#64748b",
+};
+
+const accountsTransfersTitleStyle: React.CSSProperties = {
+  fontSize: "12px",
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  fontWeight: 600,
+  color: "#64748b",
+};
+
+const accountsTransfersListStyle: React.CSSProperties = {
+  listStyle: "none",
+  margin: 0,
+  padding: 0,
+  display: "grid",
+  gap: "8px",
+};
+
+const accountsTransferItemStyle: React.CSSProperties = {
+  backgroundColor: "#ffffff",
+  borderRadius: "10px",
+  padding: "10px",
+  border: "1px solid #e2e8f0",
+  display: "grid",
+  gap: "4px",
+};
+
+const accountsTransferMetaStyle: React.CSSProperties = {
+  fontSize: "12px",
+  color: "#64748b",
 };

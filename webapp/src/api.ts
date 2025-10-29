@@ -209,6 +209,10 @@ export async function fetchComplianceReport(token: string) {
       resolvedThisQuarter: number;
     };
     nextBasDue: string | null;
+    designatedTotals: {
+      paygw: number;
+      gst: number;
+    };
   }>;
 }
 
@@ -225,6 +229,31 @@ export async function fetchSecurityUsers(token: string) {
       mfaEnabled: boolean;
       createdAt: string;
       lastLogin: string | null;
+    }>;
+  }>;
+}
+
+export async function fetchDesignatedAccounts(token: string) {
+  const res = await fetch(`${API_BASE}/org/designated-accounts`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error("failed_designated_accounts");
+  return res.json() as Promise<{
+    totals: {
+      paygw: number;
+      gst: number;
+    };
+    accounts: Array<{
+      id: string;
+      type: string;
+      balance: number;
+      updatedAt: string;
+      transfers: Array<{
+        id: string;
+        amount: number;
+        source: string;
+        createdAt: string;
+      }>;
     }>;
   }>;
 }
