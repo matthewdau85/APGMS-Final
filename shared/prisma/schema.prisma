@@ -331,6 +331,8 @@ model Org {
   users      User[]
   lines      BankLine[]
   tombstones OrgTombstone[]
+  alerts     Alert[]
+  basCycles  BasCycle[]
 
   // payroll backrefs
   employees  Employee[]
@@ -342,9 +344,43 @@ model User {
   email     String   @unique
   password  String
   createdAt DateTime @default(now())
+  role      String   @default("admin")
+  mfaEnabled Boolean @default(false)
 
   org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
   orgId     String
+}
+
+model Alert {
+  id             String   @id @default(cuid())
+  org            Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId          String
+  type           String
+  severity       String
+  message        String
+  createdAt      DateTime @default(now())
+  resolvedAt     DateTime?
+  resolutionNote String?
+
+  @@index([orgId, createdAt])
+  @@index([orgId, resolvedAt])
+}
+
+model BasCycle {
+  id            String   @id @default(cuid())
+  org           Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId         String
+  periodStart   DateTime
+  periodEnd     DateTime
+  paygwRequired Decimal
+  paygwSecured  Decimal
+  gstRequired   Decimal
+  gstSecured    Decimal
+  overallStatus String
+  lodgedAt      DateTime?
+
+  @@index([orgId, periodStart, periodEnd])
+  @@index([orgId, lodgedAt])
 }
 
 model BankLine {

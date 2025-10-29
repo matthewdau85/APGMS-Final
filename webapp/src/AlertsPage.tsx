@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { fetchAlerts } from "./api";
+import { fetchAlerts, resolveAlert } from "./api";
 import { getToken } from "./auth";
 
 type AlertRecord = Awaited<ReturnType<typeof fetchAlerts>>["alerts"][number];
@@ -9,23 +9,57 @@ export default function AlertsPage() {
   const [alerts, setAlerts] = useState<AlertRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [submittingId, setSubmittingId] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const loadAlerts = async () => {
+    if (!token) {
+      return;
+    }
+    setError(null);
+    try {
+      const result = await fetchAlerts(token);
+      setAlerts(result.alerts);
+    } catch (err) {
+      console.error(err);
+      setError("Unable to load alerts");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!token) {
       return;
     }
-    (async () => {
-      try {
-        const result = await fetchAlerts(token);
-        setAlerts(result.alerts);
-      } catch (err) {
-        console.error(err);
-        setError("Unable to load alerts");
-      } finally {
-        setLoading(false);
-      }
-    })();
+    void loadAlerts();
   }, [token]);
+
+  async function handleResolve(alert: AlertRecord) {
+    if (!token) return;
+    const note =
+      window.prompt(
+        "Add a resolution note for the audit log:",
+        "We transferred the missing GST this morning."
+      ) ?? "";
+    if (!note.trim()) {
+      return;
+    }
+
+    setSubmittingId(alert.id);
+    setError(null);
+    setSuccess(null);
+    try {
+      await resolveAlert(token, alert.id, note.trim());
+      await loadAlerts();
+      setSuccess("Alert resolved and logged.");
+    } catch (err) {
+      console.error(err);
+      setError("Failed to resolve alert.");
+    } finally {
+      setSubmittingId(null);
+    }
+  }
 
   if (!token) {
     return null;
@@ -42,6 +76,7 @@ export default function AlertsPage() {
 
       {loading && <div style={infoTextStyle}>Loading alerts...</div>}
       {error && <div style={errorTextStyle}>{error}</div>}
+      {success && <div style={successTextStyle}>{success}</div>}
 
       {!loading && !error && (
         <section style={cardStyle}>
@@ -59,9 +94,28 @@ export default function AlertsPage() {
                     <div style={metaTextStyle}>
                       {alert.type} • {new Date(alert.createdAt).toLocaleString()}
                     </div>
+                    {alert.resolutionNote && (
+                      <div style={resolutionNoteStyle}>
+                        Note: {alert.resolutionNote}
+                      </div>
+                    )}
                   </div>
-                  <div>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                     <ResolvedBadge resolved={alert.resolved} />
+                    {!alert.resolved && (
+                      <button
+                        type="button"
+                        style={{
+                          ...resolveButtonStyle,
+                          opacity: submittingId === alert.id ? 0.6 : 1,
+                          cursor: submittingId === alert.id ? "wait" : "pointer",
+                        }}
+                        disabled={submittingId === alert.id}
+                        onClick={() => handleResolve(alert)}
+                      >
+                        {submittingId === alert.id ? "Resolving…" : "Resolve"}
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}
@@ -177,4 +231,24 @@ const infoTextStyle: React.CSSProperties = {
 const errorTextStyle: React.CSSProperties = {
   fontSize: "14px",
   color: "#b91c1c",
+};
+
+const successTextStyle: React.CSSProperties = {
+  fontSize: "14px",
+  color: "#047857",
+};
+
+const resolutionNoteStyle: React.CSSProperties = {
+  fontSize: "12px",
+  color: "#4b5563",
+};
+
+const resolveButtonStyle: React.CSSProperties = {
+  padding: "6px 12px",
+  borderRadius: "999px",
+  border: "1px solid #d1d5db",
+  backgroundColor: "#ffffff",
+  fontSize: "12px",
+  fontWeight: 600,
+  cursor: "pointer",
 };

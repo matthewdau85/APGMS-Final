@@ -1,6 +1,11 @@
 import Fastify, { FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
-import { PrismaClient } from "@prisma/client";
+import {
+  PrismaClient,
+  Prisma,
+  Alert as AlertModel,
+  BasCycle as BasCycleModel,
+} from "@prisma/client";
 import crypto from "node:crypto";
 
 // NOTE: make sure config.ts exports what we discussed earlier,
@@ -11,6 +16,85 @@ import { authGuard } from "./auth.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 
 const prisma = new PrismaClient();
+
+function decimalToNumber(value: Prisma.Decimal | number | null | undefined): number {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === "number") return value;
+  return Number(value);
+}
+
+function shapeAlert(alert: AlertModel) {
+  return {
+    id: alert.id,
+    type: alert.type,
+    severity: alert.severity,
+    message: alert.message,
+    createdAt: alert.createdAt,
+    resolved: Boolean(alert.resolvedAt),
+    resolvedAt: alert.resolvedAt ?? null,
+    resolutionNote: alert.resolutionNote ?? null,
+  };
+}
+
+function shapeBasPreview(cycle: BasCycleModel | null) {
+  if (!cycle) {
+    return null;
+  }
+
+  const paygwRequired = decimalToNumber(cycle.paygwRequired);
+  const paygwSecured = decimalToNumber(cycle.paygwSecured);
+  const paygwShortfall = Math.max(0, paygwRequired - paygwSecured);
+  const gstRequired = decimalToNumber(cycle.gstRequired);
+  const gstSecured = decimalToNumber(cycle.gstSecured);
+  const gstShortfall = Math.max(0, gstRequired - gstSecured);
+
+  const paygwStatus = paygwShortfall <= 0 ? "READY" : "BLOCKED";
+  const gstStatus = gstShortfall <= 0 ? "READY" : "BLOCKED";
+  const overallStatus =
+    paygwStatus === "READY" && gstStatus === "READY" ? "READY" : "BLOCKED";
+
+  const blockers: string[] = [];
+  if (paygwShortfall > 0) {
+    blockers.push(
+      `PAYGW not fully funded. $${paygwShortfall.toFixed(
+        2
+      )} short. Transfer to ATO is halted until funded or plan requested.`
+    );
+  }
+  if (gstShortfall > 0) {
+    blockers.push(
+      `GST not fully funded. $${gstShortfall.toFixed(
+        2
+      )} short. Review daily capture and top up the holding account.`
+    );
+  }
+
+  return {
+    periodStart: cycle.periodStart.toISOString(),
+    periodEnd: cycle.periodEnd.toISOString(),
+    paygw: {
+      required: paygwRequired,
+      secured: paygwSecured,
+      status: paygwStatus,
+      shortfall: Number(paygwShortfall.toFixed(2)),
+    },
+    gst: {
+      required: gstRequired,
+      secured: gstSecured,
+      status: gstStatus,
+      shortfall: Number(gstShortfall.toFixed(2)),
+    },
+    overallStatus,
+    blockers,
+    lodgedAt: cycle.lodgedAt ?? null,
+  };
+}
+
+function formatBasPeriod(start: Date, end: Date): string {
+  const year = start.getUTCFullYear();
+  const quarter = Math.floor(start.getUTCMonth() / 3) + 1;
+  return `${year} Q${quarter}`;
+}
 
 export async function buildServer(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -287,23 +371,49 @@ export async function buildServer(): Promise<FastifyInstance> {
       const userClaims: any = (request as any).user;
       const orgId = userClaims.orgId;
 
-      const data = {
-        basPeriodStart: "2025-10-01",
-        basPeriodEnd: "2025-10-31",
-        paygw: {
-          required: 12345.67,
-          secured: 12000,
-          shortfall: 345.67,
-          status: "SHORTFALL",
-        },
-        gst: {
-          required: 9876.54,
-          secured: 9876.54,
-          shortfall: 0,
-          status: "READY",
-        },
-        nextBasDue: "2025-11-21T00:00:00Z",
-      };
+      const cycle = await prisma.basCycle.findFirst({
+        where: { orgId, lodgedAt: null },
+        orderBy: { periodEnd: "desc" },
+      });
+
+      const preview = shapeBasPreview(cycle);
+      const response = preview
+        ? {
+            basPeriodStart: preview.periodStart,
+            basPeriodEnd: preview.periodEnd,
+            paygw: {
+              required: preview.paygw.required,
+              secured: preview.paygw.secured,
+              shortfall: preview.paygw.shortfall,
+              status:
+                preview.paygw.shortfall > 0 ? "SHORTFALL" : preview.paygw.status,
+            },
+            gst: {
+              required: preview.gst.required,
+              secured: preview.gst.secured,
+              shortfall: preview.gst.shortfall,
+              status:
+                preview.gst.shortfall > 0 ? "SHORTFALL" : preview.gst.status,
+            },
+            nextBasDue: preview.periodEnd,
+          }
+        : {
+            basPeriodStart: null,
+            basPeriodEnd: null,
+            paygw: {
+              required: 0,
+              secured: 0,
+              shortfall: 0,
+              status: "READY",
+            },
+            gst: {
+              required: 0,
+              secured: 0,
+              shortfall: 0,
+              status: "READY",
+            },
+            nextBasDue: null,
+          };
 
       try {
         await prisma.auditLog.create({
@@ -316,7 +426,7 @@ export async function buildServer(): Promise<FastifyInstance> {
         });
       } catch (_) {}
 
-      reply.send(data);
+      reply.send(response);
     }
   );
 
@@ -403,18 +513,10 @@ export async function buildServer(): Promise<FastifyInstance> {
       const userClaims: any = (request as any).user;
       const orgId = userClaims.orgId;
 
-      const data = {
-        alerts: [
-          {
-            id: "alrt-1",
-            type: "GST_SHORTFALL",
-            severity: "HIGH",
-            message: "GST secured is lower than GST calculated",
-            createdAt: "2025-10-16T10:00:00Z",
-            resolved: false,
-          },
-        ],
-      };
+      const alerts = await prisma.alert.findMany({
+        where: { orgId },
+        orderBy: { createdAt: "desc" },
+      });
 
       try {
         await prisma.auditLog.create({
@@ -427,7 +529,72 @@ export async function buildServer(): Promise<FastifyInstance> {
         });
       } catch (_) {}
 
-      reply.send(data);
+      reply.send({
+        alerts: alerts.map((alert) => shapeAlert(alert)),
+      });
+    }
+  );
+
+  app.post(
+    "/alerts/:id/resolve",
+    { preHandler: authGuard },
+    async (request, reply) => {
+      const userClaims: any = (request as any).user;
+      const orgId = userClaims.orgId;
+      const { id } = request.params as { id: string };
+      const body = request.body as { note?: string } | undefined;
+
+      if (!body?.note || body.note.trim().length === 0) {
+        reply.code(400).send({
+          error: {
+            code: "invalid_body",
+            message: "Resolution note is required",
+          },
+        });
+        return;
+      }
+
+      const alert = await prisma.alert.findUnique({
+        where: { id },
+      });
+
+      if (!alert || alert.orgId !== orgId) {
+        reply.code(404).send({
+          error: { code: "alert_not_found", message: "No such alert" },
+        });
+        return;
+      }
+
+      if (alert.resolvedAt) {
+        reply.code(409).send({
+          error: {
+            code: "already_resolved",
+            message: "Alert already resolved",
+          },
+        });
+        return;
+      }
+
+      const resolved = await prisma.alert.update({
+        where: { id },
+        data: {
+          resolvedAt: new Date(),
+          resolutionNote: body.note,
+        },
+      });
+
+      try {
+        await prisma.auditLog.create({
+          data: {
+            orgId,
+            actorId: userClaims.sub,
+            action: "alert.resolve",
+            metadata: { alertId: id },
+          },
+        });
+      } catch (_) {}
+
+      reply.send({ alert: shapeAlert(resolved) });
     }
   );
 
@@ -438,24 +605,37 @@ export async function buildServer(): Promise<FastifyInstance> {
       const userClaims: any = (request as any).user;
       const orgId = userClaims.orgId;
 
-      const data = {
-        periodStart: "2025-10-01",
-        periodEnd: "2025-10-31",
-        paygw: {
-          required: 12345.67,
-          secured: 12000,
-          status: "BLOCKED",
-        },
-        gst: {
-          required: 9876.54,
-          secured: 9876.54,
-          status: "READY",
-        },
-        overallStatus: "BLOCKED",
-        blockers: [
-          "PAYGW not fully funded. $345.67 short. Transfer to ATO is halted until funded or plan requested.",
-        ],
-      };
+      const cycle = await prisma.basCycle.findFirst({
+        where: { orgId, lodgedAt: null },
+        orderBy: { periodEnd: "desc" },
+      });
+
+      const preview = shapeBasPreview(cycle);
+      const payload = preview
+        ? {
+            periodStart: preview.periodStart,
+            periodEnd: preview.periodEnd,
+            paygw: {
+              required: preview.paygw.required,
+              secured: preview.paygw.secured,
+              status: preview.paygw.status,
+            },
+            gst: {
+              required: preview.gst.required,
+              secured: preview.gst.secured,
+              status: preview.gst.status,
+            },
+            overallStatus: preview.overallStatus,
+            blockers: preview.blockers,
+          }
+        : {
+            periodStart: null,
+            periodEnd: null,
+            paygw: { required: 0, secured: 0, status: "READY" },
+            gst: { required: 0, secured: 0, status: "READY" },
+            overallStatus: "READY",
+            blockers: [],
+          };
 
       try {
         await prisma.auditLog.create({
@@ -468,7 +648,70 @@ export async function buildServer(): Promise<FastifyInstance> {
         });
       } catch (_) {}
 
-      reply.send(data);
+      reply.send(payload);
+    }
+  );
+
+  app.post(
+    "/bas/lodge",
+    { preHandler: authGuard },
+    async (request, reply) => {
+      const userClaims: any = (request as any).user;
+      const orgId = userClaims.orgId;
+
+      const cycle = await prisma.basCycle.findFirst({
+        where: { orgId, lodgedAt: null },
+        orderBy: { periodEnd: "desc" },
+      });
+
+      if (!cycle) {
+        reply.code(404).send({
+          error: {
+            code: "bas_cycle_not_found",
+            message: "No active BAS cycle",
+          },
+        });
+        return;
+      }
+
+      const preview = shapeBasPreview(cycle);
+      if (!preview || preview.overallStatus !== "READY") {
+        reply.code(409).send({
+          error: {
+            code: "bas_cycle_blocked",
+            message: "BAS cycle not ready for lodgment",
+          },
+        });
+        return;
+      }
+
+      const lodgmentTime = new Date();
+      const updated = await prisma.basCycle.update({
+        where: { id: cycle.id },
+        data: {
+          overallStatus: "LODGED",
+          lodgedAt: lodgmentTime,
+        },
+      });
+
+      try {
+        await prisma.auditLog.create({
+          data: {
+            orgId,
+            actorId: userClaims.sub,
+            action: "bas.lodge",
+            metadata: { basCycleId: updated.id },
+          },
+        });
+      } catch (_) {}
+
+      reply.send({
+        basCycle: {
+          id: updated.id,
+          status: updated.overallStatus,
+          lodgedAt: updated.lodgedAt?.toISOString() ?? lodgmentTime.toISOString(),
+        },
+      });
     }
   );
 
@@ -478,22 +721,58 @@ export async function buildServer(): Promise<FastifyInstance> {
     async (request, reply) => {
       const userClaims: any = (request as any).user;
       const orgId = userClaims.orgId;
+      const [basCycles, alerts] = await Promise.all([
+        prisma.basCycle.findMany({
+          where: { orgId },
+          orderBy: { periodStart: "desc" },
+          take: 8,
+        }),
+        prisma.alert.findMany({
+          where: { orgId },
+          orderBy: { createdAt: "desc" },
+        }),
+      ]);
 
-      const data = {
+      const activeCycle =
+        basCycles.find((cycle) => cycle.lodgedAt === null) ?? null;
+
+      const now = new Date();
+      const currentQuarter = Math.floor(now.getMonth() / 3);
+      const quarterStart = new Date(now.getFullYear(), currentQuarter * 3, 1);
+
+      const complianceReport = {
         orgId,
-        basHistory: [
-          {
-            period: "2025 Q3",
-            lodgedAt: "2025-10-28T01:00:00Z",
-            status: "ON_TIME",
-            notes: "All obligations secured pre-lodgment",
-          },
-        ],
+        basHistory: basCycles.map((cycle) => {
+          const periodLabel = formatBasPeriod(cycle.periodStart, cycle.periodEnd);
+          const paygwReady =
+            decimalToNumber(cycle.paygwSecured) >=
+            decimalToNumber(cycle.paygwRequired);
+          const gstReady =
+            decimalToNumber(cycle.gstSecured) >= decimalToNumber(cycle.gstRequired);
+          const readinessNote = [
+            `PAYGW ${paygwReady ? "secured" : "short"}`,
+            `GST ${gstReady ? "secured" : "short"}`,
+          ].join("; ");
+
+          return {
+            period: periodLabel,
+            lodgedAt: cycle.lodgedAt?.toISOString() ?? null,
+            status:
+              cycle.overallStatus === "LODGED"
+                ? "ON_TIME"
+                : cycle.overallStatus.toUpperCase(),
+            notes: readinessNote,
+          };
+        }),
         alertsSummary: {
-          openHighSeverity: 1,
-          resolvedThisQuarter: 3,
+          openHighSeverity: alerts.filter(
+            (alert) => alert.severity === "HIGH" && !alert.resolvedAt
+          ).length,
+          resolvedThisQuarter: alerts.filter(
+            (alert) => alert.resolvedAt && alert.resolvedAt >= quarterStart
+          ).length,
         },
-        nextBasDue: "2025-11-21T00:00:00Z",
+        nextBasDue: activeCycle?.periodEnd.toISOString() ?? null,
       };
 
       try {
@@ -507,7 +786,7 @@ export async function buildServer(): Promise<FastifyInstance> {
         });
       } catch (_) {}
 
-      reply.send(data);
+      reply.send(complianceReport);
     }
   );
 
@@ -518,17 +797,17 @@ export async function buildServer(): Promise<FastifyInstance> {
       const userClaims: any = (request as any).user;
       const orgId = userClaims.orgId;
 
-      const data = {
-        users: [
-          {
-            id: "dev-user",
-            email: "dev@example.com",
-            role: "admin",
-            mfaEnabled: false,
-            lastLogin: "2025-10-28T00:00:00Z",
-          },
-        ],
-      };
+      const users = await prisma.user.findMany({
+        where: { orgId },
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          mfaEnabled: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "asc" },
+      });
 
       try {
         await prisma.auditLog.create({
@@ -541,7 +820,16 @@ export async function buildServer(): Promise<FastifyInstance> {
         });
       } catch (_) {}
 
-      reply.send(data);
+      reply.send({
+        users: users.map((user) => ({
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          mfaEnabled: user.mfaEnabled,
+          createdAt: user.createdAt.toISOString(),
+          lastLogin: user.createdAt.toISOString(),
+        })),
+      });
     }
   );
 

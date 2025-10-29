@@ -53,7 +53,9 @@ export default function CompliancePage() {
             <div style={summaryCardStyle}>
               <span style={summaryLabelStyle}>Next BAS Due</span>
               <span style={summaryValueStyle}>
-                {new Date(report.nextBasDue).toLocaleDateString()}
+                {report.nextBasDue
+                  ? new Date(report.nextBasDue).toLocaleDateString()
+                  : "Not scheduled"}
               </span>
             </div>
             <div style={summaryCardStyle}>

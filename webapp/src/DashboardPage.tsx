@@ -57,6 +57,11 @@ export default function DashboardPage() {
     return Math.max(0, obligations.gst.required - obligations.gst.secured);
   }, [obligations]);
 
+  const nextBasDueDisplay = useMemo(() => {
+    if (!obligations?.nextBasDue) return "Not scheduled";
+    return new Date(obligations.nextBasDue).toLocaleString();
+  }, [obligations]);
+
   async function handleCreateLine(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setFormError(null);
@@ -109,7 +114,7 @@ export default function DashboardPage() {
             <div style={nextBasCardStyle}>
               <span style={infoLabelStyle}>Next BAS Due</span>
               <div style={nextBasValueStyle}>
-                {new Date(obligations.nextBasDue).toLocaleString()}
+                {nextBasDueDisplay}
               </div>
               <p style={nextBasDescriptionStyle}>
                 APGMS blocks the ATO transfer if the holding accounts are short so you can remediate early.
