@@ -138,7 +138,30 @@ export async function fetchAlerts(token: string) {
       message: string;
       createdAt: string;
       resolved: boolean;
+      resolvedAt: string | null;
+      resolutionNote: string | null;
     }>;
+  }>;
+}
+
+export async function resolveAlert(
+  token: string,
+  alertId: string,
+  note: string
+) {
+  const res = await fetch(`${API_BASE}/alerts/${alertId}/resolve`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ note }),
+  });
+  if (!res.ok) throw new Error("failed_resolve_alert");
+  return res.json() as Promise<{
+    alert: {
+      id: string;
+      resolved: boolean;
+      resolvedAt: string | null;
+      resolutionNote: string | null;
+    };
   }>;
 }
 
@@ -148,12 +171,23 @@ export async function fetchBasPreview(token: string) {
   });
   if (!res.ok) throw new Error("failed_bas_preview");
   return res.json() as Promise<{
-    periodStart: string;
-    periodEnd: string;
+    periodStart: string | null;
+    periodEnd: string | null;
     paygw: { required: number; secured: number; status: string };
     gst: { required: number; secured: number; status: string };
     overallStatus: string;
     blockers: string[];
+  }>;
+}
+
+export async function lodgeBas(token: string) {
+  const res = await fetch(`${API_BASE}/bas/lodge`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error("failed_bas_lodge");
+  return res.json() as Promise<{
+    basCycle: { id: string; status: string; lodgedAt: string };
   }>;
 }
 
@@ -174,7 +208,7 @@ export async function fetchComplianceReport(token: string) {
       openHighSeverity: number;
       resolvedThisQuarter: number;
     };
-    nextBasDue: string;
+    nextBasDue: string | null;
   }>;
 }
 
@@ -189,7 +223,8 @@ export async function fetchSecurityUsers(token: string) {
       email: string;
       role: string;
       mfaEnabled: boolean;
-      lastLogin: string;
+      createdAt: string;
+      lastLogin: string | null;
     }>;
   }>;
 }
