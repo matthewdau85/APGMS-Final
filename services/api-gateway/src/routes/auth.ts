@@ -2,6 +2,7 @@
 import { FastifyInstance } from "fastify";
 import { authGuard, verifyCredentials, signToken } from "../auth.js";
 import { prisma } from "../db.js";
+import { recordAuditLog } from "../lib/audit.js";
 import {
   createChallenge,
   verifyChallenge,
@@ -82,18 +83,12 @@ export async function registerAuthRoutes(app: FastifyInstance) {
 
       const code = createChallenge(user.id);
 
-      try {
-        await prisma.auditLog.create({
-          data: {
-            orgId: user.orgId,
-            actorId: user.id,
-            action: "auth.mfa.initiate",
-            metadata: {},
-          },
-        });
-      } catch {
-        // best-effort audit logging
-      }
+      await recordAuditLog({
+        orgId: user.orgId,
+        actorId: user.id,
+        action: "auth.mfa.initiate",
+        metadata: {},
+      });
 
       reply.send({
         delivery: "mock",
@@ -151,18 +146,12 @@ export async function registerAuthRoutes(app: FastifyInstance) {
         });
       }
 
-      try {
-        await prisma.auditLog.create({
-          data: {
-            orgId: user.orgId,
-            actorId: user.id,
-            action: "auth.mfa.verify",
-            metadata: { enabled: true },
-          },
-        });
-      } catch {
-        // ignore audit failure
-      }
+      await recordAuditLog({
+        orgId: user.orgId,
+        actorId: user.id,
+        action: "auth.mfa.verify",
+        metadata: { enabled: true },
+      });
 
       const token = signToken({
         id: user.id,

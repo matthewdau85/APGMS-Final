@@ -1,32 +1,68 @@
 import React, { useEffect, useState } from "react";
-import { fetchComplianceReport } from "./api";
+import {
+  fetchComplianceReport,
+  fetchEvidenceArtifacts,
+  createEvidenceArtifact,
+  fetchEvidenceArtifactDetail,
+} from "./api";
 import { getToken } from "./auth";
 
 type ComplianceReport = Awaited<ReturnType<typeof fetchComplianceReport>>;
 
 type PaymentPlan = ComplianceReport["paymentPlans"][number];
 
+type EvidenceArtifactSummary = Awaited<
+  ReturnType<typeof fetchEvidenceArtifacts>
+>["artifacts"][number];
+
 export default function CompliancePage() {
   const token = getToken();
   const [report, setReport] = useState<ComplianceReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [artifacts, setArtifacts] = useState<EvidenceArtifactSummary[]>([]);
+  const [artifactLoading, setArtifactLoading] = useState(true);
+  const [artifactError, setArtifactError] = useState<string | null>(null);
+  const [artifactSuccess, setArtifactSuccess] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const loadReport = async () => {
+    if (!token) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchComplianceReport(token);
+      setReport(data);
+    } catch (err) {
+      console.error(err);
+      setError("Unable to load compliance report");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadArtifacts = async () => {
+    if (!token) return;
+    setArtifactLoading(true);
+    setArtifactError(null);
+    setArtifactSuccess(null);
+    try {
+      const response = await fetchEvidenceArtifacts(token);
+      setArtifacts(response.artifacts);
+    } catch (err) {
+      console.error(err);
+      setArtifactError("Unable to load evidence history");
+    } finally {
+      setArtifactLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!token) {
       return;
     }
-    (async () => {
-      try {
-        const data = await fetchComplianceReport(token);
-        setReport(data);
-      } catch (err) {
-        console.error(err);
-        setError("Unable to load compliance report");
-      } finally {
-        setLoading(false);
-      }
-    })();
+    void loadReport();
+    void loadArtifacts();
   }, [token]);
 
   if (!token) {
@@ -35,6 +71,46 @@ export default function CompliancePage() {
 
   function handleDownload() {
     window.open("http://localhost:3000/compliance/report", "_blank");
+  }
+
+  async function handleGenerateEvidence() {
+    if (!token) return;
+    setArtifactError(null);
+    setArtifactSuccess(null);
+    try {
+      const response = await createEvidenceArtifact(token);
+      setArtifactSuccess(
+        `Evidence pack generated (${response.artifact.id.slice(0, 8)}…, sha ${response.artifact.sha256.slice(0, 12)})`
+      );
+      await loadArtifacts();
+    } catch (err) {
+      console.error(err);
+      setArtifactError("Unable to generate compliance evidence pack");
+    }
+  }
+
+  async function handleDownloadArtifact(artifactId: string) {
+    if (!token) return;
+    setDownloadingId(artifactId);
+    try {
+      const response = await fetchEvidenceArtifactDetail(token, artifactId);
+      const blob = new Blob([JSON.stringify(response.artifact.payload ?? {}, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `apgms-evidence-${artifactId}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      setArtifactError("Unable to download evidence payload");
+    } finally {
+      setDownloadingId(null);
+    }
   }
 
   return (
@@ -122,6 +198,56 @@ export default function CompliancePage() {
             </table>
             {report.basHistory.length === 0 && <div style={infoTextStyle}>No BAS events recorded yet.</div>}
           </section>
+
+          <section style={cardStyle}>
+            <div style={cardHeaderStyle}>
+              <h2 style={sectionTitleStyle}>Evidence Pack History</h2>
+              <button type="button" style={downloadButtonStyle} onClick={handleGenerateEvidence}>
+                Generate new evidence pack
+              </button>
+            </div>
+            {artifactSuccess && <div style={successTextStyle}>{artifactSuccess}</div>}
+            {artifactError && <div style={errorTextStyle}>{artifactError}</div>}
+            {artifactLoading ? (
+              <div style={infoTextStyle}>Loading recorded evidence packs...</div>
+            ) : artifacts.length === 0 ? (
+              <div style={infoTextStyle}>No evidence packs have been generated yet.</div>
+            ) : (
+              <table style={tableStyle}>
+                <thead>
+                  <tr>
+                    <th style={thStyle}>Artifact ID</th>
+                    <th style={thStyle}>Created</th>
+                    <th style={thStyle}>SHA-256</th>
+                    <th style={thStyle}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {artifacts.map((artifact) => (
+                    <tr key={artifact.id}>
+                      <td style={tdStyle}>
+                        <code>{artifact.id}</code>
+                      </td>
+                      <td style={tdStyle}>{new Date(artifact.createdAt).toLocaleString()}</td>
+                      <td style={tdStyle}>
+                        <code>{artifact.sha256}</code>
+                      </td>
+                      <td style={tdStyle}>
+                        <button
+                          type="button"
+                          style={smallButtonStyle}
+                          onClick={() => handleDownloadArtifact(artifact.id)}
+                          disabled={downloadingId === artifact.id}
+                        >
+                          {downloadingId === artifact.id ? "Preparing..." : "Download JSON"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
         </>
       )}
     </div>
@@ -193,6 +319,11 @@ const errorTextStyle: React.CSSProperties = {
   color: "#b91c1c",
 };
 
+const successTextStyle: React.CSSProperties = {
+  fontSize: "14px",
+  color: "#047857",
+};
+
 const summaryCardsWrapper: React.CSSProperties = {
   display: "grid",
   gap: "16px",
@@ -252,6 +383,16 @@ const downloadButtonStyle: React.CSSProperties = {
   borderRadius: "6px",
   padding: "10px 16px",
   fontSize: "14px",
+  cursor: "pointer",
+};
+
+const smallButtonStyle: React.CSSProperties = {
+  backgroundColor: "#0b5fff",
+  color: "#ffffff",
+  border: "none",
+  borderRadius: "4px",
+  padding: "6px 12px",
+  fontSize: "12px",
   cursor: "pointer",
 };
 
