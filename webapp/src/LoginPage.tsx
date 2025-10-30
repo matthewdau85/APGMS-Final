@@ -1,7 +1,7 @@
 // webapp/src/LoginPage.tsx
 import React, { useState } from "react";
 import { login } from "./api";
-import { saveToken } from "./auth";
+import { saveSession } from "./auth";
 import { useNavigate } from "react-router-dom";
 
 export default function LoginPage() {
@@ -15,8 +15,8 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const { token } = await login(email, password);
-      saveToken(token);
+      const session = await login(email, password);
+      saveSession(session);
       nav("/dashboard");
     } catch (_) {
       setError("Login failed");

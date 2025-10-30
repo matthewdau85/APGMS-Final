@@ -1,7 +1,6 @@
 import Fastify, { FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import {
-  PrismaClient,
   Prisma,
   Alert as AlertModel,
   BasCycle as BasCycleModel,
@@ -10,15 +9,17 @@ import {
   PaymentPlanRequest as PaymentPlanRequestModel,
 } from "@prisma/client";
 import crypto from "node:crypto";
+import { register as promRegister, collectDefaultMetrics, Counter } from "prom-client";
 
 // NOTE: make sure config.ts exports what we discussed earlier,
 // including cors.allowedOrigins: string[]
 import { config } from "./config.js";
 
+import rateLimit from "./plugins/rate-limit.js";
 import { authGuard } from "./auth.js";
 import { registerAuthRoutes } from "./routes/auth.js";
-
-const prisma = new PrismaClient();
+import { prisma } from "./db.js";
+import { verifyChallenge, requireRecentVerification } from "./security/mfa.js";
 
 function decimalToNumber(value: Prisma.Decimal | number | null | undefined): number {
   if (value === null || value === undefined) return 0;
@@ -56,6 +57,19 @@ type PaymentPlanSummary = {
   details: Record<string, unknown>;
   resolvedAt: string | null;
 };
+
+const SHORTFALL_ALERT_THRESHOLD = Number.parseFloat(
+  process.env.APGMS_SHORTFALL_ALERT_THRESHOLD ?? "500",
+);
+
+collectDefaultMetrics({ register: promRegister });
+
+const httpRequestCounter = new Counter({
+  name: "apgms_api_requests_total",
+  help: "Total number of API requests handled by the gateway",
+  labelNames: ["method", "route", "status"],
+  registers: [promRegister],
+});
 
 function shapeAlert(alert: AlertModel) {
   return {
@@ -157,6 +171,63 @@ function formatBasPeriod(start: Date, end: Date): string {
   return `${year} Q${quarter}`;
 }
 
+async function ensureSuspiciousTaxGapAlert(
+  orgId: string,
+  paygwShortfall: number,
+  gstShortfall: number,
+): Promise<void> {
+  const flags: string[] = [];
+  if (paygwShortfall > SHORTFALL_ALERT_THRESHOLD) {
+    flags.push(`PAYGW shortfall $${paygwShortfall.toFixed(2)}`);
+  }
+  if (gstShortfall > SHORTFALL_ALERT_THRESHOLD) {
+    flags.push(`GST shortfall $${gstShortfall.toFixed(2)}`);
+  }
+
+  if (flags.length === 0) {
+    return;
+  }
+
+  const existing = await prisma.alert.findFirst({
+    where: {
+      orgId,
+      type: "SUSPICIOUS_TAX_GAP",
+      severity: "HIGH",
+      resolvedAt: null,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (existing) {
+    return;
+  }
+
+  await prisma.alert.create({
+    data: {
+      orgId,
+      type: "SUSPICIOUS_TAX_GAP",
+      severity: "HIGH",
+      message: flags.join("; "),
+    },
+  });
+
+  try {
+    await prisma.auditLog.create({
+      data: {
+        orgId,
+        actorId: "system",
+        action: "alerts.auto-create",
+        metadata: {
+          flags,
+          threshold: SHORTFALL_ALERT_THRESHOLD,
+        },
+      },
+    });
+  } catch {
+    // audit logging is best-effort
+  }
+}
+
 async function loadDesignatedAccountContext(orgId: string): Promise<DesignatedAccountContext> {
   const accounts = await prisma.designatedAccount.findMany({
     where: { orgId },
@@ -205,8 +276,17 @@ async function syncBasCycleSecured(
 ): Promise<BasCycleModel> {
   const paygwRequired = decimalToNumber(cycle.paygwRequired);
   const gstRequired = decimalToNumber(cycle.gstRequired);
-  const paygwStatus = balances.paygw >= paygwRequired ? "READY" : "BLOCKED";
-  const gstStatus = balances.gst >= gstRequired ? "READY" : "BLOCKED";
+  const paygwShortfall = Math.max(0, paygwRequired - balances.paygw);
+  const gstShortfall = Math.max(0, gstRequired - balances.gst);
+
+  await ensureSuspiciousTaxGapAlert(
+    cycle.orgId,
+    paygwShortfall,
+    gstShortfall,
+  );
+
+  const paygwStatus = paygwShortfall <= 0 ? "READY" : "BLOCKED";
+  const gstStatus = gstShortfall <= 0 ? "READY" : "BLOCKED";
   const overallStatus =
     paygwStatus === "READY" && gstStatus === "READY" ? "READY" : "BLOCKED";
 
@@ -236,6 +316,23 @@ export async function buildServer(): Promise<FastifyInstance> {
     logger: true,
   });
 
+  app.addHook("onResponse", (request, reply, done) => {
+    const route =
+      (request.routeOptions && request.routeOptions.url) ??
+      request.raw.url ??
+      "unknown";
+    try {
+      httpRequestCounter
+        .labels(request.method, route, String(reply.statusCode))
+        .inc();
+    } catch (error) {
+      app.log.warn({ err: error }, "failed to record metrics");
+    }
+    done();
+  });
+
+  await app.register(rateLimit);
+
   // --- CORS REGISTRATION ---
   // Allow frontend at http://localhost:5173 to call us at http://localhost:3000
   await app.register(cors, {
@@ -262,6 +359,21 @@ export async function buildServer(): Promise<FastifyInstance> {
   // simple public healthcheck
   app.get("/health", async () => {
     return { ok: true, service: "api-gateway" };
+  });
+
+  app.get("/ready", async (_, reply) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      reply.send({ ok: true, service: "api-gateway" });
+    } catch (error) {
+      app.log.error({ err: error }, "readiness check failed");
+      reply.code(503).send({ ok: false, service: "api-gateway" });
+    }
+  });
+
+  app.get("/metrics", async (_, reply) => {
+    reply.header("content-type", promRegister.contentType);
+    reply.send(await promRegister.metrics());
   });
 
   // /auth/login (public)
@@ -712,7 +824,7 @@ export async function buildServer(): Promise<FastifyInstance> {
       const userClaims: any = (request as any).user;
       const orgId = userClaims.orgId;
       const { id } = request.params as { id: string };
-      const body = request.body as { note?: string } | undefined;
+      const body = request.body as { note?: string; mfaCode?: string } | undefined;
 
       if (!body?.note || body.note.trim().length === 0) {
         reply.code(400).send({
@@ -735,6 +847,18 @@ export async function buildServer(): Promise<FastifyInstance> {
         return;
       }
 
+      const userRecord = await prisma.user.findUnique({
+        where: { id: userClaims.sub },
+        select: { id: true, orgId: true, mfaEnabled: true },
+      });
+
+      if (!userRecord || userRecord.orgId !== orgId) {
+        reply.code(403).send({
+          error: { code: "forbidden", message: "User scope mismatch" },
+        });
+        return;
+      }
+
       if (alert.resolvedAt) {
         reply.code(409).send({
           error: {
@@ -743,6 +867,30 @@ export async function buildServer(): Promise<FastifyInstance> {
           },
         });
         return;
+      }
+
+      const requiresMfa =
+        userRecord.mfaEnabled && alert.severity.toUpperCase() === "HIGH";
+
+      if (requiresMfa) {
+        let verified = requireRecentVerification(userRecord.id);
+
+        if (!verified) {
+          const trimmed = body.mfaCode?.trim();
+          if (trimmed && verifyChallenge(userRecord.id, trimmed)) {
+            verified = true;
+          }
+        }
+
+        if (!verified) {
+          reply.code(401).send({
+            error: {
+              code: "mfa_required",
+              message: "Valid MFA verification required to resolve high-severity alerts",
+            },
+          });
+          return;
+        }
       }
 
       const resolved = await prisma.alert.update({
@@ -759,7 +907,10 @@ export async function buildServer(): Promise<FastifyInstance> {
             orgId,
             actorId: userClaims.sub,
             action: "alert.resolve",
-            metadata: { alertId: id },
+            metadata: {
+              alertId: id,
+              mfaRequired: requiresMfa,
+            },
           },
         });
       } catch (_) {}
@@ -881,6 +1032,39 @@ export async function buildServer(): Promise<FastifyInstance> {
     async (request, reply) => {
       const userClaims: any = (request as any).user;
       const orgId = userClaims.orgId;
+      const body = request.body as { mfaCode?: string } | null;
+
+      const userRecord = await prisma.user.findUnique({
+        where: { id: userClaims.sub },
+        select: { id: true, orgId: true, mfaEnabled: true },
+      });
+
+      if (!userRecord || userRecord.orgId !== orgId) {
+        reply.code(403).send({
+          error: { code: "forbidden", message: "User scope mismatch" },
+        });
+        return;
+      }
+
+      if (userRecord.mfaEnabled) {
+        let verified = requireRecentVerification(userRecord.id);
+        if (!verified) {
+          const trimmed = body?.mfaCode?.trim();
+          if (trimmed && verifyChallenge(userRecord.id, trimmed)) {
+            verified = true;
+          }
+        }
+
+        if (!verified) {
+          reply.code(401).send({
+            error: {
+              code: "mfa_required",
+              message: "MFA verification required before lodgment",
+            },
+          });
+          return;
+        }
+      }
 
       const context = await loadDesignatedAccountContext(orgId);
 
@@ -926,7 +1110,10 @@ export async function buildServer(): Promise<FastifyInstance> {
             orgId,
             actorId: userClaims.sub,
             action: "bas.lodge",
-            metadata: { basCycleId: updated.id },
+            metadata: {
+              basCycleId: updated.id,
+              mfaRequired: userRecord.mfaEnabled,
+            },
           },
         });
       } catch (_) {}

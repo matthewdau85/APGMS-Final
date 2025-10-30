@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { fetchAlerts, resolveAlert } from "./api";
-import { getToken } from "./auth";
+import { fetchAlerts, resolveAlert, initiateMfa } from "./api";
+import { getToken, getSessionUser } from "./auth";
 
 type AlertRecord = Awaited<ReturnType<typeof fetchAlerts>>["alerts"][number];
 
 export default function AlertsPage() {
   const token = getToken();
+  const sessionUser = getSessionUser();
   const [alerts, setAlerts] = useState<AlertRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,19 +47,63 @@ export default function AlertsPage() {
       return;
     }
 
+    const trimmedNote = note.trim();
+    if (!trimmedNote) {
+      return;
+    }
+
     setSubmittingId(alert.id);
     setError(null);
     setSuccess(null);
+
+    let resolved = false;
+    let requiresMfa = false;
+
     try {
-      await resolveAlert(token, alert.id, note.trim());
+      await resolveAlert(token, alert.id, trimmedNote);
+      resolved = true;
+    } catch (err) {
+      if (
+        err instanceof Error &&
+        err.message === "mfa_required" &&
+        sessionUser?.mfaEnabled &&
+        alert.severity.toUpperCase() === "HIGH"
+      ) {
+        requiresMfa = true;
+      } else {
+        console.error(err);
+        setError("Failed to resolve alert.");
+      }
+    }
+
+    if (!resolved && requiresMfa) {
+      try {
+        const challenge = await initiateMfa(token);
+        window.alert(
+          `MFA verification required.\n\nDev stub code: ${challenge.code} (expires in ${challenge.expiresInSeconds}s).`
+        );
+        const supplied = window.prompt(
+          "Enter the MFA code to resolve this high-severity alert:",
+          challenge.code
+        );
+        if (!supplied || supplied.trim().length === 0) {
+          setError("MFA verification cancelled.");
+        } else {
+          await resolveAlert(token, alert.id, trimmedNote, supplied.trim());
+          resolved = true;
+        }
+      } catch (err) {
+        console.error(err);
+        setError("MFA verification failed. Please try again.");
+      }
+    }
+
+    if (resolved) {
       await loadAlerts();
       setSuccess("Alert resolved and logged.");
-    } catch (err) {
-      console.error(err);
-      setError("Failed to resolve alert.");
-    } finally {
-      setSubmittingId(null);
     }
+
+    setSubmittingId(null);
   }
 
   if (!token) {

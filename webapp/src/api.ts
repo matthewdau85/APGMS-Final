@@ -11,6 +11,16 @@ function authHeaders(token?: string): Record<string, string> {
   return headers;
 }
 
+export type ApiSession = {
+  token: string;
+  user: {
+    id: string;
+    orgId: string;
+    role: string;
+    mfaEnabled: boolean;
+  };
+};
+
 export async function login(email: string, password: string) {
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: "POST",
@@ -22,7 +32,41 @@ export async function login(email: string, password: string) {
     throw new Error("Login failed");
   }
 
-  return res.json() as Promise<{ token: string }>;
+  return res.json() as Promise<ApiSession>;
+}
+
+export async function initiateMfa(token: string) {
+  const res = await fetch(`${API_BASE}/auth/mfa/initiate`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    throw new Error("failed_mfa_initiate");
+  }
+  return res.json() as Promise<{
+    delivery: string;
+    code: string;
+    expiresInSeconds: number;
+  }>;
+}
+
+export async function verifyMfa(token: string, code: string) {
+  const res = await fetch(`${API_BASE}/auth/mfa/verify`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ code }),
+  });
+  if (!res.ok) {
+    throw new Error("failed_mfa_verify");
+  }
+  return res.json() as Promise<{
+    token: string;
+    user: ApiSession["user"];
+    session: {
+      expiresInSeconds: number;
+      verifiedAt: string;
+    };
+  }>;
 }
 
 export async function fetchUsers(token: string) {
@@ -148,14 +192,27 @@ export async function fetchAlerts(token: string) {
 export async function resolveAlert(
   token: string,
   alertId: string,
-  note: string
+  note: string,
+  mfaCode?: string
 ) {
+  const payload: Record<string, unknown> = { note };
+  if (mfaCode) {
+    payload.mfaCode = mfaCode;
+  }
   const res = await fetch(`${API_BASE}/alerts/${alertId}/resolve`, {
     method: "POST",
     headers: authHeaders(token),
-    body: JSON.stringify({ note }),
+    body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error("failed_resolve_alert");
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => null);
+    const errorCode =
+      (errorBody as { error?: { code?: string } } | null)?.error?.code ??
+      "failed_resolve_alert";
+    const error = new Error(errorCode);
+    (error as any).payload = errorBody;
+    throw error;
+  }
   return res.json() as Promise<{
     alert: {
       id: string;
@@ -182,12 +239,30 @@ export async function fetchBasPreview(token: string) {
   }>;
 }
 
-export async function lodgeBas(token: string) {
+export async function lodgeBas(
+  token: string,
+  options?: {
+    mfaCode?: string;
+  }
+) {
+  const payload: Record<string, unknown> = {};
+  if (options?.mfaCode) {
+    payload.mfaCode = options.mfaCode;
+  }
   const res = await fetch(`${API_BASE}/bas/lodge`, {
     method: "POST",
     headers: authHeaders(token),
+    body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error("failed_bas_lodge");
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => null);
+    const errorCode =
+      (errorBody as { error?: { code?: string } } | null)?.error?.code ??
+      "failed_bas_lodge";
+    const error = new Error(errorCode);
+    (error as any).payload = errorBody;
+    throw error;
+  }
   return res.json() as Promise<{
     basCycle: { id: string; status: string; lodgedAt: string };
   }>;
