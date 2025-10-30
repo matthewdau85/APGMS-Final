@@ -12,6 +12,7 @@
 ## Health & Readiness
 - GET /health returns { ok: true } - liveness only.
 - GET /ready performs DB connectivity check; returns 503 on failure.
+- GET /regulator/health exposes the read-only portal health (same process, but logged separately for regulator traffic probes).
 
 ## Logs & Correlation
 - Structured logs emitted with JSON, request IDs attached in Fastify hooks (services/api-gateway/src/app.ts).
@@ -50,10 +51,13 @@
 ## Smoke Test Checklist
 - [ ] `pnpm --filter @apgms/api-gateway dev` boots, logs listening message.
 - [ ] `curl http://localhost:3000/ready` returns 200 under normal conditions.
+- [ ] `curl http://localhost:3000/regulator/health` returns 200 to prove regulator portal guard rails are active.
 - [ ] Kill process with CTRL+C and confirm graceful shutdown log.
 - [ ] Bring DB down, `/ready` returns 503.
 - [ ] curl http://localhost:3000/metrics outputs Prometheus counters.
 - [ ] pnpm k6:smoke -- --env BASE_URL=http://localhost:3000 passes (requires k6).
+- [ ] Generate an evidence pack with `curl -X POST -H "Authorization: Bearer $TOKEN" http://localhost:3000/compliance/evidence` and confirm it appears in `/compliance/evidence`.
+- [ ] `pnpm smoke:regulator` logs in with the regulator access code and exercises `/regulator/*` endpoints end-to-end.
 
 
 See `docs/ops/logging.md` for structured logging guidance.

@@ -25,6 +25,11 @@ export interface AppConfig {
     readonly issuer: string;
     readonly devSecret: string;
   };
+  readonly regulator: {
+    readonly accessCode: string;
+    readonly jwtAudience: string;
+    readonly sessionTtlMinutes: number;
+  };
 }
 
 const base64Regex = /^[A-Za-z0-9+/=]+$/;
@@ -241,6 +246,17 @@ export function loadConfig(): AppConfig {
     "TAX_ENGINE_URL",
   );
 
+  const regulatorAccessCode = envString("REGULATOR_ACCESS_CODE");
+  const regulatorAudience =
+    process.env.REGULATOR_JWT_AUDIENCE &&
+    process.env.REGULATOR_JWT_AUDIENCE.trim().length > 0
+      ? process.env.REGULATOR_JWT_AUDIENCE.trim()
+      : "urn:apgms:regulator";
+  const regulatorSessionTtl = parseIntegerEnv(
+    "REGULATOR_SESSION_TTL_MINUTES",
+    60,
+  );
+
   return {
     databaseUrl,
     shadowDatabaseUrl,
@@ -262,6 +278,11 @@ export function loadConfig(): AppConfig {
       audience,
       issuer,
       devSecret,
+    },
+    regulator: {
+      accessCode: regulatorAccessCode,
+      jwtAudience: regulatorAudience,
+      sessionTtlMinutes: regulatorSessionTtl,
     },
   };
 }

@@ -43,6 +43,8 @@ jobs:
         env:
           SKIP_K6: "true"
         run: pnpm compliance:evidence --tag nightly-$(date +%Y%m%d)
+      - name: Run regulator portal smoke
+        run: pnpm smoke:regulator
       - name: Run k6 chaos smoke
         run: pnpm k6:smoke -- --env BASE_URL=http://localhost:3000
       - name: Stop API Gateway
@@ -54,4 +56,3 @@ jobs:
         with:
           name: compliance-nightly
           path: artifacts/compliance/nightly-*.md
-

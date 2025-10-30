@@ -13,6 +13,8 @@ import {
   createSecretManager,
   type SecretManager,
 } from "./secret-manager.js";
+import { recordAuditLog } from "../lib/audit.js";
+import type { Prisma } from "@prisma/client";
 
 import type {
   AuditEvent,
@@ -134,17 +136,15 @@ class PrismaAuditLogger implements AuditLogger {
   ): Promise<void> {
     const payload = event as AuditEvent;
     try {
-      await this.prisma.auditLog.create({
-        data: {
-          actorId: payload.actorId,
-          action: payload.action,
-          orgId:
-            (payload.metadata?.orgId as string | undefined) ??
-            "unknown",
-          // metadata column is a JSON column in the DB.
-          // Prisma accepts plain objects for Json fields at runtime.
-          metadata: payload.metadata ?? {},
-        },
+      const orgId =
+        (payload.metadata?.orgId as string | undefined) ??
+        "unknown";
+      await recordAuditLog({
+        orgId,
+        actorId: payload.actorId,
+        action: payload.action,
+        metadata: coerceMetadata(payload.metadata),
+        throwOnError: true,
       });
     } catch (error: unknown) {
       // Failing closed to avoid leaking operations; log and continue
@@ -188,6 +188,16 @@ export function createAuditLogger(prisma: any): AuditLogger {
   return new PrismaAuditLogger(prisma);
 }
 
+function coerceMetadata(
+  metadata: AuditEvent["metadata"] | undefined
+): Prisma.JsonValue | null {
+  if (metadata == null) {
+    return null;
+  }
+  const jsonSafe = JSON.parse(JSON.stringify(metadata));
+  return jsonSafe as Prisma.JsonValue;
+}
+
 async function readJsonSecret<T>(
   secretManager: SecretManager,
   envName: string,
@@ -215,3 +225,6 @@ function parseJson<T>(value: string, name: string): T {
     throw new Error(`${name} must contain valid JSON`);
   }
 }
+
+
+

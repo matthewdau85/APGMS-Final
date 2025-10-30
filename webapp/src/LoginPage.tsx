@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { login } from "./api";
 import { saveSession } from "./auth";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 export default function LoginPage() {
   const nav = useNavigate();
@@ -83,6 +83,13 @@ export default function LoginPage() {
           (dev@example.com / admin123 in dev)
         </div>
       </form>
+      <div style={{ fontSize: "12px", marginTop: "16px" }}>
+        Regulator or reviewer?{" "}
+        <Link to="/regulator" style={{ color: "#0b5fff" }}>
+          Go to the regulator login
+        </Link>
+        .
+      </div>
     </div>
   );
 }
