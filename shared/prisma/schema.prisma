@@ -298,6 +298,7 @@ model EvidenceArtifact {
   kind      String
   wormUri   String
   sha256    String
+  payload   Json?
   createdAt DateTime @default(now())
 
   @@index([orgId, kind])
@@ -336,6 +337,8 @@ model Org {
   designatedAccounts DesignatedAccount[]
   designatedTransfers DesignatedTransfer[]
   paymentPlanRequests PaymentPlanRequest[]
+  regulatorSessions RegulatorSession[]
+  monitoringSnapshots MonitoringSnapshot[]
 
   // payroll backrefs
   employees  Employee[]
@@ -461,7 +464,36 @@ model AuditLog {
   action    String
   metadata  Json?
   createdAt DateTime @default(now())
+  hash      String
+  prevHash  String?
 
   @@index([orgId, createdAt])
   @@index([actorId, createdAt])
+}
+
+model RegulatorSession {
+  id         String   @id @default(cuid())
+  org        Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId      String
+  tokenHash  String
+  issuedAt   DateTime  @default(now())
+  expiresAt  DateTime
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([orgId, createdAt])
+  @@index([orgId, expiresAt])
+}
+
+model MonitoringSnapshot {
+  id        String   @id @default(cuid())
+  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId     String
+  type      String
+  payload   Json
+  createdAt DateTime @default(now())
+
+  @@index([orgId, createdAt])
+  @@index([orgId, type, createdAt])
 }

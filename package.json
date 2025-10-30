@@ -19,6 +19,7 @@
         "build": "pnpm -r build",
         "typecheck": "pnpm -r typecheck",
         "k6:smoke": "pnpm exec k6 run k6/smoke.js",
+        "smoke:regulator": "node scripts/regulator-smoke.mjs",
         "lint:markdown": "pnpm exec markdownlint **/*.md",
         "compliance:evidence": "node scripts/collect-evidence.mjs",
         "security:rotate-keys": "node scripts/rotate-pii-keys.mjs",

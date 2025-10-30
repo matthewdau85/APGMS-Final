@@ -1,6 +1,6 @@
 // webapp/src/App.tsx
 import React from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import LoginPage from "./LoginPage";
 import DashboardPage from "./DashboardPage";
 import FeedsPage from "./FeedsPage";
@@ -9,6 +9,11 @@ import BasPage from "./BasPage";
 import CompliancePage from "./CompliancePage";
 import SecurityPage from "./SecurityPage";
 import ProtectedLayout from "./ProtectedLayout";
+import RegulatorLoginPage from "./RegulatorLoginPage";
+import RegulatorLayout from "./RegulatorLayout";
+import RegulatorOverviewPage from "./RegulatorOverviewPage";
+import RegulatorEvidencePage from "./RegulatorEvidencePage";
+import RegulatorMonitoringPage from "./RegulatorMonitoringPage";
 
 export default function App() {
   return (
@@ -16,6 +21,13 @@ export default function App() {
       <Routes>
         {/* login */}
         <Route path="/" element={<LoginPage />} />
+        <Route path="/regulator" element={<RegulatorLoginPage />} />
+        <Route path="/regulator/portal" element={<RegulatorLayout />}>
+          <Route index element={<Navigate to="overview" replace />} />
+          <Route path="overview" element={<RegulatorOverviewPage />} />
+          <Route path="evidence" element={<RegulatorEvidencePage />} />
+          <Route path="monitoring" element={<RegulatorMonitoringPage />} />
+        </Route>
         <Route element={<ProtectedLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/feeds" element={<FeedsPage />} />

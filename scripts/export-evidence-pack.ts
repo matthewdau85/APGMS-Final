@@ -20,9 +20,7 @@ function parseArgs(): CliOptions {
   for (let i = 0; i < args.length; i += 1) {
     const key = args[i];
     const value = args[i + 1];
-    if (!value) {
-      continue;
-    }
+    if (!value) continue;
     switch (key) {
       case "--base-url":
         defaults.baseUrl = value;
@@ -46,9 +44,7 @@ function parseArgs(): CliOptions {
   }
 
   if (!defaults.token) {
-    throw new Error(
-      "API token missing. Provide --token argument or set APGMS_API_TOKEN.",
-    );
+    throw new Error("API token missing. Provide --token argument or set APGMS_API_TOKEN.");
   }
 
   return defaults;
@@ -65,9 +61,31 @@ async function fetchJson<T>(baseUrl: string, path: string, token: string): Promi
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(
-      `Request to ${path} failed (${response.status}): ${text || "no response body"}`,
-    );
+    throw new Error(`Request to ${path} failed (${response.status}): ${text || "no response body"}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+async function postJson<T>(
+  baseUrl: string,
+  path: string,
+  token: string,
+  body: unknown,
+): Promise<T> {
+  const target = `${baseUrl.replace(/\/$/, "")}${path}`;
+  const response = await fetch(target, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body ?? {}),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`POST to ${path} failed (${response.status}): ${text || "no response body"}`);
   }
 
   return response.json() as Promise<T>;
@@ -90,6 +108,23 @@ async function main() {
     fetchJson<unknown>(options.baseUrl, "/compliance/report", options.token),
   ]);
 
+  const createdArtifact = await postJson<{ artifact: { id: string } }>(
+    options.baseUrl,
+    "/compliance/evidence",
+    options.token,
+    {},
+  );
+
+  const detailedArtifact = await fetchJson<{
+    artifact: {
+      id: string;
+      sha256: string;
+      createdAt: string;
+      kind: string;
+      payload: unknown;
+    };
+  }>(options.baseUrl, `/compliance/evidence/${createdArtifact.artifact.id}`, options.token);
+
   const payload = {
     generatedAt: new Date().toISOString(),
     orgId: options.orgId,
@@ -98,6 +133,7 @@ async function main() {
     },
     export: orgExport,
     compliance: complianceReport,
+    evidenceArtifact: detailedArtifact.artifact,
   };
 
   await writeFile(targetFile, `${JSON.stringify(payload, null, 2)}\n`, "utf8");

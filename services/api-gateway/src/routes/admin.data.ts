@@ -13,6 +13,7 @@ import {
   type Principal,
   type Role,
 } from "../lib/auth";
+import { recordAuditLog } from "../lib/audit.js";
 
 const PASSWORD_PLACEHOLDER = "__deleted__";
 
@@ -67,15 +68,13 @@ export async function registerAdminDataRoutes(
       await deps.auditLog(payload);
       return;
     }
-    if (prisma.auditLog && typeof prisma.auditLog.create === "function") {
-      await prisma.auditLog.create({
-        data: {
-          orgId: payload.orgId,
-          actorId: payload.principal,
-          action: payload.event,
-          metadata: buildAuditMetadata(payload),
-          createdAt: new Date(payload.occurredAt),
-        },
+    if (prisma?.auditLog) {
+      await recordAuditLog({
+        orgId: payload.orgId,
+        actorId: payload.principal,
+        action: payload.event,
+        metadata: buildAuditMetadata(payload),
+        timestamp: new Date(payload.occurredAt),
       });
     }
   };
@@ -314,14 +313,12 @@ async function logAuditForDb(
     return;
   }
   if (db?.auditLog && typeof db.auditLog.create === "function") {
-    await db.auditLog.create({
-      data: {
-        orgId: payload.orgId,
-        actorId: payload.principal,
-        action: payload.event,
-        metadata: buildAuditMetadata(payload),
-        createdAt: new Date(payload.occurredAt),
-      },
+    await recordAuditLog({
+      orgId: payload.orgId,
+      actorId: payload.principal,
+      action: payload.event,
+      metadata: buildAuditMetadata(payload),
+      timestamp: new Date(payload.occurredAt),
     });
   }
 }

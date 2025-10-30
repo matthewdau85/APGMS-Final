@@ -1,4 +1,4 @@
-import Fastify, { FastifyInstance } from "fastify";
+import Fastify, { FastifyInstance, FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
 import {
   Prisma,
@@ -7,6 +7,7 @@ import {
   DesignatedAccount as DesignatedAccountModel,
   DesignatedTransfer as DesignatedTransferModel,
   PaymentPlanRequest as PaymentPlanRequestModel,
+  MonitoringSnapshot as MonitoringSnapshotModel,
 } from "@prisma/client";
 import crypto from "node:crypto";
 import { register as promRegister, collectDefaultMetrics, Counter } from "prom-client";
@@ -16,10 +17,13 @@ import { register as promRegister, collectDefaultMetrics, Counter } from "prom-c
 import { config } from "./config.js";
 
 import rateLimit from "./plugins/rate-limit.js";
-import { authGuard } from "./auth.js";
+import { authGuard, createAuthGuard, REGULATOR_AUDIENCE } from "./auth.js";
 import { registerAuthRoutes } from "./routes/auth.js";
+import { registerRegulatorAuthRoutes } from "./routes/regulator-auth.js";
 import { prisma } from "./db.js";
 import { verifyChallenge, requireRecentVerification } from "./security/mfa.js";
+import { recordAuditLog } from "./lib/audit.js";
+import { ensureRegulatorSessionActive } from "./lib/regulator-session.js";
 
 function decimalToNumber(value: Prisma.Decimal | number | null | undefined): number {
   if (value === null || value === undefined) return 0;
@@ -56,6 +60,26 @@ type PaymentPlanSummary = {
   reason: string;
   details: Record<string, unknown>;
   resolvedAt: string | null;
+};
+
+type ComplianceReportPayload = {
+  orgId: string;
+  basHistory: Array<{
+    period: string;
+    lodgedAt: string | null;
+    status: string;
+    notes: string;
+  }>;
+  paymentPlans: PaymentPlanSummary[];
+  alertsSummary: {
+    openHighSeverity: number;
+    resolvedThisQuarter: number;
+  };
+  nextBasDue: string | null;
+  designatedTotals: {
+    paygw: number;
+    gst: number;
+  };
 };
 
 const SHORTFALL_ALERT_THRESHOLD = Number.parseFloat(
@@ -211,21 +235,15 @@ async function ensureSuspiciousTaxGapAlert(
     },
   });
 
-  try {
-    await prisma.auditLog.create({
-      data: {
-        orgId,
-        actorId: "system",
-        action: "alerts.auto-create",
-        metadata: {
-          flags,
-          threshold: SHORTFALL_ALERT_THRESHOLD,
-        },
-      },
-    });
-  } catch {
-    // audit logging is best-effort
-  }
+  await recordAuditLog({
+    orgId,
+    actorId: "system",
+    action: "alerts.auto-create",
+    metadata: {
+      flags,
+      threshold: SHORTFALL_ALERT_THRESHOLD,
+    },
+  });
 }
 
 async function loadDesignatedAccountContext(orgId: string): Promise<DesignatedAccountContext> {
@@ -311,6 +329,399 @@ async function syncBasCycleSecured(
   });
 }
 
+async function compileComplianceReport(orgId: string): Promise<ComplianceReportPayload> {
+  const [basCycles, alerts, planRequests, designatedContext] = await Promise.all([
+    prisma.basCycle.findMany({
+      where: { orgId },
+      orderBy: { periodStart: "desc" },
+      take: 8,
+    }),
+    prisma.alert.findMany({
+      where: { orgId },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.paymentPlanRequest.findMany({
+      where: { orgId },
+      orderBy: { requestedAt: "desc" },
+    }),
+    loadDesignatedAccountContext(orgId),
+  ]);
+
+  const activeIndex = basCycles.findIndex((cycle) => cycle.lodgedAt === null);
+  if (activeIndex >= 0) {
+    basCycles[activeIndex] = await syncBasCycleSecured(
+      basCycles[activeIndex],
+      designatedContext.totals
+    );
+  }
+
+  const activeCycle = activeIndex >= 0 ? basCycles[activeIndex] : null;
+
+  const now = new Date();
+  const currentQuarter = Math.floor(now.getMonth() / 3);
+  const quarterStart = new Date(now.getFullYear(), currentQuarter * 3, 1);
+
+  return {
+    orgId,
+    basHistory: basCycles.map((cycle) => {
+      const periodLabel = formatBasPeriod(cycle.periodStart, cycle.periodEnd);
+      const paygwReady =
+        decimalToNumber(cycle.paygwSecured) >= decimalToNumber(cycle.paygwRequired);
+      const gstReady =
+        decimalToNumber(cycle.gstSecured) >= decimalToNumber(cycle.gstRequired);
+      const readinessNote = [
+        `PAYGW ${paygwReady ? "secured" : "short"}`,
+        `GST ${gstReady ? "secured" : "short"}`,
+      ].join("; ");
+
+      return {
+        period: periodLabel,
+        lodgedAt: cycle.lodgedAt?.toISOString() ?? null,
+        status:
+          cycle.overallStatus === "LODGED"
+            ? "ON_TIME"
+            : cycle.overallStatus.toUpperCase(),
+        notes: readinessNote,
+      };
+    }),
+    paymentPlans: planRequests.map((plan) => shapePaymentPlan(plan)),
+    alertsSummary: {
+      openHighSeverity: alerts.filter(
+        (alert) => alert.severity === "HIGH" && !alert.resolvedAt
+      ).length,
+      resolvedThisQuarter: alerts.filter(
+        (alert) => alert.resolvedAt && alert.resolvedAt >= quarterStart
+      ).length,
+    },
+    nextBasDue: activeCycle?.periodEnd.toISOString() ?? null,
+    designatedTotals: designatedContext.totals,
+  };
+}
+
+async function createMonitoringSnapshot(orgId: string): Promise<MonitoringSnapshotModel> {
+  const now = new Date();
+
+  const [alerts, designatedContext, activeCycle, openPlanCount] = await Promise.all([
+    prisma.alert.findMany({
+      where: { orgId },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    }),
+    loadDesignatedAccountContext(orgId),
+    prisma.basCycle.findFirst({
+      where: { orgId, lodgedAt: null },
+      orderBy: { periodEnd: "desc" },
+    }),
+    prisma.paymentPlanRequest.count({
+      where: { orgId, resolvedAt: null },
+    }),
+  ]);
+
+  let preview = null as ReturnType<typeof shapeBasPreview> | null;
+  if (activeCycle) {
+    const synced = await syncBasCycleSecured(activeCycle, designatedContext.totals);
+    preview = shapeBasPreview(synced, designatedContext.totals);
+  }
+
+  const payload = {
+    generatedAt: now.toISOString(),
+    alerts: {
+      total: alerts.length,
+      openHigh: alerts.filter((alert) => !alert.resolvedAt && alert.severity === "HIGH").length,
+      openMedium: alerts.filter((alert) => !alert.resolvedAt && alert.severity === "MEDIUM").length,
+      recent: alerts.slice(0, 10).map((alert) => ({
+        id: alert.id,
+        type: alert.type,
+        severity: alert.severity,
+        createdAt: alert.createdAt.toISOString(),
+        resolved: Boolean(alert.resolvedAt),
+      })),
+    },
+    paymentPlansOpen: openPlanCount,
+    designatedTotals: designatedContext.totals,
+    bas: preview
+      ? {
+          overallStatus: preview.overallStatus,
+          paygw: preview.paygw,
+          gst: preview.gst,
+          blockers: preview.blockers,
+        }
+      : null,
+  };
+
+  return prisma.monitoringSnapshot.create({
+    data: {
+      orgId,
+      type: "compliance",
+      payload,
+    },
+  });
+}
+
+async function registerRegulatorRoutes(app: FastifyInstance): Promise<void> {
+  const regulatorContext = (request: FastifyRequest) => {
+    const claims: any = (request as any).user ?? {};
+    const session = (request as any).regulatorSession;
+    const orgId = session?.orgId ?? claims.orgId;
+    const actorId = `regulator:${claims.sessionId ?? session?.id ?? claims.sub ?? "unknown"}`;
+    return { orgId, actorId, sessionId: session?.id ?? claims.sessionId ?? claims.sub ?? "unknown" };
+  };
+
+  app.get("/evidence", async (request, reply) => {
+    const { orgId, actorId } = regulatorContext(request);
+    const artifacts = await prisma.evidenceArtifact.findMany({
+      where: { orgId },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      select: {
+        id: true,
+        kind: true,
+        sha256: true,
+        createdAt: true,
+        wormUri: true,
+      },
+    });
+
+    await recordAuditLog({
+      orgId,
+      actorId,
+      action: "regulator.evidence.list",
+      metadata: {},
+    });
+
+    reply.send({
+      artifacts: artifacts.map((artifact) => ({
+        id: artifact.id,
+        kind: artifact.kind,
+        sha256: artifact.sha256,
+        wormUri: artifact.wormUri,
+        createdAt: artifact.createdAt.toISOString(),
+      })),
+    });
+  });
+
+  app.get("/evidence/:id", async (request, reply) => {
+    const { orgId, actorId } = regulatorContext(request);
+    const { id } = request.params as { id: string };
+
+    const artifact = await prisma.evidenceArtifact.findUnique({
+      where: { id },
+    });
+
+    if (!artifact || artifact.orgId !== orgId) {
+      reply.code(404).send({
+        error: { code: "artifact_not_found", message: "No matching evidence artifact" },
+      });
+      return;
+    }
+
+    await recordAuditLog({
+      orgId,
+      actorId,
+      action: "regulator.evidence.get",
+      metadata: { artifactId: id },
+    });
+
+    reply.send({
+      artifact: {
+        id: artifact.id,
+        kind: artifact.kind,
+        sha256: artifact.sha256,
+        wormUri: artifact.wormUri,
+        createdAt: artifact.createdAt.toISOString(),
+        payload: artifact.payload ?? null,
+      },
+    });
+  });
+
+  app.get("/compliance/report", async (request, reply) => {
+    const { orgId, actorId } = regulatorContext(request);
+    const report = await compileComplianceReport(orgId);
+
+    await recordAuditLog({
+      orgId,
+      actorId,
+      action: "regulator.compliance.report",
+      metadata: {},
+    });
+
+    reply.send(report);
+  });
+
+  app.get("/alerts", async (request, reply) => {
+    const { orgId, actorId } = regulatorContext(request);
+    const alerts = await prisma.alert.findMany({
+      where: { orgId },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+
+    await recordAuditLog({
+      orgId,
+      actorId,
+      action: "regulator.alerts.list",
+      metadata: { count: alerts.length },
+    });
+
+    reply.send({
+      alerts: alerts.map((alert) => ({
+        id: alert.id,
+        type: alert.type,
+        severity: alert.severity,
+        message: alert.message,
+        createdAt: alert.createdAt.toISOString(),
+        resolved: Boolean(alert.resolvedAt),
+        resolvedAt: alert.resolvedAt?.toISOString() ?? null,
+      })),
+    });
+  });
+
+  app.get("/monitoring/snapshots", async (request, reply) => {
+    const { orgId, actorId } = regulatorContext(request);
+    const limitRaw = (request.query as Record<string, string | undefined>)?.limit;
+    const limitParsed = limitRaw ? Number.parseInt(limitRaw, 10) : 10;
+    const limit = Number.isFinite(limitParsed) ? Math.min(Math.max(limitParsed, 1), 50) : 10;
+
+    const snapshots = await prisma.monitoringSnapshot.findMany({
+      where: { orgId },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    });
+
+    await recordAuditLog({
+      orgId,
+      actorId,
+      action: "regulator.monitoring.list",
+      metadata: { limit },
+    });
+
+    reply.send({
+      snapshots: snapshots.map((snapshot) => ({
+        id: snapshot.id,
+        type: snapshot.type,
+        createdAt: snapshot.createdAt.toISOString(),
+        payload: snapshot.payload,
+      })),
+    });
+  });
+
+  app.get("/bank-lines/summary", async (request, reply) => {
+    const { orgId, actorId } = regulatorContext(request);
+    const aggregates = await prisma.bankLine.aggregate({
+      where: { orgId },
+      _count: { _all: true },
+      _sum: { amount: true },
+      _min: { date: true },
+      _max: { date: true },
+    });
+
+    const recent = await prisma.bankLine.findMany({
+      where: { orgId },
+      orderBy: { date: "desc" },
+      take: 5,
+      select: {
+        id: true,
+        date: true,
+        amount: true,
+      },
+    });
+
+    await recordAuditLog({
+      orgId,
+      actorId,
+      action: "regulator.bankLines.summary",
+      metadata: { sampleSize: recent.length },
+    });
+
+    reply.send({
+      summary: {
+        totalEntries: aggregates._count?._all ?? 0,
+        totalAmount: decimalToNumber(aggregates._sum?.amount ?? 0),
+        firstEntryAt: aggregates._min?.date?.toISOString() ?? null,
+        lastEntryAt: aggregates._max?.date?.toISOString() ?? null,
+      },
+      recent: recent.map((line) => ({
+        id: line.id,
+        date: line.date.toISOString(),
+        amount: decimalToNumber(line.amount),
+      })),
+    });
+  });
+
+  app.get("/health", async () => {
+    return { ok: true, service: "api-gateway-regulator" };
+  });
+}
+
+async function buildEvidenceSnapshot(orgId: string) {
+  const [report, designatedContext, alerts, auditLog, activeCycle, monitoringSnapshots] = await Promise.all([
+    compileComplianceReport(orgId),
+    loadDesignatedAccountContext(orgId),
+    prisma.alert.findMany({
+      where: { orgId },
+      orderBy: { createdAt: "desc" },
+      take: 25,
+    }),
+    prisma.auditLog.findMany({
+      where: { orgId },
+      orderBy: { createdAt: "desc" },
+      take: 25,
+      select: {
+        id: true,
+        actorId: true,
+        action: true,
+        metadata: true,
+        createdAt: true,
+      },
+    }),
+    prisma.basCycle.findFirst({
+      where: { orgId, lodgedAt: null },
+      orderBy: { periodEnd: "desc" },
+    }),
+    prisma.monitoringSnapshot.findMany({
+      where: { orgId },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+    }),
+  ]);
+
+  let obligationsPreview: ReturnType<typeof shapeBasPreview> | null = null;
+  if (activeCycle) {
+    const synced = await syncBasCycleSecured(activeCycle, designatedContext.totals);
+    obligationsPreview = shapeBasPreview(synced, designatedContext.totals);
+  }
+
+  const payload = {
+    generatedAt: new Date().toISOString(),
+    orgId,
+    complianceReport: report,
+    obligationsPreview,
+    alerts: alerts.map((alert) => shapeAlert(alert)),
+    auditLog: auditLog.map((entry) => ({
+      id: entry.id,
+      actorId: entry.actorId,
+      action: entry.action,
+      metadata: entry.metadata,
+      createdAt: entry.createdAt.toISOString(),
+    })),
+    monitoringSnapshots: monitoringSnapshots.map((snapshot) => ({
+      id: snapshot.id,
+      type: snapshot.type,
+      createdAt: snapshot.createdAt.toISOString(),
+      payload: snapshot.payload,
+    })),
+  };
+
+  const jsonPayload = payload as unknown as Prisma.JsonObject;
+  const payloadJson = JSON.stringify(jsonPayload);
+  const sha256 = crypto.createHash("sha256").update(payloadJson).digest("hex");
+
+  return {
+    payload: jsonPayload,
+    sha256,
+  };
+}
+
 export async function buildServer(): Promise<FastifyInstance> {
   const app = Fastify({
     logger: true,
@@ -378,6 +789,28 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   // /auth/login (public)
   await registerAuthRoutes(app);
+  await registerRegulatorAuthRoutes(app);
+
+  const regulatorAuthGuard = createAuthGuard(REGULATOR_AUDIENCE, {
+    validate: async (claims, request) => {
+      const sessionId = (claims.sessionId ?? claims.sub) as string | undefined;
+      if (!sessionId) {
+        throw new Error("regulator_session_missing");
+      }
+      const session = await ensureRegulatorSessionActive(sessionId);
+      claims.orgId = session.orgId;
+      claims.sessionId = session.id;
+      (request as any).regulatorSession = session;
+    },
+  });
+
+  app.register(
+    async (regScope) => {
+      regScope.addHook("onRequest", regulatorAuthGuard);
+      await registerRegulatorRoutes(regScope);
+    },
+    { prefix: "/regulator" },
+  );
 
   // ---- Everything below this point requires auth ----
 
@@ -409,16 +842,12 @@ export async function buildServer(): Promise<FastifyInstance> {
         };
       });
 
-      try {
-        await prisma.auditLog.create({
-          data: {
-            orgId,
-            actorId: userClaims.sub,
-            action: "users.list",
-            metadata: {},
-          },
-        });
-      } catch (_) {}
+      await recordAuditLog({
+        orgId,
+        actorId: userClaims.sub,
+        action: "users.list",
+        metadata: {},
+      });
 
       reply.send({ users: masked });
     }
@@ -452,16 +881,12 @@ export async function buildServer(): Promise<FastifyInstance> {
         createdAt: ln.createdAt,
       }));
 
-      try {
-        await prisma.auditLog.create({
-          data: {
-            orgId,
-            actorId: userClaims.sub,
-            action: "bankLines.list",
-            metadata: {},
-          },
-        });
-      } catch (_) {}
+      await recordAuditLog({
+        orgId,
+        actorId: userClaims.sub,
+        action: "bankLines.list",
+        metadata: {},
+      });
 
       reply.send({ lines: shaped });
     }
@@ -516,16 +941,12 @@ export async function buildServer(): Promise<FastifyInstance> {
         },
       });
 
-      try {
-        await prisma.auditLog.create({
-          data: {
-            orgId,
-            actorId: userClaims.sub,
-            action: "bankLines.create",
-            metadata: { lineId: newLine.id },
-          },
-        });
-      } catch (_) {}
+      await recordAuditLog({
+        orgId,
+        actorId: userClaims.sub,
+        action: "bankLines.create",
+        metadata: { lineId: newLine.id },
+      });
 
       reply.code(201).send({
         line: {
@@ -579,16 +1000,12 @@ export async function buildServer(): Promise<FastifyInstance> {
         },
       });
 
-      try {
-        await prisma.auditLog.create({
-          data: {
-            orgId,
-            actorId: userClaims.sub,
-            action: "admin.export",
-            metadata: {},
-          },
-        });
-      } catch (_) {}
+      await recordAuditLog({
+        orgId,
+        actorId: userClaims.sub,
+        action: "admin.export",
+        metadata: {},
+      });
 
       reply.send({
         export: {
@@ -670,16 +1087,12 @@ export async function buildServer(): Promise<FastifyInstance> {
             nextBasDue: null,
           };
 
-      try {
-        await prisma.auditLog.create({
-          data: {
-            orgId,
-            actorId: userClaims.sub,
-            action: "org.obligations.current",
-            metadata: {},
-          },
-        });
-      } catch (_) {}
+      await recordAuditLog({
+        orgId,
+        actorId: userClaims.sub,
+        action: "org.obligations.current",
+        metadata: {},
+      });
 
       reply.send(response);
     }
@@ -694,16 +1107,12 @@ export async function buildServer(): Promise<FastifyInstance> {
 
       const context = await loadDesignatedAccountContext(orgId);
 
-      try {
-        await prisma.auditLog.create({
-          data: {
-            orgId,
-            actorId: userClaims.sub,
-            action: "org.designatedAccounts.list",
-            metadata: {},
-          },
-        });
-      } catch (_) {}
+      await recordAuditLog({
+        orgId,
+        actorId: userClaims.sub,
+        action: "org.designatedAccounts.list",
+        metadata: {},
+      });
 
       reply.send({
         accounts: context.accounts,
@@ -732,16 +1141,12 @@ export async function buildServer(): Promise<FastifyInstance> {
         ],
       };
 
-      try {
-        await prisma.auditLog.create({
-          data: {
-            orgId,
-            actorId: userClaims.sub,
-            action: "feeds.payroll.list",
-            metadata: {},
-          },
-        });
-      } catch (_) {}
+      await recordAuditLog({
+        orgId,
+        actorId: userClaims.sub,
+        action: "feeds.payroll.list",
+        metadata: {},
+      });
 
       reply.send(data);
     }
@@ -773,16 +1178,12 @@ export async function buildServer(): Promise<FastifyInstance> {
         ],
       };
 
-      try {
-        await prisma.auditLog.create({
-          data: {
-            orgId,
-            actorId: userClaims.sub,
-            action: "feeds.gst.list",
-            metadata: {},
-          },
-        });
-      } catch (_) {}
+      await recordAuditLog({
+        orgId,
+        actorId: userClaims.sub,
+        action: "feeds.gst.list",
+        metadata: {},
+      });
 
       reply.send(data);
     }
@@ -800,16 +1201,12 @@ export async function buildServer(): Promise<FastifyInstance> {
         orderBy: { createdAt: "desc" },
       });
 
-      try {
-        await prisma.auditLog.create({
-          data: {
-            orgId,
-            actorId: userClaims.sub,
-            action: "alerts.list",
-            metadata: {},
-          },
-        });
-      } catch (_) {}
+      await recordAuditLog({
+        orgId,
+        actorId: userClaims.sub,
+        action: "alerts.list",
+        metadata: {},
+      });
 
       reply.send({
         alerts: alerts.map((alert) => shapeAlert(alert)),
@@ -901,19 +1298,15 @@ export async function buildServer(): Promise<FastifyInstance> {
         },
       });
 
-      try {
-        await prisma.auditLog.create({
-          data: {
-            orgId,
-            actorId: userClaims.sub,
-            action: "alert.resolve",
-            metadata: {
-              alertId: id,
-              mfaRequired: requiresMfa,
-            },
-          },
-        });
-      } catch (_) {}
+      await recordAuditLog({
+        orgId,
+        actorId: userClaims.sub,
+        action: "alert.resolve",
+        metadata: {
+          alertId: id,
+          mfaRequired: requiresMfa,
+        },
+      });
 
       reply.send({ alert: shapeAlert(resolved) });
     }
@@ -966,16 +1359,12 @@ export async function buildServer(): Promise<FastifyInstance> {
             blockers: [],
           };
 
-      try {
-        await prisma.auditLog.create({
-          data: {
-            orgId,
-            actorId: userClaims.sub,
-            action: "bas.preview",
-            metadata: {},
-          },
-        });
-      } catch (_) {}
+      await recordAuditLog({
+        orgId,
+        actorId: userClaims.sub,
+        action: "bas.preview",
+        metadata: {},
+      });
 
       reply.send(payload);
     }
@@ -1009,16 +1398,12 @@ export async function buildServer(): Promise<FastifyInstance> {
         orderBy: { requestedAt: "desc" },
       });
 
-      try {
-        await prisma.auditLog.create({
-          data: {
-            orgId,
-            actorId: userClaims.sub,
-            action: "bas.paymentPlan.view",
-            metadata: { basCycleId: targetCycleId },
-          },
-        });
-      } catch (_) {}
+      await recordAuditLog({
+        orgId,
+        actorId: userClaims.sub,
+        action: "bas.paymentPlan.view",
+        metadata: { basCycleId: targetCycleId },
+      });
 
       reply.send({
         request: plan ? shapePaymentPlan(plan) : null,
@@ -1104,19 +1489,15 @@ export async function buildServer(): Promise<FastifyInstance> {
         },
       });
 
-      try {
-        await prisma.auditLog.create({
-          data: {
-            orgId,
-            actorId: userClaims.sub,
-            action: "bas.lodge",
-            metadata: {
-              basCycleId: updated.id,
-              mfaRequired: userRecord.mfaEnabled,
-            },
-          },
-        });
-      } catch (_) {}
+      await recordAuditLog({
+        orgId,
+        actorId: userClaims.sub,
+        action: "bas.lodge",
+        metadata: {
+          basCycleId: updated.id,
+          mfaRequired: userRecord.mfaEnabled,
+        },
+      });
 
       reply.send({
         basCycle: {
@@ -1201,16 +1582,12 @@ export async function buildServer(): Promise<FastifyInstance> {
         },
       });
 
-      try {
-        await prisma.auditLog.create({
-          data: {
-            orgId,
-            actorId: userClaims.sub,
-            action: "bas.paymentPlan.requested",
-            metadata: { basCycleId: body.basCycleId },
-          },
-        });
-      } catch (_) {}
+      await recordAuditLog({
+        orgId,
+        actorId: userClaims.sub,
+        action: "bas.paymentPlan.requested",
+        metadata: { basCycleId: body.basCycleId },
+      });
 
       reply.code(201).send({ request: shapePaymentPlan(created) });
     }
@@ -1222,86 +1599,197 @@ export async function buildServer(): Promise<FastifyInstance> {
     async (request, reply) => {
       const userClaims: any = (request as any).user;
       const orgId = userClaims.orgId;
-      const [basCycles, alerts, planRequests, designatedContext] = await Promise.all([
-        prisma.basCycle.findMany({
-          where: { orgId },
-          orderBy: { periodStart: "desc" },
-          take: 8,
-        }),
-        prisma.alert.findMany({
-          where: { orgId },
-          orderBy: { createdAt: "desc" },
-        }),
-        prisma.paymentPlanRequest.findMany({
-          where: { orgId },
-          orderBy: { requestedAt: "desc" },
-        }),
-        loadDesignatedAccountContext(orgId),
-      ]);
+      const complianceReport = await compileComplianceReport(orgId);
 
-      const activeIndex = basCycles.findIndex((cycle) => cycle.lodgedAt === null);
-      if (activeIndex >= 0) {
-        basCycles[activeIndex] = await syncBasCycleSecured(
-          basCycles[activeIndex],
-          designatedContext.totals
-        );
-      }
-
-      const activeCycle = activeIndex >= 0 ? basCycles[activeIndex] : null;
-
-      const now = new Date();
-      const currentQuarter = Math.floor(now.getMonth() / 3);
-      const quarterStart = new Date(now.getFullYear(), currentQuarter * 3, 1);
-
-      const complianceReport = {
+      await recordAuditLog({
         orgId,
-        basHistory: basCycles.map((cycle) => {
-          const periodLabel = formatBasPeriod(cycle.periodStart, cycle.periodEnd);
-          const paygwReady =
-            decimalToNumber(cycle.paygwSecured) >=
-            decimalToNumber(cycle.paygwRequired);
-          const gstReady =
-            decimalToNumber(cycle.gstSecured) >= decimalToNumber(cycle.gstRequired);
-          const readinessNote = [
-            `PAYGW ${paygwReady ? "secured" : "short"}`,
-            `GST ${gstReady ? "secured" : "short"}`,
-          ].join("; ");
-
-          return {
-            period: periodLabel,
-            lodgedAt: cycle.lodgedAt?.toISOString() ?? null,
-            status:
-              cycle.overallStatus === "LODGED"
-                ? "ON_TIME"
-                : cycle.overallStatus.toUpperCase(),
-            notes: readinessNote,
-          };
-        }),
-        paymentPlans: planRequests.map((plan) => shapePaymentPlan(plan)),
-        alertsSummary: {
-          openHighSeverity: alerts.filter(
-            (alert) => alert.severity === "HIGH" && !alert.resolvedAt
-          ).length,
-          resolvedThisQuarter: alerts.filter(
-            (alert) => alert.resolvedAt && alert.resolvedAt >= quarterStart
-          ).length,
-        },
-        nextBasDue: activeCycle?.periodEnd.toISOString() ?? null,
-        designatedTotals: designatedContext.totals,
-      };
-
-      try {
-        await prisma.auditLog.create({
-          data: {
-            orgId,
-            actorId: userClaims.sub,
-            action: "compliance.report",
-            metadata: {},
-          },
-        });
-      } catch (_) {}
+        actorId: userClaims.sub,
+        action: "compliance.report",
+        metadata: {},
+      });
 
       reply.send(complianceReport);
+    }
+  );
+
+  app.get(
+    "/compliance/evidence",
+    { preHandler: authGuard },
+    async (request, reply) => {
+      const userClaims: any = (request as any).user;
+      const orgId = userClaims.orgId;
+
+      const artifacts = await prisma.evidenceArtifact.findMany({
+        where: { orgId },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          kind: true,
+          sha256: true,
+          createdAt: true,
+          wormUri: true,
+        },
+      });
+
+      await recordAuditLog({
+        orgId,
+        actorId: userClaims.sub,
+        action: "compliance.evidence.list",
+        metadata: {},
+      });
+
+      reply.send({
+        artifacts: artifacts.map((artifact) => ({
+          id: artifact.id,
+          kind: artifact.kind,
+          sha256: artifact.sha256,
+          wormUri: artifact.wormUri,
+          createdAt: artifact.createdAt.toISOString(),
+        })),
+      });
+    }
+  );
+
+  app.get(
+    "/compliance/evidence/:id",
+    { preHandler: authGuard },
+    async (request, reply) => {
+      const userClaims: any = (request as any).user;
+      const orgId = userClaims.orgId;
+      const { id } = request.params as { id: string };
+
+      const artifact = await prisma.evidenceArtifact.findUnique({
+        where: { id },
+      });
+
+      if (!artifact || artifact.orgId !== orgId) {
+        reply.code(404).send({
+          error: { code: "artifact_not_found", message: "No matching evidence artifact" },
+        });
+        return;
+      }
+
+      await recordAuditLog({
+        orgId,
+        actorId: userClaims.sub,
+        action: "compliance.evidence.get",
+        metadata: { artifactId: id },
+      });
+
+      reply.send({
+        artifact: {
+          id: artifact.id,
+          kind: artifact.kind,
+          sha256: artifact.sha256,
+          wormUri: artifact.wormUri,
+          createdAt: artifact.createdAt.toISOString(),
+          payload: artifact.payload ?? null,
+        },
+      });
+    }
+  );
+
+  app.post(
+    "/compliance/evidence",
+    { preHandler: authGuard },
+    async (request, reply) => {
+      const userClaims: any = (request as any).user;
+      const orgId = userClaims.orgId;
+
+      const snapshot = await buildEvidenceSnapshot(orgId);
+
+      const artifact = await prisma.$transaction(async (tx) => {
+        const created = await tx.evidenceArtifact.create({
+          data: {
+            orgId,
+            kind: "compliance-pack",
+            wormUri: "internal:evidence/pending",
+            sha256: snapshot.sha256,
+            payload: snapshot.payload,
+          },
+        });
+        return tx.evidenceArtifact.update({
+          where: { id: created.id },
+          data: { wormUri: `internal:evidence/${created.id}` },
+        });
+      });
+
+      await recordAuditLog({
+        orgId,
+        actorId: userClaims.sub,
+        action: "compliance.evidence.create",
+        metadata: { artifactId: artifact.id },
+      });
+
+      reply.code(201).send({
+        artifact: {
+          id: artifact.id,
+          sha256: artifact.sha256,
+          createdAt: artifact.createdAt.toISOString(),
+          wormUri: artifact.wormUri,
+        },
+      });
+    }
+  );
+
+  app.post(
+    "/monitoring/snapshots",
+    { preHandler: authGuard },
+    async (request, reply) => {
+      const userClaims: any = (request as any).user;
+      const orgId = userClaims.orgId;
+
+      const snapshot = await createMonitoringSnapshot(orgId);
+
+      await recordAuditLog({
+        orgId,
+        actorId: userClaims.sub,
+        action: "monitoring.snapshot.create",
+        metadata: { snapshotId: snapshot.id },
+      });
+
+      reply.code(201).send({
+        snapshot: {
+          id: snapshot.id,
+          type: snapshot.type,
+          payload: snapshot.payload,
+          createdAt: snapshot.createdAt.toISOString(),
+        },
+      });
+    }
+  );
+
+  app.get(
+    "/monitoring/snapshots",
+    { preHandler: authGuard },
+    async (request, reply) => {
+      const userClaims: any = (request as any).user;
+      const orgId = userClaims.orgId;
+      const limitRaw = (request.query as Record<string, string | undefined>)?.limit;
+      const limitParsed = limitRaw ? Number.parseInt(limitRaw, 10) : 10;
+      const limit = Number.isFinite(limitParsed) ? Math.min(Math.max(limitParsed, 1), 50) : 10;
+
+      const snapshots = await prisma.monitoringSnapshot.findMany({
+        where: { orgId },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+      });
+
+      await recordAuditLog({
+        orgId,
+        actorId: userClaims.sub,
+        action: "monitoring.snapshot.list",
+        metadata: { limit },
+      });
+
+      reply.send({
+        snapshots: snapshots.map((snapshot) => ({
+          id: snapshot.id,
+          type: snapshot.type,
+          payload: snapshot.payload,
+          createdAt: snapshot.createdAt.toISOString(),
+        })),
+      });
     }
   );
 
@@ -1324,16 +1812,12 @@ export async function buildServer(): Promise<FastifyInstance> {
         orderBy: { createdAt: "asc" },
       });
 
-      try {
-        await prisma.auditLog.create({
-          data: {
-            orgId,
-            actorId: userClaims.sub,
-            action: "security.users.list",
-            metadata: {},
-          },
-        });
-      } catch (_) {}
+      await recordAuditLog({
+        orgId,
+        actorId: userClaims.sub,
+        action: "security.users.list",
+        metadata: {},
+      });
 
       reply.send({
         users: users.map((user) => ({

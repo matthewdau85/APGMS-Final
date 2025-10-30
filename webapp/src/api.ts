@@ -399,3 +399,246 @@ export async function createPaymentPlanRequest(
     };
   }>;
 }
+
+export async function fetchEvidenceArtifacts(token: string) {
+  const res = await fetch(`${API_BASE}/compliance/evidence`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error("failed_evidence_list");
+  return res.json() as Promise<{
+    artifacts: Array<{
+      id: string;
+      kind: string;
+      sha256: string;
+      wormUri: string;
+      createdAt: string;
+    }>;
+  }>;
+}
+
+export async function createEvidenceArtifact(token: string) {
+  const res = await fetch(`${API_BASE}/compliance/evidence`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error("failed_evidence_create");
+  return res.json() as Promise<{
+    artifact: {
+      id: string;
+      sha256: string;
+      createdAt: string;
+      wormUri: string;
+    };
+  }>;
+}
+
+export async function fetchEvidenceArtifactDetail(token: string, artifactId: string) {
+  const res = await fetch(`${API_BASE}/compliance/evidence/${artifactId}`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error("failed_evidence_detail");
+  return res.json() as Promise<{
+    artifact: {
+      id: string;
+      kind: string;
+      sha256: string;
+      wormUri: string;
+      createdAt: string;
+      payload: Record<string, unknown> | null;
+    };
+  }>;
+}
+
+export type RegulatorLoginResponse = {
+  token: string;
+  session: {
+    id: string;
+    issuedAt: string;
+    expiresAt: string;
+    sessionToken: string;
+  };
+};
+
+export async function regulatorLogin(accessCode: string, orgId?: string) {
+  const trimmedCode = accessCode.trim();
+  const resolvedOrgId = orgId?.trim() && orgId.trim().length > 0 ? orgId.trim() : undefined;
+  const res = await fetch(`${API_BASE}/regulator/login`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({
+      accessCode: trimmedCode,
+      orgId: resolvedOrgId,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const code =
+      (body as { error?: { code?: string } } | null)?.error?.code ?? "regulator_login_failed";
+    const error = new Error(code);
+    (error as any).payload = body;
+    throw error;
+  }
+
+  const payload = (await res.json()) as RegulatorLoginResponse;
+  return {
+    ...payload,
+    orgId: resolvedOrgId ?? "dev-org",
+  };
+}
+
+export async function fetchRegulatorComplianceReport(token: string) {
+  const res = await fetch(`${API_BASE}/regulator/compliance/report`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error("failed_regulator_compliance");
+  return res.json() as Promise<{
+    orgId: string;
+    basHistory: Array<{
+      period: string;
+      lodgedAt: string | null;
+      status: string;
+      notes: string;
+    }>;
+    paymentPlans: Array<{
+      id: string;
+      basCycleId: string;
+      requestedAt: string;
+      status: string;
+      reason: string;
+      details: Record<string, unknown>;
+      resolvedAt: string | null;
+    }>;
+    alertsSummary: {
+      openHighSeverity: number;
+      resolvedThisQuarter: number;
+    };
+    nextBasDue: string | null;
+    designatedTotals: {
+      paygw: number;
+      gst: number;
+    };
+  }>;
+}
+
+export async function fetchRegulatorAlerts(token: string) {
+  const res = await fetch(`${API_BASE}/regulator/alerts`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error("failed_regulator_alerts");
+  return res.json() as Promise<{
+    alerts: Array<{
+      id: string;
+      type: string;
+      severity: string;
+      message: string;
+      createdAt: string;
+      resolved: boolean;
+      resolvedAt: string | null;
+    }>;
+  }>;
+}
+
+export async function fetchRegulatorMonitoringSnapshots(token: string, limit = 5) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  const res = await fetch(`${API_BASE}/regulator/monitoring/snapshots?${params.toString()}`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error("failed_regulator_snapshots");
+  return res.json() as Promise<{
+    snapshots: Array<{
+      id: string;
+      type: string;
+      createdAt: string;
+      payload: {
+        generatedAt: string;
+        alerts: {
+          total: number;
+          openHigh: number;
+          openMedium: number;
+          recent: Array<{
+            id: string;
+            type: string;
+            severity: string;
+            createdAt: string;
+            resolved: boolean;
+          }>;
+        };
+        paymentPlansOpen: number;
+        designatedTotals: {
+          paygw: number;
+          gst: number;
+        };
+        bas: null | {
+          overallStatus: string;
+          paygw: {
+            required: number;
+            secured: number;
+            status: string;
+            shortfall?: number;
+          };
+          gst: {
+            required: number;
+            secured: number;
+            status: string;
+            shortfall?: number;
+          };
+          blockers: string[];
+        };
+      };
+    }>;
+  }>;
+}
+
+export async function fetchRegulatorEvidenceList(token: string) {
+  const res = await fetch(`${API_BASE}/regulator/evidence`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error("failed_regulator_evidence");
+  return res.json() as Promise<{
+    artifacts: Array<{
+      id: string;
+      kind: string;
+      sha256: string;
+      wormUri: string | null;
+      createdAt: string;
+    }>;
+  }>;
+}
+
+export async function fetchRegulatorEvidenceDetail(token: string, artifactId: string) {
+  const res = await fetch(`${API_BASE}/regulator/evidence/${artifactId}`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error("failed_regulator_evidence_detail");
+  return res.json() as Promise<{
+    artifact: {
+      id: string;
+      kind: string;
+      sha256: string;
+      wormUri: string | null;
+      createdAt: string;
+      payload: Record<string, unknown> | null;
+    };
+  }>;
+}
+
+export async function fetchRegulatorBankSummary(token: string) {
+  const res = await fetch(`${API_BASE}/regulator/bank-lines/summary`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error("failed_regulator_bank_summary");
+  return res.json() as Promise<{
+    summary: {
+      totalEntries: number;
+      totalAmount: number;
+      firstEntryAt: string | null;
+      lastEntryAt: string | null;
+    };
+    recent: Array<{
+      id: string;
+      date: string;
+      amount: number;
+    }>;
+  }>;
+}
