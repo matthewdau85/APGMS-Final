@@ -2,7 +2,8 @@
 
 ## Prerequisites
 
-* Node 18.x, PNPM 9 (`corepack enable && corepack prepare pnpm@9 --activate`)
+* Node 20.11.x (respect `.nvmrc` / `.tool-versions`; `nvm use` or `asdf install` will pick this up)
+* PNPM 9 via Corepack (`corepack enable && corepack prepare pnpm@9 --activate`)
 * Docker & Docker Compose
 * Playwright browsers: `pnpm exec playwright install --with-deps`
 * (Optional for smoke) k6 installed locally
