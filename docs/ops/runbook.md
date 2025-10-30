@@ -19,8 +19,9 @@
 - Search by x-request-id header.
 
 ## Metrics
-- Prometheus endpoint at /metrics exposing http_requests_total, http_request_duration_seconds, security_events_total.
-- Check anomaly counter anomaly.auth for repeated auth failures.
+- Prometheus endpoint at `/metrics` exposes `apgms_api_requests_total{method,route,status}` plus the default `prom-client` process/runtime gauges.
+- Alert on unexpected growth in `apgms_api_requests_total{status="5xx"}` or missing scrapes.
+- Check anomaly counter `apgms_api_requests_total{route="/alerts/:id/resolve",status="401"}` for MFA denials and repeated auth failures.
 
 ## Alerts & SLOs
 - Targets: 99.5% availability, p95 latency < 500ms on /bank-lines.
@@ -39,6 +40,7 @@
 - File follow-up tasks to improve automation or documentation.
 - Capture command evidence with `pnpm compliance:evidence --tag <incident-id>` and archive the output in `artifacts/compliance/`.
 - Populate `status/incidents/<incident-id>.md` using the template provided to keep public status in sync.
+- Run `pnpm backup:evidence-pack -- --base-url http://localhost:3000 --org <org> --token <jwt>` against the affected environment to snapshot export/compliance JSON.
 - Run applicable chaos experiment from `docs/ops/chaos.md` after remediation to validate fixes.
 
 ## Contact
@@ -66,5 +68,3 @@ See `docs/ops/logging.md` for structured logging guidance.
 
 
 See docs/ops/alerts.md for alert routing and testing details.
-
-

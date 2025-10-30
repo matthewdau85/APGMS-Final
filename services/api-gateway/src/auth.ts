@@ -2,9 +2,7 @@
 import { FastifyRequest, FastifyReply } from "fastify";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { prisma } from "./db.js";
 
 // ✅ pull from env directly instead of importing ./config
 const AUD = process.env.AUTH_AUDIENCE!;
@@ -15,12 +13,14 @@ export function signToken(user: {
   id: string;
   orgId: string;
   role?: string;
+  mfaEnabled?: boolean;
 }) {
   return jwt.sign(
     {
       sub: user.id,
       orgId: user.orgId,
       role: user.role ?? "admin",
+      mfaEnabled: user.mfaEnabled ?? false,
       aud: AUD,
       iss: ISS,
     },

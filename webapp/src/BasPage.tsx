@@ -5,8 +5,9 @@ import {
   fetchDesignatedAccounts,
   fetchPaymentPlanRequest,
   createPaymentPlanRequest,
+  initiateMfa,
 } from "./api";
-import { getToken } from "./auth";
+import { getToken, getSessionUser } from "./auth";
 
 type BasPreviewResponse = Awaited<ReturnType<typeof fetchBasPreview>>;
 type DesignatedAccountsResponse = Awaited<ReturnType<typeof fetchDesignatedAccounts>>;
@@ -15,6 +16,7 @@ type PaymentPlanResponse = Awaited<ReturnType<typeof fetchPaymentPlanRequest>>["
 
 export default function BasPage() {
   const token = getToken();
+  const sessionUser = getSessionUser();
   const [preview, setPreview] = useState<BasPreviewResponse | null>(null);
   const [designated, setDesignated] = useState<DesignatedAccountsResponse | null>(null);
   const [paymentPlan, setPaymentPlan] = useState<PaymentPlanResponse | null>(null);
@@ -92,19 +94,55 @@ export default function BasPage() {
     setSuccess(null);
     setError(null);
 
+    let lodged = false;
+    let requiresMfa = false;
+    let lodgmentResult: Awaited<ReturnType<typeof lodgeBas>> | null = null;
+
     try {
       const result = await lodgeBas(token);
-      setSuccess(`BAS lodged at ${new Date(result.basCycle.lodgedAt).toLocaleString()}`);
-      await loadPreview();
-      if (result.basCycle.id) {
-        await loadPaymentPlan(result.basCycle.id);
-      }
+      lodgmentResult = result;
+      lodged = true;
     } catch (err) {
-      console.error(err);
-      setError("BAS could not be lodged. Check blockers and try again.");
-    } finally {
-      setSubmitting(false);
+      if (err instanceof Error && err.message === "mfa_required" && sessionUser?.mfaEnabled) {
+        requiresMfa = true;
+      } else {
+        console.error(err);
+        setError("BAS could not be lodged. Check blockers and try again.");
+      }
     }
+
+    if (!lodged && requiresMfa) {
+      try {
+        const challenge = await initiateMfa(token);
+        window.alert(
+          `MFA verification required for BAS lodgment.\n\nDev stub code: ${challenge.code} (expires in ${challenge.expiresInSeconds}s).`
+        );
+        const supplied = window.prompt(
+          "Enter the MFA code to authorise BAS lodgment:",
+          challenge.code
+        );
+        if (!supplied || supplied.trim().length === 0) {
+          setError("MFA verification cancelled.");
+        } else {
+          const result = await lodgeBas(token, { mfaCode: supplied.trim() });
+          lodgmentResult = result;
+          lodged = true;
+        }
+      } catch (err) {
+        console.error(err);
+        setError("MFA verification failed. Please try again.");
+      }
+    }
+
+    if (lodged && lodgmentResult) {
+      setSuccess(`BAS lodged at ${new Date(lodgmentResult.basCycle.lodgedAt).toLocaleString()}`);
+      await loadPreview();
+      if (lodgmentResult.basCycle.id) {
+        await loadPaymentPlan(lodgmentResult.basCycle.id);
+      }
+    }
+
+    setSubmitting(false);
   }
 
   async function handleCreatePaymentPlan() {
