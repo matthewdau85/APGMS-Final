@@ -1,14 +1,18 @@
 import React, { useEffect, useState } from "react";
-import { fetchSecurityUsers } from "./api";
-import { getToken } from "./auth";
+import { fetchSecurityUsers, initiateMfa, verifyMfa } from "./api";
+import { getToken, getSessionUser, updateSession } from "./auth";
 
 type SecurityUser = Awaited<ReturnType<typeof fetchSecurityUsers>>["users"][number];
 
 export default function SecurityPage() {
   const token = getToken();
+  const sessionUser = getSessionUser();
   const [users, setUsers] = useState<SecurityUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [enableLoading, setEnableLoading] = useState(false);
+  const [enableError, setEnableError] = useState<string | null>(null);
+  const [enableSuccess, setEnableSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) {
@@ -27,6 +31,45 @@ export default function SecurityPage() {
     })();
   }, [token]);
 
+  async function handleEnableMfa() {
+    if (!token || !sessionUser) {
+      return;
+    }
+    setEnableLoading(true);
+    setEnableError(null);
+    setEnableSuccess(null);
+    try {
+      const challenge = await initiateMfa(token);
+      window.alert(
+        `MFA enrolment initiated.\n\nDev stub code: ${challenge.code} (expires in ${challenge.expiresInSeconds}s).`
+      );
+      const supplied = window.prompt(
+        "Enter the MFA code to finish enabling MFA on your account:",
+        challenge.code
+      );
+      if (!supplied || supplied.trim().length === 0) {
+        setEnableError("MFA enrolment cancelled.");
+        return;
+      }
+      const verification = await verifyMfa(token, supplied.trim());
+      updateSession({
+        token: verification.token,
+        user: verification.user,
+      });
+      setEnableSuccess("Multi-factor authentication enabled for your account.");
+      const refreshedToken = getToken();
+      if (refreshedToken) {
+        const response = await fetchSecurityUsers(refreshedToken);
+        setUsers(response.users);
+      }
+    } catch (err) {
+      console.error(err);
+      setEnableError("Unable to enable MFA. Please try again.");
+    } finally {
+      setEnableLoading(false);
+    }
+  }
+
   if (!token) {
     return null;
   }
@@ -42,6 +85,34 @@ export default function SecurityPage() {
 
       {loading && <div style={infoTextStyle}>Loading security roster...</div>}
       {error && <div style={errorTextStyle}>{error}</div>}
+
+      {!loading && !error && sessionUser && (
+        <section style={enrolCardStyle}>
+          <div style={{ display: "grid", gap: "6px" }}>
+            <h2 style={sectionTitleStyle}>Your MFA status</h2>
+            <p style={pageSubtitleStyle}>
+              MFA protects high-risk actions like BAS lodgment and high-severity alert resolution. Enable it before pilot handover.
+            </p>
+            {enableError && <span style={errorTextStyle}>{enableError}</span>}
+            {enableSuccess && <span style={successTextStyle}>{enableSuccess}</span>}
+          </div>
+          <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+            <span style={sessionUser.mfaEnabled ? mfaOnBadgeStyle : mfaOffBadgeStyle}>
+              {sessionUser.mfaEnabled ? "Enabled" : "MFA OFF"}
+            </span>
+            {!sessionUser.mfaEnabled && (
+              <button
+                type="button"
+                onClick={handleEnableMfa}
+                style={enableMfaButtonStyle}
+                disabled={enableLoading}
+              >
+                {enableLoading ? "Enabling..." : "Enable MFA (beta)"}
+              </button>
+            )}
+          </div>
+        </section>
+      )}
 
       {!loading && !error && (
         <section style={cardStyle}>
@@ -102,6 +173,24 @@ const infoTextStyle: React.CSSProperties = {
 const errorTextStyle: React.CSSProperties = {
   fontSize: "14px",
   color: "#b91c1c",
+};
+
+const successTextStyle: React.CSSProperties = {
+  fontSize: "14px",
+  color: "#047857",
+};
+
+const enrolCardStyle: React.CSSProperties = {
+  backgroundColor: "#ffffff",
+  borderRadius: "12px",
+  padding: "20px 24px",
+  border: "1px solid #e2e8f0",
+  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.08)",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "16px",
+  flexWrap: "wrap",
 };
 
 const cardStyle: React.CSSProperties = {
@@ -171,4 +260,15 @@ const mfaOffBadgeStyle: React.CSSProperties = {
   fontSize: "12px",
   fontWeight: 700,
   textTransform: "uppercase",
+};
+
+const enableMfaButtonStyle: React.CSSProperties = {
+  padding: "10px 16px",
+  borderRadius: "8px",
+  border: "1px solid #1d4ed8",
+  backgroundColor: "#1d4ed8",
+  color: "#ffffff",
+  fontSize: "14px",
+  fontWeight: 600,
+  cursor: "pointer",
 };
