@@ -1,5 +1,6 @@
 import Fastify, { FastifyInstance, FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
 import {
   Prisma,
   Alert as AlertModel,
@@ -727,6 +728,8 @@ export async function buildServer(): Promise<FastifyInstance> {
     logger: true,
   });
 
+  const allowedOrigins = new Set(config.cors.allowedOrigins);
+
   app.addHook("onResponse", (request, reply, done) => {
     const route =
       (request.routeOptions && request.routeOptions.url) ??
@@ -743,25 +746,42 @@ export async function buildServer(): Promise<FastifyInstance> {
   });
 
   await app.register(rateLimit);
+  await app.register(helmet, {
+    frameguard: {
+      action: "deny",
+    },
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        baseUri: ["'self'"],
+        connectSrc: ["'self'"],
+        scriptSrc: [
+          "'self'",
+          "'sha256-+Ul8C6HpBvEV0hgFekKPKiEh0Ug3SIn50SjA+iyTNHo='",
+        ],
+        styleSrc: ["'self'"],
+        imgSrc: ["'self'", "data:"],
+        objectSrc: ["'none'"],
+        frameAncestors: ["'none'"],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+  });
 
   // --- CORS REGISTRATION ---
   // Allow frontend at http://localhost:5173 to call us at http://localhost:3000
   await app.register(cors, {
     origin: (origin, cb) => {
-      // Browser will pass origin like "http://localhost:5173"
-      // Non-browser clients (curl, PowerShell) might send no origin.
       if (!origin) {
-        // allow same-network tools like curl / Invoke-WebRequest
-        return cb(null, true);
+        cb(null, false);
+        return;
       }
-
-      const allowed = config.cors.allowedOrigins;
-      if (allowed.includes(origin)) {
-        return cb(null, true);
+      if (allowedOrigins.has(origin)) {
+        cb(null, true);
+        return;
       }
-
-      // not allowed
-      cb(new Error("CORS not allowed"), false);
+      const error = new Error(`Origin ${origin} is not allowed`);
+      cb(Object.assign(error, { code: "FST_CORS_FORBIDDEN_ORIGIN", statusCode: 403 }), false);
     },
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
