@@ -1,60 +1,29 @@
-const CODE_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
-const SESSION_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
+import { verifyTotpToken } from "@apgms/shared";
+import {
+  getTotpCredential,
+  hashRecoveryCode,
+  recordMfaUsage,
+  updateTotpRecoveryCodes,
+} from "../lib/mfa-store.js";
 
-type PendingChallenge = {
-  code: string;
-  expiresAt: number;
-};
+const SESSION_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
 
 type ActiveSession = {
   expiresAt: number;
 };
 
-const pendingChallenges = new Map<string, PendingChallenge>();
 const activeSessions = new Map<string, ActiveSession>();
-
-const generateCode = (): string =>
-  Math.floor(100000 + Math.random() * 900000).toString();
 
 const now = () => Date.now();
 
 const cleanup = () => {
   const timestamp = now();
-  for (const [userId, details] of pendingChallenges.entries()) {
-    if (details.expiresAt <= timestamp) {
-      pendingChallenges.delete(userId);
-    }
-  }
   for (const [userId, details] of activeSessions.entries()) {
     if (details.expiresAt <= timestamp) {
       activeSessions.delete(userId);
     }
   }
 };
-
-export function createChallenge(userId: string): string {
-  cleanup();
-  const code = generateCode();
-  pendingChallenges.set(userId, {
-    code,
-    expiresAt: now() + CODE_EXPIRY_MS,
-  });
-  activeSessions.delete(userId);
-  return code;
-}
-
-export function verifyChallenge(userId: string, code: string): boolean {
-  cleanup();
-  const record = pendingChallenges.get(userId);
-  if (!record || record.code !== code) {
-    return false;
-  }
-  pendingChallenges.delete(userId);
-  activeSessions.set(userId, {
-    expiresAt: now() + SESSION_EXPIRY_MS,
-  });
-  return true;
-}
 
 export function requireRecentVerification(userId: string): boolean {
   cleanup();
@@ -70,6 +39,80 @@ export function requireRecentVerification(userId: string): boolean {
 }
 
 export function clearVerification(userId: string): void {
-  pendingChallenges.delete(userId);
   activeSessions.delete(userId);
+}
+
+export function grantStepUpSession(
+  userId: string,
+  ttlMs: number = SESSION_EXPIRY_MS,
+): Date {
+  const expiry = now() + ttlMs;
+  activeSessions.set(userId, {
+    expiresAt: expiry,
+  });
+  return new Date(expiry);
+}
+
+function normaliseRecoveryCode(input: string): string {
+  return input.replace(/[\s-]/g, "").toUpperCase();
+}
+
+export type VerifyChallengeResult = {
+  success: boolean;
+  method?: "totp" | "recovery";
+  expiresAt?: Date;
+  remainingRecoveryCodes?: number;
+};
+
+export async function verifyChallenge(userId: string, code: string): Promise<VerifyChallengeResult> {
+  cleanup();
+  const trimmed = code.trim();
+  if (trimmed.length === 0) {
+    return { success: false };
+  }
+
+  const credential = await getTotpCredential(userId);
+  if (!credential) {
+    return { success: false };
+  }
+
+  const numericToken = trimmed.replace(/\s+/g, "");
+  if (/^\d{6}$/.test(numericToken) && verifyTotpToken(credential.secret, numericToken)) {
+    await recordMfaUsage(credential.record.id);
+    const expiresAt = grantStepUpSession(userId);
+    return {
+      success: true,
+      method: "totp",
+      expiresAt,
+      remainingRecoveryCodes: credential.recoveryCodes.filter((entry) => !entry.used).length,
+    };
+  }
+
+  const hashed = hashRecoveryCode(normaliseRecoveryCode(trimmed));
+  const index = credential.recoveryCodes.findIndex(
+    (entry) => entry.hash === hashed && !entry.used,
+  );
+
+  if (index === -1) {
+    return { success: false };
+  }
+
+  const updatedRecoveryCodes = credential.recoveryCodes.map((entry, idx) =>
+    idx === index ? { ...entry, used: true } : entry,
+  );
+
+  await updateTotpRecoveryCodes(
+    credential.record.id,
+    userId,
+    credential.secret,
+    updatedRecoveryCodes,
+  );
+  await recordMfaUsage(credential.record.id);
+  const expiresAt = grantStepUpSession(userId);
+  return {
+    success: true,
+    method: "recovery",
+    expiresAt,
+    remainingRecoveryCodes: updatedRecoveryCodes.filter((entry) => !entry.used).length,
+  };
 }

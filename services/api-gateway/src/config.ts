@@ -13,6 +13,7 @@ export interface AppConfig {
   readonly security: {
     readonly authFailureThreshold: number;
     readonly kmsKeysetLoaded?: boolean;
+    readonly requireHttps: boolean;
   };
   readonly cors: {
     readonly allowedOrigins: string[];
@@ -29,6 +30,14 @@ export interface AppConfig {
     readonly accessCode: string;
     readonly jwtAudience: string;
     readonly sessionTtlMinutes: number;
+  };
+  readonly encryption: {
+    readonly masterKey: Buffer;
+  };
+  readonly webauthn: {
+    readonly rpId: string;
+    readonly rpName: string;
+    readonly origin: string;
   };
 }
 
@@ -67,6 +76,17 @@ const ensureUrl = (value: string, name: string): string => {
   } catch {
     throw new Error(`${name} must be a valid URL`);
   }
+};
+
+const ensureMasterKey = (raw: string): Buffer => {
+  if (!base64Regex.test(raw)) {
+    throw new Error("ENCRYPTION_MASTER_KEY must be base64 encoded");
+  }
+  const key = Buffer.from(raw, "base64");
+  if (key.length !== 32) {
+    throw new Error("ENCRYPTION_MASTER_KEY must decode to 32 bytes");
+  }
+  return key;
 };
 
 const parseJson = <T>(value: string, name: string): T => {
@@ -214,8 +234,11 @@ export function loadConfig(): AppConfig {
     );
   }
 
+  const masterKey = ensureMasterKey(envString("ENCRYPTION_MASTER_KEY"));
+
   // if we reached here, PII is valid
   const kmsKeysetLoaded = true;
+  const requireHttps = process.env.REQUIRE_TLS === "true";
 
   // rate limit config
   const rateLimitMax = parseIntegerEnv(
@@ -257,6 +280,13 @@ export function loadConfig(): AppConfig {
     60,
   );
 
+  const webauthnRpId = process.env.WEBAUTHN_RP_ID?.trim() ?? "localhost";
+  const webauthnRpName = process.env.WEBAUTHN_RP_NAME?.trim() ?? "APGMS Admin";
+  const webauthnOrigin = ensureUrl(
+    process.env.WEBAUTHN_ORIGIN?.trim() ?? "http://localhost:5173",
+    "WEBAUTHN_ORIGIN",
+  );
+
   return {
     databaseUrl,
     shadowDatabaseUrl,
@@ -267,6 +297,7 @@ export function loadConfig(): AppConfig {
     security: {
       authFailureThreshold,
       kmsKeysetLoaded,
+      requireHttps,
     },
     cors: {
       allowedOrigins: splitOrigins(
@@ -283,6 +314,14 @@ export function loadConfig(): AppConfig {
       accessCode: regulatorAccessCode,
       jwtAudience: regulatorAudience,
       sessionTtlMinutes: regulatorSessionTtl,
+    },
+    encryption: {
+      masterKey,
+    },
+    webauthn: {
+      rpId: webauthnRpId,
+      rpName: webauthnRpName,
+      origin: webauthnOrigin,
     },
   };
 }

@@ -22,7 +22,11 @@ import { authGuard, createAuthGuard, REGULATOR_AUDIENCE } from "./auth.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerRegulatorAuthRoutes } from "./routes/regulator-auth.js";
 import { prisma } from "./db.js";
-import { verifyChallenge, requireRecentVerification } from "./security/mfa.js";
+import {
+  verifyChallenge,
+  requireRecentVerification,
+  type VerifyChallengeResult,
+} from "./security/mfa.js";
 import { recordAuditLog } from "./lib/audit.js";
 import { ensureRegulatorSessionActive } from "./lib/regulator-session.js";
 
@@ -1288,26 +1292,25 @@ export async function buildServer(): Promise<FastifyInstance> {
 
       const requiresMfa =
         userRecord.mfaEnabled && alert.severity.toUpperCase() === "HIGH";
+      let verification: VerifyChallengeResult | null = null;
+      let verified = !requiresMfa ? true : requireRecentVerification(userRecord.id);
 
-      if (requiresMfa) {
-        let verified = requireRecentVerification(userRecord.id);
-
-        if (!verified) {
-          const trimmed = body.mfaCode?.trim();
-          if (trimmed && verifyChallenge(userRecord.id, trimmed)) {
-            verified = true;
-          }
+      if (requiresMfa && !verified) {
+        const trimmed = body.mfaCode?.trim();
+        if (trimmed) {
+          verification = await verifyChallenge(userRecord.id, trimmed);
+          verified = verification.success;
         }
+      }
 
-        if (!verified) {
-          reply.code(401).send({
-            error: {
-              code: "mfa_required",
-              message: "Valid MFA verification required to resolve high-severity alerts",
-            },
-          });
-          return;
-        }
+      if (requiresMfa && !verified) {
+        reply.code(401).send({
+          error: {
+            code: "mfa_required",
+            message: "Valid MFA verification required to resolve high-severity alerts",
+          },
+        });
+        return;
       }
 
       const resolved = await prisma.alert.update({
@@ -1325,6 +1328,11 @@ export async function buildServer(): Promise<FastifyInstance> {
         metadata: {
           alertId: id,
           mfaRequired: requiresMfa,
+          mfaMethod: requiresMfa
+            ? verification?.method ??
+              (requireRecentVerification(userRecord.id) ? "session" : undefined)
+            : undefined,
+          recoveryCodesRemaining: verification?.remainingRecoveryCodes,
         },
       });
 
@@ -1451,24 +1459,26 @@ export async function buildServer(): Promise<FastifyInstance> {
         return;
       }
 
-      if (userRecord.mfaEnabled) {
-        let verified = requireRecentVerification(userRecord.id);
-        if (!verified) {
-          const trimmed = body?.mfaCode?.trim();
-          if (trimmed && verifyChallenge(userRecord.id, trimmed)) {
-            verified = true;
-          }
-        }
+      const requiresMfa = userRecord.mfaEnabled;
+      let verification: VerifyChallengeResult | null = null;
+      let verified = !requiresMfa || requireRecentVerification(userRecord.id);
 
-        if (!verified) {
-          reply.code(401).send({
-            error: {
-              code: "mfa_required",
-              message: "MFA verification required before lodgment",
-            },
-          });
-          return;
+      if (requiresMfa && !verified) {
+        const trimmed = body?.mfaCode?.trim();
+        if (trimmed) {
+          verification = await verifyChallenge(userRecord.id, trimmed);
+          verified = verification.success;
         }
+      }
+
+      if (requiresMfa && !verified) {
+        reply.code(401).send({
+          error: {
+            code: "mfa_required",
+            message: "MFA verification required before lodgment",
+          },
+        });
+        return;
       }
 
       const context = await loadDesignatedAccountContext(orgId);
@@ -1515,7 +1525,12 @@ export async function buildServer(): Promise<FastifyInstance> {
         action: "bas.lodge",
         metadata: {
           basCycleId: updated.id,
-          mfaRequired: userRecord.mfaEnabled,
+          mfaRequired: requiresMfa,
+          mfaMethod: requiresMfa
+            ? verification?.method ??
+              (requireRecentVerification(userRecord.id) ? "session" : undefined)
+            : undefined,
+          recoveryCodesRemaining: verification?.remainingRecoveryCodes,
         },
       });
 

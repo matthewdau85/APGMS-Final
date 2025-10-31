@@ -2,6 +2,8 @@ export * from "./masking";
 export * from "./security/password";
 export * from "./redaction";
 export * from "./logging";
+export * from "./crypto/envelope";
+export * from "./security/totp";
 export * from "./tax";
 export * from "./tax/tables";
 export * from "./security/secret-manager";

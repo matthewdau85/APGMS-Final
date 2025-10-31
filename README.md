@@ -18,12 +18,23 @@ Create `.env` files at package roots as needed. **Gateway hard-start checks**:
 Example (root `.env` or `services/api-gateway/.env`):
 
 ```
-CORS_ALLOWED_ORIGINS=http://localhost:5173
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/apgms
-SHADOW_DATABASE_URL=postgres://postgres:postgres@localhost:5432/apgms_shadow
-JWT_SECRET=dev_only_change_me
-RATE_LIMIT_MAX=100
-RATE_LIMIT_WINDOW=1 minute
+CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/apgms?schema=public
+SHADOW_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/apgms_shadow?schema=public
+AUTH_AUDIENCE=urn:apgms:local
+AUTH_ISSUER=urn:apgms:issuer
+AUTH_DEV_SECRET=local-dev-shared-secret-change-me
+AUTH_JWKS={"keys":[{"kid":"local","alg":"RS256","kty":"RSA","n":"replace-with-base64url-modulus","e":"AQAB"}]}
+ENCRYPTION_MASTER_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+API_RATE_LIMIT_MAX=120
+API_RATE_LIMIT_WINDOW=1 minute
+AUTH_FAILURE_THRESHOLD=5
+WEBAUTHN_RP_ID=localhost
+WEBAUTHN_RP_NAME=APGMS Admin
+WEBAUTHN_ORIGIN=http://localhost:5173
+REGULATOR_ACCESS_CODE=regulator-dev-code
+REGULATOR_JWT_AUDIENCE=urn:apgms:regulator
+REGULATOR_SESSION_TTL_MINUTES=60
 ```
 
 > KMS dev keys: store JSON key material under `artifacts/kms/` (git-ignored). The directory is tracked via `.gitkeep`.
@@ -59,7 +70,7 @@ Run these before pushing. They match the CI jobs and "blockers".
 # Type safety
 pnpm -r typecheck
 
-# Tests + coverage (≥ 85% enforced)
+# Tests + coverage (>= 85% enforced)
 pnpm -r test -- --coverage
 node ./scripts/check-coverage.mjs
 
