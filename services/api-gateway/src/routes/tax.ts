@@ -2,7 +2,7 @@ import { SpanStatusCode, trace } from "@opentelemetry/api";
 import { FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
 
-import { maskError } from "@apgms/shared";
+import { safeLogAttributes, safeLogError } from "@apgms/shared";
 import { authenticateRequest, type Role } from "../lib/auth";
 
 const tracer = trace.getTracer("apgms-api-gateway");
@@ -49,7 +49,7 @@ export default async function taxRoutes(app: FastifyInstance): Promise<void> {
           message: "invalid upstream payload",
         });
         app.log.warn(
-          { err: parsed.error.flatten(), upstream: maskError(json) },
+          safeLogAttributes({ err: parsed.error.flatten(), upstream: json }),
           "invalid tax-engine payload",
         );
         return sendUpstreamError(reply, "tax-engine payload invalid", 502);
@@ -58,7 +58,10 @@ export default async function taxRoutes(app: FastifyInstance): Promise<void> {
       return reply.send(parsed.data);
     } catch (error) {
       span.setStatus({ code: SpanStatusCode.ERROR, message: "tax health check failed" });
-      app.log.error({ err: maskError(error) }, "tax health request failed");
+      app.log.error(
+        safeLogAttributes({ err: safeLogError(error) }),
+        "tax health request failed",
+      );
       app.metrics?.recordSecurityEvent("tax.health.error");
       return sendUpstreamError(reply, "tax-engine unavailable", 502);
     } finally {

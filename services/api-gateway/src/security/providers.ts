@@ -14,6 +14,7 @@ import {
   type SecretManager,
 } from "./secret-manager.js";
 import { recordAuditLog } from "../lib/audit.js";
+import { redactValue } from "@apgms/shared";
 import type { Prisma } from "@prisma/client";
 
 import type {
@@ -139,11 +140,14 @@ class PrismaAuditLogger implements AuditLogger {
       const orgId =
         (payload.metadata?.orgId as string | undefined) ??
         "unknown";
+      const metadata = coerceMetadata(payload.metadata);
+      const safeMetadata = redactValue(metadata) as Prisma.JsonValue | null;
+
       await recordAuditLog({
         orgId,
         actorId: payload.actorId,
         action: payload.action,
-        metadata: coerceMetadata(payload.metadata),
+        metadata: safeMetadata,
         throwOnError: true,
       });
     } catch (error: unknown) {

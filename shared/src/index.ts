@@ -2,6 +2,8 @@
 
 export * from "./masking.js";
 export * from "./security/password.js";
+export * from "./redaction.js";
+export * from "./logging.js";
 
 // If ./tax is a directory with index.ts, NodeNext wants the explicit /index.js.
 // If instead you actually have tax.ts (not a folder), then change this line to:

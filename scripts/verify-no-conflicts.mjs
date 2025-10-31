@@ -10,7 +10,15 @@ const markers = [
 let hasConflicts = false;
 
 for (const marker of markers) {
-  const result = spawnSync("git", ["grep", "-n", marker.pattern, "--", "."], {
+  const args = [
+    "grep",
+    "-n",
+    marker.pattern,
+    "--",
+    ".",
+    ":(exclude)scripts/verify-no-conflicts.mjs",
+  ];
+  const result = spawnSync("git", args, {
     stdio: hasConflicts ? "ignore" : "inherit",
   });
 
