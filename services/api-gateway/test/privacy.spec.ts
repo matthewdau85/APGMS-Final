@@ -104,12 +104,27 @@ type AuditEntry = {
   createdAt: Date;
 };
 
+type IdempotencyRecord = {
+  id: string;
+  orgId: string;
+  actorId: string;
+  key: string;
+  requestHash: string;
+  responseHash: string;
+  statusCode: number;
+  responsePayload: unknown;
+  resource: string | null;
+  resourceId: string | null;
+  createdAt: Date;
+};
+
 type State = {
   orgs: OrgState[];
   users: User[];
   bankLines: BankLine[];
   tombstones: Array<{ id: string; orgId: string; payload: AdminOrgExport; createdAt: Date }>;
   auditLogs: AuditEntry[];
+  idempotencyEntries: IdempotencyRecord[];
 };
 
 type TransactionCallback<T> = (tx: PrismaLike) => Promise<T>;
@@ -329,6 +344,7 @@ test("POST /bank-lines rejects mismatched claims", async () => {
     } as any,
     headers: {
       authorization: `Bearer ${token}`,
+      "Idempotency-Key": randomUUID(),
     },
   });
 
@@ -353,7 +369,7 @@ test("POST /bank-lines inserts a new line scoped to the principal", async () => 
       payee: "Acme",
       desc: "Consulting",
     },
-    headers: { authorization: `Bearer ${token}` },
+    headers: { authorization: `Bearer ${token}`, "Idempotency-Key": randomUUID() },
   });
 
   assert.equal(response.statusCode, 201);
@@ -363,6 +379,49 @@ test("POST /bank-lines inserts a new line scoped to the principal", async () => 
   assert.equal(body.line.amount, 150.5);
   assert.equal(body.line.description, "Consulting");
   assert.ok(stub.state.auditLogs.some((entry) => entry.action === "bank-lines.create"));
+});
+
+test("POST /bank-lines replays when Idempotency-Key is reused", async () => {
+  const token = await signToken({
+    sub: "admin-1",
+    orgId: "org-123",
+    roles: ["admin"],
+  });
+
+  const key = randomUUID();
+  const payload = {
+    date: "2024-01-01T00:00:00.000Z",
+    amount: "250.00",
+    payee: "Acme",
+    desc: "Retainer",
+  };
+
+  const first = await app.inject({
+    method: "POST",
+    url: "/bank-lines",
+    payload,
+    headers: { authorization: `Bearer ${token}`, "Idempotency-Key": key },
+  });
+
+  assert.equal(first.statusCode, 201);
+  assert.equal(first.headers["idempotent-replay"], "false");
+
+  const second = await app.inject({
+    method: "POST",
+    url: "/bank-lines",
+    payload,
+    headers: { authorization: `Bearer ${token}`, "Idempotency-Key": key },
+  });
+
+  assert.equal(second.statusCode, 201);
+  assert.equal(second.headers["idempotent-replay"], "true");
+  assert.deepEqual(second.json(), first.json());
+
+  const createdLines = stub.state.bankLines.filter((line) => line.orgId === "org-123");
+  assert.equal(createdLines.length, 1);
+
+  const auditEvents = stub.state.auditLogs.filter((entry) => entry.action === "bank-lines.create");
+  assert.equal(auditEvents.length, 1);
 });
 
 test("metrics endpoint exposes Prometheus counters", async () => {
@@ -405,6 +464,7 @@ function createPrismaStub(initial?: Partial<State>): Stub {
     bankLines: initial?.bankLines ?? [],
     tombstones: initial?.tombstones ?? [],
     auditLogs: initial?.auditLogs ?? [],
+    idempotencyEntries: initial?.idempotencyEntries ?? [],
   };
 
   const client: PrismaLike = {
@@ -559,6 +619,41 @@ function createPrismaStub(initial?: Partial<State>): Stub {
         };
         state.auditLogs.push(entry);
         return entry;
+      },
+    },
+    idempotencyEntry: {
+      findUnique: async ({ where }: any = {}) => {
+        const composite = where?.orgId_key;
+        if (!composite) return null;
+        const entry = state.idempotencyEntries.find(
+          (record) => record.orgId === composite.orgId && record.key === composite.key,
+        );
+        return entry ? { ...entry } : null;
+      },
+      create: async ({ data }: any = {}) => {
+        const existing = state.idempotencyEntries.find(
+          (record) => record.orgId === data.orgId && record.key === data.key,
+        );
+        if (existing) {
+          const error: any = new Error("Unique constraint failed");
+          error.code = "P2002";
+          throw error;
+        }
+        const entry: IdempotencyRecord = {
+          id: data.id ?? randomUUID(),
+          orgId: data.orgId,
+          actorId: data.actorId,
+          key: data.key,
+          requestHash: data.requestHash,
+          responseHash: data.responseHash,
+          statusCode: data.statusCode,
+          responsePayload: data.responsePayload ?? null,
+          resource: data.resource ?? null,
+          resourceId: data.resourceId ?? null,
+          createdAt: data.createdAt ?? new Date(),
+        };
+        state.idempotencyEntries.push(entry);
+        return { ...entry };
       },
     },
     $transaction: async <T>(callback: TransactionCallback<T>) => {
