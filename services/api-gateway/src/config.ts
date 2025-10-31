@@ -44,6 +44,15 @@ export interface AppConfig {
     readonly maxReadTransactions: number;
     readonly maxWriteCents: number;
   };
+  readonly redis?: {
+    readonly url: string;
+  };
+  readonly nats?: {
+    readonly url: string;
+    readonly token?: string;
+    readonly username?: string;
+    readonly password?: string;
+  };
 }
 
 const base64Regex = /^[A-Za-z0-9+/=]+$/;
@@ -303,6 +312,25 @@ export function loadConfig(): AppConfig {
     5_000_000,
   );
 
+  const redisUrlRaw = process.env.REDIS_URL?.trim();
+  const redis =
+    redisUrlRaw && redisUrlRaw.length > 0
+      ? {
+          url: ensureUrl(redisUrlRaw, "REDIS_URL"),
+        }
+      : undefined;
+
+  const natsUrlRaw = process.env.NATS_URL?.trim();
+  const nats =
+    natsUrlRaw && natsUrlRaw.length > 0
+      ? {
+          url: ensureUrl(natsUrlRaw, "NATS_URL"),
+          token: process.env.NATS_TOKEN?.trim() || undefined,
+          username: process.env.NATS_USERNAME?.trim() || undefined,
+          password: process.env.NATS_PASSWORD?.trim() || undefined,
+        }
+      : undefined;
+
   return {
     databaseUrl,
     shadowDatabaseUrl,
@@ -344,6 +372,8 @@ export function loadConfig(): AppConfig {
       maxReadTransactions: bankingMaxRead,
       maxWriteCents: bankingMaxWrite,
     },
+    redis,
+    nats,
   };
 }
 
