@@ -39,6 +39,11 @@ export interface AppConfig {
     readonly rpName: string;
     readonly origin: string;
   };
+  readonly banking: {
+    readonly providerId: string;
+    readonly maxReadTransactions: number;
+    readonly maxWriteCents: number;
+  };
 }
 
 const base64Regex = /^[A-Za-z0-9+/=]+$/;
@@ -287,6 +292,17 @@ export function loadConfig(): AppConfig {
     "WEBAUTHN_ORIGIN",
   );
 
+  const bankingProvider =
+    process.env.BANKING_PROVIDER?.trim().toLowerCase() ?? "mock";
+  const bankingMaxRead = parseIntegerEnv(
+    "BANKING_MAX_READ_TRANSACTIONS",
+    1000,
+  );
+  const bankingMaxWrite = parseIntegerEnv(
+    "BANKING_MAX_WRITE_CENTS",
+    5_000_000,
+  );
+
   return {
     databaseUrl,
     shadowDatabaseUrl,
@@ -322,6 +338,11 @@ export function loadConfig(): AppConfig {
       rpId: webauthnRpId,
       rpName: webauthnRpName,
       origin: webauthnOrigin,
+    },
+    banking: {
+      providerId: bankingProvider.length > 0 ? bankingProvider : "mock",
+      maxReadTransactions: bankingMaxRead,
+      maxWriteCents: bankingMaxWrite,
     },
   };
 }
