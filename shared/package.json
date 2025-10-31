@@ -31,6 +31,7 @@
                     "./security/secret-manager": "./src/security/secret-manager.ts",
                     "./validation": "./src/validation/index.ts",
                     "./crypto/envelope": "./src/crypto/envelope.ts",
+                    "./ledger": "./src/ledger/index.ts",
                     "./tax":  "./src/tax/index.ts",
                     "./tax/tables": "./src/tax/tables.ts",
                     "./messaging":  "./src/messaging/event-bus.ts",
