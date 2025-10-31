@@ -353,8 +353,26 @@ model User {
   role      String   @default("admin")
   mfaEnabled Boolean @default(false)
 
-  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  orgId     String
+  org            Org             @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId          String
+  mfaCredentials MfaCredential[]
+}
+
+model MfaCredential {
+  id           String   @id @default(cuid())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+  type         String
+  label        String?
+  data         Json
+  credentialId String? @unique
+  primary      Boolean @default(false)
+  status       String  @default("active")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  lastUsedAt   DateTime?
+
+  @@index([userId, type, status])
 }
 
 model Alert {

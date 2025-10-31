@@ -21,6 +21,10 @@ const defaultTestEnv: Record<string, string> = {
   REGULATOR_ACCESS_CODE: "regulator-dev-code",
   REGULATOR_JWT_AUDIENCE: "urn:apgms:regulator",
   REGULATOR_SESSION_TTL_MINUTES: "60",
+  ENCRYPTION_MASTER_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+  WEBAUTHN_RP_ID: "localhost",
+  WEBAUTHN_RP_NAME: "APGMS Admin",
+  WEBAUTHN_ORIGIN: "http://localhost:5173",
 };
 
 for (const [key, value] of Object.entries(defaultTestEnv)) {

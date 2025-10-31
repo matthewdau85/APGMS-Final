@@ -9,6 +9,7 @@ const REQUIRED_KEYS = [
   "AUTH_AUDIENCE",
   "AUTH_ISSUER",
   "AUTH_JWKS",
+  "AUTH_DEV_SECRET",
   "PII_KEYS",
   "PII_ACTIVE_KEY",
   "PII_SALTS",
@@ -18,6 +19,14 @@ const REQUIRED_KEYS = [
   "AUTH_FAILURE_THRESHOLD",
   "TAX_ENGINE_URL",
   "CORS_ALLOWED_ORIGINS",
+  "ENCRYPTION_MASTER_KEY",
+  "REGULATOR_ACCESS_CODE",
+  "REGULATOR_JWT_AUDIENCE",
+  "REGULATOR_SESSION_TTL_MINUTES",
+  "REQUIRE_TLS",
+  "WEBAUTHN_RP_ID",
+  "WEBAUTHN_RP_NAME",
+  "WEBAUTHN_ORIGIN",
 ] as const;
 
 const envBackup = new Map<string, string | undefined>();
@@ -55,6 +64,7 @@ test("loadConfig parses typed values and defaults", () => {
   process.env.AUTH_AUDIENCE = "urn:test:aud";
   process.env.AUTH_ISSUER = "urn:test:issuer";
   process.env.AUTH_JWKS = sampleJwks;
+  process.env.AUTH_DEV_SECRET = "local-dev-secret";
   process.env.PII_KEYS = JSON.stringify([{ kid: "local", material: sampleKeyMaterial }]);
   process.env.PII_ACTIVE_KEY = "local";
   process.env.PII_SALTS = JSON.stringify([{ sid: "local", secret: sampleSaltMaterial }]);
@@ -64,6 +74,14 @@ test("loadConfig parses typed values and defaults", () => {
   process.env.AUTH_FAILURE_THRESHOLD = "7";
   process.env.TAX_ENGINE_URL = "http://tax-engine.internal:8080";
   process.env.CORS_ALLOWED_ORIGINS = "https://app.example.com, https://admin.example.com";
+  process.env.ENCRYPTION_MASTER_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+  process.env.REGULATOR_ACCESS_CODE = "code-123";
+  process.env.REGULATOR_JWT_AUDIENCE = "urn:test:reg";
+  process.env.REGULATOR_SESSION_TTL_MINUTES = "90";
+  process.env.REQUIRE_TLS = "true";
+  process.env.WEBAUTHN_RP_ID = "localhost";
+  process.env.WEBAUTHN_RP_NAME = "APGMS Admin";
+  process.env.WEBAUTHN_ORIGIN = "http://localhost:5173";
 
   const config = loadConfig();
 
@@ -72,11 +90,19 @@ test("loadConfig parses typed values and defaults", () => {
   assert.equal(config.rateLimit.max, 42);
   assert.equal(config.rateLimit.window, "2 minutes");
   assert.equal(config.security.authFailureThreshold, 7);
+  assert.equal(config.security.requireHttps, true);
   assert.equal(config.taxEngineUrl, "http://tax-engine.internal:8080");
   assert.deepEqual(config.cors.allowedOrigins, [
     "https://app.example.com",
     "https://admin.example.com",
   ]);
+  assert.equal(config.encryption.masterKey.length, 32);
+  assert.equal(config.auth.devSecret, "local-dev-secret");
+  assert.equal(config.regulator.accessCode, "code-123");
+  assert.equal(config.regulator.jwtAudience, "urn:test:reg");
+  assert.equal(config.regulator.sessionTtlMinutes, 90);
+  assert.equal(config.webauthn.rpId, "localhost");
+  assert.equal(config.webauthn.origin, "http://localhost:5173");
 });
 
 test("loadConfig fails closed when secrets missing", () => {
@@ -85,10 +111,19 @@ test("loadConfig fails closed when secrets missing", () => {
   process.env.AUTH_AUDIENCE = "urn:test:aud";
   process.env.AUTH_ISSUER = "urn:test:issuer";
   process.env.AUTH_JWKS = sampleJwks;
+  process.env.AUTH_DEV_SECRET = "local-dev-secret";
   process.env.PII_KEYS = JSON.stringify([{ kid: "local", material: sampleKeyMaterial }]);
   process.env.PII_ACTIVE_KEY = "local";
   process.env.PII_SALTS = JSON.stringify([{ sid: "local", secret: sampleSaltMaterial }]);
   process.env.PII_ACTIVE_SALT = "local";
+  process.env.ENCRYPTION_MASTER_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+  process.env.REGULATOR_ACCESS_CODE = "code-123";
+  process.env.REGULATOR_JWT_AUDIENCE = "urn:test:reg";
+  process.env.REGULATOR_SESSION_TTL_MINUTES = "90";
+  process.env.REQUIRE_TLS = "false";
+  process.env.WEBAUTHN_RP_ID = "localhost";
+  process.env.WEBAUTHN_RP_NAME = "APGMS Admin";
+  process.env.WEBAUTHN_ORIGIN = "http://localhost:5173";
 
   assert.throws(() => loadConfig(), /DATABASE_URL is required/);
 });
