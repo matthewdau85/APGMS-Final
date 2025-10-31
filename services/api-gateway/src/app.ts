@@ -12,6 +12,23 @@ import {
 } from "@prisma/client";
 import crypto from "node:crypto";
 import { register as promRegister, collectDefaultMetrics, Counter } from "prom-client";
+import {
+  AppError,
+  badRequest,
+  conflict,
+  forbidden,
+  notFound,
+  unauthorized,
+} from "@apgms/shared";
+import {
+  AlertResolveBodySchema,
+  AlertResolveParamsSchema,
+  BankLineCreateSchema,
+  BasLodgeBodySchema,
+  BasPaymentPlanBodySchema,
+  BasPaymentPlanQuerySchema,
+  OrgScopedParamsSchema,
+} from "@apgms/shared";
 
 // NOTE: make sure config.ts exports what we discussed earlier,
 // including cors.allowedOrigins: string[]
@@ -22,6 +39,7 @@ import { authGuard, createAuthGuard, REGULATOR_AUDIENCE } from "./auth.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerRegulatorAuthRoutes } from "./routes/regulator-auth.js";
 import { prisma } from "./db.js";
+import { parseWithSchema } from "./lib/validation.js";
 import {
   verifyChallenge,
   requireRecentVerification,
@@ -514,10 +532,7 @@ async function registerRegulatorRoutes(app: FastifyInstance): Promise<void> {
     });
 
     if (!artifact || artifact.orgId !== orgId) {
-      reply.code(404).send({
-        error: { code: "artifact_not_found", message: "No matching evidence artifact" },
-      });
-      return;
+      throw notFound("artifact_not_found", "No matching evidence artifact");
     }
 
     await recordAuditLog({
@@ -736,9 +751,7 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   app.addHook("onResponse", (request, reply, done) => {
     const route =
-      (request.routeOptions && request.routeOptions.url) ??
-      request.raw.url ??
-      "unknown";
+      (request.routeOptions && request.routeOptions.url) ?? request.raw.url ?? "unknown";
     try {
       httpRequestCounter
         .labels(request.method, route, String(reply.statusCode))
@@ -747,6 +760,37 @@ export async function buildServer(): Promise<FastifyInstance> {
       app.log.warn({ err: error }, "failed to record metrics");
     }
     done();
+  });
+
+  app.setErrorHandler((error, request, reply) => {
+    if (error instanceof AppError) {
+      reply
+        .status(error.status)
+        .send({ error: { code: error.code, message: error.message, fields: error.fields } });
+      return;
+    }
+
+    if ((error as any)?.validation) {
+      reply.status(400).send({
+        error: { code: "invalid_body", message: "Validation failed" },
+      });
+      return;
+    }
+
+    if ((error as any)?.code === "FST_CORS_FORBIDDEN_ORIGIN") {
+      reply.status(403).send({
+        error: {
+          code: "cors_forbidden",
+          message: (error as Error).message ?? "Origin not allowed",
+        },
+      });
+      return;
+    }
+
+    request.log.error({ err: error }, "Unhandled error");
+    reply.status(500).send({
+      error: { code: "internal_error", message: "Internal server error" },
+    });
   });
 
   await app.register(rateLimit);
@@ -924,27 +968,7 @@ export async function buildServer(): Promise<FastifyInstance> {
       const userClaims: any = (request as any).user;
       const orgId = userClaims.orgId;
 
-      const body = request.body as {
-        date?: string;
-        amount?: string;
-        payee?: string;
-        desc?: string;
-      };
-
-      if (
-        !body?.date ||
-        !body?.amount ||
-        !body?.payee ||
-        !body?.desc
-      ) {
-        reply.code(400).send({
-          error: {
-            code: "invalid_body",
-            message: "date, amount, payee, desc are required",
-          },
-        });
-        return;
-      }
+      const body = parseWithSchema(BankLineCreateSchema, request.body);
 
       const cryptoSafeId = crypto
         .randomUUID()
@@ -988,15 +1012,13 @@ export async function buildServer(): Promise<FastifyInstance> {
   app.get(
     "/admin/export/:orgId",
     { preHandler: authGuard },
-    async (request, reply) => {
+    async (request) => {
       const userClaims: any = (request as any).user;
-      const { orgId } = request.params as { orgId: string };
+      const params = parseWithSchema(OrgScopedParamsSchema, request.params);
+      const { orgId } = params;
 
       if (orgId !== userClaims.orgId) {
-        reply.code(403).send({
-          error: { code: "forbidden", message: "Cross-org export denied" },
-        });
-        return;
+        throw forbidden("forbidden", "Cross-org export denied");
       }
 
       const org = await prisma.org.findUnique({
@@ -1031,7 +1053,7 @@ export async function buildServer(): Promise<FastifyInstance> {
         metadata: {},
       });
 
-      reply.send({
+      return {
         export: {
           org,
           users: users.map((u) => ({
@@ -1048,7 +1070,7 @@ export async function buildServer(): Promise<FastifyInstance> {
             createdAt: b.createdAt,
           })),
         },
-      });
+      };
     }
   );
 
@@ -1244,28 +1266,16 @@ export async function buildServer(): Promise<FastifyInstance> {
     async (request, reply) => {
       const userClaims: any = (request as any).user;
       const orgId = userClaims.orgId;
-      const { id } = request.params as { id: string };
-      const body = request.body as { note?: string; mfaCode?: string } | undefined;
-
-      if (!body?.note || body.note.trim().length === 0) {
-        reply.code(400).send({
-          error: {
-            code: "invalid_body",
-            message: "Resolution note is required",
-          },
-        });
-        return;
-      }
+      const params = parseWithSchema(AlertResolveParamsSchema, request.params);
+      const body = parseWithSchema(AlertResolveBodySchema, request.body);
+      const { id } = params;
 
       const alert = await prisma.alert.findUnique({
         where: { id },
       });
 
       if (!alert || alert.orgId !== orgId) {
-        reply.code(404).send({
-          error: { code: "alert_not_found", message: "No such alert" },
-        });
-        return;
+        throw notFound("alert_not_found", "No such alert");
       }
 
       const userRecord = await prisma.user.findUnique({
@@ -1274,20 +1284,11 @@ export async function buildServer(): Promise<FastifyInstance> {
       });
 
       if (!userRecord || userRecord.orgId !== orgId) {
-        reply.code(403).send({
-          error: { code: "forbidden", message: "User scope mismatch" },
-        });
-        return;
+        throw forbidden("forbidden", "User scope mismatch");
       }
 
       if (alert.resolvedAt) {
-        reply.code(409).send({
-          error: {
-            code: "already_resolved",
-            message: "Alert already resolved",
-          },
-        });
-        return;
+        throw conflict("already_resolved", "Alert already resolved");
       }
 
       const requiresMfa =
@@ -1304,13 +1305,10 @@ export async function buildServer(): Promise<FastifyInstance> {
       }
 
       if (requiresMfa && !verified) {
-        reply.code(401).send({
-          error: {
-            code: "mfa_required",
-            message: "Valid MFA verification required to resolve high-severity alerts",
-          },
-        });
-        return;
+        throw unauthorized(
+          "mfa_required",
+          "Valid MFA verification required to resolve high-severity alerts",
+        );
       }
 
       const resolved = await prisma.alert.update({
@@ -1404,7 +1402,7 @@ export async function buildServer(): Promise<FastifyInstance> {
     async (request, reply) => {
       const userClaims: any = (request as any).user;
       const orgId = userClaims.orgId;
-      const { basCycleId } = request.query as { basCycleId?: string };
+      const { basCycleId } = parseWithSchema(BasPaymentPlanQuerySchema, request.query);
 
       let targetCycleId = basCycleId ?? null;
 
@@ -1445,7 +1443,7 @@ export async function buildServer(): Promise<FastifyInstance> {
     async (request, reply) => {
       const userClaims: any = (request as any).user;
       const orgId = userClaims.orgId;
-      const body = request.body as { mfaCode?: string } | null;
+      const body = parseWithSchema(BasLodgeBodySchema, request.body);
 
       const userRecord = await prisma.user.findUnique({
         where: { id: userClaims.sub },
@@ -1453,10 +1451,7 @@ export async function buildServer(): Promise<FastifyInstance> {
       });
 
       if (!userRecord || userRecord.orgId !== orgId) {
-        reply.code(403).send({
-          error: { code: "forbidden", message: "User scope mismatch" },
-        });
-        return;
+        throw forbidden("forbidden", "User scope mismatch");
       }
 
       const requiresMfa = userRecord.mfaEnabled;
@@ -1464,7 +1459,7 @@ export async function buildServer(): Promise<FastifyInstance> {
       let verified = !requiresMfa || requireRecentVerification(userRecord.id);
 
       if (requiresMfa && !verified) {
-        const trimmed = body?.mfaCode?.trim();
+        const trimmed = body?.mfaCode;
         if (trimmed) {
           verification = await verifyChallenge(userRecord.id, trimmed);
           verified = verification.success;
@@ -1472,13 +1467,7 @@ export async function buildServer(): Promise<FastifyInstance> {
       }
 
       if (requiresMfa && !verified) {
-        reply.code(401).send({
-          error: {
-            code: "mfa_required",
-            message: "MFA verification required before lodgment",
-          },
-        });
-        return;
+        throw unauthorized("mfa_required", "MFA verification required before lodgment");
       }
 
       const context = await loadDesignatedAccountContext(orgId);
@@ -1489,25 +1478,13 @@ export async function buildServer(): Promise<FastifyInstance> {
       });
 
       if (!cycle) {
-        reply.code(404).send({
-          error: {
-            code: "bas_cycle_not_found",
-            message: "No active BAS cycle",
-          },
-        });
-        return;
+        throw notFound("bas_cycle_not_found", "No active BAS cycle");
       }
 
       cycle = await syncBasCycleSecured(cycle, context.totals);
       const preview = shapeBasPreview(cycle, context.totals);
       if (!preview || preview.overallStatus !== "READY") {
-        reply.code(409).send({
-          error: {
-            code: "bas_cycle_blocked",
-            message: "BAS cycle not ready for lodgment",
-          },
-        });
-        return;
+        throw conflict("bas_cycle_blocked", "BAS cycle not ready for lodgment");
       }
 
       const lodgmentTime = new Date();
@@ -1550,39 +1527,14 @@ export async function buildServer(): Promise<FastifyInstance> {
     async (request, reply) => {
       const userClaims: any = (request as any).user;
       const orgId = userClaims.orgId;
-      const body = request.body as {
-        basCycleId?: string;
-        reason?: string;
-        weeklyAmount?: number;
-        startDate?: string;
-        notes?: string;
-      } | null;
-
-      if (
-        !body?.basCycleId ||
-        !body.reason ||
-        typeof body.weeklyAmount !== "number" ||
-        Number.isNaN(body.weeklyAmount) ||
-        !body.startDate
-      ) {
-        reply.code(400).send({
-          error: {
-            code: "invalid_body",
-            message: "basCycleId, reason, weeklyAmount, and startDate are required",
-          },
-        });
-        return;
-      }
+      const body = parseWithSchema(BasPaymentPlanBodySchema, request.body);
 
       const cycle = await prisma.basCycle.findUnique({
         where: { id: body.basCycleId },
       });
 
       if (!cycle || cycle.orgId !== orgId) {
-        reply.code(404).send({
-          error: { code: "bas_cycle_not_found", message: "No matching BAS cycle" },
-        });
-        return;
+        throw notFound("bas_cycle_not_found", "No matching BAS cycle");
       }
 
       const existing = await prisma.paymentPlanRequest.findFirst({
@@ -1594,13 +1546,10 @@ export async function buildServer(): Promise<FastifyInstance> {
       });
 
       if (existing) {
-        reply.code(409).send({
-          error: {
-            code: "plan_exists",
-            message: "A payment plan request already exists for this BAS cycle",
-          },
-        });
-        return;
+        throw conflict(
+          "plan_exists",
+          "A payment plan request already exists for this BAS cycle",
+        );
       }
 
       const created = await prisma.paymentPlanRequest.create({
@@ -1691,17 +1640,14 @@ export async function buildServer(): Promise<FastifyInstance> {
     async (request, reply) => {
       const userClaims: any = (request as any).user;
       const orgId = userClaims.orgId;
-      const { id } = request.params as { id: string };
+      const { id } = parseWithSchema(AlertResolveParamsSchema, request.params);
 
       const artifact = await prisma.evidenceArtifact.findUnique({
         where: { id },
       });
 
       if (!artifact || artifact.orgId !== orgId) {
-        reply.code(404).send({
-          error: { code: "artifact_not_found", message: "No matching evidence artifact" },
-        });
-        return;
+        throw notFound("artifact_not_found", "No matching evidence artifact");
       }
 
       await recordAuditLog({
