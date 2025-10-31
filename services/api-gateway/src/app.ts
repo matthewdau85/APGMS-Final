@@ -47,6 +47,7 @@ import {
 } from "./security/mfa.js";
 import { recordAuditLog } from "./lib/audit.js";
 import { ensureRegulatorSessionActive } from "./lib/regulator-session.js";
+import { withIdempotency } from "./lib/idempotency.js";
 
 function decimalToNumber(value: Prisma.Decimal | number | null | undefined): number {
   if (value === null || value === undefined) return 0;
@@ -970,41 +971,58 @@ export async function buildServer(): Promise<FastifyInstance> {
 
       const body = parseWithSchema(BankLineCreateSchema, request.body);
 
-      const cryptoSafeId = crypto
-        .randomUUID()
-        .replace(/-/g, "")
-        .slice(0, 16);
-
-      const newLine = await prisma.bankLine.create({
-        data: {
-          id: cryptoSafeId,
+      await withIdempotency(
+        request,
+        reply,
+        {
+          prisma,
           orgId,
-          date: new Date(body.date),
-          amount: body.amount,
-          payeeCiphertext: "***",
-          payeeKid: "dev",
-          descCiphertext: "***",
-          descKid: "dev",
-          idempotencyKey: null,
+          actorId: userClaims.sub,
+          requestPayload: body,
+          resource: "bank-line",
         },
-      });
+        async ({ idempotencyKey }) => {
+          const cryptoSafeId = crypto
+            .randomUUID()
+            .replace(/-/g, "")
+            .slice(0, 16);
 
-      await recordAuditLog({
-        orgId,
-        actorId: userClaims.sub,
-        action: "bankLines.create",
-        metadata: { lineId: newLine.id },
-      });
+          const newLine = await prisma.bankLine.create({
+            data: {
+              id: cryptoSafeId,
+              orgId,
+              date: new Date(body.date),
+              amount: body.amount,
+              payeeCiphertext: "***",
+              payeeKid: "dev",
+              descCiphertext: "***",
+              descKid: "dev",
+              idempotencyKey,
+            },
+          });
 
-      reply.code(201).send({
-        line: {
-          id: newLine.id,
-          postedAt: newLine.date,
-          amount: Number(newLine.amount),
-          description: "***",
-          createdAt: newLine.createdAt,
+          await recordAuditLog({
+            orgId,
+            actorId: userClaims.sub,
+            action: "bankLines.create",
+            metadata: { lineId: newLine.id },
+          });
+
+          return {
+            statusCode: 201,
+            resourceId: newLine.id,
+            body: {
+              line: {
+                id: newLine.id,
+                postedAt: newLine.date.toISOString(),
+                amount: Number(newLine.amount),
+                description: body.desc,
+                createdAt: newLine.createdAt.toISOString(),
+              },
+            },
+          };
         },
-      });
+      );
     }
   );
 
@@ -1268,73 +1286,91 @@ export async function buildServer(): Promise<FastifyInstance> {
       const orgId = userClaims.orgId;
       const params = parseWithSchema(AlertResolveParamsSchema, request.params);
       const body = parseWithSchema(AlertResolveBodySchema, request.body);
-      const { id } = params;
 
-      const alert = await prisma.alert.findUnique({
-        where: { id },
-      });
-
-      if (!alert || alert.orgId !== orgId) {
-        throw notFound("alert_not_found", "No such alert");
-      }
-
-      const userRecord = await prisma.user.findUnique({
-        where: { id: userClaims.sub },
-        select: { id: true, orgId: true, mfaEnabled: true },
-      });
-
-      if (!userRecord || userRecord.orgId !== orgId) {
-        throw forbidden("forbidden", "User scope mismatch");
-      }
-
-      if (alert.resolvedAt) {
-        throw conflict("already_resolved", "Alert already resolved");
-      }
-
-      const requiresMfa =
-        userRecord.mfaEnabled && alert.severity.toUpperCase() === "HIGH";
-      let verification: VerifyChallengeResult | null = null;
-      let verified = !requiresMfa ? true : requireRecentVerification(userRecord.id);
-
-      if (requiresMfa && !verified) {
-        const trimmed = body.mfaCode?.trim();
-        if (trimmed) {
-          verification = await verifyChallenge(userRecord.id, trimmed);
-          verified = verification.success;
-        }
-      }
-
-      if (requiresMfa && !verified) {
-        throw unauthorized(
-          "mfa_required",
-          "Valid MFA verification required to resolve high-severity alerts",
-        );
-      }
-
-      const resolved = await prisma.alert.update({
-        where: { id },
-        data: {
-          resolvedAt: new Date(),
-          resolutionNote: body.note,
+      await withIdempotency(
+        request,
+        reply,
+        {
+          prisma,
+          orgId,
+          actorId: userClaims.sub,
+          requestPayload: { params, body },
+          resource: "alert",
         },
-      });
+        async () => {
+          const { id } = params;
 
-      await recordAuditLog({
-        orgId,
-        actorId: userClaims.sub,
-        action: "alert.resolve",
-        metadata: {
-          alertId: id,
-          mfaRequired: requiresMfa,
-          mfaMethod: requiresMfa
-            ? verification?.method ??
-              (requireRecentVerification(userRecord.id) ? "session" : undefined)
-            : undefined,
-          recoveryCodesRemaining: verification?.remainingRecoveryCodes,
+          const alert = await prisma.alert.findUnique({
+            where: { id },
+          });
+
+          if (!alert || alert.orgId !== orgId) {
+            throw notFound("alert_not_found", "No such alert");
+          }
+
+          const userRecord = await prisma.user.findUnique({
+            where: { id: userClaims.sub },
+            select: { id: true, orgId: true, mfaEnabled: true },
+          });
+
+          if (!userRecord || userRecord.orgId !== orgId) {
+            throw forbidden("forbidden", "User scope mismatch");
+          }
+
+          if (alert.resolvedAt) {
+            throw conflict("already_resolved", "Alert already resolved");
+          }
+
+          const requiresMfa =
+            userRecord.mfaEnabled && alert.severity.toUpperCase() === "HIGH";
+          let verification: VerifyChallengeResult | null = null;
+          let verified = !requiresMfa ? true : requireRecentVerification(userRecord.id);
+
+          if (requiresMfa && !verified) {
+            const trimmed = body.mfaCode;
+            if (trimmed) {
+              verification = await verifyChallenge(userRecord.id, trimmed);
+              verified = verification.success;
+            }
+          }
+
+          if (requiresMfa && !verified) {
+            throw unauthorized(
+              "mfa_required",
+              "Valid MFA verification required to resolve high-severity alerts",
+            );
+          }
+
+          const resolved = await prisma.alert.update({
+            where: { id },
+            data: {
+              resolvedAt: new Date(),
+              resolutionNote: body.note,
+            },
+          });
+
+          await recordAuditLog({
+            orgId,
+            actorId: userClaims.sub,
+            action: "alert.resolve",
+            metadata: {
+              alertId: id,
+              mfaRequired: requiresMfa,
+              mfaMethod: requiresMfa
+                ? verification?.method ??
+                  (requireRecentVerification(userRecord.id) ? "session" : undefined)
+                : undefined,
+              recoveryCodesRemaining: verification?.remainingRecoveryCodes,
+            },
+          });
+
+          return {
+            statusCode: 200,
+            resourceId: resolved.id,
+            body: { alert: shapeAlert(resolved) },
+          };
         },
-      });
-
-      reply.send({ alert: shapeAlert(resolved) });
+      );
     }
   );
 
@@ -1437,145 +1473,181 @@ export async function buildServer(): Promise<FastifyInstance> {
     }
   );
 
-  app.post(
-    "/bas/lodge",
-    { preHandler: authGuard },
-    async (request, reply) => {
-      const userClaims: any = (request as any).user;
-      const orgId = userClaims.orgId;
-      const body = parseWithSchema(BasLodgeBodySchema, request.body);
+    app.post(
+      "/bas/lodge",
+      { preHandler: authGuard },
+      async (request, reply) => {
+        const userClaims: any = (request as any).user;
+        const orgId = userClaims.orgId;
+        const body = parseWithSchema(BasLodgeBodySchema, request.body);
 
-      const userRecord = await prisma.user.findUnique({
-        where: { id: userClaims.sub },
-        select: { id: true, orgId: true, mfaEnabled: true },
-      });
+        await withIdempotency(
+          request,
+          reply,
+          {
+            prisma,
+            orgId,
+            actorId: userClaims.sub,
+            requestPayload: body,
+            resource: "bas-cycle",
+          },
+          async () => {
+            const userRecord = await prisma.user.findUnique({
+              where: { id: userClaims.sub },
+              select: { id: true, orgId: true, mfaEnabled: true },
+            });
 
-      if (!userRecord || userRecord.orgId !== orgId) {
-        throw forbidden("forbidden", "User scope mismatch");
-      }
+            if (!userRecord || userRecord.orgId !== orgId) {
+              throw forbidden("forbidden", "User scope mismatch");
+            }
 
-      const requiresMfa = userRecord.mfaEnabled;
-      let verification: VerifyChallengeResult | null = null;
-      let verified = !requiresMfa || requireRecentVerification(userRecord.id);
+            const requiresMfa = userRecord.mfaEnabled;
+            let verification: VerifyChallengeResult | null = null;
+            let verified = !requiresMfa || requireRecentVerification(userRecord.id);
 
-      if (requiresMfa && !verified) {
-        const trimmed = body?.mfaCode;
-        if (trimmed) {
-          verification = await verifyChallenge(userRecord.id, trimmed);
-          verified = verification.success;
-        }
-      }
+            if (requiresMfa && !verified) {
+              const trimmed = body?.mfaCode;
+              if (trimmed) {
+                verification = await verifyChallenge(userRecord.id, trimmed);
+                verified = verification.success;
+              }
+            }
 
-      if (requiresMfa && !verified) {
-        throw unauthorized("mfa_required", "MFA verification required before lodgment");
-      }
+            if (requiresMfa && !verified) {
+              throw unauthorized("mfa_required", "MFA verification required before lodgment");
+            }
 
-      const context = await loadDesignatedAccountContext(orgId);
+            const context = await loadDesignatedAccountContext(orgId);
 
-      let cycle = await prisma.basCycle.findFirst({
-        where: { orgId, lodgedAt: null },
-        orderBy: { periodEnd: "desc" },
-      });
+            let cycle = await prisma.basCycle.findFirst({
+              where: { orgId, lodgedAt: null },
+              orderBy: { periodEnd: "desc" },
+            });
 
-      if (!cycle) {
-        throw notFound("bas_cycle_not_found", "No active BAS cycle");
-      }
+            if (!cycle) {
+              throw notFound("bas_cycle_not_found", "No active BAS cycle");
+            }
 
-      cycle = await syncBasCycleSecured(cycle, context.totals);
-      const preview = shapeBasPreview(cycle, context.totals);
-      if (!preview || preview.overallStatus !== "READY") {
-        throw conflict("bas_cycle_blocked", "BAS cycle not ready for lodgment");
-      }
+            cycle = await syncBasCycleSecured(cycle, context.totals);
+            const preview = shapeBasPreview(cycle, context.totals);
+            if (!preview || preview.overallStatus !== "READY") {
+              throw conflict("bas_cycle_blocked", "BAS cycle not ready for lodgment");
+            }
 
-      const lodgmentTime = new Date();
-      const updated = await prisma.basCycle.update({
-        where: { id: cycle.id },
-        data: {
-          overallStatus: "LODGED",
-          lodgedAt: lodgmentTime,
-        },
-      });
+            const lodgmentTime = new Date();
+            const updated = await prisma.basCycle.update({
+              where: { id: cycle.id },
+              data: {
+                overallStatus: "LODGED",
+                lodgedAt: lodgmentTime,
+              },
+            });
 
-      await recordAuditLog({
-        orgId,
-        actorId: userClaims.sub,
-        action: "bas.lodge",
-        metadata: {
-          basCycleId: updated.id,
-          mfaRequired: requiresMfa,
-          mfaMethod: requiresMfa
-            ? verification?.method ??
-              (requireRecentVerification(userRecord.id) ? "session" : undefined)
-            : undefined,
-          recoveryCodesRemaining: verification?.remainingRecoveryCodes,
-        },
-      });
+            await recordAuditLog({
+              orgId,
+              actorId: userClaims.sub,
+              action: "bas.lodge",
+              metadata: {
+                basCycleId: updated.id,
+                mfaRequired: requiresMfa,
+                mfaMethod: requiresMfa
+                  ? verification?.method ??
+                    (requireRecentVerification(userRecord.id) ? "session" : undefined)
+                  : undefined,
+                recoveryCodesRemaining: verification?.remainingRecoveryCodes,
+              },
+            });
 
-      reply.send({
-        basCycle: {
-          id: updated.id,
-          status: updated.overallStatus,
-          lodgedAt: updated.lodgedAt?.toISOString() ?? lodgmentTime.toISOString(),
-        },
-      });
-    }
-  );
-
-  app.post(
-    "/bas/payment-plan-request",
-    { preHandler: authGuard },
-    async (request, reply) => {
-      const userClaims: any = (request as any).user;
-      const orgId = userClaims.orgId;
-      const body = parseWithSchema(BasPaymentPlanBodySchema, request.body);
-
-      const cycle = await prisma.basCycle.findUnique({
-        where: { id: body.basCycleId },
-      });
-
-      if (!cycle || cycle.orgId !== orgId) {
-        throw notFound("bas_cycle_not_found", "No matching BAS cycle");
-      }
-
-      const existing = await prisma.paymentPlanRequest.findFirst({
-        where: {
-          orgId,
-          basCycleId: body.basCycleId,
-          resolvedAt: null,
-        },
-      });
-
-      if (existing) {
-        throw conflict(
-          "plan_exists",
-          "A payment plan request already exists for this BAS cycle",
+            return {
+              statusCode: 200,
+              resource: "bas-cycle",
+              resourceId: updated.id,
+              body: {
+                basCycle: {
+                  id: updated.id,
+                  status: updated.overallStatus,
+                  lodgedAt: updated.lodgedAt?.toISOString() ?? lodgmentTime.toISOString(),
+                },
+              },
+            };
+          },
         );
       }
+    );
 
-      const created = await prisma.paymentPlanRequest.create({
-        data: {
-          orgId,
-          basCycleId: body.basCycleId,
-          reason: body.reason,
-          status: "SUBMITTED",
-          detailsJson: {
-            weeklyAmount: body.weeklyAmount,
-            startDate: body.startDate,
-            notes: body.notes ?? null,
+    app.post(
+      "/bas/payment-plan-request",
+      { preHandler: authGuard },
+      async (request, reply) => {
+        const userClaims: any = (request as any).user;
+        const orgId = userClaims.orgId;
+        const body = parseWithSchema(BasPaymentPlanBodySchema, request.body);
+
+        await withIdempotency(
+          request,
+          reply,
+          {
+            prisma,
+            orgId,
+            actorId: userClaims.sub,
+            requestPayload: body,
+            resource: "payment-plan-request",
           },
-        },
-      });
+          async () => {
+            const cycle = await prisma.basCycle.findUnique({
+              where: { id: body.basCycleId },
+            });
 
-      await recordAuditLog({
-        orgId,
-        actorId: userClaims.sub,
-        action: "bas.paymentPlan.requested",
-        metadata: { basCycleId: body.basCycleId },
-      });
+            if (!cycle || cycle.orgId !== orgId) {
+              throw notFound("bas_cycle_not_found", "No matching BAS cycle");
+            }
 
-      reply.code(201).send({ request: shapePaymentPlan(created) });
-    }
-  );
+            const existing = await prisma.paymentPlanRequest.findFirst({
+              where: {
+                orgId,
+                basCycleId: body.basCycleId,
+                resolvedAt: null,
+              },
+            });
+
+            if (existing) {
+              throw conflict(
+                "plan_exists",
+                "A payment plan request already exists for this BAS cycle",
+              );
+            }
+
+            const created = await prisma.paymentPlanRequest.create({
+              data: {
+                orgId,
+                basCycleId: body.basCycleId,
+                reason: body.reason,
+                status: "SUBMITTED",
+                detailsJson: {
+                  weeklyAmount: body.weeklyAmount,
+                  startDate: body.startDate,
+                  notes: body.notes ?? null,
+                },
+              },
+            });
+
+            await recordAuditLog({
+              orgId,
+              actorId: userClaims.sub,
+              action: "bas.paymentPlan.requested",
+              metadata: { basCycleId: body.basCycleId },
+            });
+
+            return {
+              statusCode: 201,
+              resource: "payment-plan-request",
+              resourceId: created.id,
+              body: { request: shapePaymentPlan(created) },
+            };
+          },
+        );
+      }
+    );
 
   app.get(
     "/compliance/report",
@@ -1670,75 +1742,111 @@ export async function buildServer(): Promise<FastifyInstance> {
     }
   );
 
-  app.post(
-    "/compliance/evidence",
-    { preHandler: authGuard },
-    async (request, reply) => {
-      const userClaims: any = (request as any).user;
-      const orgId = userClaims.orgId;
+    app.post(
+      "/compliance/evidence",
+      { preHandler: authGuard },
+      async (request, reply) => {
+        const userClaims: any = (request as any).user;
+        const orgId = userClaims.orgId;
 
-      const snapshot = await buildEvidenceSnapshot(orgId);
-
-      const artifact = await prisma.$transaction(async (tx) => {
-        const created = await tx.evidenceArtifact.create({
-          data: {
+        await withIdempotency(
+          request,
+          reply,
+          {
+            prisma,
             orgId,
-            kind: "compliance-pack",
-            wormUri: "internal:evidence/pending",
-            sha256: snapshot.sha256,
-            payload: snapshot.payload,
+            actorId: userClaims.sub,
+            requestPayload: request.body ?? null,
+            resource: "evidence-artifact",
           },
-        });
-        return tx.evidenceArtifact.update({
-          where: { id: created.id },
-          data: { wormUri: `internal:evidence/${created.id}` },
-        });
-      });
+          async () => {
+            const snapshot = await buildEvidenceSnapshot(orgId);
 
-      await recordAuditLog({
-        orgId,
-        actorId: userClaims.sub,
-        action: "compliance.evidence.create",
-        metadata: { artifactId: artifact.id },
-      });
+            const artifact = await prisma.$transaction(async (tx) => {
+              const created = await tx.evidenceArtifact.create({
+                data: {
+                  orgId,
+                  kind: "compliance-pack",
+                  wormUri: "internal:evidence/pending",
+                  sha256: snapshot.sha256,
+                  payload: snapshot.payload,
+                },
+              });
+              return tx.evidenceArtifact.update({
+                where: { id: created.id },
+                data: { wormUri: `internal:evidence/${created.id}` },
+              });
+            });
 
-      reply.code(201).send({
-        artifact: {
-          id: artifact.id,
-          sha256: artifact.sha256,
-          createdAt: artifact.createdAt.toISOString(),
-          wormUri: artifact.wormUri,
-        },
-      });
-    }
-  );
+            await recordAuditLog({
+              orgId,
+              actorId: userClaims.sub,
+              action: "compliance.evidence.create",
+              metadata: { artifactId: artifact.id },
+            });
 
-  app.post(
-    "/monitoring/snapshots",
-    { preHandler: authGuard },
-    async (request, reply) => {
-      const userClaims: any = (request as any).user;
-      const orgId = userClaims.orgId;
+            return {
+              statusCode: 201,
+              resource: "evidence-artifact",
+              resourceId: artifact.id,
+              body: {
+                artifact: {
+                  id: artifact.id,
+                  sha256: artifact.sha256,
+                  createdAt: artifact.createdAt.toISOString(),
+                  wormUri: artifact.wormUri,
+                },
+              },
+            };
+          },
+        );
+      }
+    );
 
-      const snapshot = await createMonitoringSnapshot(orgId);
+    app.post(
+      "/monitoring/snapshots",
+      { preHandler: authGuard },
+      async (request, reply) => {
+        const userClaims: any = (request as any).user;
+        const orgId = userClaims.orgId;
 
-      await recordAuditLog({
-        orgId,
-        actorId: userClaims.sub,
-        action: "monitoring.snapshot.create",
-        metadata: { snapshotId: snapshot.id },
-      });
+        await withIdempotency(
+          request,
+          reply,
+          {
+            prisma,
+            orgId,
+            actorId: userClaims.sub,
+            requestPayload: request.body ?? null,
+            resource: "monitoring-snapshot",
+          },
+          async () => {
+            const snapshot = await createMonitoringSnapshot(orgId);
 
-      reply.code(201).send({
-        snapshot: {
-          id: snapshot.id,
-          type: snapshot.type,
-          payload: snapshot.payload,
-          createdAt: snapshot.createdAt.toISOString(),
-        },
-      });
-    }
-  );
+            await recordAuditLog({
+              orgId,
+              actorId: userClaims.sub,
+              action: "monitoring.snapshot.create",
+              metadata: { snapshotId: snapshot.id },
+            });
+
+            return {
+              statusCode: 201,
+              resource: "monitoring-snapshot",
+              resourceId: snapshot.id,
+              body: {
+                snapshot: {
+                  id: snapshot.id,
+                  type: snapshot.type,
+                  payload: snapshot.payload,
+                  createdAt: snapshot.createdAt.toISOString(),
+                },
+              },
+            };
+          },
+        );
+      }
+    );
 
   app.get(
     "/monitoring/snapshots",

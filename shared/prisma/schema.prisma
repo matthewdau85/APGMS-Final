@@ -304,17 +304,6 @@ model EvidenceArtifact {
   @@index([orgId, kind])
 }
 
-model IdempotencyKey {
-  id          String   @id @default(uuid()) @db.Uuid
-  orgId       String   @db.Uuid
-  key         String
-  firstSeenAt DateTime @default(now())
-  resource    String?
-  resourceId  String?
-
-  @@unique([orgId, key])
-}
-
 // =========================
 // Legacy models still used by the live Fastify API
 // =========================
@@ -323,6 +312,21 @@ model IdempotencyKey {
 // (auth/login, /users, /bank-lines, /admin/export/:orgId).
 // =========================
 
+model IdempotencyEntry {
+  id             String   @id @default(cuid())
+  orgId          String
+  actorId        String
+  key            String
+  requestHash    String
+  responseHash   String
+  statusCode     Int
+  responsePayload Json?
+  resource       String?
+  resourceId     String?
+  createdAt      DateTime @default(now())
+
+  @@unique([orgId, key])
+}
 model Org {
   id         String         @id @default(cuid())
   name       String
