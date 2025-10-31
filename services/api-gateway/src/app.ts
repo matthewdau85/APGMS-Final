@@ -11,7 +11,7 @@ import {
   MonitoringSnapshot as MonitoringSnapshotModel,
 } from "@prisma/client";
 import crypto from "node:crypto";
-import { register as promRegister, collectDefaultMetrics, Counter } from "prom-client";
+import { context, trace } from "@opentelemetry/api";
 import {
   AppError,
   badRequest,
@@ -48,6 +48,9 @@ import {
 import { recordAuditLog } from "./lib/audit.js";
 import { ensureRegulatorSessionActive } from "./lib/regulator-session.js";
 import { withIdempotency } from "./lib/idempotency.js";
+import { metrics, promRegister } from "./observability/metrics.js";
+import { attachPrismaMetrics } from "./observability/prisma-metrics.js";
+import { closeProviders, initProviders } from "./providers.js";
 
 function decimalToNumber(value: Prisma.Decimal | number | null | undefined): number {
   if (value === null || value === undefined) return 0;
@@ -109,15 +112,6 @@ type ComplianceReportPayload = {
 const SHORTFALL_ALERT_THRESHOLD = Number.parseFloat(
   process.env.APGMS_SHORTFALL_ALERT_THRESHOLD ?? "500",
 );
-
-collectDefaultMetrics({ register: promRegister });
-
-const httpRequestCounter = new Counter({
-  name: "apgms_api_requests_total",
-  help: "Total number of API requests handled by the gateway",
-  labelNames: ["method", "route", "status"],
-  registers: [promRegister],
-});
 
 function shapeAlert(alert: AlertModel) {
   return {
@@ -423,62 +417,64 @@ async function compileComplianceReport(orgId: string): Promise<ComplianceReportP
 }
 
 async function createMonitoringSnapshot(orgId: string): Promise<MonitoringSnapshotModel> {
-  const now = new Date();
+  return metrics.observeJob("monitoring.snapshot.create", async () => {
+    const now = new Date();
 
-  const [alerts, designatedContext, activeCycle, openPlanCount] = await Promise.all([
-    prisma.alert.findMany({
-      where: { orgId },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-    }),
-    loadDesignatedAccountContext(orgId),
-    prisma.basCycle.findFirst({
-      where: { orgId, lodgedAt: null },
-      orderBy: { periodEnd: "desc" },
-    }),
-    prisma.paymentPlanRequest.count({
-      where: { orgId, resolvedAt: null },
-    }),
-  ]);
+    const [alerts, designatedContext, activeCycle, openPlanCount] = await Promise.all([
+      prisma.alert.findMany({
+        where: { orgId },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+      }),
+      loadDesignatedAccountContext(orgId),
+      prisma.basCycle.findFirst({
+        where: { orgId, lodgedAt: null },
+        orderBy: { periodEnd: "desc" },
+      }),
+      prisma.paymentPlanRequest.count({
+        where: { orgId, resolvedAt: null },
+      }),
+    ]);
 
-  let preview = null as ReturnType<typeof shapeBasPreview> | null;
-  if (activeCycle) {
-    const synced = await syncBasCycleSecured(activeCycle, designatedContext.totals);
-    preview = shapeBasPreview(synced, designatedContext.totals);
-  }
+    let preview = null as ReturnType<typeof shapeBasPreview> | null;
+    if (activeCycle) {
+      const synced = await syncBasCycleSecured(activeCycle, designatedContext.totals);
+      preview = shapeBasPreview(synced, designatedContext.totals);
+    }
 
-  const payload = {
-    generatedAt: now.toISOString(),
-    alerts: {
-      total: alerts.length,
-      openHigh: alerts.filter((alert) => !alert.resolvedAt && alert.severity === "HIGH").length,
-      openMedium: alerts.filter((alert) => !alert.resolvedAt && alert.severity === "MEDIUM").length,
-      recent: alerts.slice(0, 10).map((alert) => ({
-        id: alert.id,
-        type: alert.type,
-        severity: alert.severity,
-        createdAt: alert.createdAt.toISOString(),
-        resolved: Boolean(alert.resolvedAt),
-      })),
-    },
-    paymentPlansOpen: openPlanCount,
-    designatedTotals: designatedContext.totals,
-    bas: preview
-      ? {
-          overallStatus: preview.overallStatus,
-          paygw: preview.paygw,
-          gst: preview.gst,
-          blockers: preview.blockers,
-        }
-      : null,
-  };
+    const payload = {
+      generatedAt: now.toISOString(),
+      alerts: {
+        total: alerts.length,
+        openHigh: alerts.filter((alert) => !alert.resolvedAt && alert.severity === "HIGH").length,
+        openMedium: alerts.filter((alert) => !alert.resolvedAt && alert.severity === "MEDIUM").length,
+        recent: alerts.slice(0, 10).map((alert) => ({
+          id: alert.id,
+          type: alert.type,
+          severity: alert.severity,
+          createdAt: alert.createdAt.toISOString(),
+          resolved: Boolean(alert.resolvedAt),
+        })),
+      },
+      paymentPlansOpen: openPlanCount,
+      designatedTotals: designatedContext.totals,
+      bas: preview
+        ? {
+            overallStatus: preview.overallStatus,
+            paygw: preview.paygw,
+            gst: preview.gst,
+            blockers: preview.blockers,
+          }
+        : null,
+    };
 
-  return prisma.monitoringSnapshot.create({
-    data: {
-      orgId,
-      type: "compliance",
-      payload,
-    },
+    return prisma.monitoringSnapshot.create({
+      data: {
+        orgId,
+        type: "compliance",
+        payload,
+      },
+    });
   });
 }
 
@@ -675,73 +671,78 @@ async function registerRegulatorRoutes(app: FastifyInstance): Promise<void> {
 }
 
 async function buildEvidenceSnapshot(orgId: string) {
-  const [report, designatedContext, alerts, auditLog, activeCycle, monitoringSnapshots] = await Promise.all([
-    compileComplianceReport(orgId),
-    loadDesignatedAccountContext(orgId),
-    prisma.alert.findMany({
-      where: { orgId },
-      orderBy: { createdAt: "desc" },
-      take: 25,
-    }),
-    prisma.auditLog.findMany({
-      where: { orgId },
-      orderBy: { createdAt: "desc" },
-      take: 25,
-      select: {
-        id: true,
-        actorId: true,
-        action: true,
-        metadata: true,
-        createdAt: true,
-      },
-    }),
-    prisma.basCycle.findFirst({
-      where: { orgId, lodgedAt: null },
-      orderBy: { periodEnd: "desc" },
-    }),
-    prisma.monitoringSnapshot.findMany({
-      where: { orgId },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-    }),
-  ]);
+  return metrics.observeJob("compliance.evidence.snapshot", async () => {
+    const [report, designatedContext, alerts, auditLog, activeCycle, monitoringSnapshots] =
+      await Promise.all([
+        compileComplianceReport(orgId),
+        loadDesignatedAccountContext(orgId),
+        prisma.alert.findMany({
+          where: { orgId },
+          orderBy: { createdAt: "desc" },
+          take: 25,
+        }),
+        prisma.auditLog.findMany({
+          where: { orgId },
+          orderBy: { createdAt: "desc" },
+          take: 25,
+          select: {
+            id: true,
+            actorId: true,
+            action: true,
+            metadata: true,
+            createdAt: true,
+          },
+        }),
+        prisma.basCycle.findFirst({
+          where: { orgId, lodgedAt: null },
+          orderBy: { periodEnd: "desc" },
+        }),
+        prisma.monitoringSnapshot.findMany({
+          where: { orgId },
+          orderBy: { createdAt: "desc" },
+          take: 5,
+        }),
+      ]);
 
-  let obligationsPreview: ReturnType<typeof shapeBasPreview> | null = null;
-  if (activeCycle) {
-    const synced = await syncBasCycleSecured(activeCycle, designatedContext.totals);
-    obligationsPreview = shapeBasPreview(synced, designatedContext.totals);
-  }
+    let obligationsPreview: ReturnType<typeof shapeBasPreview> | null = null;
+    if (activeCycle) {
+      const synced = await syncBasCycleSecured(activeCycle, designatedContext.totals);
+      obligationsPreview = shapeBasPreview(synced, designatedContext.totals);
+    }
 
-  const payload = {
-    generatedAt: new Date().toISOString(),
-    orgId,
-    complianceReport: report,
-    obligationsPreview,
-    alerts: alerts.map((alert) => shapeAlert(alert)),
-    auditLog: auditLog.map((entry) => ({
-      id: entry.id,
-      actorId: entry.actorId,
-      action: entry.action,
-      metadata: entry.metadata,
-      createdAt: entry.createdAt.toISOString(),
-    })),
-    monitoringSnapshots: monitoringSnapshots.map((snapshot) => ({
-      id: snapshot.id,
-      type: snapshot.type,
-      createdAt: snapshot.createdAt.toISOString(),
-      payload: snapshot.payload,
-    })),
-  };
+    const payload = {
+      generatedAt: new Date().toISOString(),
+      orgId,
+      complianceReport: report,
+      obligationsPreview,
+      alerts: alerts.map((alert) => shapeAlert(alert)),
+      auditLog: auditLog.map((entry) => ({
+        id: entry.id,
+        actorId: entry.actorId,
+        action: entry.action,
+        metadata: entry.metadata,
+        createdAt: entry.createdAt.toISOString(),
+      })),
+      monitoringSnapshots: monitoringSnapshots.map((snapshot) => ({
+        id: snapshot.id,
+        type: snapshot.type,
+        createdAt: snapshot.createdAt.toISOString(),
+        payload: snapshot.payload,
+      })),
+    };
 
-  const jsonPayload = payload as unknown as Prisma.JsonObject;
-  const payloadJson = JSON.stringify(jsonPayload);
-  const sha256 = crypto.createHash("sha256").update(payloadJson).digest("hex");
+    const jsonPayload = payload as unknown as Prisma.JsonObject;
+    const payloadJson = JSON.stringify(jsonPayload);
+    const sha256 = crypto.createHash("sha256").update(payloadJson).digest("hex");
 
-  return {
-    payload: jsonPayload,
-    sha256,
-  };
+    return {
+      payload: jsonPayload,
+      sha256,
+    };
+  });
 }
+
+attachPrismaMetrics(prisma);
 
 export async function buildServer(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -750,15 +751,61 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   const allowedOrigins = new Set(config.cors.allowedOrigins);
 
-  app.addHook("onResponse", (request, reply, done) => {
+  const providers = await initProviders(app.log);
+  app.decorate("providers", providers);
+  app.addHook("onClose", async () => {
+    await closeProviders(providers, app.log);
+  });
+
+  const drainingState = { value: false };
+  app.decorate("isDraining", () => drainingState.value);
+  app.decorate("setDraining", (value: boolean) => {
+    drainingState.value = value;
+  });
+
+  app.addHook("onRequest", (request, reply, done) => {
+    const span = trace.getSpan(context.active());
+    if (span) {
+      const traceId = span.spanContext().traceId;
+      if (traceId) {
+        request.log = request.log.child({ traceId });
+        reply.log = reply.log.child({ traceId });
+      }
+    }
+
     const route =
-      (request.routeOptions && request.routeOptions.url) ?? request.raw.url ?? "unknown";
+      request.routeOptions?.url ?? request.raw.url ?? "unknown";
+    const timer = metrics.httpRequestDuration.startTimer({
+      method: request.method,
+      route,
+    });
+    (reply as any).__metrics = {
+      timer,
+      method: request.method,
+      route,
+    };
+    done();
+  });
+
+  app.addHook("onResponse", (request, reply, done) => {
+    const metricState = (reply as any).__metrics ?? {};
+    const route =
+      metricState.route ?? request.routeOptions?.url ?? request.raw.url ?? "unknown";
+    const method = metricState.method ?? request.method;
+    const status = String(reply.statusCode);
+
     try {
-      httpRequestCounter
-        .labels(request.method, route, String(reply.statusCode))
-        .inc();
+      metrics.httpRequestTotal.labels(method, route, status).inc();
+      if (typeof metricState.timer === "function") {
+        metricState.timer({ status });
+      } else {
+        const end = metrics.httpRequestDuration.startTimer({ method, route });
+        end({ status });
+      }
     } catch (error) {
-      app.log.warn({ err: error }, "failed to record metrics");
+      request.log.warn({ err: error }, "failed_to_record_http_metrics");
+    } finally {
+      (reply as any).__metrics = undefined;
     }
     done();
   });
@@ -841,14 +888,62 @@ export async function buildServer(): Promise<FastifyInstance> {
     return { ok: true, service: "api-gateway" };
   });
 
-  app.get("/ready", async (_, reply) => {
+  app.get("/ready", async (_request, reply) => {
+    if (app.isDraining()) {
+      reply.code(503).send({ ok: false, draining: true });
+      return;
+    }
+
+    const providerState = app.providers;
+    const results: {
+      db: boolean;
+      redis: boolean | null;
+      nats: boolean | null;
+    } = {
+      db: false,
+      redis: providerState.redis ? false : null,
+      nats: providerState.nats ? false : null,
+    };
+
     try {
       await prisma.$queryRaw`SELECT 1`;
-      reply.send({ ok: true, service: "api-gateway" });
+      results.db = true;
     } catch (error) {
-      app.log.error({ err: error }, "readiness check failed");
-      reply.code(503).send({ ok: false, service: "api-gateway" });
+      app.log.error({ err: error }, "readiness_db_check_failed");
+      results.db = false;
     }
+
+    if (providerState.redis) {
+      try {
+        await providerState.redis.ping();
+        results.redis = true;
+      } catch (error) {
+        results.redis = false;
+        app.log.error({ err: error }, "readiness_redis_ping_failed");
+      }
+    }
+
+    if (providerState.nats) {
+      try {
+        await providerState.nats.flush();
+        results.nats = true;
+      } catch (error) {
+        results.nats = false;
+        app.log.error({ err: error }, "readiness_nats_flush_failed");
+      }
+    }
+
+    const healthy =
+      results.db &&
+      (results.redis !== false) &&
+      (results.nats !== false);
+
+    if (!healthy) {
+      reply.code(503).send({ ok: false, components: results });
+      return;
+    }
+
+    reply.send({ ok: true, components: results });
   });
 
   app.get("/metrics", async (_, reply) => {
