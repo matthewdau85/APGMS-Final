@@ -62,6 +62,12 @@ curl -sf http://localhost:3000/metrics
 
 ---
 
+## API Idempotency
+
+All mutating REST endpoints now require an `Idempotency-Key` header. Replays with the same key will return the original response payload and a response header `Idempotent-Replay: true`. Re-using a key with different payload, actor, or org scope is rejected with `409 idempotency_conflict`. Generate a fresh key for each unique write operation and persist it across retries.
+
+---
+
 ## Quality & Security Gates (local mirrors of CI)
 
 Run these before pushing. They match the CI jobs and "blockers".

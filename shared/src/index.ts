@@ -8,6 +8,7 @@ export * from "./errors.js";
 export * from "./crypto/envelope.js";
 export * from "./security/totp.js";
 export * from "./validation/index.js";
+export * from "./idempotency.js";
 
 // If ./tax is a directory with index.ts, NodeNext wants the explicit /index.js.
 // If instead you actually have tax.ts (not a folder), then change this line to:
