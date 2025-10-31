@@ -16,7 +16,22 @@ import {
   requireRecentVerification,
   verifyChallenge,
 } from "../security/mfa.js";
-import { generateTotpSecret, verifyTotpToken, buildTotpUri } from "@apgms/shared";
+import {
+  generateTotpSecret,
+  verifyTotpToken,
+  buildTotpUri,
+  LoginBodySchema,
+  TotpConfirmBodySchema,
+  MfaStepUpBodySchema,
+  PasskeyRegistrationBodySchema,
+  PasskeyVerifyBodySchema,
+  unauthorized,
+  forbidden,
+  notFound,
+  conflict,
+  badRequest,
+} from "@apgms/shared";
+import { parseWithSchema } from "../lib/validation.js";
 import type {
   RegistrationResponseJSON,
   AuthenticationResponseJSON,
@@ -69,31 +84,12 @@ function cleanupPendingTotp(): void {
 
 export async function registerAuthRoutes(app: FastifyInstance) {
   app.post("/auth/login", async (request, reply) => {
-    const body = request.body as {
-      email?: string;
-      password?: string;
-    };
-
-    if (!body?.email || !body?.password) {
-      reply.code(400).send({
-        error: {
-          code: "invalid_body",
-          message: "email and password are required",
-        },
-      });
-      return;
-    }
+    const body = parseWithSchema(LoginBodySchema, request.body);
 
     const user = await verifyCredentials(body.email, body.password);
 
     if (!user) {
-      reply.code(401).send({
-        error: {
-          code: "bad_credentials",
-          message: "Invalid email/password",
-        },
-      });
-      return;
+      throw unauthorized("bad_credentials", "Invalid email/password");
     }
 
     const authUser = buildSessionUser(user);
@@ -118,10 +114,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       const userId = claims?.sub as string | undefined;
 
       if (!userId) {
-        reply.code(401).send({
-          error: { code: "unauthorized", message: "Missing user context" },
-        });
-        return;
+        throw unauthorized("unauthorized", "Missing user context");
       }
 
       const user = await prisma.user.findUnique({
@@ -130,10 +123,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       });
 
       if (!user) {
-        reply.code(404).send({
-          error: { code: "user_not_found", message: "User record missing" },
-        });
-        return;
+        throw notFound("user_not_found", "User record missing");
       }
 
       const [totpCredential, passkeys] = await Promise.all([
@@ -173,10 +163,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       const userId = claims?.sub as string | undefined;
 
       if (!userId) {
-        reply.code(401).send({
-          error: { code: "unauthorized", message: "Missing user context" },
-        });
-        return;
+        throw unauthorized("unauthorized", "Missing user context");
       }
 
       const user = await prisma.user.findUnique({
@@ -185,10 +172,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       });
 
       if (!user) {
-        reply.code(404).send({
-          error: { code: "user_not_found", message: "User record missing" },
-        });
-        return;
+        throw notFound("user_not_found", "User record missing");
       }
 
       cleanupPendingTotp();
@@ -239,10 +223,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       const userId = claims?.sub as string | undefined;
 
       if (!userId) {
-        reply.code(401).send({
-          error: { code: "unauthorized", message: "Missing user context" },
-        });
-        return;
+        throw unauthorized("unauthorized", "Missing user context");
       }
 
       const user = await prisma.user.findUnique({
@@ -251,38 +232,20 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       });
 
       if (!user) {
-        reply.code(404).send({
-          error: { code: "user_not_found", message: "User record missing" },
-        });
-        return;
+        throw notFound("user_not_found", "User record missing");
       }
 
-      const body = request.body as { token?: string } | null;
-      if (!body?.token || body.token.trim().length === 0) {
-        reply.code(400).send({
-          error: { code: "invalid_body", message: "token is required" },
-        });
-        return;
-      }
+      const body = parseWithSchema(TotpConfirmBodySchema, request.body);
 
       cleanupPendingTotp();
       const pending = pendingTotpEnrollments.get(user.id);
       if (!pending) {
-        reply.code(409).send({
-          error: {
-            code: "totp_enrollment_missing",
-            message: "No pending TOTP enrollment",
-          },
-        });
-        return;
+        throw conflict("totp_enrollment_missing", "No pending TOTP enrollment");
       }
 
       const trimmed = body.token.replace(/\s+/g, "");
       if (!verifyTotpToken(pending.secret, trimmed)) {
-        reply.code(401).send({
-          error: { code: "totp_invalid", message: "Invalid TOTP token" },
-        });
-        return;
+        throw unauthorized("totp_invalid", "Invalid TOTP token");
       }
 
       await upsertTotpCredential(user.id, pending.secret, pending.codesHashed);
@@ -322,26 +285,14 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       const userId = claims?.sub as string | undefined;
 
       if (!userId) {
-        reply.code(401).send({
-          error: { code: "unauthorized", message: "Missing user context" },
-        });
-        return;
+        throw unauthorized("unauthorized", "Missing user context");
       }
 
-      const body = request.body as { code?: string } | null;
-      if (!body?.code || body.code.trim().length === 0) {
-        reply.code(400).send({
-          error: { code: "invalid_body", message: "code is required" },
-        });
-        return;
-      }
+      const body = parseWithSchema(MfaStepUpBodySchema, request.body);
 
       const result = await verifyChallenge(userId, body.code);
       if (!result.success) {
-        reply.code(401).send({
-          error: { code: "mfa_invalid", message: "MFA verification failed" },
-        });
-        return;
+        throw unauthorized("mfa_invalid", "MFA verification failed");
       }
 
       const user = await prisma.user.findUnique({
@@ -376,10 +327,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       const userId = claims?.sub as string | undefined;
 
       if (!userId) {
-        reply.code(401).send({
-          error: { code: "unauthorized", message: "Missing user context" },
-        });
-        return;
+        throw unauthorized("unauthorized", "Missing user context");
       }
 
       const user = await prisma.user.findUnique({
@@ -388,10 +336,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       });
 
       if (!user) {
-        reply.code(404).send({
-          error: { code: "user_not_found", message: "User record missing" },
-        });
-        return;
+        throw notFound("user_not_found", "User record missing");
       }
 
       const existing = await listPasskeyCredentials(user.id);
@@ -427,10 +372,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       const userId = claims?.sub as string | undefined;
 
       if (!userId) {
-        reply.code(401).send({
-          error: { code: "unauthorized", message: "Missing user context" },
-        });
-        return;
+        throw unauthorized("unauthorized", "Missing user context");
       }
 
       const user = await prisma.user.findUnique({
@@ -439,33 +381,18 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       });
 
       if (!user) {
-        reply.code(404).send({
-          error: { code: "user_not_found", message: "User record missing" },
-        });
-        return;
+        throw notFound("user_not_found", "User record missing");
       }
 
-      const body = request.body as {
-        credential?: RegistrationResponseJSON;
-        response?: RegistrationResponseJSON;
-      } | null;
-      const registrationResponse = body?.credential ?? body?.response;
+      const body = parseWithSchema(PasskeyRegistrationBodySchema, request.body);
+      const registrationResponse = (body.credential ?? body.response) as RegistrationResponseJSON;
       if (!registrationResponse) {
-        reply.code(400).send({
-          error: {
-            code: "invalid_body",
-            message: "registration response is required",
-          },
-        });
-        return;
+        throw badRequest("invalid_body", "registration response is required");
       }
 
       const verification = await verifyPasskeyRegistration(user.id, registrationResponse);
       if (!verification.verified || !verification.registrationInfo) {
-        reply.code(401).send({
-          error: { code: "passkey_invalid", message: "Registration verification failed" },
-        });
-        return;
+        throw unauthorized("passkey_invalid", "Registration verification failed");
       }
 
       const credential = verification.registrationInfo.credential;
@@ -510,10 +437,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       const userId = claims?.sub as string | undefined;
 
       if (!userId) {
-        reply.code(401).send({
-          error: { code: "unauthorized", message: "Missing user context" },
-        });
-        return;
+        throw unauthorized("unauthorized", "Missing user context");
       }
 
       const user = await prisma.user.findUnique({
@@ -522,10 +446,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       });
 
       if (!user) {
-        reply.code(404).send({
-          error: { code: "user_not_found", message: "User record missing" },
-        });
-        return;
+        throw notFound("user_not_found", "User record missing");
       }
 
       const credentials = await listPasskeyCredentials(user.id);
@@ -534,13 +455,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
         .filter((id): id is string => Boolean(id));
 
       if (allowCredentialIds.length === 0) {
-        reply.code(404).send({
-          error: {
-            code: "passkey_not_configured",
-            message: "No passkey credentials available",
-          },
-        });
-        return;
+        throw notFound("passkey_not_configured", "No passkey credentials available");
       }
 
       const options = await createAuthenticationOptions({
@@ -569,10 +484,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       const userId = claims?.sub as string | undefined;
 
       if (!userId) {
-        reply.code(401).send({
-          error: { code: "unauthorized", message: "Missing user context" },
-        });
-        return;
+        throw unauthorized("unauthorized", "Missing user context");
       }
 
       const user = await prisma.user.findUnique({
@@ -581,25 +493,13 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       });
 
       if (!user) {
-        reply.code(404).send({
-          error: { code: "user_not_found", message: "User record missing" },
-        });
-        return;
+        throw notFound("user_not_found", "User record missing");
       }
 
-      const body = request.body as {
-        credential?: AuthenticationResponseJSON;
-        response?: AuthenticationResponseJSON;
-      } | null;
-      const assertionResponse = body?.credential ?? body?.response;
+      const body = parseWithSchema(PasskeyVerifyBodySchema, request.body);
+      const assertionResponse = (body.credential ?? body.response) as AuthenticationResponseJSON;
       if (!assertionResponse) {
-        reply.code(400).send({
-          error: {
-            code: "invalid_body",
-            message: "authentication response is required",
-          },
-        });
-        return;
+        throw badRequest("invalid_body", "authentication response is required");
       }
 
       const credentialId = assertionResponse.id;
@@ -614,10 +514,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
         credentialRecord.userId !== user.id ||
         credentialRecord.status !== "active"
       ) {
-        reply.code(404).send({
-          error: { code: "passkey_not_found", message: "Passkey not registered" },
-        });
-        return;
+        throw notFound("passkey_not_found", "Passkey not registered");
       }
 
       const decoded = await decodePasskeyCredential(credentialRecord);
@@ -633,10 +530,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
         webauthnCredential,
       );
       if (!verification.verified) {
-        reply.code(401).send({
-          error: { code: "passkey_invalid", message: "Authentication failed" },
-        });
-        return;
+        throw unauthorized("passkey_invalid", "Authentication failed");
       }
 
       await updatePasskeyCounter(credentialId!, verification.authenticationInfo.newCounter);
@@ -668,10 +562,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       const claims: any = (request as any).user;
       const userId = claims?.sub as string | undefined;
       if (!userId) {
-        reply.code(401).send({
-          error: { code: "unauthorized", message: "Missing user context" },
-        });
-        return;
+        throw unauthorized("unauthorized", "Missing user context");
       }
 
       clearVerification(userId);
