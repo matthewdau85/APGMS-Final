@@ -28,7 +28,7 @@ function maskString(value) {
     const end = value.slice(-2);
     return `${start}${"*".repeat(Math.max(3, value.length - 6))}${end}`;
 }
-function maskValue(value, key) {
+export function maskValue(value, key) {
     if (value == null)
         return value;
     if (typeof value === "string") {
