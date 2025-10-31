@@ -1,6 +1,12 @@
 // services/api-gateway/src/routes/auth.ts
 import { FastifyInstance } from "fastify";
-import { authGuard, verifyCredentials, signToken } from "../auth.js";
+import {
+  authGuard,
+  verifyCredentials,
+  signToken,
+  buildClientUser,
+  buildSessionUser,
+} from "../auth.js";
 import { prisma } from "../db.js";
 import { recordAuditLog } from "../lib/audit.js";
 import {
@@ -38,21 +44,17 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       return;
     }
 
+    const authUser = buildSessionUser(user);
     const token = signToken({
-      id: user.id,
-      orgId: user.orgId,
-      role: user.role ?? "admin",
-      mfaEnabled: user.mfaEnabled ?? false,
+      id: authUser.sub,
+      orgId: authUser.orgId,
+      role: authUser.role,
+      mfaEnabled: authUser.mfaEnabled,
     });
 
     reply.send({
       token,
-      user: {
-        id: user.id,
-        orgId: user.orgId,
-        role: user.role ?? "admin",
-        mfaEnabled: user.mfaEnabled ?? false,
-      },
+      user: buildClientUser(authUser),
     });
   });
 
@@ -153,21 +155,23 @@ export async function registerAuthRoutes(app: FastifyInstance) {
         metadata: { enabled: true },
       });
 
-      const token = signToken({
+      const authUser = buildSessionUser({
         id: user.id,
         orgId: user.orgId,
         role: user.role ?? "admin",
         mfaEnabled: true,
       });
 
+      const token = signToken({
+        id: authUser.sub,
+        orgId: authUser.orgId,
+        role: authUser.role,
+        mfaEnabled: true,
+      });
+
       reply.send({
         token,
-        user: {
-          id: user.id,
-          orgId: user.orgId,
-          role: user.role ?? "admin",
-          mfaEnabled: true,
-        },
+        user: buildClientUser(authUser),
         session: {
           expiresInSeconds: 600,
           verifiedAt: new Date().toISOString(),

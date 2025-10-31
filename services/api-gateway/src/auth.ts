@@ -12,6 +12,7 @@ const REGULATOR_AUD =
   process.env.REGULATOR_JWT_AUDIENCE?.trim().length
     ? process.env.REGULATOR_JWT_AUDIENCE!.trim()
     : "urn:apgms:regulator";
+const CLOCK_TOLERANCE_SECONDS = 60;
 
 export type TokenClaims = JwtPayload & Record<string, unknown>;
 
@@ -20,6 +21,35 @@ export interface SignTokenOptions {
   expiresIn?: string;
   subject?: string;
   extraClaims?: Record<string, unknown>;
+}
+
+export interface AuthenticatedUser {
+  sub: string;
+  orgId: string;
+  role: string;
+  mfaEnabled: boolean;
+  regulator?: boolean;
+  sessionId?: string;
+}
+
+declare module "fastify" {
+  interface FastifyRequest {
+    user?: AuthenticatedUser;
+  }
+}
+
+function toSessionUser(user: {
+  id: string;
+  orgId: string;
+  role?: string | null;
+  mfaEnabled?: boolean | null;
+}): AuthenticatedUser {
+  return {
+    sub: user.id,
+    orgId: user.orgId,
+    role: user.role ?? "admin",
+    mfaEnabled: Boolean(user.mfaEnabled),
+  };
 }
 
 export function signToken(
@@ -63,6 +93,53 @@ export function createAuthGuard(
   expectedAudience: string,
   options: GuardOptions = {},
 ) {
+  function validateClaims(payload: TokenClaims, request: FastifyRequest): AuthenticatedUser {
+    const audience = payload.aud;
+    if (Array.isArray(audience)) {
+      if (!audience.includes(expectedAudience)) {
+        throw new Error("unexpected_audience");
+      }
+    } else if (audience && audience !== expectedAudience) {
+      throw new Error("unexpected_audience");
+    }
+
+    const sub =
+      typeof payload.sub === "string"
+        ? payload.sub
+        : typeof (payload as any).id === "string"
+          ? (payload as any).id
+          : null;
+    if (!sub) {
+      throw new Error("missing_subject");
+    }
+
+    const orgId = typeof payload.orgId === "string" ? payload.orgId : null;
+    if (!orgId) {
+      throw new Error("missing_org_scope");
+    }
+
+    const role = typeof payload.role === "string" ? payload.role : null;
+    if (!role) {
+      throw new Error("missing_role_scope");
+    }
+
+    const mfaEnabled = payload.mfaEnabled === true;
+    const regulator = payload.regulator === true;
+    const sessionId =
+      typeof payload.sessionId === "string" ? payload.sessionId : undefined;
+
+    const authContext: AuthenticatedUser = {
+      sub,
+      orgId,
+      role,
+      mfaEnabled,
+      regulator,
+      sessionId,
+    };
+
+    return authContext;
+  }
+
   return async function authGuardInstance(
     request: FastifyRequest,
     reply: FastifyReply,
@@ -82,13 +159,15 @@ export function createAuthGuard(
         algorithms: ["HS256"],
         audience: expectedAudience,
         issuer: ISS,
+        clockTolerance: CLOCK_TOLERANCE_SECONDS,
       }) as TokenClaims;
 
       if (options.validate) {
         await options.validate(decoded, request);
       }
 
-      (request as any).user = decoded;
+      const context = validateClaims(decoded, request);
+      (request as any).user = context;
     } catch {
       reply.code(401).send({
         error: { code: "unauthorized", message: "Invalid token" },
@@ -107,13 +186,42 @@ export async function verifyCredentials(
 ) {
   const user = await prisma.user.findUnique({
     where: { email },
+    select: {
+      id: true,
+      orgId: true,
+      role: true,
+      mfaEnabled: true,
+      password: true,
+    },
   });
   if (!user) return null;
 
   const ok = await bcrypt.compare(pw, user.password);
   if (!ok) return null;
 
-  return user;
+  return {
+    id: user.id,
+    orgId: user.orgId,
+    role: user.role ?? "admin",
+    mfaEnabled: user.mfaEnabled ?? false,
+  };
 }
 
+export function buildSessionUser(user: {
+  id: string;
+  orgId: string;
+  role?: string | null;
+  mfaEnabled?: boolean | null;
+}): AuthenticatedUser {
+  return toSessionUser(user);
+}
+
+export function buildClientUser(user: AuthenticatedUser) {
+  return {
+    id: user.sub,
+    orgId: user.orgId,
+    role: user.role,
+    mfaEnabled: user.mfaEnabled,
+  };
+}
 

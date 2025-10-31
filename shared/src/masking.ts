@@ -54,7 +54,7 @@ function maskPotentialSecret(value: string, key?: string): string {
   return value;
 }
 
-function maskValue(value: unknown, key?: string): unknown {
+export function maskValue(value: unknown, key?: string): unknown {
   if (value == null) return value;
 
   if (typeof value === "string") {

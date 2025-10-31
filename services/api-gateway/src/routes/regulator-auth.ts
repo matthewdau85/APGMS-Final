@@ -2,7 +2,7 @@ import { FastifyInstance } from "fastify";
 
 import { config } from "../config.js";
 import { prisma } from "../db.js";
-import { signToken } from "../auth.js";
+import { signToken, buildSessionUser } from "../auth.js";
 import { createRegulatorSession } from "../lib/regulator-session.js";
 import { recordAuditLog } from "../lib/audit.js";
 
@@ -25,7 +25,10 @@ export async function registerRegulatorAuthRoutes(app: FastifyInstance): Promise
     }
 
     const orgId = body.orgId ?? "dev-org";
-    const org = await prisma.org.findUnique({ where: { id: orgId } });
+    const org = await prisma.org.findUnique({
+      where: { id: orgId },
+      select: { id: true },
+    });
     if (!org) {
       reply.code(404).send({
         error: { code: "org_not_found", message: "Organisation not found" },
@@ -38,12 +41,19 @@ export async function registerRegulatorAuthRoutes(app: FastifyInstance): Promise
       config.regulator.sessionTtlMinutes,
     );
 
+    const authUser = buildSessionUser({
+      id: session.id,
+      orgId,
+      role: "regulator",
+      mfaEnabled: false,
+    });
+
     const token = signToken(
       {
-        id: session.id,
-        orgId,
-        role: "regulator",
-        mfaEnabled: false,
+        id: authUser.sub,
+        orgId: authUser.orgId,
+        role: authUser.role,
+        mfaEnabled: authUser.mfaEnabled,
       },
       {
         subject: session.id,
