@@ -1,35 +1,34 @@
 import { FastifyInstance } from "fastify";
 
+import { RegulatorLoginBodySchema } from "@apgms/shared";
+
 import { config } from "../config.js";
 import { prisma } from "../db.js";
 import { signToken, buildSessionUser } from "../auth.js";
 import { createRegulatorSession } from "../lib/regulator-session.js";
 import { recordAuditLog } from "../lib/audit.js";
+import { parseWithSchema } from "../lib/validation.js";
 
 export async function registerRegulatorAuthRoutes(app: FastifyInstance): Promise<void> {
   app.post("/regulator/login", async (request, reply) => {
-    const body = request.body as { accessCode?: string; orgId?: string } | null;
+    const { accessCode, orgId } = parseWithSchema(
+      RegulatorLoginBodySchema,
+      request.body,
+    );
 
-    if (!body?.accessCode || body.accessCode.trim().length === 0) {
-      reply.code(400).send({
-        error: { code: "invalid_body", message: "accessCode is required" },
-      });
-      return;
-    }
-
-    if (body.accessCode.trim() !== config.regulator.accessCode) {
+    if (accessCode !== config.regulator.accessCode) {
+      app.metrics.recordSecurityEvent("regulator.login.invalid_code");
       reply.code(401).send({
         error: { code: "access_denied", message: "Invalid regulator access code" },
       });
       return;
     }
-
-    const orgId = body.orgId ?? "dev-org";
     const org = await prisma.org.findUnique({
       where: { id: orgId },
       select: { id: true },
     });
     if (!org) {
+      app.metrics.recordSecurityEvent("regulator.login.unknown_org");
       reply.code(404).send({
         error: { code: "org_not_found", message: "Organisation not found" },
       });

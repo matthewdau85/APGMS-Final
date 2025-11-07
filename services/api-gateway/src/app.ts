@@ -48,7 +48,11 @@ import {
 import { recordAuditLog } from "./lib/audit.js";
 import { ensureRegulatorSessionActive } from "./lib/regulator-session.js";
 import { withIdempotency } from "./lib/idempotency.js";
-import { metrics, promRegister } from "./observability/metrics.js";
+import {
+  appSecurityMetrics,
+  metrics,
+  promRegister,
+} from "./observability/metrics.js";
 import { attachPrismaMetrics } from "./observability/prisma-metrics.js";
 import { closeProviders, initProviders } from "./providers.js";
 
@@ -762,6 +766,7 @@ export async function buildServer(): Promise<FastifyInstance> {
   app.decorate("setDraining", (value: boolean) => {
     drainingState.value = value;
   });
+  app.decorate("metrics", appSecurityMetrics);
 
   app.addHook("onRequest", (request, reply, done) => {
     const span = trace.getSpan(context.active());
@@ -877,6 +882,7 @@ export async function buildServer(): Promise<FastifyInstance> {
         return;
       }
       const error = new Error(`Origin ${origin} is not allowed`);
+      app.metrics.incCorsReject(origin);
       cb(Object.assign(error, { code: "FST_CORS_FORBIDDEN_ORIGIN", statusCode: 403 }), false);
     },
     methods: ["GET", "POST", "OPTIONS"],

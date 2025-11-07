@@ -40,6 +40,42 @@ const jobDuration = new Histogram({
   buckets: [0.1, 0.25, 0.5, 1, 2, 5, 10, 30],
 });
 
+const securityEventsTotal = new Counter({
+  name: "apgms_security_events_total",
+  help: "Count of security-related events (auth failures, anomalous routes, manual security logs)",
+  labelNames: ["event"] as const,
+});
+
+const authFailuresTotal = new Counter({
+  name: "apgms_auth_failures_total",
+  help: "Authentication and authorization failures by organisation",
+  labelNames: ["orgId"] as const,
+});
+
+const corsRejectTotal = new Counter({
+  name: "apgms_cors_reject_total",
+  help: "Number of rejected CORS requests grouped by origin",
+  labelNames: ["origin"] as const,
+});
+
+export type AppSecurityMetrics = {
+  recordSecurityEvent(event: string): void;
+  incAuthFailure(orgId: string): void;
+  incCorsReject(origin: string): void;
+};
+
+export const appSecurityMetrics: AppSecurityMetrics = {
+  recordSecurityEvent(event: string) {
+    securityEventsTotal.inc({ event });
+  },
+  incAuthFailure(orgId: string) {
+    authFailuresTotal.inc({ orgId });
+  },
+  incCorsReject(origin: string) {
+    corsRejectTotal.inc({ origin });
+  },
+};
+
 export const metrics = {
   httpRequestTotal,
   httpRequestDuration,

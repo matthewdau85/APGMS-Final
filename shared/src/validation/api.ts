@@ -9,6 +9,13 @@ export const LoginBodySchema = z
   })
   .strict();
 
+export const RegulatorLoginBodySchema = z
+  .object({
+    accessCode: trimmed(),
+    orgId: trimmed(),
+  })
+  .strict();
+
 export const BankLineCreateSchema = z
   .object({
     date: z.string().datetime({ offset: true }),
