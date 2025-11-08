@@ -1,0 +1,42 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "dependencyDashboard": true,
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "rangeStrategy": "replace",
+  "timezone": "UTC",
+  "schedule": ["after 10pm on sunday"],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 5am on monday"]
+  },
+  "postUpdateOptions": ["pnpmDedupe"],
+  "packageRules": [
+    {
+      "matchManagers": ["pnpm"],
+      "matchDepTypes": ["dependencies"],
+      "groupName": "workspace runtime dependencies",
+      "groupSlug": "workspace-runtime"
+    },
+    {
+      "matchManagers": ["pnpm"],
+      "matchDepTypes": ["devDependencies"],
+      "groupName": "workspace dev dependencies",
+      "groupSlug": "workspace-dev",
+      "matchUpdateTypes": ["patch", "minor"],
+      "automerge": true,
+      "requiredStatusChecks": [
+        "CI / build",
+        "CI / axe",
+        "CI / lighthouse",
+        "Security Scans / security"
+      ]
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions",
+      "groupSlug": "github-actions"
+    }
+  ]
+}

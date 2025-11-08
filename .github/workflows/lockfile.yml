@@ -1,0 +1,60 @@
+name: Lockfile Maintenance
+
+on:
+  schedule:
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  lockfile:
+    name: Refresh pnpm lockfile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Update lockfile
+        run: pnpm install --lockfile-only
+
+      - name: Audit dependencies (high+)
+        run: pnpm audit --audit-level high
+
+      - name: Generate SBOM (CycloneDX)
+        run: pnpm dlx @cyclonedx/cyclonedx-npm --output-format json --output-file sbom.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lockfile-sbom
+          path: sbom.json
+          if-no-files-found: error
+
+      - name: Create lockfile PR
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: chore(deps): refresh pnpm lockfile
+          branch: chore/lockfile-maintenance
+          delete-branch: true
+          title: 'chore(deps): refresh pnpm lockfile'
+          body: |
+            ## Summary
+            - ensure the pnpm lockfile stays in sync with workspace constraints
+            - require audit + SBOM generation for transparency before merging
+          labels: dependencies, automated-pr
+          add-paths: pnpm-lock.yaml
+          signoff: true
