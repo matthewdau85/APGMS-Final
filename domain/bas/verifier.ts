@@ -322,12 +322,10 @@ async function createDiscrepancyArtifact(
     discrepancies: BasDiscrepancy[];
   },
 ): Promise<BasDiscrepancyArtifact> {
-  const generatedAt = new Date().toISOString();
   const remediation = buildRemediation(input.discrepancies);
 
-  const report: RawDiscrepancyReport = {
+  const baseReport = {
     version: "1.0",
-    generatedAt,
     basCycle: {
       id: input.cycle.id,
       periodStart: input.cycle.periodStart.toISOString(),
@@ -344,6 +342,44 @@ async function createDiscrepancyArtifact(
     },
     discrepancies: input.discrepancies,
     remediation,
+  } satisfies Omit<RawDiscrepancyReport, "generatedAt" | "jsonHash" | "pdfBase64">;
+
+  const dedupeHash = createHash("sha256")
+    .update(JSON.stringify(baseReport, null, 2))
+    .digest("hex");
+
+  const existingCandidate = await prisma.evidenceArtifact.findFirst({
+    where: {
+      orgId: input.orgId,
+      kind: "bas.discrepancy",
+      wormUri: { startsWith: `urn:apgms:bas-discrepancy:${input.cycle.id}:` },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  let existing: (typeof existingCandidate & { payload: RawDiscrepancyReport }) | null = null;
+  if (existingCandidate) {
+    try {
+      const payload = normalizeArtifactPayload(existingCandidate.payload);
+      const payloadComparable = buildComparableReport(payload);
+      const payloadHash = createHash("sha256")
+        .update(JSON.stringify(payloadComparable, null, 2))
+        .digest("hex");
+      if (payloadHash === dedupeHash) {
+        existing = { ...existingCandidate, payload };
+      }
+    } catch {
+      existing = null;
+    }
+  }
+
+  const generatedAt = existing
+    ? existing.payload.generatedAt ?? existing.createdAt.toISOString()
+    : new Date().toISOString();
+
+  const report: RawDiscrepancyReport = {
+    ...baseReport,
+    generatedAt,
   };
 
   const jsonString = JSON.stringify(report, null, 2);
@@ -354,19 +390,16 @@ async function createDiscrepancyArtifact(
   const pdfHash = createHash("sha256").update(pdfBytes).digest("hex");
   report.pdfBase64 = pdfBytes.toString("base64");
 
-  const existing = await prisma.evidenceArtifact.findFirst({
-    where: { orgId: input.orgId, kind: "bas.discrepancy", sha256: pdfHash },
-    orderBy: { createdAt: "desc" },
-  });
+  const wormUri = `urn:apgms:bas-discrepancy:${input.cycle.id}:${dedupeHash}`;
 
   if (existing) {
     await prisma.evidenceArtifact.update({
       where: { id: existing.id },
-      data: { payload: report },
+      data: { payload: report, sha256: pdfHash, wormUri },
     });
     return {
       id: existing.id,
-      sha256: existing.sha256,
+      sha256: pdfHash,
       generatedAt,
       jsonHash,
     };
@@ -376,7 +409,7 @@ async function createDiscrepancyArtifact(
     data: {
       orgId: input.orgId,
       kind: "bas.discrepancy",
-      wormUri: `urn:apgms:bas-discrepancy:${input.cycle.id}:${pdfHash}`,
+      wormUri,
       sha256: pdfHash,
       payload: report,
     },
@@ -387,6 +420,20 @@ async function createDiscrepancyArtifact(
     sha256: artifact.sha256,
     generatedAt,
     jsonHash,
+  };
+}
+
+function buildComparableReport(
+  report: RawDiscrepancyReport,
+): Omit<RawDiscrepancyReport, "generatedAt" | "jsonHash" | "pdfBase64"> {
+  return {
+    version: report.version,
+    basCycle: report.basCycle,
+    actorId: report.actorId,
+    expected: report.expected,
+    designated: report.designated,
+    discrepancies: report.discrepancies,
+    remediation: report.remediation,
   };
 }
 
