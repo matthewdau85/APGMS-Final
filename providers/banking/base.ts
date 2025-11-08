@@ -40,6 +40,7 @@ export abstract class BaseBankingProvider implements BankingProvider {
       {
         prisma: context.prisma,
         auditLogger: context.auditLogger,
+        analyticsLogger: context.analyticsLogger,
       },
       {
         orgId: context.orgId,
@@ -60,6 +61,7 @@ export abstract class BaseBankingProvider implements BankingProvider {
         {
           prisma: context.prisma,
           auditLogger: context.auditLogger,
+          analyticsLogger: context.analyticsLogger,
         },
         {
           orgId: context.orgId,

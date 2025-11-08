@@ -1,5 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 
+import type { AnalyticsEventLogger } from "../../domain/ledger/analytics-events.js";
+
 import type {
   ApplyDesignatedTransferResult,
   ApplyDesignatedTransferInput,
@@ -22,6 +24,7 @@ export type BankingProviderContext = {
     action: string;
     metadata: Record<string, unknown>;
   }) => Promise<void>;
+  analyticsLogger?: AnalyticsEventLogger;
 };
 
 export type CreditDesignatedAccountInput = Omit<

@@ -8,6 +8,7 @@ import {
   generateDesignatedAccountReconciliationArtifact,
 } from "../../../domain/policy/designated-accounts.js";
 import { createBankingProvider } from "../../../providers/banking/index.js";
+import { createAnalyticsEventLogger } from "../../../domain/ledger/analytics-events.js";
 
 type DesignatedAccountState = {
   id: string;
@@ -61,6 +62,21 @@ type InMemoryState = {
   alerts: AlertState[];
   evidenceArtifacts: EvidenceArtifactState[];
   auditLogs: AuditEntry[];
+  analyticsEvents: AnalyticsEventState[];
+};
+
+type AnalyticsEventState = {
+  id: string;
+  orgId: string;
+  domain: string;
+  source: string;
+  eventType: string;
+  occurredAt: Date;
+  payload: unknown;
+  labels: unknown;
+  dedupeKey: string | null;
+  recordedAt: Date;
+  createdAt: Date;
 };
 
 const randomId = () => `id-${Math.random().toString(16).slice(2, 10)}`;
@@ -72,6 +88,7 @@ function createInMemoryPrisma(): { prisma: any; state: InMemoryState } {
     alerts: [],
     evidenceArtifacts: [],
     auditLogs: [],
+    analyticsEvents: [],
   };
 
   const prisma = {
@@ -209,6 +226,25 @@ function createInMemoryPrisma(): { prisma: any; state: InMemoryState } {
         return { ...entry };
       },
     },
+    analyticsEvent: {
+      create: async ({ data }: any) => {
+        const event: AnalyticsEventState = {
+          id: data.id ?? randomId(),
+          orgId: data.orgId,
+          domain: data.domain,
+          source: data.source,
+          eventType: data.eventType,
+          occurredAt: data.occurredAt ?? new Date(),
+          payload: data.payload,
+          labels: data.labels,
+          dedupeKey: data.dedupeKey ?? null,
+          recordedAt: data.recordedAt ?? new Date(),
+          createdAt: data.createdAt ?? new Date(),
+        };
+        state.analyticsEvents.push(event);
+        return { ...event };
+      },
+    },
     $transaction: async (callback: (tx: any) => Promise<any>) =>
       callback(prisma),
   };
@@ -236,6 +272,10 @@ test("designated accounts block debit attempts and raise alerts", async () => {
     auditLogger: async (entry: any) => {
       await prisma.auditLog.create({ data: entry });
     },
+    analyticsLogger: createAnalyticsEventLogger(prisma as any, {
+      domain: "policy",
+      source: "tests.designated",
+    }),
   };
 
   await assert.rejects(
@@ -250,6 +290,12 @@ test("designated accounts block debit attempts and raise alerts", async () => {
   assert.equal(state.alerts.length, 1);
   assert.equal(state.alerts[0].type, "DESIGNATED_WITHDRAWAL_ATTEMPT");
   assert.equal(state.auditLogs.some((entry) => entry.action === "designatedAccount.violation"), true);
+  assert.equal(
+    state.analyticsEvents.some(
+      (event) => event.eventType === "designated_transfer.blocked" && event.domain === "policy",
+    ),
+    true,
+  );
 });
 
 test("designated account reconciliation emits evidence artefact", async () => {
@@ -278,6 +324,10 @@ test("designated account reconciliation emits evidence artefact", async () => {
       auditLogger: async (entry: any) => {
         await prisma.auditLog.create({ data: entry });
       },
+      analyticsLogger: createAnalyticsEventLogger(prisma as any, {
+        domain: "policy",
+        source: "tests.designated",
+      }),
     },
     {
       orgId: "org-1",
@@ -294,6 +344,10 @@ test("designated account reconciliation emits evidence artefact", async () => {
       auditLogger: async (entry: any) => {
         await prisma.auditLog.create({ data: entry });
       },
+      analyticsLogger: createAnalyticsEventLogger(prisma as any, {
+        domain: "policy",
+        source: "tests.designated",
+      }),
     },
     {
       orgId: "org-1",
@@ -311,6 +365,10 @@ test("designated account reconciliation emits evidence artefact", async () => {
         auditLogger: async (entry: any) => {
           await prisma.auditLog.create({ data: entry });
         },
+        analyticsLogger: createAnalyticsEventLogger(prisma as any, {
+          domain: "policy",
+          source: "tests.designated",
+        }),
       },
       "org-1",
       "system",
@@ -331,4 +389,7 @@ test("designated account reconciliation emits evidence artefact", async () => {
     ),
     true,
   );
+  const eventTypes = state.analyticsEvents.map((event) => event.eventType);
+  assert.equal(eventTypes.includes("designated_transfer.approved"), true);
+  assert.equal(eventTypes.includes("designated_reconciliation.generated"), true);
 });

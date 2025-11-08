@@ -226,6 +226,39 @@ model EventEnvelope {
   @@index([orgId, ts])
 }
 
+model AnalyticsEvent {
+  id         String   @id @default(cuid())
+  orgId      String
+  domain     String
+  source     String
+  eventType  String
+  occurredAt DateTime
+  recordedAt DateTime @default(now())
+  payload    Json
+  labels     Json?
+  dedupeKey  String?
+  createdAt  DateTime @default(now())
+
+  org Org @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, occurredAt])
+  @@index([domain, eventType, occurredAt])
+}
+
+model AnalyticsFeatureSnapshot {
+  id          String   @id @default(cuid())
+  orgId       String
+  windowStart DateTime
+  asOf        DateTime
+  features    Json
+  labels      Json
+  createdAt   DateTime @default(now())
+
+  org Org @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, asOf])
+}
+
 model BankTransaction {
   id               String   @id @default(uuid()) @db.Uuid
   orgId            String   @db.Uuid
@@ -343,6 +376,8 @@ model Org {
   paymentPlanRequests PaymentPlanRequest[]
   regulatorSessions RegulatorSession[]
   monitoringSnapshots MonitoringSnapshot[]
+  analyticsEvents AnalyticsEvent[]
+  analyticsFeatureSnapshots AnalyticsFeatureSnapshot[]
 
   // payroll backrefs
   employees  Employee[]

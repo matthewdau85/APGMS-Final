@@ -9,6 +9,8 @@ import {
   type DesignatedTransferSource,
 } from "@apgms/shared/ledger";
 
+import type { AnalyticsEventLogger } from "../ledger/analytics-events.js";
+
 type AuditLogger = (entry: {
   orgId: string;
   actorId: string;
@@ -19,6 +21,7 @@ type AuditLogger = (entry: {
 type PolicyContext = {
   prisma: PrismaClient;
   auditLogger?: AuditLogger;
+  analyticsLogger?: AnalyticsEventLogger;
 };
 
 export type ApplyDesignatedTransferInput = {
@@ -34,6 +37,7 @@ export type ApplyDesignatedTransferResult = {
   newBalance: number;
   transferId: string;
   source: DesignatedTransferSource;
+  occurredAt: string;
 };
 
 async function ensureViolationAlert(
@@ -74,6 +78,26 @@ export async function applyDesignatedAccountTransfer(
   });
 
   if (!evaluation.allowed) {
+    if (context.analyticsLogger) {
+      await context.analyticsLogger({
+        orgId: input.orgId,
+        eventType: "designated_transfer.blocked",
+        occurredAt: new Date(),
+        payload: {
+          accountId: input.accountId,
+          amount: input.amount,
+          source: input.source,
+          actorId: input.actorId,
+          violation: evaluation.violation,
+        },
+        labels: {
+          allowed: false,
+          violationCode: evaluation.violation.code,
+          severity: evaluation.violation.severity,
+        },
+      });
+    }
+
     await ensureViolationAlert(
       context.prisma,
       input.orgId,
@@ -147,6 +171,7 @@ export async function applyDesignatedAccountTransfer(
       newBalance: Number(updatedBalance),
       transferId: transfer.id,
       source: normalizedSource,
+      occurredAt: transfer.createdAt.toISOString(),
     };
   });
 
@@ -160,6 +185,25 @@ export async function applyDesignatedAccountTransfer(
         amount: input.amount,
         source: result.source,
         transferId: result.transferId,
+      },
+    });
+  }
+
+  if (context.analyticsLogger) {
+    await context.analyticsLogger({
+      orgId: input.orgId,
+      eventType: "designated_transfer.approved",
+      occurredAt: new Date(result.occurredAt),
+      payload: {
+        accountId: result.accountId,
+        amount: input.amount,
+        source: result.source,
+        transferId: result.transferId,
+        actorId: input.actorId,
+      },
+      labels: {
+        allowed: true,
+        source: result.source,
       },
     });
   }
@@ -272,6 +316,22 @@ export async function generateDesignatedAccountReconciliationArtifact(
         artifactId: artifact.id,
         sha256,
         totals,
+      },
+    });
+  }
+
+  if (context.analyticsLogger) {
+    await context.analyticsLogger({
+      orgId,
+      eventType: "designated_reconciliation.generated",
+      occurredAt: now,
+      payload: {
+        artifactId: artifact.id,
+        totals,
+        movementCount: summary.movementsLast24h.length,
+      },
+      labels: {
+        hasRecentMovements: summary.movementsLast24h.length > 0,
       },
     });
   }

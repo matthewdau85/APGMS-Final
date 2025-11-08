@@ -2,9 +2,13 @@ import Fastify from "fastify";
 import { AccountSubtype, AccountType, PrismaClient } from "@prisma/client";
 import { v7 as uuidv7 } from "uuid";
 
-import { JournalWriter } from "@apgms/ledger";
 import type { BusEnvelope } from "@apgms/shared";
 import { NatsBus } from "@apgms/shared";
+
+import {
+  createAnalyticsEventLogger,
+  writeLedgerJournal,
+} from "../../domain/ledger/index.js";
 
 const prisma = new PrismaClient();
 
@@ -22,7 +26,10 @@ const subjects = {
   reconAlert: `${config.subjectPrefix}.recon.alert`,
 };
 
-const ledgerWriter = new JournalWriter(prisma);
+const analyticsLogger = createAnalyticsEventLogger(prisma, {
+  domain: "ledger",
+  source: "apps.phase1-demo",
+});
 
 async function main(): Promise<void> {
   const nats = await NatsBus.connect({
@@ -38,18 +45,29 @@ async function main(): Promise<void> {
     const payload = message.payload as PayrollPayload;
     const amount = BigInt(payload.paygwCents);
 
-    await ledgerWriter.write({
-      orgId: message.orgId,
-      eventId: message.id,
-      dedupeId: message.dedupeId,
-      type: "PAYROLL_HOLD",
-      occurredAt: new Date(message.ts),
-      source: message.source,
-      postings: [
-        { accountId: accounts.paygwBuffer.id, amountCents: -amount },
-        { accountId: accounts.clearing.id, amountCents: amount },
-      ],
-    });
+    await writeLedgerJournal(
+      {
+        prisma,
+        analyticsLogger,
+      },
+      {
+        orgId: message.orgId,
+        eventId: message.id,
+        dedupeId: message.dedupeId,
+        type: "PAYROLL_HOLD",
+        occurredAt: new Date(message.ts),
+        source: message.source,
+        description: "Payroll hold captured from ingestion",
+        postings: [
+          { accountId: accounts.paygwBuffer.id, amountCents: -amount },
+          { accountId: accounts.clearing.id, amountCents: amount },
+        ],
+        analyticsPayload: {
+          payrollId: payload.payrollId,
+          grossCents: payload.grossCents,
+        },
+      },
+    );
   });
 
   if (process.env.DEMO_PUBLISH === "true") {
