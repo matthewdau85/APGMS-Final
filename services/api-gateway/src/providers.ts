@@ -1,11 +1,11 @@
 import type { FastifyBaseLogger } from "fastify";
-import { createClient, type RedisClientType } from "redis";
+import { createClient } from "redis";
 import { connect, type ConnectionOptions, type NatsConnection } from "nats";
 
 import { config } from "./config.js";
 
 export type Providers = {
-  redis: RedisClientType | null;
+  redis: ReturnType<typeof createClient> | null;
   nats: NatsConnection | null;
 };
 

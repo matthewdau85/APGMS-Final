@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 
 export type IdempotencyContext = {
   prisma: PrismaClient;
@@ -35,7 +35,7 @@ export async function registerIdempotencyRecord(
       requestHash: input.requestHash,
       responseHash,
       statusCode: input.statusCode,
-      responsePayload: input.responsePayload,
+      responsePayload: input.responsePayload as Prisma.InputJsonValue,
       resource: input.resource ?? null,
       resourceId: input.resourceId ?? null,
     },

@@ -2,6 +2,17 @@ import type { PrismaClient } from "@prisma/client";
 
 import { metrics } from "./metrics.js";
 
+type MiddlewareParams = {
+  model?: string;
+  action?: string;
+  type?: string;
+  [key: string]: unknown;
+};
+
+type MiddlewareNext = (params: MiddlewareParams) => Promise<unknown>;
+
+type MiddlewareFn = (params: MiddlewareParams, next: MiddlewareNext) => Promise<unknown>;
+
 const attached = new WeakSet<object>();
 
 export function attachPrismaMetrics(client: PrismaClient): void {
@@ -9,7 +20,7 @@ export function attachPrismaMetrics(client: PrismaClient): void {
     return;
   }
 
-  client.$use(async (params, next) => {
+  const middleware: MiddlewareFn = async (params, next) => {
     const model = params.model ?? "raw";
     const operation = params.action ?? params.type ?? "unknown";
 
@@ -32,7 +43,15 @@ export function attachPrismaMetrics(client: PrismaClient): void {
       stop();
       throw error;
     }
-  });
+  };
+
+  const target = client as unknown as { $use?: (mw: MiddlewareFn) => void };
+  if (typeof target.$use !== "function") {
+    attached.add(client);
+    return;
+  }
+
+  target.$use(middleware);
 
   attached.add(client);
 }
