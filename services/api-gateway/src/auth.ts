@@ -2,7 +2,9 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import jwt, { JwtPayload, SignOptions } from "jsonwebtoken";
 
-import { verifyPassword } from "@apgms/shared";
+import bcrypt from "bcryptjs";
+
+import { hashPassword, verifyPassword } from "@apgms/shared";
 
 import { prisma } from "./db.js";
 
@@ -221,7 +223,18 @@ export async function verifyCredentials(
     return null;
   }
 
-  const ok = await verifyPassword(user.password, pw);
+  let ok = false;
+
+  if (isBcryptHash(user.password)) {
+    ok = await bcrypt.compare(pw, user.password);
+
+    if (ok) {
+      await migratePasswordHash(user.id, pw);
+    }
+  } else {
+    ok = await verifyPassword(user.password, pw);
+  }
+
   if (!ok) return null;
 
   return {
@@ -230,6 +243,26 @@ export async function verifyCredentials(
     role: user.role ?? "admin",
     mfaEnabled: user.mfaEnabled ?? false,
   };
+}
+
+const BCRYPT_PREFIX = /^\$2[aby]\$/;
+
+function isBcryptHash(hash: string): boolean {
+  return BCRYPT_PREFIX.test(hash);
+}
+
+async function migratePasswordHash(userId: string, password: string) {
+  try {
+    const nextHash = await hashPassword(password);
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password: nextHash },
+    });
+  } catch (error) {
+    // Failing to migrate should not block the login flow; log for visibility.
+    console.error("password_migration_failed", { userId, error });
+  }
 }
 
 export function buildSessionUser(user: {
