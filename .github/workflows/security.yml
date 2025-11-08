@@ -40,7 +40,7 @@ jobs:
         run: |
           curl -sSfL https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64 -o osv-scanner
           chmod +x osv-scanner
-          ./osv-scanner scan --lockfile pnpm-lock.yaml --format json --output osv-report.json
+          ./osv-scanner scan --lockfile pnpm-lock.yaml --format json --output osv-report.json --exit-code 0
           HIGH_COUNT=$(jq '[.results[]?.vulnerabilities[]? | ( [ .severity[]?.score? | try tonumber catch 0 ] | max? // 0 ) as $max | select($max >= 7)] | length' osv-report.json)
           if [ "$HIGH_COUNT" -gt 0 ]; then
             echo "::error::Detected $HIGH_COUNT high or critical vulnerabilities via OSV Scanner"
