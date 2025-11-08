@@ -92,6 +92,27 @@ const metricsPlugin: FastifyPluginCallback = (app, _opts, done) => {
   });
 
   // decorate app with helper methods we call elsewhere
+  const normaliseCorsOriginLabel = (origin: string): string => {
+    if (!origin) {
+      return "missing";
+    }
+
+    try {
+      const { protocol } = new URL(origin);
+
+      switch (protocol) {
+        case "https:":
+          return "valid_https";
+        case "http:":
+          return "valid_http";
+        default:
+          return "valid_other";
+      }
+    } catch {
+      return "invalid";
+    }
+  };
+
   app.decorate("metrics", {
     recordSecurityEvent: (event: string) => {
       securityEventsTotal.inc({ event });
@@ -100,7 +121,7 @@ const metricsPlugin: FastifyPluginCallback = (app, _opts, done) => {
       authFailuresTotal.inc({ orgId });
     },
     incCorsReject: (origin: string) => {
-      corsRejectTotal.inc({ origin });
+      corsRejectTotal.inc({ origin: normaliseCorsOriginLabel(origin) });
     },
   });
 

@@ -52,9 +52,30 @@ const authFailuresTotal = new Counter({
   labelNames: ["orgId"] as const,
 });
 
+const normaliseCorsOriginLabel = (origin: string): string => {
+  if (!origin) {
+    return "missing";
+  }
+
+  try {
+    const { protocol } = new URL(origin);
+
+    switch (protocol) {
+      case "https:":
+        return "valid_https";
+      case "http:":
+        return "valid_http";
+      default:
+        return "valid_other";
+    }
+  } catch {
+    return "invalid";
+  }
+};
+
 const corsRejectTotal = new Counter({
   name: "apgms_cors_reject_total",
-  help: "Number of rejected CORS requests grouped by origin",
+  help: "Number of rejected CORS requests grouped by origin bucket",
   labelNames: ["origin"] as const,
 });
 
@@ -72,7 +93,7 @@ export const appSecurityMetrics: AppSecurityMetrics = {
     authFailuresTotal.inc({ orgId });
   },
   incCorsReject(origin: string) {
-    corsRejectTotal.inc({ origin });
+    corsRejectTotal.inc({ origin: normaliseCorsOriginLabel(origin) });
   },
 };
 

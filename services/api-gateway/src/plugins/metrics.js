@@ -91,6 +91,25 @@ const metricsPlugin = (app, _opts, done) => {
      * (auth checks, CORS guard, readiness checks, audit logging)
      * can emit structured events.
      */
+    const normaliseCorsOriginLabel = (origin) => {
+        if (!origin) {
+            return "missing";
+        }
+        try {
+            const { protocol } = new URL(origin);
+            switch (protocol) {
+                case "https:":
+                    return "valid_https";
+                case "http:":
+                    return "valid_http";
+                default:
+                    return "valid_other";
+            }
+        }
+        catch (_error) {
+            return "invalid";
+        }
+    };
     app.decorate("metrics", {
         /**
          * recordSecurityEvent("readiness.fail")
@@ -115,7 +134,7 @@ const metricsPlugin = (app, _opts, done) => {
          * Call this when you reject an Origin in the CORS plugin.
          */
         incCorsReject: (origin) => {
-            corsRejectTotal.inc({ origin: origin ?? "unknown" });
+            corsRejectTotal.inc({ origin: normaliseCorsOriginLabel(origin) });
         },
     });
     done();
