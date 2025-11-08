@@ -36,6 +36,8 @@
                     "./tax/tables": "./src/tax/tables.ts",
                     "./messaging":  "./src/messaging/event-bus.ts",
                     "./messaging/in-memory": "./src/messaging/in-memory-bus.ts",
-                    "./messaging/nats": "./src/messaging/nats-bus.ts"
+                    "./messaging/nats": "./src/messaging/nats-bus.ts",
+                    "./au/abn": "./au/abn.ts",
+                    "./au/tfn": "./au/tfn.ts"
                 }
 }

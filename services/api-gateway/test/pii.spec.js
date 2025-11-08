@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import Fastify from "fastify";
 import { configurePIIProviders, decryptPII, encryptPII, registerPIIRoutes, tokenizeTFN, } from "../src/lib/pii";
-import { isValidABN } from "@apgms/shared-au/abn";
-import { isValidTFN } from "@apgms/shared-au/tfn";
+import { isValidABN } from "@apgms/shared/au/abn";
+import { isValidTFN } from "@apgms/shared/au/tfn";
 const TEST_KEY = Buffer.alloc(32, 7);
 const TEST_SALT = Buffer.from("test-salt-secret", "utf8");
 const kms = {

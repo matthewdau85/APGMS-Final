@@ -49,7 +49,6 @@ import { recordAuditLog } from "./lib/audit.js";
 import { ensureRegulatorSessionActive } from "./lib/regulator-session.js";
 import { withIdempotency } from "./lib/idempotency.js";
 import { metrics, promRegister } from "./observability/metrics.js";
-import { attachPrismaMetrics } from "./observability/prisma-metrics.js";
 import { closeProviders, initProviders } from "./providers.js";
 
 function decimalToNumber(value: Prisma.Decimal | number | null | undefined): number {
@@ -741,8 +740,6 @@ async function buildEvidenceSnapshot(orgId: string) {
     };
   });
 }
-
-attachPrismaMetrics(prisma);
 
 export async function buildServer(): Promise<FastifyInstance> {
   const app = Fastify({

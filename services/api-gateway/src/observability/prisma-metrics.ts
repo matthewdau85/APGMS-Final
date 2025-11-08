@@ -2,37 +2,54 @@ import type { PrismaClient } from "@prisma/client";
 
 import { metrics } from "./metrics.js";
 
-const attached = new WeakSet<object>();
+const instrumentedClients = new WeakMap<object, unknown>();
 
-export function attachPrismaMetrics(client: PrismaClient): void {
-  if (attached.has(client)) {
-    return;
+export function attachPrismaMetrics<T extends PrismaClient>(client: T): T {
+  const existing = instrumentedClients.get(client);
+  if (existing) {
+    return existing as T;
   }
 
-  client.$use(async (params, next) => {
-    const model = params.model ?? "raw";
-    const operation = params.action ?? params.type ?? "unknown";
+  const instrumented = client.$extends({
+    query: {
+      $allModels: {
+        async $allOperations({
+          model,
+          operation,
+          args,
+          query,
+        }: {
+          model?: string;
+          operation: string;
+          args: unknown;
+          query: (args: unknown) => Promise<unknown>;
+        }) {
+          const normalizedModel = model ?? "raw";
+          const normalizedOperation = operation ?? "unknown";
+          const stop = metrics.dbQueryDuration.startTimer({
+            model: normalizedModel,
+            operation: normalizedOperation,
+          });
 
-    const stop = metrics.dbQueryDuration.startTimer({
-      model,
-      operation,
-    });
-
-    try {
-      const result = await next(params);
-      metrics.dbQueryTotal
-        .labels(model, operation, "success")
-        .inc();
-      stop();
-      return result;
-    } catch (error) {
-      metrics.dbQueryTotal
-        .labels(model, operation, "error")
-        .inc();
-      stop();
-      throw error;
-    }
+          try {
+            const result = await query(args);
+            metrics.dbQueryTotal
+              .labels(normalizedModel, normalizedOperation, "success")
+              .inc();
+            return result;
+          } catch (error) {
+            metrics.dbQueryTotal
+              .labels(normalizedModel, normalizedOperation, "error")
+              .inc();
+            throw error;
+          } finally {
+            stop();
+          }
+        },
+      },
+    },
   });
 
-  attached.add(client);
+  instrumentedClients.set(client, instrumented);
+  return instrumented as T;
 }
