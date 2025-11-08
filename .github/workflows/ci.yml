@@ -34,11 +34,15 @@ jobs:
         run: pnpm -r typecheck
 
       # 3. Tests + coverage gate
-      #    First run tests with coverage output...
-      - name: Test (with coverage)
-        run: pnpm -r test -- --coverage
+      #    Run all workspace tests (unit/integration) first...
+      - name: Tests
+        run: pnpm -r test
 
-      #    ...then enforce coverage budget (>=85% lines, etc.).
+      #    ...then generate a Jest coverage summary for enforcement.
+      - name: Generate coverage summary
+        run: pnpm coverage
+
+      #    Finally enforce coverage budget (>=85% lines, etc.).
       #    check-coverage.mjs should read the coverage summary JSON and exit 1 if below threshold.
       - name: Enforce coverage >=85%
         run: |
