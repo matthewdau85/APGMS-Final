@@ -2,37 +2,52 @@ import type { PrismaClient } from "@prisma/client";
 
 import { metrics } from "./metrics.js";
 
-const attached = new WeakSet<object>();
+const attached = new WeakSet<PrismaClient>();
 
 export function attachPrismaMetrics(client: PrismaClient): void {
   if (attached.has(client)) {
     return;
   }
 
-  client.$use(async (params, next) => {
-    const model = params.model ?? "raw";
-    const operation = params.action ?? params.type ?? "unknown";
+  type QueryContext = {
+    model?: string;
+    operation?: string;
+    args: unknown;
+    query: (args: unknown) => Promise<unknown>;
+    [key: string]: unknown;
+  };
 
-    const stop = metrics.dbQueryDuration.startTimer({
-      model,
-      operation,
-    });
+  const instrumented = client.$extends({
+    query: {
+      $allModels: {
+        async $allOperations({ model, operation, args, query }: QueryContext) {
+          const modelLabel = model ?? "raw";
+          const operationLabel = operation ?? "unknown";
 
-    try {
-      const result = await next(params);
-      metrics.dbQueryTotal
-        .labels(model, operation, "success")
-        .inc();
-      stop();
-      return result;
-    } catch (error) {
-      metrics.dbQueryTotal
-        .labels(model, operation, "error")
-        .inc();
-      stop();
-      throw error;
-    }
+          const stop = metrics.dbQueryDuration.startTimer({
+            model: modelLabel,
+            operation: operationLabel,
+          });
+
+          try {
+            const result = await query(args);
+            metrics.dbQueryTotal
+              .labels(modelLabel, operationLabel, "success")
+              .inc();
+            stop();
+            return result;
+          } catch (error) {
+            metrics.dbQueryTotal
+              .labels(modelLabel, operationLabel, "error")
+              .inc();
+            stop();
+            throw error;
+          }
+        },
+      },
+    },
   });
 
+  Object.assign(client, instrumented);
   attached.add(client);
 }

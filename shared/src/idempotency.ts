@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 
 export type IdempotencyContext = {
   prisma: PrismaClient;
@@ -26,6 +26,10 @@ export async function registerIdempotencyRecord(
   input: RegisterInput,
 ) {
   const responseHash = computePayloadHash(input.responsePayload);
+  const responsePayload =
+    input.responsePayload === null || input.responsePayload === undefined
+      ? Prisma.JsonNull
+      : (input.responsePayload as Prisma.InputJsonValue);
 
   return ctx.prisma.idempotencyEntry.create({
     data: {
@@ -35,7 +39,7 @@ export async function registerIdempotencyRecord(
       requestHash: input.requestHash,
       responseHash,
       statusCode: input.statusCode,
-      responsePayload: input.responsePayload,
+      responsePayload,
       resource: input.resource ?? null,
       resourceId: input.resourceId ?? null,
     },

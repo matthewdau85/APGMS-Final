@@ -1,0 +1,16 @@
+{
+  "name": "@apgms/shared-au",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./abn": {
+      "types": "./abn.ts",
+      "default": "./abn.js"
+    },
+    "./tfn": {
+      "types": "./tfn.ts",
+      "default": "./tfn.js"
+    }
+  }
+}

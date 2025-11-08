@@ -14,6 +14,7 @@
     "db:migrate": "pnpm --filter @apgms/shared exec prisma migrate dev --schema prisma/schema.prisma",
     "db:deploy": "pnpm --filter @apgms/shared exec prisma migrate deploy --schema prisma/schema.prisma",
     "db:gen": "pnpm --filter @apgms/shared exec prisma generate --schema prisma/schema.prisma",
+    "postinstall": "pnpm --filter @apgms/shared exec prisma generate --schema prisma/schema.prisma",
     "test": "pnpm -r test",
     "test:e2e": "pnpm exec playwright test",
     "jest": "jest",
