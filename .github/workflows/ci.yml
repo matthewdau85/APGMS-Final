@@ -81,11 +81,19 @@ jobs:
 
       # 6. Secret scanning gate (Gitleaks)
       #    Fails the build if any API keys/tokens/secrets are committed.
-      - name: Secret scan
-        run: |
-          curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks-linux-amd64 -o gitleaks
-          chmod +x gitleaks
-          ./gitleaks detect --no-color --redact --exit-code 1
+      - name: Secret scan (Gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          args: --no-git --redact --exit-code 1
+
+      - name: Trivy FS security scan
+        uses: aquasecurity/trivy-action@0.12.0
+        with:
+          scan-type: fs
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
 
   axe:
     needs: build

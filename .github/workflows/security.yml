@@ -11,6 +11,13 @@ on:
       - 'package.json'
       - 'pnpm-lock.yaml'
       - '.github/workflows/security.yml'
+  pull_request:
+    paths:
+      - '**/*.js'
+      - '**/*.ts'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/security.yml'
 
 jobs:
   security:
@@ -29,6 +36,17 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Dependency audit (high+)
         run: pnpm audit --audit-level high
+      - name: OSV scan (fail on high/critical)
+        run: |
+          curl -sSfL https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64 -o osv-scanner
+          chmod +x osv-scanner
+          ./osv-scanner scan --lockfile pnpm-lock.yaml --format json --output osv-report.json
+          HIGH_COUNT=$(jq '[.results[]?.vulnerabilities[]? | ( [ .severity[]?.score? | try tonumber catch 0 ] | max? // 0 ) as $max | select($max >= 7)] | length' osv-report.json)
+          if [ "$HIGH_COUNT" -gt 0 ]; then
+            echo "::error::Detected $HIGH_COUNT high or critical vulnerabilities via OSV Scanner"
+            jq '.results[]?.vulnerabilities[]? | select(( [ .severity[]?.score? | try tonumber catch 0 ] | max? // 0 ) >= 7) | {package: .package?.name, severity: .severity}' osv-report.json
+            exit 1
+          fi
       - name: Generate SBOM (CycloneDX)
         run: pnpm dlx @cyclonedx/cyclonedx-npm --output-format json --output-file sbom.json
       - name: Upload SBOM artifact
@@ -43,7 +61,7 @@ jobs:
       - name: Gitleaks Secret Scan
         uses: gitleaks/gitleaks-action@v2
         with:
-          args: --no-git --redact
+          args: --no-git --redact --exit-code 1
       - name: Trivy FS Scan
         uses: aquasecurity/trivy-action@0.12.0
         with:
@@ -51,5 +69,6 @@ jobs:
           format: table
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          exit-code: '1'
       - name: Prisma drift check
         run: pnpm --filter @apgms/shared exec prisma migrate status --schema prisma/schema.prisma
