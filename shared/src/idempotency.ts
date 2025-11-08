@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
-import { Prisma, type PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
+import { Prisma } from "@prisma/client/edge";
 
 export type IdempotencyContext = {
   prisma: PrismaClient;

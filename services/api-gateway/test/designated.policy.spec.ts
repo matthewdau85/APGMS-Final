@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { Prisma } from "@prisma/client";
+import { Decimal } from "@prisma/client/runtime/library";
 
 import {
   applyDesignatedAccountTransfer,
@@ -13,7 +13,7 @@ type DesignatedAccountState = {
   id: string;
   orgId: string;
   type: string;
-  balance: Prisma.Decimal;
+  balance: Decimal;
   updatedAt: Date;
 };
 
@@ -21,7 +21,7 @@ type DesignatedTransferState = {
   id: string;
   orgId: string;
   accountId: string;
-  amount: Prisma.Decimal;
+  amount: Decimal;
   source: string;
   createdAt: Date;
 };
@@ -223,7 +223,7 @@ test("designated accounts block debit attempts and raise alerts", async () => {
     id: "acct-paygw",
     orgId: "org-1",
     type: "PAYGW",
-    balance: new Prisma.Decimal(12000),
+    balance: new Decimal(12000),
     updatedAt: new Date(),
   });
 
@@ -260,14 +260,14 @@ test("designated account reconciliation emits evidence artefact", async () => {
       id: "acct-paygw",
       orgId: "org-1",
       type: "PAYGW",
-      balance: new Prisma.Decimal(0),
+      balance: new Decimal(0),
       updatedAt: new Date(),
     },
     {
       id: "acct-gst",
       orgId: "org-1",
       type: "GST",
-      balance: new Prisma.Decimal(0),
+      balance: new Decimal(0),
       updatedAt: new Date(),
     },
   );

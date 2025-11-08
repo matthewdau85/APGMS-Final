@@ -5,28 +5,26 @@ import { prisma } from "../db.js";
 import { signToken, buildSessionUser } from "../auth.js";
 import { createRegulatorSession } from "../lib/regulator-session.js";
 import { recordAuditLog } from "../lib/audit.js";
+import { parseWithSchema } from "../lib/validation.js";
+import { RegulatorLoginSchema } from "../schemas/regulator.js";
 
 export async function registerRegulatorAuthRoutes(app: FastifyInstance): Promise<void> {
   app.post("/regulator/login", async (request, reply) => {
-    const body = request.body as { accessCode?: string; orgId?: string } | null;
+    const { accessCode, orgId } = parseWithSchema(
+      RegulatorLoginSchema,
+      request.body,
+    );
 
-    if (!body?.accessCode || body.accessCode.trim().length === 0) {
-      reply.code(400).send({
-        error: { code: "invalid_body", message: "accessCode is required" },
-      });
-      return;
-    }
-
-    if (body.accessCode.trim() !== config.regulator.accessCode) {
+    if (accessCode !== config.regulator.accessCode) {
       reply.code(401).send({
         error: { code: "access_denied", message: "Invalid regulator access code" },
       });
       return;
     }
 
-    const orgId = body.orgId ?? "dev-org";
+    const targetOrgId = orgId ?? "dev-org";
     const org = await prisma.org.findUnique({
-      where: { id: orgId },
+      where: { id: targetOrgId },
       select: { id: true },
     });
     if (!org) {
@@ -37,13 +35,13 @@ export async function registerRegulatorAuthRoutes(app: FastifyInstance): Promise
     }
 
     const { session, sessionToken } = await createRegulatorSession(
-      orgId,
+      targetOrgId,
       config.regulator.sessionTtlMinutes,
     );
 
     const authUser = buildSessionUser({
       id: session.id,
-      orgId,
+      orgId: targetOrgId,
       role: "regulator",
       mfaEnabled: false,
     });
@@ -67,7 +65,7 @@ export async function registerRegulatorAuthRoutes(app: FastifyInstance): Promise
     );
 
     await recordAuditLog({
-      orgId,
+      orgId: targetOrgId,
       actorId: `regulator:${session.id}`,
       action: "regulator.login",
       metadata: {},

@@ -1,8 +1,8 @@
 import Fastify, { FastifyInstance, FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
-import {
-  Prisma,
+import type { Prisma } from "@prisma/client/edge";
+import type {
   Alert as AlertModel,
   BasCycle as BasCycleModel,
   DesignatedAccount as DesignatedAccountModel,
@@ -2014,4 +2014,8 @@ export async function buildServer(): Promise<FastifyInstance> {
   );
 
   return app;
+}
+
+export async function createApp(): Promise<FastifyInstance> {
+  return buildServer();
 }

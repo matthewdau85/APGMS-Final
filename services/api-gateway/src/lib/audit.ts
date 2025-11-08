@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client/edge";
 
 import { prisma } from "../db.js";
 

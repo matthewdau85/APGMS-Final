@@ -4,7 +4,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { FastifyPluginAsync } from "fastify";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
-import { loadConfig } from "./config";
+import { loadConfig } from "../config.js";
 
 const config = loadConfig(); // load once
 

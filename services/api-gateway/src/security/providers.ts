@@ -15,7 +15,7 @@ import {
 } from "./secret-manager.js";
 import { recordAuditLog } from "../lib/audit.js";
 import { redactValue } from "@apgms/shared";
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client/edge";
 
 import type {
   AuditEvent,

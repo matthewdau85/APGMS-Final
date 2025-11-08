@@ -21,6 +21,9 @@
                             "tsx":  "^4.20.6",
                             "typescript":  "^5.9.3"
                         },
+    "prisma": {
+        "schema": "prisma/schema.prisma"
+    },
     "exports":  {
                     ".":  "./src/index.ts",
                     "./db":  "./src/db.ts",

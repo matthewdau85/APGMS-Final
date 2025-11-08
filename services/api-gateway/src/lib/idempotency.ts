@@ -1,6 +1,6 @@
 
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { Prisma } from "@prisma/client";
+import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import {
   badRequest,
   conflict,
@@ -78,7 +78,7 @@ export async function withIdempotency(
       resourceId: result.resourceId,
     });
   } catch (error) {
-    if ((error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") || (error as any)?.code === "P2002") {
+    if ((error instanceof PrismaClientKnownRequestError && error.code === "P2002") || (error as any)?.code === "P2002") {
       const latest = await findIdempotentResponse(ctx, idempotencyKey);
       if (latest && latest.actorId === options.actorId && latest.requestHash === requestHash) {
         reply.header("Idempotent-Replay", "true");

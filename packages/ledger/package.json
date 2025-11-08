@@ -14,5 +14,13 @@
     "@apgms/shared": "workspace:*",
     "@prisma/client": "^6.17.1",
     "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.14.0",
+    "eslint": "^9.14.0",
+    "typescript-eslint": "^8.11.0"
+  },
+  "prisma": {
+    "schema": "../../shared/prisma/schema.prisma"
   }
 }

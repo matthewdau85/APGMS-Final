@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
-import type { Prisma, MfaCredential } from "@prisma/client";
+import type { Prisma } from "@prisma/client/edge";
+import type { MfaCredential } from "@prisma/client";
 
 import { prisma } from "../db.js";
 import { sealObject, unsealObject, type EncryptionEnvelope } from "./encryption.js";

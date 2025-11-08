@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
-import { Prisma, type PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
+import { Decimal } from "@prisma/client/runtime/library";
 
 import { conflict, notFound } from "@apgms/shared";
 import {
@@ -109,7 +110,7 @@ export async function applyDesignatedAccountTransfer(
     );
   }
 
-  const amountDecimal = new Prisma.Decimal(input.amount);
+  const amountDecimal = new Decimal(input.amount);
 
   const result = await context.prisma.$transaction(async (tx) => {
     const account = await tx.designatedAccount.findUnique({
