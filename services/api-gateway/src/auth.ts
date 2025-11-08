@@ -1,7 +1,8 @@
 // services/api-gateway/src/auth.ts
 import { FastifyReply, FastifyRequest } from "fastify";
 import jwt, { JwtPayload, SignOptions } from "jsonwebtoken";
-import bcrypt from "bcryptjs";
+
+import { verifyPassword as verifyArgonPassword } from "@apgms/shared";
 
 import { prisma } from "./db.js";
 
@@ -196,7 +197,7 @@ export async function verifyCredentials(
   });
   if (!user) return null;
 
-  const ok = await bcrypt.compare(pw, user.password);
+  const ok = await verifyArgonPassword(user.password, pw);
   if (!ok) return null;
 
   return {
