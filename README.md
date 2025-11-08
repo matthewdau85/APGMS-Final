@@ -63,6 +63,14 @@ curl -sf http://localhost:3000/ready
 curl -sf http://localhost:3000/metrics
 ```
 
+### ML Scoring Service
+
+The lightweight FastAPI-based scoring service lives under `apgms-ml/server`. To start it locally with auto-reload, run:
+
+```bash
+uvicorn --app-dir apgms-ml server.main:app --reload
+```
+
 ---
 
 ## API Idempotency
