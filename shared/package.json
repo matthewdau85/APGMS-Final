@@ -36,6 +36,7 @@
                     "./tax/tables": "./src/tax/tables.ts",
                     "./messaging":  "./src/messaging/event-bus.ts",
                     "./messaging/in-memory": "./src/messaging/in-memory-bus.ts",
-                    "./messaging/nats": "./src/messaging/nats-bus.ts"
+                    "./messaging/nats": "./src/messaging/nats-bus.ts",
+                    "./recon": "./src/recon/contracts.ts"
                 }
 }
