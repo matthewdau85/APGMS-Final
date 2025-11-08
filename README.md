@@ -23,7 +23,8 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5432/apgms?schema=public
 SHADOW_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/apgms_shadow?schema=public
 AUTH_AUDIENCE=urn:apgms:local
 AUTH_ISSUER=urn:apgms:issuer
-AUTH_DEV_SECRET=local-dev-shared-secret-change-me
+AUTH_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\nreplace-with-private-key\n-----END PRIVATE KEY-----
+AUTH_PUBLIC_KEY=-----BEGIN PUBLIC KEY-----\nreplace-with-public-key\n-----END PUBLIC KEY-----
 AUTH_JWKS={"keys":[{"kid":"local","alg":"RS256","kty":"RSA","n":"replace-with-base64url-modulus","e":"AQAB"}]}
 ENCRYPTION_MASTER_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 API_RATE_LIMIT_MAX=120

@@ -6,7 +6,7 @@ import jwt from "jsonwebtoken";
 
 import { authGuard } from "../src/auth";
 
-const SECRET = process.env.AUTH_DEV_SECRET!;
+const PRIVATE_KEY = process.env.AUTH_PRIVATE_KEY!;
 const ISSUER = process.env.AUTH_ISSUER!;
 const AUDIENCE = process.env.AUTH_AUDIENCE!;
 
@@ -19,8 +19,8 @@ function signToken(overrides: Partial<jwt.JwtPayload> = {}, options: jwt.SignOpt
     ...overrides,
   };
 
-  return jwt.sign(payload, SECRET, {
-    algorithm: "HS256",
+  return jwt.sign(payload, PRIVATE_KEY, {
+    algorithm: "RS256",
     audience: AUDIENCE,
     issuer: ISSUER,
     expiresIn: "5m",
@@ -93,9 +93,9 @@ describe("authGuard enforcement", () => {
         mfaEnabled: true,
         exp: past,
       },
-      SECRET,
+      PRIVATE_KEY,
       {
-        algorithm: "HS256",
+        algorithm: "RS256",
         audience: AUDIENCE,
         issuer: ISSUER,
         noTimestamp: true,
@@ -118,9 +118,9 @@ describe("authGuard enforcement", () => {
         role: "admin",
         mfaEnabled: true,
       },
-      SECRET,
+      PRIVATE_KEY,
       {
-        algorithm: "HS256",
+        algorithm: "RS256",
         audience: AUDIENCE,
         issuer: ISSUER,
         notBefore: 120,
@@ -142,9 +142,9 @@ describe("authGuard enforcement", () => {
         role: "admin",
         mfaEnabled: true,
       },
-      SECRET,
+      PRIVATE_KEY,
       {
-        algorithm: "HS256",
+        algorithm: "RS256",
         audience: AUDIENCE,
         issuer: ISSUER,
         expiresIn: "5m",

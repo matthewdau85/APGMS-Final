@@ -1,13 +1,34 @@
 // services/api-gateway/src/auth.ts
 import { FastifyReply, FastifyRequest } from "fastify";
 import jwt, { JwtPayload, SignOptions } from "jsonwebtoken";
-import bcrypt from "bcryptjs";
+
+import { verifyPassword } from "@apgms/shared";
 
 import { prisma } from "./db.js";
 
 const AUD = process.env.AUTH_AUDIENCE!;
 const ISS = process.env.AUTH_ISSUER!;
-const SECRET = process.env.AUTH_DEV_SECRET!; // HS256 key
+function normalizePem(value: string): string {
+  const trimmed = value.trim();
+  return trimmed
+    .replace(/\r\n?/g, "\n")
+    .replace(/\\n/g, "\n")
+    .replace(/\\r/g, "");
+}
+
+const privateKeyRaw = process.env.AUTH_PRIVATE_KEY;
+const publicKeyRaw = process.env.AUTH_PUBLIC_KEY;
+
+if (!privateKeyRaw) {
+  throw new Error("AUTH_PRIVATE_KEY must be configured");
+}
+
+if (!publicKeyRaw) {
+  throw new Error("AUTH_PUBLIC_KEY must be configured");
+}
+
+const PRIVATE_KEY = normalizePem(privateKeyRaw);
+const PUBLIC_KEY = normalizePem(publicKeyRaw);
 const REGULATOR_AUD =
   process.env.REGULATOR_JWT_AUDIENCE?.trim().length
     ? process.env.REGULATOR_JWT_AUDIENCE!.trim()
@@ -71,13 +92,13 @@ export function signToken(
 
 
   const signOptions: SignOptions = {
-    algorithm: "HS256",
+    algorithm: "RS256",
     expiresIn: (options.expiresIn ?? "1h") as SignOptions["expiresIn"],
     audience: options.audience ?? AUD,
     issuer: ISS,
   };
 
-  return jwt.sign(payload, SECRET, signOptions);
+  return jwt.sign(payload, PRIVATE_KEY, signOptions);
 }
 
 type GuardValidateFn = (
@@ -155,8 +176,8 @@ export function createAuthGuard(
     const token = header.substring("Bearer ".length).trim();
 
     try {
-      const decoded = jwt.verify(token, SECRET, {
-        algorithms: ["HS256"],
+      const decoded = jwt.verify(token, PUBLIC_KEY, {
+        algorithms: ["RS256"],
         audience: expectedAudience,
         issuer: ISS,
         clockTolerance: CLOCK_TOLERANCE_SECONDS,
@@ -196,7 +217,11 @@ export async function verifyCredentials(
   });
   if (!user) return null;
 
-  const ok = await bcrypt.compare(pw, user.password);
+  if (!user.password) {
+    return null;
+  }
+
+  const ok = await verifyPassword(user.password, pw);
   if (!ok) return null;
 
   return {

@@ -24,7 +24,8 @@ export interface AppConfig {
   readonly auth: {
     readonly audience: string;
     readonly issuer: string;
-    readonly devSecret: string;
+    readonly privateKey: string;
+    readonly publicKey: string;
   };
   readonly regulator: {
     readonly accessCode: string;
@@ -101,6 +102,21 @@ const ensureMasterKey = (raw: string): Buffer => {
     throw new Error("ENCRYPTION_MASTER_KEY must decode to 32 bytes");
   }
   return key;
+};
+
+const ensurePem = (value: string, name: string): string => {
+  const normalized = value
+    .trim()
+    .replace(/\r\n?/g, "\n")
+    .replace(/\\n/g, "\n")
+    .replace(/\\r/g, "");
+  if (!normalized.startsWith("-----BEGIN ")) {
+    throw new Error(`${name} must begin with PEM header`);
+  }
+  if (!normalized.includes("-----END ")) {
+    throw new Error(`${name} must include PEM footer`);
+  }
+  return normalized;
 };
 
 const parseJson = <T>(value: string, name: string): T => {
@@ -220,7 +236,8 @@ export function loadConfig(): AppConfig {
   // auth inputs must exist / be sane
   const audience = envString("AUTH_AUDIENCE");
   const issuer = envString("AUTH_ISSUER");
-  const devSecret = envString("AUTH_DEV_SECRET");
+  const privateKey = ensurePem(envString("AUTH_PRIVATE_KEY"), "AUTH_PRIVATE_KEY");
+  const publicKey = ensurePem(envString("AUTH_PUBLIC_KEY"), "AUTH_PUBLIC_KEY");
 
   // we keep AUTH_JWKS sanity because original code expected it
   ensureJwksConfigured();
@@ -352,7 +369,8 @@ export function loadConfig(): AppConfig {
     auth: {
       audience,
       issuer,
-      devSecret,
+      privateKey,
+      publicKey,
     },
     regulator: {
       accessCode: regulatorAccessCode,
