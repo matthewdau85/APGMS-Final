@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package recon;
+
+service ReconciliationService {
+  rpc RunInference (InferenceRequest) returns (InferenceResponse);
+}
+
+message InferenceRequest {
+  string org_id = 1;
+  string artifact_id = 2;
+}
+
+enum Decision {
+  DECISION_UNSPECIFIED = 0;
+  DECISION_CLEAR = 1;
+  DECISION_REVIEW = 2;
+}
+
+message DriftSignal {
+  string feature = 1;
+  double score = 2;
+  double threshold = 3;
+}
+
+message InferenceResponse {
+  string artifact_id = 1;
+  string generated_at = 2;
+  string model_version = 3;
+  double risk_score = 4;
+  double confidence = 5;
+  Decision decision = 6;
+  bool fallback_recommended = 7;
+  repeated DriftSignal drift = 8;
+}

@@ -1,0 +1,22 @@
+{
+  "version": "recon-2025-03-15",
+  "createdAt": "2025-03-15T10:00:00.000Z",
+  "bias": -0.35,
+  "decisionThreshold": 0.58,
+  "confidenceThreshold": 0.6,
+  "driftStdDeviations": 2.5,
+  "features": [
+    { "name": "total_balance", "weight": -0.12, "mean": 210000, "stdDev": 55000 },
+    { "name": "total_inflow_24h", "weight": 0.22, "mean": 25000, "stdDev": 12000 },
+    { "name": "total_transfers_24h", "weight": 0.14, "mean": 18, "stdDev": 6 },
+    { "name": "paygw_balance", "weight": -0.21, "mean": 125000, "stdDev": 38000 },
+    { "name": "paygw_inflow_24h", "weight": 0.18, "mean": 14000, "stdDev": 7500 },
+    { "name": "paygw_transfers_24h", "weight": 0.09, "mean": 9, "stdDev": 4 },
+    { "name": "gst_balance", "weight": -0.19, "mean": 85000, "stdDev": 24000 },
+    { "name": "gst_inflow_24h", "weight": 0.16, "mean": 11000, "stdDev": 6000 },
+    { "name": "gst_transfers_24h", "weight": 0.07, "mean": 7, "stdDev": 3 },
+    { "name": "avg_transfer_size_24h", "weight": 0.11, "mean": 1500, "stdDev": 620 },
+    { "name": "paygw_balance_share", "weight": -0.05, "mean": 0.58, "stdDev": 0.12 },
+    { "name": "gst_balance_share", "weight": -0.04, "mean": 0.42, "stdDev": 0.12 }
+  ]
+}
