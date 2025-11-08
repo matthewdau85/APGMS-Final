@@ -26,16 +26,31 @@ const activities = [
   {
     name: 'GreenRidge solar expansion',
     detail: 'Closing diligence with Commonwealth Bank',
-    status: 'Due tomorrow'
+    deadline: {
+      display: 'Due tomorrow',
+      dateTime: '2024-06-21',
+      ariaLabel: 'GreenRidge solar expansion is due tomorrow'
+    },
+    status: 'Awaiting credit sign-off'
   },
   {
     name: 'Helios storage facility',
     detail: 'Amended terms shared with syndicate partners',
-    status: 'Updated 2h ago'
+    deadline: {
+      display: 'Updated 2h ago',
+      dateTime: '2024-06-20T14:00:00Z',
+      ariaLabel: 'Helios storage facility updated two hours ago'
+    },
+    status: 'Review revised syndicate comments'
   },
   {
     name: 'Urban mobility fund II',
     detail: 'Capital call scheduled for Monday',
+    deadline: {
+      display: 'Due Monday',
+      dateTime: '2024-06-24',
+      ariaLabel: 'Urban mobility fund II due on Monday'
+    },
     status: 'Action needed'
   }
 ];
@@ -70,15 +85,43 @@ export default function HomePage() {
           <p className="activity__subtitle">Curated tasks across deal teams and syndicate partners</p>
         </div>
         <ul className="activity__list">
-          {activities.map((activity) => (
-            <li className="activity__item" key={activity.name}>
-              <div>
-                <p className="activity__name">{activity.name}</p>
-                <p className="activity__detail">{activity.detail}</p>
-              </div>
-              <span className="activity__status">{activity.status}</span>
-            </li>
-          ))}
+          {activities.map((activity, index) => {
+            const titleId = `activity-name-${index}`;
+            const detailId = `activity-detail-${index}`;
+            const statusId = `activity-status-${index}`;
+
+            return (
+              <li className="activity__item" key={activity.name}>
+                <article
+                  className="activity__card"
+                  aria-labelledby={titleId}
+                  aria-describedby={`${detailId} ${statusId}`}
+                >
+                  <div className="activity__summary">
+                    <p className="activity__name" id={titleId}>
+                      {activity.name}
+                    </p>
+                    <time
+                      className="activity__deadline"
+                      dateTime={activity.deadline.dateTime}
+                      aria-label={activity.deadline.ariaLabel}
+                    >
+                      {activity.deadline.display}
+                    </time>
+                  </div>
+                  <p className="activity__detail" id={detailId}>
+                    {activity.detail}
+                  </p>
+                  <p className="activity__status" id={statusId}>
+                    <span aria-hidden="true">{activity.status}</span>
+                    <span className="visually-hidden">
+                      Status for {activity.name}: {activity.status}
+                    </span>
+                  </p>
+                </article>
+              </li>
+            );
+          })}
         </ul>
       </section>
     </div>
