@@ -1,0 +1,104 @@
+name: ML Training
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 12 * * 1'
+  push:
+    paths:
+      - 'ml/**'
+      - '.github/workflows/ml-train.yml'
+      - 'infra/mlflow/**'
+
+permissions:
+  contents: read
+  id-token: write
+  actions: read
+
+jobs:
+  train:
+    name: Train and publish payroll anomaly model
+    runs-on: ubuntu-latest
+    env:
+      MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+      MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
+      MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
+      MLFLOW_S3_ENDPOINT_URL: ${{ secrets.MLFLOW_S3_ENDPOINT_URL }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.MLFLOW_ARTIFACT_AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.MLFLOW_ARTIFACT_AWS_SECRET_ACCESS_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r ml/requirements.txt
+
+      - name: Train model
+        run: python -m ml.scripts.train_model --config ml/config/training.yaml
+
+      - name: Evaluate model against curated dataset
+        run: python -m ml.scripts.evaluate_model --model ml/artifacts/model.joblib --dataset ml/data/curated_payroll_anomalies.csv --output ml/artifacts/evaluation.json
+
+      - name: Enforce holdout metrics budget
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          metrics_path = Path('ml/artifacts/metrics.json')
+          if not metrics_path.exists():
+              raise SystemExit('metrics.json missing')
+          metrics = json.loads(metrics_path.read_text())
+          roc_auc = metrics.get('roc_auc')
+          if roc_auc is not None and roc_auc < 0.7:
+              raise SystemExit(f"ROC AUC below threshold: {roc_auc:.3f}")
+          accuracy = metrics.get('accuracy')
+          if accuracy is not None and accuracy < 0.75:
+              raise SystemExit(f"Accuracy below threshold: {accuracy:.3f}")
+          PY
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3.2.0
+
+      - name: Sign model artifact (optional)
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.ML_COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.ML_COSIGN_PASSWORD }}
+        run: |
+          if [ -n "${COSIGN_PRIVATE_KEY}" ]; then
+            cosign sign-blob --key env://COSIGN_PRIVATE_KEY ml/artifacts/model.joblib > ml/artifacts/model.joblib.sig
+            echo 'cosign signature generated' > ml/artifacts/model.joblib.sig.info
+          else
+            echo 'Signature placeholder - configure ML_COSIGN_PRIVATE_KEY to enable signing.' > ml/artifacts/model.joblib.sig
+            echo 'Signing skipped (COSIGN_PRIVATE_KEY not configured)' > ml/artifacts/model.joblib.sig.info
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: payroll-anomaly-model
+          if-no-files-found: error
+          path: |
+            ml/artifacts/model.joblib
+            ml/artifacts/model.joblib.sig
+            ml/artifacts/model.joblib.sig.info
+            ml/artifacts/metrics.json
+            ml/artifacts/evaluation.json
+            ml/artifacts/model.signature.json
+            ml/artifacts/run-metadata.json
+
+      - name: Publish run metadata summary
+        if: always()
+        run: |
+          echo "### Latest payroll anomaly training" >> $GITHUB_STEP_SUMMARY
+          echo "- Run ID: $(jq -r '.run_id' ml/artifacts/run-metadata.json 2>/dev/null || echo 'n/a')" >> $GITHUB_STEP_SUMMARY
+          echo "- Accuracy: $(jq -r '.metrics.accuracy // "n/a"' ml/artifacts/run-metadata.json 2>/dev/null)" >> $GITHUB_STEP_SUMMARY
+          echo "- ROC AUC: $(jq -r '.metrics.roc_auc // "n/a"' ml/artifacts/run-metadata.json 2>/dev/null)" >> $GITHUB_STEP_SUMMARY

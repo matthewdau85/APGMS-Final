@@ -1,0 +1,29 @@
+mlflow:
+  image:
+    repository: ghcr.io/mlflow/mlflow
+    tag: 2.9.2
+  backendStore:
+    database:
+      host: mlflow-postgres
+      port: 5432
+      user: mlflow
+      passwordSecretRef: mlflow-db-password
+      database: mlflow
+  artifactStore:
+    type: s3
+    bucket: apgms-mlflow-artifacts
+    endpointUrl: https://s3.ap-southeast-2.amazonaws.com
+    secretRefs:
+      accessKeyId: mlflow-artifact-access-key
+      secretAccessKey: mlflow-artifact-secret-key
+  service:
+    type: ClusterIP
+    port: 5000
+  ingress:
+    enabled: true
+    className: alb
+    hosts:
+      - host: mlflow.apgms.internal
+        paths:
+          - path: /
+            pathType: Prefix

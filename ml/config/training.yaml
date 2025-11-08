@@ -1,0 +1,39 @@
+experiment_name: apgms-payroll-anomaly
+model_registry_uri: file:ml/mlruns
+model_name: payroll-anomaly-detector
+model_flavor: sklearn
+tracking:
+  run_name_prefix: payroll_anomaly
+  tags:
+    project: apgms
+    domain: payroll
+    type: anomaly_detection
+training:
+  dataset_path: ml/data/curated_payroll_anomalies.csv
+  target_column: anomaly_flag
+  datetime_columns:
+    - pay_period_start
+    - pay_period_end
+  categorical_columns:
+    - org_id
+    - employee_id
+    - employment_type
+  numerical_columns:
+    - gross_pay
+    - payg_withheld
+    - super_accrued
+  test_size: 0.2
+  random_state: 42
+  model_type: gradient_boosting
+  isolation_forest:
+    contamination: 0.15
+    n_estimators: 200
+  gradient_boosting:
+    learning_rate: 0.05
+    max_depth: 3
+    n_estimators: 200
+outputs:
+  artifact_dir: ml/artifacts
+  metrics_file: metrics.json
+  model_file: model.joblib
+  signature_file: model.signature.json
