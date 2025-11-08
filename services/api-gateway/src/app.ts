@@ -56,7 +56,7 @@ import {
   resolveScopeForKind,
   type WormProvider,
   type WormScope,
-} from "../../providers/worm/index.js";
+} from "../../../providers/worm/index.js";
 
 function decimalToNumber(value: Prisma.Decimal | number | null | undefined): number {
   if (value === null || value === undefined) return 0;

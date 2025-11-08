@@ -3,7 +3,7 @@ import { createClient, type RedisClientType } from "redis";
 import { connect, type ConnectionOptions, type NatsConnection } from "nats";
 
 import { config } from "./config.js";
-import { createWormProvider, type WormProvider } from "../../providers/worm/index.js";
+import { createWormProvider, type WormProvider } from "../../../providers/worm/index.js";
 
 export type Providers = {
   redis: RedisClientType | null;
