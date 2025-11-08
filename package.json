@@ -56,5 +56,13 @@
         "nats": "^2.18.0",
         "uuid": "^10.0.0",
         "zod": "^4.1.12"
+    },
+    "pnpm": {
+        "overrides": {
+            "@opentelemetry/exporter-trace-otlp-http": "0.57.2",
+            "@opentelemetry/instrumentation-fastify": "0.53.0",
+            "@opentelemetry/instrumentation-http": "0.57.2",
+            "@opentelemetry/sdk-node": "0.57.2"
+        }
     }
 }
