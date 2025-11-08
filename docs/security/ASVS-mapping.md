@@ -1,7 +1,7 @@
 # OWASP ASVS L2 Mapping
 
 ## V1: Architecture, Design and Threat Modelling
-- JWT verification enforced with RS256 keys, audience/issuer validation, and role scoping (services/api-gateway/src/lib/auth.ts:12).
+- JWT verification enforced with an HS256 shared secret, audience/issuer validation, and role scoping (services/api-gateway/src/auth.ts:10).
 - Strict, fail-closed CORS allow-list, Helmet CSP/HSTS, and rate limiting across the gateway (services/api-gateway/src/app.ts:224).
 - Startup rejects missing JWT/KMS secrets and invalid base64 material (services/api-gateway/src/config.ts:1).
 

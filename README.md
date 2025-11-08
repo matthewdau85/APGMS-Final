@@ -23,8 +23,7 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5432/apgms?schema=public
 SHADOW_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/apgms_shadow?schema=public
 AUTH_AUDIENCE=urn:apgms:local
 AUTH_ISSUER=urn:apgms:issuer
-AUTH_DEV_SECRET=local-dev-shared-secret-change-me
-AUTH_JWKS={"keys":[{"kid":"local","alg":"RS256","kty":"RSA","n":"replace-with-base64url-modulus","e":"AQAB"}]}
+AUTH_DEV_SECRET=local-dev-shared-secret-change-me # HS256 signing key shared by gateway + tests
 ENCRYPTION_MASTER_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 API_RATE_LIMIT_MAX=120
 API_RATE_LIMIT_WINDOW=1 minute
@@ -42,6 +41,9 @@ BANKING_MAX_WRITE_CENTS=5000000
 
 > KMS dev keys: store JSON key material under `artifacts/kms/` (git-ignored). The directory is tracked via `.gitkeep`.
 > Rotate keys: `pnpm security:rotate-keys --write-env .env` (omit `--write-env` to dry-run).
+
+> JWT signing uses the shared secret in `AUTH_DEV_SECRET` with HS256. JWKS/RS256 support is on the backlog; keep environments in
+> sync by rotating the shared secret together with the rest of the gateway credentials.
 
 ---
 
