@@ -1,0 +1,9 @@
+question	answer	label
+Do exports include GST?	Generally GST-free if exported within the required timeframe	1
+What does STP stand for?	Single Touch Payroll reporting to the ATO	1
+When must I report PAYGW?	Report pay as you go withholding on your BAS	1
+How often is monthly BAS due?	21 days after the end of the month, unless deferred	1
+Do exports include GST?	Report pay as you go withholding on your BAS	0
+What does STP stand for?	Goods and Services Tax	0
+When must I report PAYGW?	Prepayments of tax based on business income	0
+How often is monthly BAS due?	28 days after the end of the quarter, unless deferred	0
