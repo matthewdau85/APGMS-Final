@@ -1,4 +1,4 @@
-import Fastify, { FastifyInstance, FastifyRequest } from "fastify";
+import Fastify, { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import {
@@ -56,6 +56,21 @@ function decimalToNumber(value: Prisma.Decimal | number | null | undefined): num
   if (value === null || value === undefined) return 0;
   if (typeof value === "number") return value;
   return Number(value);
+}
+
+function maskUserEmail(email: string): string {
+  const [localPart = "", domain = ""] = email.split("@");
+  if (!domain) {
+    return "***";
+  }
+
+  if (localPart.length === 0) {
+    return `*@${domain}`;
+  }
+
+  const prefixLength = localPart.length <= 2 ? 1 : 2;
+  const prefix = localPart.slice(0, prefixLength);
+  return `${prefix}*@${domain}`;
 }
 
 type DesignatedAccountView = {
@@ -978,10 +993,23 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   // ---- Everything below this point requires auth ----
 
+  function requireAdminRole(
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): void {
+    const userClaims: any = (request as any).user;
+    if (!userClaims || userClaims.role !== "admin") {
+      reply.code(403).send({
+        error: { code: "forbidden", message: "Admin role required" },
+      });
+      return;
+    }
+  }
+
   // GET /users
   app.get(
     "/users",
-    { preHandler: authGuard },
+    { preHandler: [authGuard, requireAdminRole] },
     async (request, reply) => {
       const userClaims: any = (request as any).user;
       const orgId = userClaims.orgId;
@@ -995,16 +1023,11 @@ export async function buildServer(): Promise<FastifyInstance> {
         },
       });
 
-      const masked = users.map((u) => {
-        const [local, domain] = u.email.split("@");
-        const safeLocal =
-          local.length <= 2 ? local[0] + "*" : local.slice(0, 2) + "*";
-        return {
-          userId: u.id,
-          email: `${safeLocal}@${domain}`,
-          createdAt: u.createdAt,
-        };
-      });
+      const masked = users.map((u) => ({
+        userId: u.id,
+        email: maskUserEmail(u.email),
+        createdAt: u.createdAt,
+      }));
 
       await recordAuditLog({
         orgId,
@@ -1979,7 +2002,7 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   app.get(
     "/security/users",
-    { preHandler: authGuard },
+    { preHandler: [authGuard, requireAdminRole] },
     async (request, reply) => {
       const userClaims: any = (request as any).user;
       const orgId = userClaims.orgId;
@@ -2006,7 +2029,7 @@ export async function buildServer(): Promise<FastifyInstance> {
       reply.send({
         users: users.map((user) => ({
           id: user.id,
-          email: user.email,
+          email: maskUserEmail(user.email),
           role: user.role,
           mfaEnabled: user.mfaEnabled,
           createdAt: user.createdAt.toISOString(),
