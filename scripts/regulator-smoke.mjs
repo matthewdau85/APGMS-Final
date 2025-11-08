@@ -3,7 +3,7 @@ import process from "node:process";
 
 const API_BASE_URL = process.env.API_BASE_URL ?? "http://localhost:3000";
 const ACCESS_CODE = process.env.REGULATOR_ACCESS_CODE ?? "regulator-dev-code";
-const ORG_ID = process.env.REGULATOR_ORG_ID ?? "dev-org";
+const EXPECTED_ORG_ID = process.env.REGULATOR_ORG_ID?.trim();
 
 async function request(path, options = {}) {
   const url = `${API_BASE_URL}${path}`;
@@ -20,7 +20,7 @@ async function request(path, options = {}) {
 }
 
 async function main() {
-  console.log(`[info] Regulator smoke against ${API_BASE_URL} (org: ${ORG_ID})`);
+  console.log(`[info] Regulator smoke against ${API_BASE_URL}`);
 
   const login = await request("/regulator/login", {
     method: "POST",
@@ -29,7 +29,6 @@ async function main() {
     },
     body: JSON.stringify({
       accessCode: ACCESS_CODE,
-      orgId: ORG_ID,
     }),
   });
 
@@ -37,6 +36,14 @@ async function main() {
   if (!token) {
     throw new Error("Login response missing token");
   }
+
+  const orgId = login.orgId ?? "unknown-org";
+  if (EXPECTED_ORG_ID && orgId !== EXPECTED_ORG_ID) {
+    throw new Error(
+      `Logged into unexpected organisation: expected ${EXPECTED_ORG_ID}, received ${orgId}`,
+    );
+  }
+  console.log(`  [ok] authenticated as org ${orgId}`);
 
   const authHeaders = {
     Authorization: `Bearer ${token}`,

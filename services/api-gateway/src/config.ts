@@ -28,6 +28,8 @@ export interface AppConfig {
   };
   readonly regulator: {
     readonly accessCode: string;
+    readonly orgId: string;
+    readonly accessCodeOrgMap: Readonly<Record<string, string>>;
     readonly jwtAudience: string;
     readonly sessionTtlMinutes: number;
   };
@@ -284,6 +286,12 @@ export function loadConfig(): AppConfig {
   );
 
   const regulatorAccessCode = envString("REGULATOR_ACCESS_CODE");
+  const regulatorOrgIdEnv = process.env.REGULATOR_ORG_ID?.trim();
+  const regulatorOrgIdDefault =
+    regulatorOrgIdEnv && regulatorOrgIdEnv.length > 0
+      ? regulatorOrgIdEnv
+      : "dev-org";
+  const regulatorAccessCodesRaw = process.env.REGULATOR_ACCESS_CODES?.trim();
   const regulatorAudience =
     process.env.REGULATOR_JWT_AUDIENCE &&
     process.env.REGULATOR_JWT_AUDIENCE.trim().length > 0
@@ -293,6 +301,46 @@ export function loadConfig(): AppConfig {
     "REGULATOR_SESSION_TTL_MINUTES",
     60,
   );
+
+  const regulatorAccessCodeSchema = z.record(z.string().min(1), z.string().min(1));
+  let regulatorAccessCodeMap: Record<string, string>;
+
+  if (regulatorAccessCodesRaw && regulatorAccessCodesRaw.length > 0) {
+    const parsed = parseJson<Record<string, unknown>>(
+      regulatorAccessCodesRaw,
+      "REGULATOR_ACCESS_CODES",
+    );
+    const result = regulatorAccessCodeSchema.safeParse(parsed);
+    if (!result.success) {
+      throw new Error(
+        `REGULATOR_ACCESS_CODES invalid: ${result.error.message}`,
+      );
+    }
+
+    const normalized: Record<string, string> = {};
+    for (const [rawCode, rawOrg] of Object.entries(result.data)) {
+      const code = rawCode.trim();
+      const orgId = rawOrg.trim();
+      if (code.length === 0 || orgId.length === 0) {
+        throw new Error(
+          "REGULATOR_ACCESS_CODES must map non-empty access codes to org IDs",
+        );
+      }
+      normalized[code] = orgId;
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(normalized, regulatorAccessCode)) {
+      normalized[regulatorAccessCode] = regulatorOrgIdDefault;
+    }
+
+    regulatorAccessCodeMap = normalized;
+  } else {
+    regulatorAccessCodeMap = {
+      [regulatorAccessCode]: regulatorOrgIdDefault,
+    };
+  }
+
+  const regulatorOrgId = regulatorAccessCodeMap[regulatorAccessCode];
 
   const webauthnRpId = process.env.WEBAUTHN_RP_ID?.trim() ?? "localhost";
   const webauthnRpName = process.env.WEBAUTHN_RP_NAME?.trim() ?? "APGMS Admin";
@@ -356,6 +404,8 @@ export function loadConfig(): AppConfig {
     },
     regulator: {
       accessCode: regulatorAccessCode,
+      orgId: regulatorOrgId,
+      accessCodeOrgMap: Object.freeze({ ...regulatorAccessCodeMap }),
       jwtAudience: regulatorAudience,
       sessionTtlMinutes: regulatorSessionTtl,
     },

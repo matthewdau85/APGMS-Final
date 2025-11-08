@@ -1,39 +1,45 @@
 import { FastifyInstance } from "fastify";
+import { z } from "zod";
+
+import { notFound, unauthorized } from "@apgms/shared";
 
 import { config } from "../config.js";
 import { prisma } from "../db.js";
 import { signToken, buildSessionUser } from "../auth.js";
 import { createRegulatorSession } from "../lib/regulator-session.js";
 import { recordAuditLog } from "../lib/audit.js";
+import { parseWithSchema } from "../lib/validation.js";
+
+const RegulatorLoginBodySchema = z
+  .object({
+    accessCode: z
+      .string({
+        required_error: "accessCode is required",
+        invalid_type_error: "accessCode must be a string",
+      })
+      .trim()
+      .min(1, "accessCode is required"),
+  })
+  .strict();
 
 export async function registerRegulatorAuthRoutes(app: FastifyInstance): Promise<void> {
   app.post("/regulator/login", async (request, reply) => {
-    const body = request.body as { accessCode?: string; orgId?: string } | null;
+    const { accessCode } = parseWithSchema(
+      RegulatorLoginBodySchema,
+      request.body,
+    );
 
-    if (!body?.accessCode || body.accessCode.trim().length === 0) {
-      reply.code(400).send({
-        error: { code: "invalid_body", message: "accessCode is required" },
-      });
-      return;
+    const orgId = config.regulator.accessCodeOrgMap[accessCode];
+    if (!orgId) {
+      throw unauthorized("access_denied", "Invalid regulator access code");
     }
 
-    if (body.accessCode.trim() !== config.regulator.accessCode) {
-      reply.code(401).send({
-        error: { code: "access_denied", message: "Invalid regulator access code" },
-      });
-      return;
-    }
-
-    const orgId = body.orgId ?? "dev-org";
     const org = await prisma.org.findUnique({
       where: { id: orgId },
       select: { id: true },
     });
     if (!org) {
-      reply.code(404).send({
-        error: { code: "org_not_found", message: "Organisation not found" },
-      });
-      return;
+      throw notFound("org_not_found", "Organisation not found");
     }
 
     const { session, sessionToken } = await createRegulatorSession(
@@ -75,6 +81,7 @@ export async function registerRegulatorAuthRoutes(app: FastifyInstance): Promise
 
     reply.send({
       token,
+      orgId,
       session: {
         id: session.id,
         issuedAt: session.issuedAt.toISOString(),

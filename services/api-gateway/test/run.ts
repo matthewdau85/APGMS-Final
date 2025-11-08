@@ -19,6 +19,7 @@ const defaultTestEnv: Record<string, string> = {
   TAX_ENGINE_URL: "http://tax-engine:8000",
   CORS_ALLOWED_ORIGINS: "http://localhost:5173",
   REGULATOR_ACCESS_CODE: "regulator-dev-code",
+  REGULATOR_ORG_ID: "dev-org",
   REGULATOR_JWT_AUDIENCE: "urn:apgms:regulator",
   REGULATOR_SESSION_TTL_MINUTES: "60",
   ENCRYPTION_MASTER_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",

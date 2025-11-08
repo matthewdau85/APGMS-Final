@@ -451,6 +451,7 @@ export async function fetchEvidenceArtifactDetail(token: string, artifactId: str
 
 export type RegulatorLoginResponse = {
   token: string;
+  orgId: string;
   session: {
     id: string;
     issuedAt: string;
@@ -459,15 +460,13 @@ export type RegulatorLoginResponse = {
   };
 };
 
-export async function regulatorLogin(accessCode: string, orgId?: string) {
+export async function regulatorLogin(accessCode: string) {
   const trimmedCode = accessCode.trim();
-  const resolvedOrgId = orgId?.trim() && orgId.trim().length > 0 ? orgId.trim() : undefined;
   const res = await fetch(`${API_BASE}/regulator/login`, {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify({
       accessCode: trimmedCode,
-      orgId: resolvedOrgId,
     }),
   });
 
@@ -481,10 +480,7 @@ export async function regulatorLogin(accessCode: string, orgId?: string) {
   }
 
   const payload = (await res.json()) as RegulatorLoginResponse;
-  return {
-    ...payload,
-    orgId: resolvedOrgId ?? "dev-org",
-  };
+  return payload;
 }
 
 export async function fetchRegulatorComplianceReport(token: string) {

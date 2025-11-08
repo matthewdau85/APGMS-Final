@@ -21,6 +21,8 @@ const REQUIRED_KEYS = [
   "CORS_ALLOWED_ORIGINS",
   "ENCRYPTION_MASTER_KEY",
   "REGULATOR_ACCESS_CODE",
+  "REGULATOR_ORG_ID",
+  "REGULATOR_ACCESS_CODES",
   "REGULATOR_JWT_AUDIENCE",
   "REGULATOR_SESSION_TTL_MINUTES",
   "REQUIRE_TLS",
@@ -76,6 +78,11 @@ test("loadConfig parses typed values and defaults", () => {
   process.env.CORS_ALLOWED_ORIGINS = "https://app.example.com, https://admin.example.com";
   process.env.ENCRYPTION_MASTER_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
   process.env.REGULATOR_ACCESS_CODE = "code-123";
+  process.env.REGULATOR_ORG_ID = "org-primary";
+  process.env.REGULATOR_ACCESS_CODES = JSON.stringify({
+    "code-123": "org-primary",
+    "code-override": "org-secondary",
+  });
   process.env.REGULATOR_JWT_AUDIENCE = "urn:test:reg";
   process.env.REGULATOR_SESSION_TTL_MINUTES = "90";
   process.env.REQUIRE_TLS = "true";
@@ -99,6 +106,11 @@ test("loadConfig parses typed values and defaults", () => {
   assert.equal(config.encryption.masterKey.length, 32);
   assert.equal(config.auth.devSecret, "local-dev-secret");
   assert.equal(config.regulator.accessCode, "code-123");
+  assert.equal(config.regulator.orgId, "org-primary");
+  assert.deepEqual(config.regulator.accessCodeOrgMap, {
+    "code-123": "org-primary",
+    "code-override": "org-secondary",
+  });
   assert.equal(config.regulator.jwtAudience, "urn:test:reg");
   assert.equal(config.regulator.sessionTtlMinutes, 90);
   assert.equal(config.webauthn.rpId, "localhost");

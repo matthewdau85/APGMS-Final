@@ -6,7 +6,6 @@ import { saveRegulatorSession } from "./regulatorAuth";
 export default function RegulatorLoginPage() {
   const navigate = useNavigate();
   const [accessCode, setAccessCode] = useState("");
-  const [orgId, setOrgId] = useState("dev-org");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -15,7 +14,7 @@ export default function RegulatorLoginPage() {
     setError(null);
     setIsSubmitting(true);
     try {
-      const result = await regulatorLogin(accessCode, orgId);
+      const result = await regulatorLogin(accessCode);
       saveRegulatorSession({
         token: result.token,
         orgId: result.orgId,
@@ -50,18 +49,6 @@ export default function RegulatorLoginPage() {
               autoComplete="one-time-code"
               required
             />
-          </label>
-          <label style={labelStyle}>
-            <span>Organisation ID</span>
-            <input
-              value={orgId}
-              onChange={(event) => setOrgId(event.target.value)}
-              placeholder="dev-org"
-              style={inputStyle}
-            />
-            <span style={helperTextStyle}>
-              Default is <code>dev-org</code>; override to inspect another tenant.
-            </span>
           </label>
           {error ? (
             <div style={errorStyle}>
@@ -141,11 +128,6 @@ const inputStyle: React.CSSProperties = {
   borderRadius: "8px",
   border: "1px solid #cbd5f5",
   fontSize: "14px",
-};
-
-const helperTextStyle: React.CSSProperties = {
-  fontSize: "12px",
-  color: "#64748b",
 };
 
 const errorStyle: React.CSSProperties = {
