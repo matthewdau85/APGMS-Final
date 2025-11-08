@@ -29,3 +29,5 @@ export class DesignatedAccount {}
 export class DesignatedTransfer {}
 export class PaymentPlanRequest {}
 export class MonitoringSnapshot {}
+
+export default PrismaClient;
