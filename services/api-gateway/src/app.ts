@@ -804,7 +804,7 @@ export async function buildServer(): Promise<FastifyInstance> {
     try {
       metrics.httpRequestTotal.labels(method, route, status).inc();
       if (status.startsWith("5")) {
-        metrics.httpRequestErrorsTotal.labels(route).inc();
+        metrics.httpRequestErrorsTotal.labels(method, route, status).inc();
       }
       if (typeof metricState.timer === "function") {
         metricState.timer({ status });
@@ -2032,7 +2032,7 @@ export async function buildServer(): Promise<FastifyInstance> {
           async () => {
             const snapshot = await createMonitoringSnapshot(orgId);
 
-            metrics.monitoringSnapshotLagSeconds.labels(orgId).set(0);
+            metrics.recordMonitoringSnapshotLag(orgId, snapshot.createdAt);
 
             await recordAuditLog({
               orgId,
@@ -2077,11 +2077,7 @@ export async function buildServer(): Promise<FastifyInstance> {
 
       const latest = snapshots[0];
       if (latest) {
-        const lagSeconds = Math.max(
-          0,
-          (Date.now() - latest.createdAt.getTime()) / 1000
-        );
-        metrics.monitoringSnapshotLagSeconds.labels(orgId).set(lagSeconds);
+        metrics.recordMonitoringSnapshotLag(orgId, latest.createdAt);
       }
 
       await recordAuditLog({

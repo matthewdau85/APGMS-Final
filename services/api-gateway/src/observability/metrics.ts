@@ -24,7 +24,7 @@ const httpRequestDuration = new Histogram({
 const httpRequestErrorsTotal = new Counter({
   name: "apgms_http_request_errors_total",
   help: "Total number of HTTP requests that returned a 5xx status code",
-  labelNames: ["route"] as const,
+  labelNames: ["method", "route", "status"] as const,
 });
 
 const dbQueryDuration = new Histogram({
@@ -53,10 +53,19 @@ const queueBacklogDepth = new Gauge({
   labelNames: ["queue"] as const,
 });
 
+const latestMonitoringSnapshotTimestamps = new Map<string, number>();
+
 const monitoringSnapshotLagSeconds = new Gauge({
   name: "apgms_monitoring_snapshot_lag_seconds",
   help: "Age of the most recent monitoring snapshot in seconds",
   labelNames: ["org_id"] as const,
+  collect(this: Gauge<string>) {
+    const now = Date.now();
+    for (const [orgId, timestamp] of latestMonitoringSnapshotTimestamps.entries()) {
+      const lagSeconds = Math.max(0, (now - timestamp) / 1000);
+      this.set({ org_id: orgId }, lagSeconds);
+    }
+  },
 });
 
 export const metrics = {
@@ -68,6 +77,12 @@ export const metrics = {
   jobDuration,
   queueBacklogDepth,
   monitoringSnapshotLagSeconds,
+  recordMonitoringSnapshotLag(orgId: string, createdAt: Date | number): void {
+    const timestamp = createdAt instanceof Date ? createdAt.getTime() : createdAt;
+    latestMonitoringSnapshotTimestamps.set(orgId, timestamp);
+    const lagSeconds = Math.max(0, (Date.now() - timestamp) / 1000);
+    monitoringSnapshotLagSeconds.labels(orgId).set(lagSeconds);
+  },
   async observeJob<T>(job: string, fn: () => Promise<T>): Promise<T> {
     const stop = jobDuration.startTimer({ job });
     try {
