@@ -51,6 +51,12 @@ import { withIdempotency } from "./lib/idempotency.js";
 import { metrics, promRegister } from "./observability/metrics.js";
 import { attachPrismaMetrics } from "./observability/prisma-metrics.js";
 import { closeProviders, initProviders } from "./providers.js";
+import {
+  createContentAddressedUri,
+  resolveScopeForKind,
+  type WormProvider,
+  type WormScope,
+} from "../../providers/worm/index.js";
 
 function decimalToNumber(value: Prisma.Decimal | number | null | undefined): number {
   if (value === null || value === undefined) return 0;
@@ -112,6 +118,12 @@ type ComplianceReportPayload = {
 const SHORTFALL_ALERT_THRESHOLD = Number.parseFloat(
   process.env.APGMS_SHORTFALL_ALERT_THRESHOLD ?? "500",
 );
+
+function retentionDaysForScope(scope: WormScope): number {
+  return scope === "bank"
+    ? config.retention.bankRetentionDays
+    : config.retention.evidenceRetentionDays;
+}
 
 function shapeAlert(alert: AlertModel) {
   return {
@@ -551,6 +563,33 @@ async function registerRegulatorRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
+  app.get("/evidence/:id/attestation", async (request, reply) => {
+    const { orgId, actorId } = regulatorContext(request);
+    const { id } = request.params as { id: string };
+
+    const artifact = await prisma.evidenceArtifact.findUnique({
+      where: { id },
+    });
+
+    if (!artifact || artifact.orgId !== orgId) {
+      throw notFound("artifact_not_found", "No matching evidence artifact");
+    }
+
+    await recordAuditLog({
+      orgId,
+      actorId,
+      action: "regulator.evidence.attestation",
+      metadata: { artifactId: id },
+    });
+
+    const attestation = await issueArtifactAttestation(
+      app.providers.worm,
+      artifact,
+    );
+
+    reply.send({ attestation });
+  });
+
   app.get("/compliance/report", async (request, reply) => {
     const { orgId, actorId } = regulatorContext(request);
     const report = await compileComplianceReport(orgId);
@@ -744,6 +783,19 @@ async function buildEvidenceSnapshot(orgId: string) {
 
 attachPrismaMetrics(prisma);
 
+async function issueArtifactAttestation(
+  worm: WormProvider,
+  artifact: { kind: string; sha256: string; createdAt: Date },
+) {
+  const scope = resolveScopeForKind(artifact.kind);
+  return worm.issueAttestation({
+    scope,
+    sha256: artifact.sha256,
+    createdAt: artifact.createdAt,
+    retentionDays: retentionDaysForScope(scope),
+  });
+}
+
 export async function buildServer(): Promise<FastifyInstance> {
   const app = Fastify({
     logger: true,
@@ -899,10 +951,12 @@ export async function buildServer(): Promise<FastifyInstance> {
       db: boolean;
       redis: boolean | null;
       nats: boolean | null;
+      worm: boolean;
     } = {
       db: false,
       redis: providerState.redis ? false : null,
       nats: providerState.nats ? false : null,
+      worm: true,
     };
 
     try {
@@ -935,6 +989,7 @@ export async function buildServer(): Promise<FastifyInstance> {
 
     const healthy =
       results.db &&
+      results.worm &&
       (results.redis !== false) &&
       (results.nats !== false);
 
@@ -1837,6 +1892,31 @@ export async function buildServer(): Promise<FastifyInstance> {
     }
   );
 
+  app.get(
+    "/compliance/evidence/:id/attestation",
+    { preHandler: authGuard },
+    async (request, reply) => {
+      const userClaims: any = (request as any).user;
+      const orgId = userClaims.orgId;
+      const { id } = parseWithSchema(AlertResolveParamsSchema, request.params);
+
+      const artifact = await prisma.evidenceArtifact.findUnique({
+        where: { id },
+      });
+
+      if (!artifact || artifact.orgId !== orgId) {
+        throw notFound("artifact_not_found", "No matching evidence artifact");
+      }
+
+      const attestation = await issueArtifactAttestation(
+        app.providers.worm,
+        artifact,
+      );
+
+      reply.send({ attestation });
+    }
+  );
+
     app.post(
       "/compliance/evidence",
       { preHandler: authGuard },
@@ -1857,27 +1937,43 @@ export async function buildServer(): Promise<FastifyInstance> {
           async () => {
             const snapshot = await buildEvidenceSnapshot(orgId);
 
-            const artifact = await prisma.$transaction(async (tx) => {
-              const created = await tx.evidenceArtifact.create({
-                data: {
-                  orgId,
-                  kind: "compliance-pack",
-                  wormUri: "internal:evidence/pending",
-                  sha256: snapshot.sha256,
-                  payload: snapshot.payload,
-                },
-              });
-              return tx.evidenceArtifact.update({
-                where: { id: created.id },
-                data: { wormUri: `internal:evidence/${created.id}` },
-              });
+            const desiredUri = createContentAddressedUri(
+              "evidence",
+              snapshot.sha256,
+            );
+
+            let artifact = await prisma.evidenceArtifact.create({
+              data: {
+                orgId,
+                kind: "compliance-pack",
+                wormUri: desiredUri,
+                sha256: snapshot.sha256,
+                payload: snapshot.payload,
+              },
             });
+
+            const attestation = await issueArtifactAttestation(
+              app.providers.worm,
+              artifact,
+            );
+
+            if (attestation.uri !== artifact.wormUri) {
+              artifact = await prisma.evidenceArtifact.update({
+                where: { id: artifact.id },
+                data: { wormUri: attestation.uri },
+              });
+            }
 
             await recordAuditLog({
               orgId,
               actorId: userClaims.sub,
               action: "compliance.evidence.create",
-              metadata: { artifactId: artifact.id },
+              metadata: {
+                artifactId: artifact.id,
+                sha256: artifact.sha256,
+                uri: artifact.wormUri,
+                retentionUntil: attestation.retentionUntil,
+              },
             });
 
             return {

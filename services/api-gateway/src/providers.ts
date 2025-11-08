@@ -3,10 +3,12 @@ import { createClient, type RedisClientType } from "redis";
 import { connect, type ConnectionOptions, type NatsConnection } from "nats";
 
 import { config } from "./config.js";
+import { createWormProvider, type WormProvider } from "../../providers/worm/index.js";
 
 export type Providers = {
   redis: RedisClientType | null;
   nats: NatsConnection | null;
+  worm: WormProvider;
 };
 
 export async function initProviders(
@@ -15,6 +17,13 @@ export async function initProviders(
   const providers: Providers = {
     redis: null,
     nats: null,
+    worm: createWormProvider({
+      providerId: config.retention.providerId,
+      evidenceRetentionDays: config.retention.evidenceRetentionDays,
+      bankRetentionDays: config.retention.bankRetentionDays,
+      s3: config.retention.s3,
+      gcs: config.retention.gcs,
+    }),
   };
 
   if (config.redis?.url) {
@@ -82,6 +91,12 @@ export async function closeProviders(
         logger.error({ err: closeError }, "nats_close_failed");
       }
     }
+  }
+
+  try {
+    await providers.worm.close();
+  } catch (error) {
+    logger.error({ err: error }, "worm_provider_close_failed");
   }
 }
 

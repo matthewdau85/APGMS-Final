@@ -3,6 +3,7 @@ import {
   fetchRegulatorEvidenceDetail,
   fetchRegulatorEvidenceList,
 } from "./api";
+import EvidenceVerify from "./portal/EvidenceVerify";
 import { getRegulatorToken } from "./regulatorAuth";
 
 type EvidenceList = Awaited<ReturnType<typeof fetchRegulatorEvidenceList>>;
@@ -200,6 +201,7 @@ export default function RegulatorEvidencePage() {
           <div style={emptyStateStyle}>Failed to load artifact: {detailState.error}</div>
         ) : detailState.artifact ? (
           <ArtifactDetailView
+            token={token}
             artifact={detailState.artifact}
             verification={detailState.verification}
             onVerify={handleVerify}
@@ -213,10 +215,12 @@ export default function RegulatorEvidencePage() {
 }
 
 function ArtifactDetailView({
+  token,
   artifact,
   verification,
   onVerify,
 }: {
+  token: string | null;
   artifact: EvidenceDetail["artifact"];
   verification: DetailState["verification"];
   onVerify: () => void;
@@ -278,6 +282,13 @@ function ArtifactDetailView({
           </a>
         </div>
       ) : null}
+
+      <EvidenceVerify
+        token={token}
+        artifactId={artifact.id}
+        sha256={artifact.sha256}
+        wormUri={artifact.wormUri}
+      />
     </div>
   );
 }

@@ -8,6 +8,10 @@ import {
   normalizeTransferSource,
   type DesignatedTransferSource,
 } from "@apgms/shared/ledger";
+import {
+  createContentAddressedUri,
+  type WormProvider,
+} from "../../providers/worm/index.js";
 
 type AuditLogger = (entry: {
   orgId: string;
@@ -19,6 +23,10 @@ type AuditLogger = (entry: {
 type PolicyContext = {
   prisma: PrismaClient;
   auditLogger?: AuditLogger;
+  worm?: WormProvider;
+  retentionDays?: {
+    bank: number;
+  };
 };
 
 export type ApplyDesignatedTransferInput = {
@@ -244,36 +252,45 @@ export async function generateDesignatedAccountReconciliationArtifact(
     .update(JSON.stringify(summary))
     .digest("hex");
 
-  const artifact = await context.prisma.$transaction(async (tx) => {
-    const created = await tx.evidenceArtifact.create({
-      data: {
-        orgId,
-        kind: "designated-reconciliation",
-        wormUri: "internal:designated/pending",
-        sha256,
-        payload: summary,
-      },
-    });
+  const desiredUri = createContentAddressedUri("bank", sha256);
 
-    return tx.evidenceArtifact.update({
-      where: { id: created.id },
-      data: {
-        wormUri: `internal:designated/${created.id}`,
-      },
-    });
+  let artifact = await context.prisma.evidenceArtifact.create({
+    data: {
+      orgId,
+      kind: "designated-reconciliation",
+      wormUri: desiredUri,
+      sha256,
+      payload: summary,
+    },
   });
+
+  if (context.worm) {
+    const attestation = await context.worm.issueAttestation({
+      scope: "bank",
+      sha256,
+      createdAt: artifact.createdAt,
+      retentionDays: context.retentionDays?.bank ?? 0,
+    });
+    if (attestation.uri !== artifact.wormUri) {
+      artifact = await context.prisma.evidenceArtifact.update({
+        where: { id: artifact.id },
+        data: { wormUri: attestation.uri },
+      });
+    }
+  }
 
   if (context.auditLogger) {
     await context.auditLogger({
       orgId,
       actorId,
       action: "designatedAccount.reconciliation",
-      metadata: {
-        artifactId: artifact.id,
-        sha256,
-        totals,
-      },
-    });
+        metadata: {
+          artifactId: artifact.id,
+          sha256,
+          totals,
+          wormUri: artifact.wormUri,
+        },
+      });
   }
 
   return {

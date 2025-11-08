@@ -623,6 +623,29 @@ export async function fetchRegulatorEvidenceDetail(token: string, artifactId: st
   }>;
 }
 
+export async function fetchRegulatorEvidenceAttestation(
+  token: string,
+  artifactId: string,
+) {
+  const res = await fetch(
+    `${API_BASE}/regulator/evidence/${artifactId}/attestation`,
+    {
+      headers: authHeaders(token),
+    },
+  );
+  if (!res.ok) throw new Error("failed_regulator_evidence_attestation");
+  return res.json() as Promise<{
+    attestation: {
+      uri: string;
+      sha256: string;
+      scope: string;
+      providerId: string;
+      lockState: string;
+      retentionUntil: string | null;
+    };
+  }>;
+}
+
 export async function fetchRegulatorBankSummary(token: string) {
   const res = await fetch(`${API_BASE}/regulator/bank-lines/summary`, {
     headers: authHeaders(token),

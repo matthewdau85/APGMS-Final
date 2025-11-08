@@ -53,6 +53,20 @@ export interface AppConfig {
     readonly username?: string;
     readonly password?: string;
   };
+  readonly retention: {
+    readonly providerId: string;
+    readonly evidenceRetentionDays: number;
+    readonly bankRetentionDays: number;
+    readonly s3?: {
+      readonly bucket: string;
+      readonly region: string;
+      readonly objectLockMode?: string;
+    };
+    readonly gcs?: {
+      readonly bucket: string;
+      readonly location?: string;
+    };
+  };
 }
 
 const base64Regex = /^[A-Za-z0-9+/=]+$/;
@@ -331,6 +345,39 @@ export function loadConfig(): AppConfig {
         }
       : undefined;
 
+  const retentionProvider =
+    process.env.RETENTION_PROVIDER?.trim().toLowerCase() ?? "internal";
+  const evidenceRetentionDays = parseIntegerEnv(
+    "RETENTION_EVIDENCE_DAYS",
+    365,
+  );
+  const bankRetentionDays = parseIntegerEnv(
+    "RETENTION_BANK_DAYS",
+    90,
+  );
+
+  const retentionS3Bucket = process.env.RETENTION_S3_BUCKET?.trim();
+  const retentionS3Region = process.env.RETENTION_S3_REGION?.trim();
+  const retentionS3Mode = process.env.RETENTION_S3_MODE?.trim();
+  const retentionGcsBucket = process.env.RETENTION_GCS_BUCKET?.trim();
+  const retentionGcsLocation = process.env.RETENTION_GCS_LOCATION?.trim();
+
+  if (retentionProvider === "s3" || retentionProvider === "s3-object-lock") {
+    if (!retentionS3Bucket || !retentionS3Region) {
+      throw new Error(
+        "RETENTION_S3_BUCKET and RETENTION_S3_REGION required for S3 provider",
+      );
+    }
+  }
+
+  if (retentionProvider === "gcs" || retentionProvider === "gcs-bucket-lock") {
+    if (!retentionGcsBucket) {
+      throw new Error(
+        "RETENTION_GCS_BUCKET required for GCS provider",
+      );
+    }
+  }
+
   return {
     databaseUrl,
     shadowDatabaseUrl,
@@ -374,6 +421,25 @@ export function loadConfig(): AppConfig {
     },
     redis,
     nats,
+    retention: {
+      providerId: retentionProvider,
+      evidenceRetentionDays,
+      bankRetentionDays,
+      s3:
+        retentionS3Bucket && retentionS3Region
+          ? {
+              bucket: retentionS3Bucket,
+              region: retentionS3Region,
+              objectLockMode: retentionS3Mode || undefined,
+            }
+          : undefined,
+      gcs: retentionGcsBucket
+        ? {
+            bucket: retentionGcsBucket,
+            location: retentionGcsLocation || undefined,
+          }
+        : undefined,
+    },
   };
 }
 
