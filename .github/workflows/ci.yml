@@ -74,7 +74,7 @@ jobs:
 
       # 5. Schema / merge hygiene gates
       - name: Check Prisma migration drift
-        run: pnpm -w exec prisma migrate status
+        run: pnpm --filter @apgms/shared exec prisma migrate status --schema prisma/schema.prisma
 
       - name: Conflict marker guard
         run: git grep -n '<<<<<<<\|=======\|>>>>>>>' -- ':!*.lock'
