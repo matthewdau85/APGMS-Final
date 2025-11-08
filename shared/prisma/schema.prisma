@@ -304,6 +304,51 @@ model EvidenceArtifact {
   @@index([orgId, kind])
 }
 
+model StpPayrollSummary {
+  id             String   @id @default(cuid())
+  org            Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId          String
+  providerId     String
+  providerRunId  String
+  periodStart    DateTime
+  periodEnd      DateTime
+  paymentDate    DateTime
+  grossWages     Decimal  @default(0)
+  paygwWithheld  Decimal  @default(0)
+  superAccrued   Decimal  @default(0)
+  employeeCount  Int      @default(0)
+  source         String
+  metadata       Json?
+  ingestedAt     DateTime @default(now())
+  basCycle       BasCycle? @relation(fields: [basCycleId], references: [id], onDelete: SetNull)
+  basCycleId     String?
+
+  @@unique([orgId, providerId, providerRunId])
+  @@index([orgId, paymentDate])
+  @@index([orgId, periodStart, periodEnd])
+}
+
+model PosGstEvent {
+  id               String   @id @default(cuid())
+  org              Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId            String
+  providerId       String
+  eventRef         String
+  occurredAt       DateTime
+  taxableSales     Decimal  @default(0)
+  gstCollected     Decimal  @default(0)
+  inputTaxCredits  Decimal  @default(0)
+  netGstOwed       Decimal  @default(0)
+  source           String
+  metadata         Json?
+  ingestedAt       DateTime @default(now())
+  basCycle         BasCycle? @relation(fields: [basCycleId], references: [id], onDelete: SetNull)
+  basCycleId       String?
+
+  @@unique([orgId, providerId, eventRef])
+  @@index([orgId, occurredAt])
+}
+
 // =========================
 // Legacy models still used by the live Fastify API
 // =========================
@@ -338,6 +383,8 @@ model Org {
   tombstones OrgTombstone[]
   alerts     Alert[]
   basCycles  BasCycle[]
+  stpSummaries StpPayrollSummary[]
+  gstEvents    PosGstEvent[]
   designatedAccounts DesignatedAccount[]
   designatedTransfers DesignatedTransfer[]
   paymentPlanRequests PaymentPlanRequest[]
@@ -407,6 +454,8 @@ model BasCycle {
   overallStatus String
   lodgedAt      DateTime?
   paymentPlanRequests PaymentPlanRequest[]
+  stpSummaries       StpPayrollSummary[]
+  gstEvents          PosGstEvent[]
 
   @@index([orgId, periodStart, periodEnd])
   @@index([orgId, lodgedAt])

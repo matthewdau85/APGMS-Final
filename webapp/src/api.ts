@@ -21,6 +21,44 @@ export type ApiSession = {
   };
 };
 
+export type BasVerificationSummary = {
+  expected: { paygw: number; gst: number };
+  designated: { paygw: number; gst: number };
+  discrepancies: Array<{
+    tax: string;
+    expected: number;
+    designated: number;
+    delta: number;
+    guidance: string;
+  }>;
+  report: {
+    id: string;
+    sha256: string;
+    generatedAt: string;
+    jsonHash: string | null;
+  } | null;
+};
+
+export type BasDiscrepancyReport = {
+  id: string;
+  sha256: string;
+  generatedAt: string;
+  basCycle: { id: string; periodStart: string; periodEnd: string } | null;
+  expected: { paygw: number; gst: number } | null;
+  designated: { paygw: number; gst: number } | null;
+  discrepancies: Array<{
+    tax: string;
+    expected: number;
+    designated: number;
+    delta: number;
+    guidance: string;
+  }>;
+  remediation: string[];
+  jsonHash: string | null;
+  pdfBase64: string | null;
+  json: Record<string, unknown>;
+};
+
 export async function login(email: string, password: string) {
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: "POST",
@@ -134,6 +172,7 @@ export async function fetchCurrentObligations(token: string) {
       status: string;
     };
     nextBasDue: string | null;
+    verification: BasVerificationSummary | null;
   }>;
 }
 
@@ -236,7 +275,16 @@ export async function fetchBasPreview(token: string) {
     gst: { required: number; secured: number; status: string };
     overallStatus: string;
     blockers: string[];
+    verification: BasVerificationSummary | null;
   }>;
+}
+
+export async function fetchBasDiscrepancyReport(token: string) {
+  const res = await fetch(`${API_BASE}/compliance/bas/discrepancy-report`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error("failed_bas_discrepancy");
+  return res.json() as Promise<{ report: BasDiscrepancyReport | null }>;
 }
 
 export async function lodgeBas(
@@ -519,6 +567,14 @@ export async function fetchRegulatorComplianceReport(token: string) {
       gst: number;
     };
   }>;
+}
+
+export async function fetchRegulatorBasDiscrepancyReport(token: string) {
+  const res = await fetch(`${API_BASE}/regulator/bas/discrepancy-report`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error("failed_regulator_bas_report");
+  return res.json() as Promise<{ report: BasDiscrepancyReport | null }>;
 }
 
 export async function fetchRegulatorAlerts(token: string) {

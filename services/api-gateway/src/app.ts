@@ -38,6 +38,9 @@ import rateLimit from "./plugins/rate-limit.js";
 import { authGuard, createAuthGuard, REGULATOR_AUDIENCE } from "./auth.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerRegulatorAuthRoutes } from "./routes/regulator-auth.js";
+import registerBasComplianceRoutes, {
+  shapeDiscrepancyReport,
+} from "./routes/compliance/bas.js";
 import { prisma } from "./db.js";
 import { parseWithSchema } from "./lib/validation.js";
 import {
@@ -51,6 +54,13 @@ import { withIdempotency } from "./lib/idempotency.js";
 import { metrics, promRegister } from "./observability/metrics.js";
 import { attachPrismaMetrics } from "./observability/prisma-metrics.js";
 import { closeProviders, initProviders } from "./providers.js";
+import {
+  verifyBasDesignatedBalance,
+  fetchLatestBasDiscrepancyReport,
+  type BasVerificationResult,
+  type BasDiscrepancy,
+  type BasDiscrepancyArtifact,
+} from "../../domain/bas/verifier.js";
 
 function decimalToNumber(value: Prisma.Decimal | number | null | undefined): number {
   if (value === null || value === undefined) return 0;
@@ -107,6 +117,18 @@ type ComplianceReportPayload = {
     paygw: number;
     gst: number;
   };
+};
+
+type BasVerificationSummary = {
+  expected: { paygw: number; gst: number };
+  designated: { paygw: number; gst: number };
+  discrepancies: BasDiscrepancy[];
+  report: {
+    id: string;
+    sha256: string;
+    generatedAt: string;
+    jsonHash: string | null;
+  } | null;
 };
 
 const SHORTFALL_ALERT_THRESHOLD = Number.parseFloat(
@@ -182,7 +204,65 @@ function shapeBasPreview(
     overallStatus,
     blockers,
     lodgedAt: cycle.lodgedAt ?? null,
+    verification: null as BasVerificationSummary | null,
   };
+}
+
+function applyVerificationToPreview(
+  preview: NonNullable<ReturnType<typeof shapeBasPreview>>,
+  verification: BasVerificationResult,
+) {
+  preview.paygw.required = verification.expected.paygw;
+  preview.paygw.shortfall = Number(
+    Math.max(0, verification.expected.paygw - preview.paygw.secured).toFixed(2),
+  );
+  if (
+    preview.paygw.shortfall > 0 ||
+    verification.discrepancies.some((entry) => entry.tax === "PAYGW")
+  ) {
+    preview.paygw.status = "BLOCKED";
+  }
+
+  preview.gst.required = verification.expected.gst;
+  preview.gst.shortfall = Number(
+    Math.max(0, verification.expected.gst - preview.gst.secured).toFixed(2),
+  );
+  if (
+    preview.gst.shortfall > 0 ||
+    verification.discrepancies.some((entry) => entry.tax === "GST")
+  ) {
+    preview.gst.status = "BLOCKED";
+  }
+
+  if (verification.discrepancies.length > 0) {
+    preview.overallStatus = "BLOCKED";
+    for (const discrepancy of verification.discrepancies) {
+      const blocker = `${discrepancy.tax} designated balance deviates by $${Math.abs(discrepancy.delta).toFixed(2)}. ${discrepancy.guidance}`;
+      if (!preview.blockers.includes(blocker)) {
+        preview.blockers.push(blocker);
+      }
+    }
+  }
+
+  preview.verification = {
+    expected: {
+      paygw: Number(verification.expected.paygw.toFixed(2)),
+      gst: Number(verification.expected.gst.toFixed(2)),
+    },
+    designated: {
+      paygw: Number(verification.designated.paygw.toFixed(2)),
+      gst: Number(verification.designated.gst.toFixed(2)),
+    },
+    discrepancies: verification.discrepancies,
+    report: verification.artifact
+      ? {
+          id: verification.artifact.id,
+          sha256: verification.artifact.sha256,
+          generatedAt: verification.artifact.generatedAt,
+          jsonHash: verification.artifact.jsonHash ?? null,
+        }
+      : null,
+  } satisfies BasVerificationSummary;
 }
 
 function shapePaymentPlan(request: PaymentPlanRequestModel): PaymentPlanSummary {
@@ -549,6 +629,25 @@ async function registerRegulatorRoutes(app: FastifyInstance): Promise<void> {
         payload: artifact.payload ?? null,
       },
     });
+  });
+
+  app.get("/bas/discrepancy-report", async (request, reply) => {
+    const { orgId, actorId } = regulatorContext(request);
+    const report = await fetchLatestBasDiscrepancyReport(prisma, orgId);
+
+    if (!report) {
+      reply.send({ report: null });
+      return;
+    }
+
+    await recordAuditLog({
+      orgId,
+      actorId,
+      action: "regulator.bas.discrepancy.fetch",
+      metadata: { artifactId: report.id },
+    });
+
+    reply.send({ report: shapeDiscrepancyReport(report) });
   });
 
   app.get("/compliance/report", async (request, reply) => {
@@ -954,6 +1053,7 @@ export async function buildServer(): Promise<FastifyInstance> {
   // /auth/login (public)
   await registerAuthRoutes(app);
   await registerRegulatorAuthRoutes(app);
+  await registerBasComplianceRoutes(app);
 
   const regulatorAuthGuard = createAuthGuard(REGULATOR_AUDIENCE, {
     validate: async (claims, request) => {
@@ -1201,11 +1301,35 @@ export async function buildServer(): Promise<FastifyInstance> {
         orderBy: { periodEnd: "desc" },
       });
 
+      let verification: BasVerificationResult | null = null;
+
       if (cycle) {
         cycle = await syncBasCycleSecured(cycle, designatedContext.totals);
+
+        const auditLogger = async (entry: {
+          orgId: string;
+          actorId: string;
+          action: string;
+          metadata: Record<string, unknown>;
+        }) =>
+          recordAuditLog({
+            orgId: entry.orgId,
+            actorId: entry.actorId,
+            action: entry.action,
+            metadata: entry.metadata,
+          });
+
+        verification = await verifyBasDesignatedBalance(
+          { prisma, auditLogger },
+          { orgId, basCycleId: cycle.id, actorId: userClaims.sub },
+        );
+        cycle = verification.cycle;
       }
 
       const preview = shapeBasPreview(cycle, designatedContext.totals);
+      if (preview && verification) {
+        applyVerificationToPreview(preview, verification);
+      }
       const response = preview
         ? {
             basCycleId: preview.id,
@@ -1226,6 +1350,7 @@ export async function buildServer(): Promise<FastifyInstance> {
                 preview.gst.shortfall > 0 ? "SHORTFALL" : preview.gst.status,
             },
             nextBasDue: preview.periodEnd,
+            verification: preview.verification,
           }
         : {
             basCycleId: null,
@@ -1244,6 +1369,7 @@ export async function buildServer(): Promise<FastifyInstance> {
               status: "READY",
             },
             nextBasDue: null,
+            verification: null,
           };
 
       await recordAuditLog({
@@ -1287,17 +1413,46 @@ export async function buildServer(): Promise<FastifyInstance> {
       const userClaims: any = (request as any).user;
       const orgId = userClaims.orgId;
 
+      const designated = await loadDesignatedAccountContext(orgId);
+      const summaries = await prisma.stpPayrollSummary.findMany({
+        where: { orgId },
+        orderBy: { paymentDate: "asc" },
+      });
+
+      let remainingPaygw = designated.totals.paygw;
+      const allocated = summaries.map((summary) => {
+        const paygw = decimalToNumber(summary.paygwWithheld);
+        const secured = Math.max(0, Math.min(paygw, remainingPaygw));
+        remainingPaygw = Math.max(0, remainingPaygw - secured);
+        let status = "READY";
+        if (paygw <= 0) {
+          status = "MISSING";
+        } else if (secured === 0 && paygw > 0) {
+          status = "SHORT";
+        } else if (secured < paygw) {
+          status = "PARTIAL";
+        }
+        return {
+          id: summary.providerRunId,
+          paymentDate: summary.paymentDate,
+          gross: decimalToNumber(summary.grossWages),
+          paygw,
+          secured: Number(secured.toFixed(2)),
+          status,
+        };
+      });
+
       const data = {
-        runs: [
-          {
-            id: "run-2025-10-15",
-            date: "2025-10-15",
-            grossWages: 45000,
-            paygwCalculated: 8200,
-            paygwSecured: 8000,
-            status: "PARTIAL",
-          },
-        ],
+        runs: allocated
+          .sort((a, b) => b.paymentDate.getTime() - a.paymentDate.getTime())
+          .map((entry) => ({
+            id: entry.id,
+            date: entry.paymentDate.toISOString().slice(0, 10),
+            grossWages: entry.gross,
+            paygwCalculated: entry.paygw,
+            paygwSecured: entry.secured,
+            status: entry.status,
+          })),
       };
 
       await recordAuditLog({
@@ -1318,23 +1473,44 @@ export async function buildServer(): Promise<FastifyInstance> {
       const userClaims: any = (request as any).user;
       const orgId = userClaims.orgId;
 
+      const designated = await loadDesignatedAccountContext(orgId);
+      const events = await prisma.posGstEvent.findMany({
+        where: { orgId },
+        orderBy: { occurredAt: "asc" },
+      });
+
+      let remainingGst = designated.totals.gst;
+      const allocated = events.map((event) => {
+        const net = decimalToNumber(event.netGstOwed);
+        const secured = Math.max(0, Math.min(net, remainingGst));
+        remainingGst = Math.max(0, remainingGst - secured);
+        let status = "READY";
+        if (net <= 0) {
+          status = "MISSING";
+        } else if (secured === 0 && net > 0) {
+          status = "SHORT";
+        } else if (secured < net) {
+          status = "PARTIAL";
+        }
+        return {
+          date: event.occurredAt,
+          sales: decimalToNumber(event.taxableSales),
+          calculated: net,
+          secured: Number(secured.toFixed(2)),
+          status,
+        };
+      });
+
       const data = {
-        days: [
-          {
-            date: "2025-10-15",
-            salesTotal: 12000,
-            gstCalculated: 1090,
-            gstSecured: 1090,
-            status: "OK",
-          },
-          {
-            date: "2025-10-16",
-            salesTotal: 9000,
-            gstCalculated: 818,
-            gstSecured: 600,
-            status: "SHORT",
-          },
-        ],
+        days: allocated
+          .sort((a, b) => b.date.getTime() - a.date.getTime())
+          .map((entry) => ({
+            date: entry.date.toISOString().slice(0, 10),
+            salesTotal: entry.sales,
+            gstCalculated: entry.calculated,
+            gstSecured: entry.secured,
+            status: entry.status === "READY" ? "OK" : entry.status,
+          })),
       };
 
       await recordAuditLog({
@@ -1483,11 +1659,36 @@ export async function buildServer(): Promise<FastifyInstance> {
         orderBy: { periodEnd: "desc" },
       });
 
+      let verification: BasVerificationResult | null = null;
+
       if (cycle) {
         cycle = await syncBasCycleSecured(cycle, context.totals);
+
+        const auditLogger = async (entry: {
+          orgId: string;
+          actorId: string;
+          action: string;
+          metadata: Record<string, unknown>;
+        }) =>
+          recordAuditLog({
+            orgId: entry.orgId,
+            actorId: entry.actorId,
+            action: entry.action,
+            metadata: entry.metadata,
+          });
+
+        verification = await verifyBasDesignatedBalance(
+          { prisma, auditLogger },
+          { orgId, basCycleId: cycle.id, actorId: userClaims.sub },
+        );
+        cycle = verification.cycle;
       }
 
       const preview = shapeBasPreview(cycle, context.totals);
+      if (preview && verification) {
+        applyVerificationToPreview(preview, verification);
+      }
+
       const payload = preview
         ? {
             basCycleId: preview.id,
@@ -1505,6 +1706,7 @@ export async function buildServer(): Promise<FastifyInstance> {
             },
             overallStatus: preview.overallStatus,
             blockers: preview.blockers,
+            verification: preview.verification,
           }
         : {
             basCycleId: null,
@@ -1514,6 +1716,7 @@ export async function buildServer(): Promise<FastifyInstance> {
             gst: { required: 0, secured: 0, status: "READY" },
             overallStatus: "READY",
             blockers: [],
+            verification: null,
           };
 
       await recordAuditLog({
@@ -1624,7 +1827,31 @@ export async function buildServer(): Promise<FastifyInstance> {
             }
 
             cycle = await syncBasCycleSecured(cycle, context.totals);
+
+            const auditLogger = async (entry: {
+              orgId: string;
+              actorId: string;
+              action: string;
+              metadata: Record<string, unknown>;
+            }) =>
+              recordAuditLog({
+                orgId: entry.orgId,
+                actorId: entry.actorId,
+                action: entry.action,
+                metadata: entry.metadata,
+              });
+
+            const verificationResult = await verifyBasDesignatedBalance(
+              { prisma, auditLogger },
+              { orgId, basCycleId: cycle.id, actorId: userClaims.sub },
+            );
+            cycle = verificationResult.cycle;
+
             const preview = shapeBasPreview(cycle, context.totals);
+            if (preview) {
+              applyVerificationToPreview(preview, verificationResult);
+            }
+
             if (!preview || preview.overallStatus !== "READY") {
               throw conflict("bas_cycle_blocked", "BAS cycle not ready for lodgment");
             }

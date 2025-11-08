@@ -6,6 +6,8 @@ import {
   fetchPaymentPlanRequest,
   createPaymentPlanRequest,
   initiateMfa,
+  fetchBasDiscrepancyReport,
+  type BasDiscrepancyReport,
 } from "./api";
 import { getToken, getSessionUser } from "./auth";
 
@@ -29,8 +31,19 @@ export default function BasPage() {
   const [planError, setPlanError] = useState<string | null>(null);
   const [planSuccess, setPlanSuccess] = useState<string | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
+  const [report, setReport] = useState<BasDiscrepancyReport | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
 
   const basCycleId = preview?.basCycleId ?? null;
+  const verification = preview?.verification ?? null;
+  const hasDiscrepancies = Boolean(verification && verification.discrepancies.length > 0);
+
+  useEffect(() => {
+    setReport(null);
+    setReportError(null);
+    setReportLoading(false);
+  }, [verification?.report?.id, basCycleId]);
 
   const loadPreview = async () => {
     if (!token) return;
@@ -87,6 +100,44 @@ export default function BasPage() {
       setPlanSuccess(null);
     }
   }, [token, basCycleId]);
+
+  const handleDownloadReport = async (format: "pdf" | "json") => {
+    if (!token) return;
+    setReportError(null);
+    setReportLoading(true);
+    try {
+      const response = await fetchBasDiscrepancyReport(token);
+      const latest = response.report;
+      if (!latest) {
+        setReportError("Discrepancy report not available yet.");
+        return;
+      }
+      setReport(latest);
+      if (format === "pdf") {
+        if (!latest.pdfBase64) {
+          setReportError("PDF artifact is missing for this report.");
+          return;
+        }
+        downloadBase64File(
+          `bas-discrepancy-${latest.generatedAt}.pdf`,
+          latest.pdfBase64,
+          "application/pdf",
+        );
+      } else {
+        const jsonString = JSON.stringify(latest.json ?? latest, null, 2);
+        downloadTextFile(
+          `bas-discrepancy-${latest.generatedAt}.json`,
+          jsonString,
+          "application/json",
+        );
+      }
+    } catch (err) {
+      console.error(err);
+      setReportError("Unable to download discrepancy report");
+    } finally {
+      setReportLoading(false);
+    }
+  };
 
   async function handleLodge() {
     if (!token) return;
@@ -240,6 +291,98 @@ export default function BasPage() {
             <ObligationCard title="PAYGW" data={preview.paygw} />
             <ObligationCard title="GST" data={preview.gst} />
           </section>
+
+          {verification && (
+            <section style={verificationCardStyle}>
+              <h2 style={sectionTitleStyle}>Designated balance verification</h2>
+              <p style={metaTextStyle}>
+                We reconcile STP payroll summaries and POS GST feeds against the PAYGW and GST
+                designated accounts before releasing BAS funds.
+              </p>
+              <table style={verificationTableStyle}>
+                <thead>
+                  <tr>
+                    <th style={verificationThStyle}>Tax</th>
+                    <th style={verificationThStyle}>Expected</th>
+                    <th style={verificationThStyle}>Designated</th>
+                    <th style={verificationThStyle}>Delta</th>
+                    <th style={verificationThStyle}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {([
+                    ["PAYGW", verification.expected.paygw, verification.designated.paygw] as const,
+                    ["GST", verification.expected.gst, verification.designated.gst] as const,
+                  ]).map(([label, expectedValue, designatedValue]) => {
+                    const diff = designatedValue - expectedValue;
+                    const status = Math.abs(diff) <= 0.5 ? "READY" : diff >= 0 ? "EXCESS" : "SHORT";
+                    return (
+                      <tr key={label}>
+                        <td style={verificationTdStyle}>{label}</td>
+                        <td style={verificationTdStyle}>{formatCurrency(expectedValue)}</td>
+                        <td style={verificationTdStyle}>{formatCurrency(designatedValue)}</td>
+                        <td style={verificationTdStyle}>{formatCurrency(diff)}</td>
+                        <td style={verificationStatusStyle(status)}>{status}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {hasDiscrepancies ? (
+                <>
+                  <p style={{ ...metaTextStyle, marginTop: "12px" }}>
+                    Discrepancies detected:
+                  </p>
+                  <ul style={blockersListStyle}>
+                    {verification.discrepancies.map((item, idx) => (
+                      <li key={idx} style={blockerItemStyle}>
+                        <strong>{item.tax}</strong>: {item.guidance} (delta {formatCurrency(item.delta)})
+                      </li>
+                    ))}
+                  </ul>
+                  <div style={reportActionsStyle}>
+                    <button
+                      type="button"
+                      style={downloadButtonStyle}
+                      onClick={() => handleDownloadReport("pdf")}
+                      disabled={reportLoading}
+                    >
+                      {reportLoading ? "Preparing PDF..." : "Download discrepancy report (PDF)"}
+                    </button>
+                    <button
+                      type="button"
+                      style={secondaryDownloadButtonStyle}
+                      onClick={() => handleDownloadReport("json")}
+                      disabled={reportLoading}
+                    >
+                      {reportLoading ? "Preparing JSON..." : "Download report JSON"}
+                    </button>
+                  </div>
+                  {reportError && <div style={errorTextStyle}>{reportError}</div>}
+                  {verification.report && (
+                    <div style={metaTextStyle}>
+                      Latest report hash: <code>{verification.report.sha256}</code>
+                      {verification.report.jsonHash && (
+                        <>
+                          {" "}(JSON digest <code>{verification.report.jsonHash}</code>)
+                        </>
+                      )}
+                    </div>
+                  )}
+                  {report && (
+                    <div style={metaTextStyle}>
+                      Downloaded artifact hash: <code>{report.sha256}</code>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={infoTextStyle}>
+                  All designated balances align with expected PAYGW and GST obligations for this BAS
+                  cycle.
+                </div>
+              )}
+            </section>
+          )}
 
           {preview.blockers.length > 0 && (
             <section style={blockersCardStyle}>
@@ -592,6 +735,103 @@ const blockersListStyle: React.CSSProperties = {
 const blockerItemStyle: React.CSSProperties = {
   lineHeight: 1.5,
 };
+
+const verificationCardStyle: React.CSSProperties = {
+  backgroundColor: "#ffffff",
+  borderRadius: "12px",
+  border: "1px solid #e2e8f0",
+  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.08)",
+  padding: "20px 24px",
+  display: "grid",
+  gap: "12px",
+};
+
+const verificationTableStyle: React.CSSProperties = {
+  width: "100%",
+  borderCollapse: "collapse",
+  marginTop: "4px",
+};
+
+const verificationThStyle: React.CSSProperties = {
+  textAlign: "left",
+  fontSize: "12px",
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+  color: "#6b7280",
+  borderBottom: "1px solid #e5e7eb",
+  padding: "8px 12px",
+};
+
+const verificationTdStyle: React.CSSProperties = {
+  fontSize: "14px",
+  padding: "10px 12px",
+  borderBottom: "1px solid #f1f5f9",
+};
+
+function verificationStatusStyle(status: string): React.CSSProperties {
+  const palette =
+    status === "READY"
+      ? { bg: "rgba(16, 185, 129, 0.12)", text: "#047857" }
+      : status === "EXCESS"
+        ? { bg: "rgba(59, 130, 246, 0.12)", text: "#1d4ed8" }
+        : { bg: "rgba(239, 68, 68, 0.12)", text: "#b91c1c" };
+  return {
+    fontWeight: 600,
+    color: palette.text,
+    backgroundColor: palette.bg,
+    padding: "4px 10px",
+    borderRadius: "999px",
+    display: "inline-block",
+    fontSize: "12px",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+  };
+}
+
+const reportActionsStyle: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "12px",
+  alignItems: "center",
+  marginTop: "12px",
+};
+
+const downloadButtonStyle: React.CSSProperties = {
+  padding: "10px 16px",
+  backgroundColor: "#1d4ed8",
+  border: "none",
+  borderRadius: "8px",
+  color: "#ffffff",
+  fontWeight: 600,
+  cursor: "pointer",
+};
+
+const secondaryDownloadButtonStyle: React.CSSProperties = {
+  ...downloadButtonStyle,
+  backgroundColor: "#e0f2fe",
+  color: "#1d4ed8",
+};
+
+function downloadBase64File(filename: string, base64: string, mimeType: string) {
+  const link = document.createElement("a");
+  link.href = `data:${mimeType};base64,${base64}`;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function downloadTextFile(filename: string, content: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
 
 const accountsCardStyle: React.CSSProperties = {
   backgroundColor: "#ffffff",

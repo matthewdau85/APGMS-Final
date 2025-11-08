@@ -4,6 +4,8 @@ import {
   fetchRegulatorBankSummary,
   fetchRegulatorComplianceReport,
   fetchRegulatorMonitoringSnapshots,
+  fetchRegulatorBasDiscrepancyReport,
+  type BasDiscrepancyReport,
 } from "./api";
 import { getRegulatorSession, getRegulatorToken } from "./regulatorAuth";
 
@@ -19,6 +21,7 @@ type State = {
   alerts: AlertsResponse["alerts"] | null;
   snapshots: MonitoringResponse["snapshots"] | null;
   bankSummary: BankSummaryResponse | null;
+  discrepancyReport: BasDiscrepancyReport | null;
 };
 
 const initialState: State = {
@@ -28,12 +31,14 @@ const initialState: State = {
   alerts: null,
   snapshots: null,
   bankSummary: null,
+  discrepancyReport: null,
 };
 
 export default function RegulatorOverviewPage() {
   const token = getRegulatorToken();
   const session = getRegulatorSession();
   const [state, setState] = useState<State>(initialState);
+  const [reportError, setReportError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) {
@@ -44,11 +49,12 @@ export default function RegulatorOverviewPage() {
     async function load() {
       setState(initialState);
       try {
-        const [compliance, alerts, snapshots, bankSummary] = await Promise.all([
+        const [compliance, alerts, snapshots, bankSummary, discrepancy] = await Promise.all([
           fetchRegulatorComplianceReport(token),
           fetchRegulatorAlerts(token),
           fetchRegulatorMonitoringSnapshots(token, 5),
           fetchRegulatorBankSummary(token),
+          fetchRegulatorBasDiscrepancyReport(token),
         ]);
         if (cancelled) return;
         setState({
@@ -58,6 +64,7 @@ export default function RegulatorOverviewPage() {
           alerts: alerts.alerts,
           snapshots: snapshots.snapshots,
           bankSummary,
+          discrepancyReport: discrepancy.report,
         });
       } catch (error) {
         if (cancelled) return;
@@ -69,6 +76,7 @@ export default function RegulatorOverviewPage() {
           alerts: null,
           snapshots: null,
           bankSummary: null,
+          discrepancyReport: null,
         });
       }
     }
@@ -79,6 +87,40 @@ export default function RegulatorOverviewPage() {
   }, [token]);
 
   const latestSnapshot = useMemo(() => state.snapshots?.[0] ?? null, [state.snapshots]);
+  const discrepancy = state.discrepancyReport;
+  const hasDiscrepancies = Boolean(discrepancy && discrepancy.discrepancies.length > 0);
+  const reportId = discrepancy?.id ?? null;
+
+  useEffect(() => {
+    setReportError(null);
+  }, [reportId]);
+
+  const handleDownloadReport = (format: "pdf" | "json") => {
+    setReportError(null);
+    if (!discrepancy) {
+      setReportError("Discrepancy report is not available yet.");
+      return;
+    }
+    if (format === "pdf") {
+      if (!discrepancy.pdfBase64) {
+        setReportError("PDF artifact missing from latest report.");
+        return;
+      }
+      downloadBase64File(
+        `bas-discrepancy-${discrepancy.generatedAt}.pdf`,
+        discrepancy.pdfBase64,
+        "application/pdf",
+      );
+      return;
+    }
+
+    const jsonString = JSON.stringify(discrepancy.json ?? discrepancy, null, 2);
+    downloadTextFile(
+      `bas-discrepancy-${discrepancy.generatedAt}.json`,
+      jsonString,
+      "application/json",
+    );
+  };
 
   if (!token) {
     return (
@@ -162,6 +204,138 @@ export default function RegulatorOverviewPage() {
             ))
           )}
         </div>
+      </section>
+
+      <section style={sectionStyle}>
+        <div style={sectionHeaderRowStyle}>
+          <div>
+            <h2 style={sectionTitleStyle}>BAS discrepancy report</h2>
+            <p style={sectionSubtitleStyle}>
+              Latest verifier output comparing designated balances with expected PAYGW/GST.
+            </p>
+          </div>
+          {discrepancy ? (
+            <div style={discrepancyMetaStyle}>
+              <span>Generated {formatDate(discrepancy.generatedAt)}</span>
+              <span>
+                SHA-256 <code style={monoHashStyle}>{discrepancy.sha256}</code>
+              </span>
+            </div>
+          ) : null}
+        </div>
+        {reportError ? <div style={errorBannerStyle}>{reportError}</div> : null}
+        {discrepancy ? (
+          <div style={discrepancyGridStyle}>
+            <div style={discrepancySummaryColumnStyle}>
+              <div style={discrepancySummaryCardStyle}>
+                <div>
+                  <div style={discrepancySummaryLabelStyle}>BAS cycle</div>
+                  <div style={discrepancySummaryValueStyle}>
+                    {discrepancy.basCycle
+                      ? formatDateRange(
+                          discrepancy.basCycle.periodStart,
+                          discrepancy.basCycle.periodEnd,
+                        )
+                      : "No BAS cycle linked"}
+                  </div>
+                </div>
+                <div style={discrepancyAmountsGridStyle}>
+                  <div style={discrepancyAmountCardStyle}>
+                    <span style={discrepancySummaryLabelStyle}>Expected PAYGW</span>
+                    <strong style={discrepancySummaryValueStyle}>
+                      {discrepancy.expected
+                        ? formatCurrency(discrepancy.expected.paygw)
+                        : "—"}
+                    </strong>
+                  </div>
+                  <div style={discrepancyAmountCardStyle}>
+                    <span style={discrepancySummaryLabelStyle}>Designated PAYGW</span>
+                    <strong style={discrepancySummaryValueStyle}>
+                      {discrepancy.designated
+                        ? formatCurrency(discrepancy.designated.paygw)
+                        : "—"}
+                    </strong>
+                  </div>
+                  <div style={discrepancyAmountCardStyle}>
+                    <span style={discrepancySummaryLabelStyle}>Expected GST</span>
+                    <strong style={discrepancySummaryValueStyle}>
+                      {discrepancy.expected
+                        ? formatCurrency(discrepancy.expected.gst)
+                        : "—"}
+                    </strong>
+                  </div>
+                  <div style={discrepancyAmountCardStyle}>
+                    <span style={discrepancySummaryLabelStyle}>Designated GST</span>
+                    <strong style={discrepancySummaryValueStyle}>
+                      {discrepancy.designated
+                        ? formatCurrency(discrepancy.designated.gst)
+                        : "—"}
+                    </strong>
+                  </div>
+                </div>
+                <div style={discrepancyStatusBadge(hasDiscrepancies)}>
+                  {hasDiscrepancies ? "Remittance blocked" : "No discrepancies detected"}
+                </div>
+              </div>
+              <div style={discrepancyActionsStyle}>
+                <button type="button" style={downloadButtonStyle} onClick={() => handleDownloadReport("pdf")}>
+                  Download PDF report
+                </button>
+                <button
+                  type="button"
+                  style={secondaryDownloadButtonStyle}
+                  onClick={() => handleDownloadReport("json")}
+                >
+                  Download JSON evidence
+                </button>
+              </div>
+            </div>
+            <div style={discrepancyDetailColumnStyle}>
+              <div style={discrepancyDetailCardStyle}>
+                <div style={discrepancyDetailHeaderStyle}>Discrepancies</div>
+                {discrepancy.discrepancies.length === 0 ? (
+                  <div style={emptyStateStyle}>No variance captured in latest cycle.</div>
+                ) : (
+                  <div style={discrepancyListStyle}>
+                    {discrepancy.discrepancies.map((item, idx) => (
+                      <div key={`${item.tax}-${idx}`} style={discrepancyListItemStyle}>
+                        <div style={discrepancyItemHeaderStyle}>
+                          <span style={discrepancyTagStyle}>{item.tax}</span>
+                          <span style={discrepancyDeltaStyle(item.delta)}>
+                            {item.delta >= 0 ? "Shortfall" : "Surplus"} {formatCurrency(Math.abs(item.delta))}
+                          </span>
+                        </div>
+                        <div style={discrepancyItemMetricsStyle}>
+                          <span>Expected {formatCurrency(item.expected)}</span>
+                          <span>Designated {formatCurrency(item.designated)}</span>
+                        </div>
+                        <p style={discrepancyGuidanceStyle}>{item.guidance}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div style={discrepancyDetailCardStyle}>
+                <div style={discrepancyDetailHeaderStyle}>Remediation steps</div>
+                {discrepancy.remediation.length === 0 ? (
+                  <div style={emptyStateStyle}>No remediation guidance recorded.</div>
+                ) : (
+                  <ul style={remediationListStyle}>
+                    {discrepancy.remediation.map((step, idx) => (
+                      <li key={idx} style={remediationItemStyle}>
+                        {step}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div style={emptyStateStyle}>
+            Verification aligned with designated balances; no discrepancy report has been issued yet.
+          </div>
+        )}
       </section>
 
       <section style={sectionStyle}>
@@ -266,6 +440,20 @@ function formatDate(value: string | null): string {
     dateStyle: "medium",
     timeStyle: "short",
   });
+}
+
+function formatDateRange(start: string | null, end: string | null): string {
+  if (!start && !end) return "—";
+  const opts: Intl.DateTimeFormatOptions = { dateStyle: "medium" };
+  if (start && end) {
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    return `${startDate.toLocaleDateString("en-AU", opts)} → ${endDate.toLocaleDateString("en-AU", opts)}`;
+  }
+  if (start) {
+    return new Date(start).toLocaleDateString("en-AU", opts);
+  }
+  return new Date(end!).toLocaleDateString("en-AU", opts);
 }
 
 type StatusTone = "ok" | "warn";
@@ -395,11 +583,34 @@ const sectionTitleStyle: React.CSSProperties = {
   color: "#0f172a",
 };
 
+const sectionSubtitleStyle: React.CSSProperties = {
+  fontSize: "14px",
+  color: "#475569",
+  margin: "6px 0 0",
+  maxWidth: "520px",
+};
+
+const sectionHeaderRowStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "16px",
+  alignItems: "flex-start",
+  flexWrap: "wrap",
+};
+
 const emptyStateStyle: React.CSSProperties = {
   padding: "16px",
   borderRadius: "8px",
   background: "#f1f5f9",
   color: "#475569",
+  fontSize: "14px",
+};
+
+const errorBannerStyle: React.CSSProperties = {
+  padding: "12px 16px",
+  borderRadius: "8px",
+  background: "rgba(239, 68, 68, 0.12)",
+  color: "#b91c1c",
   fontSize: "14px",
 };
 
@@ -545,3 +756,203 @@ const bankSummaryValueStyle: React.CSSProperties = {
   fontWeight: 600,
   color: "#0f172a",
 };
+
+const discrepancyMetaStyle: React.CSSProperties = {
+  display: "grid",
+  gap: "4px",
+  fontSize: "13px",
+  color: "#475569",
+  justifyItems: "end",
+};
+
+const monoHashStyle: React.CSSProperties = {
+  fontFamily: "'IBM Plex Mono', 'SFMono-Regular', 'Menlo', monospace",
+  fontSize: "12px",
+  background: "#f8fafc",
+  padding: "2px 6px",
+  borderRadius: "4px",
+};
+
+const discrepancyGridStyle: React.CSSProperties = {
+  display: "grid",
+  gap: "20px",
+  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+};
+
+const discrepancySummaryColumnStyle: React.CSSProperties = {
+  display: "grid",
+  gap: "16px",
+};
+
+const discrepancyDetailColumnStyle: React.CSSProperties = {
+  display: "grid",
+  gap: "16px",
+};
+
+const discrepancySummaryCardStyle: React.CSSProperties = {
+  border: "1px solid #e2e8f0",
+  borderRadius: "12px",
+  padding: "18px",
+  display: "grid",
+  gap: "16px",
+  background: "#f8fafc",
+};
+
+const discrepancySummaryLabelStyle: React.CSSProperties = {
+  fontSize: "13px",
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+  color: "#64748b",
+};
+
+const discrepancySummaryValueStyle: React.CSSProperties = {
+  fontSize: "16px",
+  fontWeight: 600,
+  color: "#0f172a",
+};
+
+const discrepancyAmountsGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gap: "12px",
+};
+
+const discrepancyAmountCardStyle: React.CSSProperties = {
+  background: "#ffffff",
+  borderRadius: "10px",
+  border: "1px solid #e2e8f0",
+  padding: "12px",
+  display: "grid",
+  gap: "8px",
+};
+
+const discrepancyStatusBadge = (active: boolean): React.CSSProperties => ({
+  alignSelf: "flex-start",
+  padding: "6px 12px",
+  borderRadius: "999px",
+  background: active ? "rgba(234, 179, 8, 0.14)" : "rgba(16, 185, 129, 0.12)",
+  color: active ? "#92400e" : "#047857",
+  fontWeight: 600,
+  fontSize: "12px",
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+});
+
+const discrepancyActionsStyle: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "12px",
+};
+
+const downloadButtonStyle: React.CSSProperties = {
+  padding: "10px 16px",
+  backgroundColor: "#1d4ed8",
+  border: "none",
+  borderRadius: "8px",
+  color: "#ffffff",
+  fontWeight: 600,
+  cursor: "pointer",
+};
+
+const secondaryDownloadButtonStyle: React.CSSProperties = {
+  ...downloadButtonStyle,
+  backgroundColor: "#e0f2fe",
+  color: "#1d4ed8",
+};
+
+const discrepancyDetailCardStyle: React.CSSProperties = {
+  border: "1px solid #e2e8f0",
+  borderRadius: "12px",
+  padding: "18px",
+  display: "grid",
+  gap: "12px",
+};
+
+const discrepancyDetailHeaderStyle: React.CSSProperties = {
+  fontSize: "15px",
+  fontWeight: 600,
+  color: "#0f172a",
+};
+
+const discrepancyListStyle: React.CSSProperties = {
+  display: "grid",
+  gap: "12px",
+};
+
+const discrepancyListItemStyle: React.CSSProperties = {
+  border: "1px solid #cbd5f5",
+  borderRadius: "10px",
+  padding: "12px",
+  background: "#ffffff",
+  display: "grid",
+  gap: "8px",
+};
+
+const discrepancyItemHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "12px",
+};
+
+const discrepancyTagStyle: React.CSSProperties = {
+  fontSize: "12px",
+  fontWeight: 700,
+  color: "#1e3a8a",
+  letterSpacing: "0.08em",
+};
+
+const discrepancyDeltaStyle = (delta: number): React.CSSProperties => ({
+  fontSize: "13px",
+  fontWeight: 600,
+  color: delta >= 0 ? "#b91c1c" : "#047857",
+});
+
+const discrepancyItemMetricsStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "12px",
+  fontSize: "13px",
+  color: "#475569",
+};
+
+const discrepancyGuidanceStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: "13px",
+  color: "#334155",
+  lineHeight: 1.5,
+};
+
+const remediationListStyle: React.CSSProperties = {
+  margin: 0,
+  paddingInlineStart: "18px",
+  display: "grid",
+  gap: "8px",
+  color: "#334155",
+  fontSize: "13px",
+};
+
+const remediationItemStyle: React.CSSProperties = {
+  lineHeight: 1.5,
+};
+
+function downloadBase64File(filename: string, base64: string, mimeType: string) {
+  const link = document.createElement("a");
+  link.href = `data:${mimeType};base64,${base64}`;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function downloadTextFile(filename: string, content: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
