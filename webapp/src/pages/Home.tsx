@@ -51,17 +51,32 @@ export default function HomePage() {
         </p>
       </header>
 
-      <section aria-label="Key metrics" className="metric-grid">
-        {metrics.map((metric) => (
-          <article className="metric-card" key={metric.title}>
-            <header className="metric-card__header">
-              <h2>{metric.title}</h2>
-              <span className="metric-card__change">{metric.change}</span>
-            </header>
-            <p className="metric-card__value">{metric.value}</p>
-            <p className="metric-card__description">{metric.description}</p>
-          </article>
-        ))}
+      <section aria-label="Key metrics">
+        <dl className="metric-grid">
+          {metrics.map((metric, index) => {
+            const changeId = `metric-${index}-change`;
+
+            return (
+              <div className="metric-card" key={metric.title}>
+                <div className="metric-card__header">
+                  <dt className="metric-card__title">{metric.title}</dt>
+                  <dd className="metric-card__change">
+                    <span className="metric-card__change-badge" aria-hidden="true">
+                      {metric.change}
+                    </span>
+                    <span className="sr-only" id={changeId}>
+                      Change for {metric.title}: {metric.change}
+                    </span>
+                  </dd>
+                </div>
+                <dd aria-describedby={changeId} className="metric-card__value">
+                  {metric.value}
+                </dd>
+                <dd className="metric-card__description">{metric.description}</dd>
+              </div>
+            );
+          })}
+        </dl>
       </section>
 
       <section aria-label="Latest activity" className="activity">
