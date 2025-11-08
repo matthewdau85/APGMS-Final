@@ -1,0 +1,29 @@
+{
+  "name": "@apgms/shared-au",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./abn": {
+      "import": "./dist/abn.js",
+      "types": "./dist/abn.d.ts"
+    },
+    "./tfn": {
+      "import": "./dist/tfn.js",
+      "types": "./dist/tfn.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

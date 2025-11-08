@@ -1,6 +1,6 @@
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
-import { Resource } from "@opentelemetry/resources";
+import { resourceFromAttributes } from "@opentelemetry/resources";
 import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
 import { HttpInstrumentation } from "@opentelemetry/instrumentation-http";
 import { FastifyInstrumentation } from "@opentelemetry/instrumentation-fastify";
@@ -38,14 +38,16 @@ export async function initTracing(
     headers: parseHeaders(),
   });
 
+  const resource = resourceFromAttributes({
+    [SemanticResourceAttributes.SERVICE_NAME]:
+      process.env.OTEL_SERVICE_NAME ?? serviceName,
+    [SemanticResourceAttributes.SERVICE_VERSION]:
+      process.env.APP_VERSION ?? "0.1.0",
+  });
+
   sdk = new NodeSDK({
     traceExporter: exporter,
-    resource: new Resource({
-      [SemanticResourceAttributes.SERVICE_NAME]:
-        process.env.OTEL_SERVICE_NAME ?? serviceName,
-      [SemanticResourceAttributes.SERVICE_VERSION]:
-        process.env.APP_VERSION ?? "0.1.0",
-    }),
+    resource,
     instrumentations: [
       new HttpInstrumentation(),
       new FastifyInstrumentation(),
