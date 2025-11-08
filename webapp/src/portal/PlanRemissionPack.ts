@@ -100,36 +100,34 @@ export async function generatePlanRemissionPack(
     ],
   };
 
-  let manifestBlob = new Blob([JSON.stringify(manifestWithDigest, null, 2)], {
-    type: "application/json",
-  });
-  let manifestHash = await digestBlob(manifestBlob);
+  let manifestFinal: PlanRemissionPackManifest = manifestWithDigest;
+  let manifestBlob: Blob;
+  let manifestHash: string | null = null;
 
-  let manifestFinal: PlanRemissionPackManifest = {
-    ...manifestWithDigest,
-    files: manifestWithDigest.files.map((file) =>
-      file.kind === "manifest" ? { ...file, size: manifestBlob.size } : file,
-    ),
-  };
-
-  manifestBlob = new Blob([JSON.stringify(manifestFinal, null, 2)], {
-    type: "application/json",
-  });
-  manifestHash = await digestBlob(manifestBlob);
-
-  const manifestSize = manifestBlob.size;
-  const manifestEntry = manifestFinal.files.find((file) => file.kind === "manifest");
-  if (manifestEntry && manifestEntry.size !== manifestSize) {
-    manifestFinal = {
-      ...manifestFinal,
-      files: manifestFinal.files.map((file) =>
-        file.kind === "manifest" ? { ...file, size: manifestSize } : file,
-      ),
-    };
+  while (true) {
     manifestBlob = new Blob([JSON.stringify(manifestFinal, null, 2)], {
       type: "application/json",
     });
-    manifestHash = await digestBlob(manifestBlob);
+    const nextHash = await digestBlob(manifestBlob);
+    const nextSize = manifestBlob.size;
+
+    const manifestEntry = manifestFinal.files.find(
+      (file) => file.kind === "manifest",
+    );
+
+    if (manifestEntry?.size === nextSize && manifestEntry.sha256 === nextHash) {
+      manifestHash = nextHash;
+      break;
+    }
+
+    manifestFinal = {
+      ...manifestFinal,
+      files: manifestFinal.files.map((file) =>
+        file.kind === "manifest"
+          ? { ...file, size: nextSize, sha256: nextHash }
+          : file,
+      ),
+    };
   }
 
   const boundary = `apgms-plan-remission-${issuedAt.getTime()}`;
