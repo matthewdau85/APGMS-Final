@@ -48,6 +48,7 @@ import {
 import { recordAuditLog } from "./lib/audit.js";
 import { ensureRegulatorSessionActive } from "./lib/regulator-session.js";
 import { withIdempotency } from "./lib/idempotency.js";
+import { createChaosState } from "./lib/chaos.js";
 import { metrics, promRegister } from "./observability/metrics.js";
 import { attachPrismaMetrics } from "./observability/prisma-metrics.js";
 import { closeProviders, initProviders } from "./providers.js";
@@ -751,6 +752,12 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   const allowedOrigins = new Set(config.cors.allowedOrigins);
 
+  const chaosState = createChaosState(
+    app.log,
+    (process.env.CHAOS_ALLOW ?? "false").toLowerCase() === "true"
+  );
+  app.decorate("chaosState", chaosState);
+
   const providers = await initProviders(app.log);
   app.decorate("providers", providers);
   app.addHook("onClose", async () => {
@@ -796,6 +803,9 @@ export async function buildServer(): Promise<FastifyInstance> {
 
     try {
       metrics.httpRequestTotal.labels(method, route, status).inc();
+      if (status.startsWith("5")) {
+        metrics.httpRequestErrorsTotal.labels(route).inc();
+      }
       if (typeof metricState.timer === "function") {
         metricState.timer({ status });
       } else {
@@ -895,22 +905,30 @@ export async function buildServer(): Promise<FastifyInstance> {
     }
 
     const providerState = app.providers;
+    const chaos = app.chaosState;
+    const queueBacklog = chaos.enabled ? { ...chaos.dependencies.queueBacklog } : {};
     const results: {
       db: boolean;
       redis: boolean | null;
       nats: boolean | null;
+      queueBacklog: Record<string, number>;
     } = {
       db: false,
       redis: providerState.redis ? false : null,
       nats: providerState.nats ? false : null,
+      queueBacklog,
     };
 
-    try {
-      await prisma.$queryRaw`SELECT 1`;
-      results.db = true;
-    } catch (error) {
-      app.log.error({ err: error }, "readiness_db_check_failed");
+    if (chaos.enabled && chaos.dependencies.dbDown) {
       results.db = false;
+    } else {
+      try {
+        await prisma.$queryRaw`SELECT 1`;
+        results.db = true;
+      } catch (error) {
+        app.log.error({ err: error }, "readiness_db_check_failed");
+        results.db = false;
+      }
     }
 
     if (providerState.redis) {
@@ -938,18 +956,114 @@ export async function buildServer(): Promise<FastifyInstance> {
       (results.redis !== false) &&
       (results.nats !== false);
 
+    const payload: {
+      ok: boolean;
+      components: typeof results;
+      chaos?: {
+        enabled: true;
+        dependencies: {
+          dbDown: boolean;
+          queueBacklog: Record<string, number>;
+        };
+        events: typeof chaos.events;
+      };
+    } = {
+      ok: healthy,
+      components: results,
+    };
+
+    if (chaos.enabled) {
+      payload.chaos = {
+        enabled: true,
+        dependencies: {
+          dbDown: chaos.dependencies.dbDown,
+          queueBacklog,
+        },
+        events: chaos.events.slice(-5),
+      };
+    }
+
     if (!healthy) {
-      reply.code(503).send({ ok: false, components: results });
+      reply.code(503).send(payload);
       return;
     }
 
-    reply.send({ ok: true, components: results });
+    reply.send(payload);
   });
 
   app.get("/metrics", async (_, reply) => {
     reply.header("content-type", promRegister.contentType);
     reply.send(await promRegister.metrics());
   });
+
+  if (chaosState.enabled) {
+    app.post("/__chaos/dependencies/db/down", async (_request, reply) => {
+      if (!chaosState.dependencies.dbDown) {
+        chaosState.dependencies.dbDown = true;
+        chaosState.recordEvent("dependency_outage", "Database marked unavailable for drill");
+      }
+      reply.send({ ok: true, dependencies: chaosState.dependencies });
+    });
+
+    app.post("/__chaos/dependencies/db/up", async (_request, reply) => {
+      if (chaosState.dependencies.dbDown) {
+        chaosState.dependencies.dbDown = false;
+        chaosState.recordEvent("recovery", "Database connectivity restored after drill");
+      }
+      reply.send({ ok: true, dependencies: chaosState.dependencies });
+    });
+
+    app.post<{ Body: { queue?: string; depth?: number; reason?: string } }>(
+      "/__chaos/queues/backlog",
+      async (request, reply) => {
+        const queue = request.body?.queue?.trim();
+        const depthRaw = request.body?.depth ?? 0;
+        const depth = Number(depthRaw);
+        if (!queue) {
+          reply.status(400).send({ ok: false, error: "queue_required" });
+          return;
+        }
+        if (!Number.isFinite(depth) || depth < 0) {
+          reply.status(400).send({ ok: false, error: "invalid_depth" });
+          return;
+        }
+
+        chaosState.dependencies.queueBacklog[queue] = depth;
+        metrics.queueBacklogDepth.labels(queue).set(depth);
+        chaosState.recordEvent(
+          "dependency_outage",
+          `Queue backlog simulated for ${queue} (${depth})`,
+          { queue, depth, reason: request.body?.reason ?? null }
+        );
+
+        reply.send({ ok: true, queue, depth });
+      }
+    );
+
+    app.post<{ Body: { queue?: string; reason?: string } }>(
+      "/__chaos/queues/recover",
+      async (request, reply) => {
+        const queue = request.body?.queue?.trim();
+        if (!queue) {
+          reply.status(400).send({ ok: false, error: "queue_required" });
+          return;
+        }
+
+        chaosState.dependencies.queueBacklog[queue] = 0;
+        metrics.queueBacklogDepth.labels(queue).set(0);
+        chaosState.recordEvent("recovery", `Queue backlog cleared for ${queue}`, {
+          queue,
+          reason: request.body?.reason ?? null,
+        });
+
+        reply.send({ ok: true, queue, depth: 0 });
+      }
+    );
+
+    app.get("/__chaos/events", async (_request, reply) => {
+      reply.send({ events: chaosState.events });
+    });
+  }
 
   // /auth/login (public)
   await registerAuthRoutes(app);
@@ -1918,6 +2032,8 @@ export async function buildServer(): Promise<FastifyInstance> {
           async () => {
             const snapshot = await createMonitoringSnapshot(orgId);
 
+            metrics.monitoringSnapshotLagSeconds.labels(orgId).set(0);
+
             await recordAuditLog({
               orgId,
               actorId: userClaims.sub,
@@ -1958,6 +2074,15 @@ export async function buildServer(): Promise<FastifyInstance> {
         orderBy: { createdAt: "desc" },
         take: limit,
       });
+
+      const latest = snapshots[0];
+      if (latest) {
+        const lagSeconds = Math.max(
+          0,
+          (Date.now() - latest.createdAt.getTime()) / 1000
+        );
+        metrics.monitoringSnapshotLagSeconds.labels(orgId).set(lagSeconds);
+      }
 
       await recordAuditLog({
         orgId,

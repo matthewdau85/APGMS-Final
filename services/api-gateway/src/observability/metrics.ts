@@ -1,5 +1,6 @@
 import {
   Counter,
+  Gauge,
   Histogram,
   collectDefaultMetrics,
   register as promRegister,
@@ -18,6 +19,12 @@ const httpRequestDuration = new Histogram({
   help: "HTTP request duration histogram",
   labelNames: ["method", "route", "status"] as const,
   buckets: [0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10],
+});
+
+const httpRequestErrorsTotal = new Counter({
+  name: "apgms_http_request_errors_total",
+  help: "Total number of HTTP requests that returned a 5xx status code",
+  labelNames: ["route"] as const,
 });
 
 const dbQueryDuration = new Histogram({
@@ -40,12 +47,27 @@ const jobDuration = new Histogram({
   buckets: [0.1, 0.25, 0.5, 1, 2, 5, 10, 30],
 });
 
+const queueBacklogDepth = new Gauge({
+  name: "apgms_queue_backlog_depth",
+  help: "Synthetic queue backlog depth by queue name",
+  labelNames: ["queue"] as const,
+});
+
+const monitoringSnapshotLagSeconds = new Gauge({
+  name: "apgms_monitoring_snapshot_lag_seconds",
+  help: "Age of the most recent monitoring snapshot in seconds",
+  labelNames: ["org_id"] as const,
+});
+
 export const metrics = {
   httpRequestTotal,
   httpRequestDuration,
+  httpRequestErrorsTotal,
   dbQueryDuration,
   dbQueryTotal,
   jobDuration,
+  queueBacklogDepth,
+  monitoringSnapshotLagSeconds,
   async observeJob<T>(job: string, fn: () => Promise<T>): Promise<T> {
     const stop = jobDuration.startTimer({ job });
     try {

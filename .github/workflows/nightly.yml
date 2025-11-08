@@ -25,6 +25,8 @@ jobs:
       - name: Install k6
         uses: grafana/setup-k6@v1
       - name: Start API Gateway
+        env:
+          CHAOS_ALLOW: "true"
         run: |
           pnpm --filter @apgms/api-gateway dev &
           echo $! > gateway.pid
@@ -47,6 +49,8 @@ jobs:
         run: pnpm smoke:regulator
       - name: Run k6 chaos smoke
         run: pnpm k6:smoke -- --env BASE_URL=http://localhost:3000
+      - name: Run dependency chaos drill
+        run: pnpm chaos:dependencies
       - name: Stop API Gateway
         if: always()
         run: kill $(cat gateway.pid) || true

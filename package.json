@@ -33,7 +33,8 @@
     "lint:markdown": "pnpm exec markdownlint **/*.md",
     "compliance:evidence": "node scripts/collect-evidence.mjs",
     "security:rotate-keys": "node scripts/rotate-pii-keys.mjs",
-        "backup:evidence-pack": "tsx scripts/export-evidence-pack.ts"
+    "chaos:dependencies": "node scripts/chaos-drill.mjs",
+    "backup:evidence-pack": "tsx scripts/export-evidence-pack.ts"
     },
     "devDependencies": {
         "@axe-core/playwright": "^4.9.2",
