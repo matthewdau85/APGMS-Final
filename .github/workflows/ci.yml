@@ -8,15 +8,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
       - uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'pnpm'
           cache-dependency-path: pnpm-lock.yaml
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -32,6 +35,9 @@ jobs:
       #    This is the "no merge with type errors" gate.
       - name: Typecheck
         run: pnpm -r typecheck
+
+      - name: Lint
+        run: pnpm -r --if-present lint
 
       # 3. Tests + coverage gate
       #    First run tests with coverage output...
@@ -87,21 +93,24 @@ jobs:
           chmod +x gitleaks
           ./gitleaks detect --no-color --redact --exit-code 1
 
-  axe:
+  a11y-smoke:
     needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'pnpm'
           cache-dependency-path: pnpm-lock.yaml
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps
@@ -119,15 +128,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
       - uses: actions/setup-node@v4
         with:
           node-version: '18'
-        cache: 'pnpm'
-        cache-dependency-path: pnpm-lock.yaml
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @apgms/webapp build
