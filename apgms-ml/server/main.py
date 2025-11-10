@@ -237,7 +237,7 @@ def threshold_for(bundle: ModelBundle, default: float = 0.5) -> float:
 
 
 @app.post("/score/gstfree", response_model=GstFreeResponse)
-async def score_gstfree(payload: GstFreePayload) -> GstFreeResponse:
+def score_gstfree(payload: GstFreePayload) -> GstFreeResponse:
     start = time.perf_counter()
     bundle = get_bundle("gstfree")
     features = ensure_features(payload_to_mapping(payload))
@@ -259,7 +259,7 @@ async def score_gstfree(payload: GstFreePayload) -> GstFreeResponse:
 
 
 @app.post("/score/bas_conf", response_model=BasConfidenceResponse)
-async def score_bas_conf(payload: BasConfidencePayload) -> BasConfidenceResponse:
+def score_bas_conf(payload: BasConfidencePayload) -> BasConfidenceResponse:
     start = time.perf_counter()
     bundle = get_bundle("bas_conf")
     features = ensure_features(payload_to_mapping(payload))
@@ -284,7 +284,7 @@ async def score_bas_conf(payload: BasConfidencePayload) -> BasConfidenceResponse
 
 
 @app.post("/score/paygw_var", response_model=PaygwVarianceResponse)
-async def score_paygw_var(payload: PaygwVariancePayload) -> PaygwVarianceResponse:
+def score_paygw_var(payload: PaygwVariancePayload) -> PaygwVarianceResponse:
     start = time.perf_counter()
     bundle = get_bundle("paygw_var")
     features = ensure_features(payload_to_mapping(payload))
@@ -303,7 +303,7 @@ async def score_paygw_var(payload: PaygwVariancePayload) -> PaygwVarianceRespons
 
 
 @app.post("/score/dups", response_model=DuplicatesResponse)
-async def score_dups(payload: DuplicatesPayload) -> DuplicatesResponse:
+def score_dups(payload: DuplicatesPayload) -> DuplicatesResponse:
     start = time.perf_counter()
     bundle = get_bundle("dups")
     features = ensure_features(payload_to_mapping(payload))
@@ -325,7 +325,7 @@ async def score_dups(payload: DuplicatesPayload) -> DuplicatesResponse:
 
 
 @app.post("/score/apportion", response_model=ApportionResponse)
-async def score_apportion(payload: ApportionPayload) -> ApportionResponse:
+def score_apportion(payload: ApportionPayload) -> ApportionResponse:
     start = time.perf_counter()
     bundle = get_bundle("apportion")
     features = ensure_features(payload_to_mapping(payload))
