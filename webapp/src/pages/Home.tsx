@@ -1,4 +1,5 @@
 ﻿import './Home.css';
+import { useRiskSnapshot } from '../useRiskSnapshot';
 
 const metrics = [
   {
@@ -41,6 +42,35 @@ const activities = [
 ];
 
 export default function HomePage() {
+  const { risk, error: riskError, loading: riskLoading } = useRiskSnapshot();
+
+  const renderRiskCard = (title: string, key: "shortfall" | "fraud") => {
+    if (!risk) return null;
+    const score = risk[key];
+    const topExplanation = score.top_explanations[0];
+    return (
+      <article className="risk-card" key={key}>
+        <header className={`risk-card__header risk-card__header--${score.risk_level}`}>
+          <div>
+            <h3>{title}</h3>
+            <p className="risk-card__score">{(score.score * 100).toFixed(1)}% risk</p>
+          </div>
+          <span className="risk-card__badge">{score.risk_level.toUpperCase()}</span>
+        </header>
+        {topExplanation && (
+          <p className="risk-card__explanation">
+            <strong>Driver:</strong> {topExplanation.rationale}
+          </p>
+        )}
+        <ul className="risk-card__mitigations">
+          {score.mitigations.slice(0, 2).map((step) => (
+            <li key={step}>{step}</li>
+          ))}
+        </ul>
+      </article>
+    );
+  };
+
   return (
     <div className="page">
       <header className="page__header">
@@ -62,6 +92,27 @@ export default function HomePage() {
             <p className="metric-card__description">{metric.description}</p>
           </article>
         ))}
+      </section>
+
+
+      <section aria-label="Risk insights" className="risk-insights">
+        <div className="risk-insights__header">
+          <h2>Risk insights</h2>
+          <p>Machine learning scores highlight BAS readiness and fraud posture in real time.</p>
+        </div>
+        {riskLoading && <p className="risk-insights__status">Loading risk insights...</p>}
+        {riskError && !riskLoading && (
+          <p className="risk-insights__status risk-insights__status--error">{riskError}</p>
+        )}
+        {!riskLoading && !riskError && risk && (
+          <div className="risk-insights__grid">
+            {renderRiskCard("BAS shortfall probability", "shortfall")}
+            {renderRiskCard("Fraud screening posture", "fraud")}
+          </div>
+        )}
+        {!riskLoading && !riskError && !risk && (
+          <p className="risk-insights__status">No risk data available.</p>
+        )}
       </section>
 
       <section aria-label="Latest activity" className="activity">

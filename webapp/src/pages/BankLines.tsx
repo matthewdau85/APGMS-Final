@@ -1,4 +1,5 @@
 ﻿import './BankLines.css';
+import { useRiskSnapshot } from '../useRiskSnapshot';
 
 type LineStatus = 'Active' | 'Pending' | 'Monitoring';
 
@@ -45,6 +46,8 @@ const statusLabels: Record<LineStatus, string> = {
 };
 
 export default function BankLinesPage() {
+  const { risk, error: riskError, loading: riskLoading } = useRiskSnapshot();
+
   return (
     <div className="bank-lines">
       <header className="bank-lines__header">
@@ -59,6 +62,31 @@ export default function BankLinesPage() {
           Export exposure report
         </button>
       </header>
+
+      <section className="bank-lines__risk">
+        <header>
+          <h2>Risk overview</h2>
+          <p>Transfers are automatically gated when ML scores exceed tolerances.</p>
+        </header>
+        {riskLoading && <p className="bank-lines__risk-status">Scoring exposure...</p>}
+        {riskError && !riskLoading && (
+          <p className="bank-lines__risk-status bank-lines__risk-status--error">{riskError}</p>
+        )}
+        {!riskLoading && risk && (
+          <div className="bank-lines__risk-cards">
+            <div className={`bank-lines__risk-card bank-lines__risk-card--${risk.shortfall.risk_level}`}>
+              <h3>Shortfall guardrail</h3>
+              <p className="bank-lines__risk-score">{(risk.shortfall.score * 100).toFixed(1)}% probability</p>
+              <p className="bank-lines__risk-detail">{risk.shortfall.mitigations[0] ?? 'Funding buffer healthy.'}</p>
+            </div>
+            <div className={`bank-lines__risk-card bank-lines__risk-card--${risk.fraud.risk_level}`}>
+              <h3>Fraud screening</h3>
+              <p className="bank-lines__risk-score">{(risk.fraud.score * 100).toFixed(1)}% probability</p>
+              <p className="bank-lines__risk-detail">{risk.fraud.mitigations[0] ?? 'No anomalous behaviour detected.'}</p>
+            </div>
+          </div>
+        )}
+      </section>
 
       <div className="bank-lines__table-wrapper">
         <table>

@@ -1,6 +1,7 @@
 ﻿import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { prisma } from "../db.js";
+import { shouldBlockTransfer, summarizeMitigations } from "../clients/ml-service.js";
 import { assertOrgAccess, redactBankLine } from "../utils/orgScope.js";
 
 // Accept the fields Prisma requires for a BankLine create
@@ -39,6 +40,41 @@ export const registerBankLinesRoutes: FastifyPluginAsync = async (app) => {
       return;
     }
 
+    const amountMillions = Math.max(0, data.amount / 1_000_000);
+    const [shortfallRisk, fraudRisk] = await Promise.all([
+      app.mlClient.scoreShortfall({
+        cash_on_hand: Math.max(0.2, 5 - amountMillions * 0.6),
+        monthly_burn: Math.max(0.1, amountMillions * 0.8 + 0.4),
+        obligations_due: Math.max(0.2, amountMillions * 0.9),
+        forecast_revenue: Math.max(0.1, 1.8 - amountMillions * 0.3),
+      }),
+      app.mlClient.scoreFraud({
+        transfer_amount: Math.max(0.05, amountMillions),
+        daily_velocity: Math.max(0.05, amountMillions * 1.6 + 0.2),
+        anomalous_counterparties: Math.max(0, Math.min(5, Math.round(amountMillions))),
+        auth_risk_score: Math.min(1, 0.25 + amountMillions / 6),
+        device_trust_score: Math.max(0.1, 0.9 - amountMillions / 8),
+      }),
+    ]);
+
+    if (shouldBlockTransfer(shortfallRisk)) {
+      reply.code(409).send({
+        error: "shortfall_risk",
+        risk: shortfallRisk,
+        mitigations: summarizeMitigations(shortfallRisk),
+      });
+      return;
+    }
+
+    if (shouldBlockTransfer(fraudRisk)) {
+      reply.code(409).send({
+        error: "fraud_risk",
+        risk: fraudRisk,
+        mitigations: summarizeMitigations(fraudRisk),
+      });
+      return;
+    }
+
     const rec = await prisma.bankLine.upsert({
       where: {
         orgId_idempotencyKey: {
@@ -59,7 +95,7 @@ export const registerBankLinesRoutes: FastifyPluginAsync = async (app) => {
       }
     });
 
-    reply.code(201).send(redactBankLine(rec));
+    reply.code(201).send({ ...redactBankLine(rec), risk: { shortfall: shortfallRisk, fraud: fraudRisk } });
   });
 
   // List for current org

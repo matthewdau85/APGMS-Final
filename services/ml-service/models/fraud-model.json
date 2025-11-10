@@ -1,0 +1,37 @@
+{
+  "name": "fraud",
+  "bias": -0.9,
+  "threshold": 0.58,
+  "features": [
+    {
+      "name": "transfer_amount",
+      "weight": 0.75,
+      "rationale": "High-value transfers attract additional screening and increase anomaly likelihood.",
+      "mitigation": "Split the transfer into staged releases with dual approval."
+    },
+    {
+      "name": "daily_velocity",
+      "weight": 0.65,
+      "rationale": "Spikes in outbound velocity relative to baseline suggest compromised access.",
+      "mitigation": "Throttle release cadence and confirm funding instructions with treasury."
+    },
+    {
+      "name": "anomalous_counterparties",
+      "weight": 0.55,
+      "rationale": "Recent alerts involving the counterparty increase fraud probability.",
+      "mitigation": "Run enhanced due diligence on the counterparty before approving."
+    },
+    {
+      "name": "auth_risk_score",
+      "weight": 1.2,
+      "rationale": "Elevated auth risk (device, step-up failures) is a strong fraud signal.",
+      "mitigation": "Require step-up MFA and verify initiator identity."
+    },
+    {
+      "name": "device_trust_score",
+      "weight": -1.1,
+      "rationale": "Trusted devices materially reduce fraud risk.",
+      "mitigation": "Harden device posture checks and re-register untrusted devices."
+    }
+  ]
+}

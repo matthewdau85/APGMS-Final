@@ -21,6 +21,42 @@ export type ApiSession = {
   };
 };
 
+
+export interface RiskFeatureExplanation {
+  name: string;
+  value: number;
+  weight: number;
+  impact: number;
+  rationale: string;
+  mitigation: string;
+}
+
+export interface RiskScore {
+  model: string;
+  score: number;
+  threshold: number;
+  risk_level: "low" | "medium" | "high";
+  exceeds_threshold: boolean;
+  mitigations: string[];
+  top_explanations: RiskFeatureExplanation[];
+}
+
+export interface RiskDashboardResponse {
+  shortfall: RiskScore;
+  fraud: RiskScore;
+}
+
+export async function getRiskDashboard(): Promise<RiskDashboardResponse> {
+  const res = await fetch(`${API_BASE}/risk/dashboard`, {
+    method: "GET",
+    headers: { "content-type": "application/json" },
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to load risk dashboard (${res.status})`);
+  }
+  return (await res.json()) as RiskDashboardResponse;
+}
+
 export async function login(email: string, password: string) {
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: "POST",

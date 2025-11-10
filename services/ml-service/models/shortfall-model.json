@@ -1,0 +1,31 @@
+{
+  "name": "shortfall",
+  "bias": -1.35,
+  "threshold": 0.62,
+  "features": [
+    {
+      "name": "cash_on_hand",
+      "weight": -0.85,
+      "rationale": "Cash buffers extend runway and absorb BAS remittances without stress.",
+      "mitigation": "Increase cash reserves in designated accounts before BAS cut-off."
+    },
+    {
+      "name": "monthly_burn",
+      "weight": 0.9,
+      "rationale": "Higher operating spend relative to reserves compresses the BAS readiness runway.",
+      "mitigation": "Stage discretionary spend or move payroll to weekly sweeps to smooth burn."
+    },
+    {
+      "name": "obligations_due",
+      "weight": 1.1,
+      "rationale": "Large upcoming PAYGW/GST obligations raise the probability of shortfall.",
+      "mitigation": "Top up the BAS escrow account and reforecast the liability schedule."
+    },
+    {
+      "name": "forecast_revenue",
+      "weight": -0.6,
+      "rationale": "Near-term cash inflows offset the upcoming statutory payments.",
+      "mitigation": "Accelerate receivables collection or lodge instalment plans with ATO."
+    }
+  ]
+}

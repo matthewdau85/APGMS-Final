@@ -40,6 +40,69 @@
   outline-offset: 2px;
 }
 
+
+.bank-lines__risk {
+  background-color: var(--color-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  padding: var(--spacing-xl);
+  display: grid;
+  gap: var(--spacing-lg);
+}
+
+.bank-lines__risk header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+}
+
+.bank-lines__risk-status {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.bank-lines__risk-status--error {
+  color: var(--color-danger);
+}
+
+.bank-lines__risk-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: var(--spacing-lg);
+}
+
+.bank-lines__risk-card {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-strong);
+  padding: var(--spacing-lg);
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.bank-lines__risk-card--low {
+  border-left: 4px solid var(--color-success);
+}
+
+.bank-lines__risk-card--medium {
+  border-left: 4px solid var(--color-warning);
+}
+
+.bank-lines__risk-card--high {
+  border-left: 4px solid var(--color-danger);
+}
+
+.bank-lines__risk-score {
+  font-size: var(--font-size-lg);
+  margin: 0;
+}
+
+.bank-lines__risk-detail {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
 .bank-lines__table-wrapper {
   background-color: var(--color-surface);
   border-radius: var(--radius-lg);

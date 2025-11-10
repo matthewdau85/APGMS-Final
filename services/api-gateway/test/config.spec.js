@@ -15,6 +15,7 @@ const REQUIRED_KEYS = [
     "API_RATE_LIMIT_WINDOW",
     "AUTH_FAILURE_THRESHOLD",
     "TAX_ENGINE_URL",
+    "ML_SERVICE_URL",
     "CORS_ALLOWED_ORIGINS",
 ];
 const envBackup = new Map();
@@ -56,6 +57,7 @@ test("loadConfig parses typed values and defaults", () => {
     process.env.API_RATE_LIMIT_WINDOW = "2 minutes";
     process.env.AUTH_FAILURE_THRESHOLD = "7";
     process.env.TAX_ENGINE_URL = "http://tax-engine.internal:8080";
+    process.env.ML_SERVICE_URL = "http://localhost:8001";
     process.env.CORS_ALLOWED_ORIGINS = "https://app.example.com, https://admin.example.com";
     const config = loadConfig();
     assert.equal(config.databaseUrl, process.env.DATABASE_URL);
@@ -64,6 +66,7 @@ test("loadConfig parses typed values and defaults", () => {
     assert.equal(config.rateLimit.window, "2 minutes");
     assert.equal(config.security.authFailureThreshold, 7);
     assert.equal(config.taxEngineUrl, "http://tax-engine.internal:8080");
+    assert.equal(config.mlServiceUrl, "http://localhost:8001");
     assert.deepEqual(config.cors.allowedOrigins, [
         "https://app.example.com",
         "https://admin.example.com",

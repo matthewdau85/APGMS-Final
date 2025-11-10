@@ -6,10 +6,13 @@ import { context, trace } from "@opentelemetry/api";
 
 import { AppError, badRequest, conflict, forbidden, notFound, unauthorized } from "./shared-shims.js";
 import { config } from "./config.js";
+import { MlServiceClient } from "./clients/ml-service.js";
+import type { RiskScoreResponse } from "./clients/ml-service.js";
 
 import rateLimit from "./plugins/rate-limit.js";
 import { authGuard, createAuthGuard, REGULATOR_AUDIENCE } from "./auth.js";
 import { registerAuthRoutes } from "./routes/auth.js";
+import { registerRiskRoutes } from "./routes/risk.js";
 import { registerRegulatorAuthRoutes } from "./routes/regulator-auth.js";
 import { prisma } from "./db.js";
 import { parseWithSchema } from "./lib/validation.js";
@@ -36,6 +39,10 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   const providers = await initProviders(app.log);
   (app as any).providers = providers;
+
+  const mlClient = new MlServiceClient(config.mlServiceUrl);
+  app.decorate("mlClient", mlClient);
+
   app.addHook("onClose", async () => {
     await closeProviders(providers, app.log);
   });
@@ -137,10 +144,27 @@ export async function buildServer(): Promise<FastifyInstance> {
     }
 
     const providerState = (app as any).providers ?? {};
-    const results: { db: boolean; redis: boolean | null; nats: boolean | null } = {
+    const mlStatus: {
+      reachable: boolean;
+      shortfall: RiskScoreResponse | null;
+      blocked: boolean;
+      error?: string | null;
+    } = {
+      reachable: false,
+      shortfall: null,
+      blocked: false,
+      error: null,
+    };
+    const results: {
+      db: boolean;
+      redis: boolean | null;
+      nats: boolean | null;
+      ml: typeof mlStatus;
+    } = {
       db: false,
       redis: providerState.redis ? false : null,
-      nats: providerState.nats ? false : null
+      nats: providerState.nats ? false : null,
+      ml: mlStatus,
     };
 
     try {
@@ -171,7 +195,34 @@ export async function buildServer(): Promise<FastifyInstance> {
       }
     }
 
-    const healthy = results.db && (results.redis !== false) && (results.nats !== false);
+    try {
+      const exposure = await prisma.bankLine.aggregate({
+        _sum: { amount: true },
+      });
+      const totalExposure = Number(exposure._sum.amount ?? 0);
+      const scaled = totalExposure / 1_000_000;
+      const shortfallProbe = await app.mlClient.scoreShortfall({
+        cash_on_hand: Math.max(0.5, 6 - scaled),
+        monthly_burn: Math.max(0.5, 1.5 + scaled / 2),
+        obligations_due: Math.max(0.5, 0.8 + scaled),
+        forecast_revenue: Math.max(0.3, 2.5 - scaled / 3),
+      });
+      mlStatus.reachable = true;
+      mlStatus.shortfall = shortfallProbe;
+      mlStatus.blocked = shortfallProbe.exceeds_threshold || shortfallProbe.score >= shortfallProbe.threshold;
+    } catch (error) {
+      mlStatus.error = (error as Error).message;
+      mlStatus.reachable = false;
+      app.log.error({ err: error }, "readiness_ml_probe_failed");
+    }
+
+    const healthy =
+      results.db &&
+      results.redis !== false &&
+      results.nats !== false &&
+      mlStatus.reachable &&
+      !mlStatus.blocked;
+
     if (!healthy) {
       reply.code(503).send({ ok: false, components: results });
       return;
@@ -182,6 +233,7 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   registerMetricsRoute(app);
 
+  await registerRiskRoutes(app);
   await registerAuthRoutes(app);
   await registerRegulatorAuthRoutes(app);
 
