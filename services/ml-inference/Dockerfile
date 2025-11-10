@@ -3,8 +3,10 @@ FROM node:20.18-alpine AS base
 WORKDIR /usr/src/app
 
 FROM base AS deps
-COPY package.json tsconfig.json pnpm-lock.yaml* ./
 COPY ../../pnpm-workspace.yaml ../../package.json ../../pnpm-lock.yaml /usr/src/
+COPY ../../packages /usr/src/packages
+COPY ../../shared /usr/src/shared
+COPY package.json tsconfig.json pnpm-lock.yaml* ./
 RUN corepack enable && corepack prepare pnpm@9.12.1 --activate && \
     pnpm install --frozen-lockfile --filter @apgms/ml-inference...
 
