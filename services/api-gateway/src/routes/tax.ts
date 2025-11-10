@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { context, trace } from "@opentelemetry/api";
-import { authenticateRequest, type Role } from "../lib/auth.js";
+import { authenticateRequest, type Role } from "@apgms/auth";
 
 export async function registerTaxRoutes(app: FastifyInstance) {
   const guard = (roles: readonly Role[] = []) =>

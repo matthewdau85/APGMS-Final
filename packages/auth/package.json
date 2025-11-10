@@ -1,0 +1,19 @@
+{
+  "name": "@apgms/auth",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint . --ext .ts",
+    "test": "../../node_modules/.bin/jest --runTestsByPath ../../packages/auth/tests/authenticateRequest.test.ts --config ../../jest.config.js --coverage"
+  },
+  "dependencies": {
+    "jose": "^6.1.0"
+  },
+  "peerDependencies": {
+    "fastify": "^5.6.1"
+  }
+}

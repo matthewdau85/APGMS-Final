@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { adminDataDeleteRequestSchema, subjectDataExportRequestSchema, subjectDataExportResponseSchema, } from "../schemas/admin.data";
 import { hashPassword } from "@apgms/shared";
-import { authenticateRequest, } from "../lib/auth";
+import { authenticateRequest, } from "@apgms/auth";
 const PASSWORD_PLACEHOLDER = "__deleted__";
 async function buildDefaultPrisma() {
     const module = (await import("../../../../shared/src/db.js"));

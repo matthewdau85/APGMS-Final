@@ -86,6 +86,15 @@ importers:
         specifier: ^11.0.0
         version: 11.0.0
 
+  packages/auth:
+    dependencies:
+      fastify:
+        specifier: ^5.6.1
+        version: 5.6.1
+      jose:
+        specifier: ^6.1.0
+        version: 6.1.0
+
   packages/ledger:
     dependencies:
       '@apgms/shared':
@@ -100,6 +109,9 @@ importers:
 
   services/api-gateway:
     dependencies:
+      '@apgms/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@fastify/helmet':
         specifier: ^13.0.2
         version: 13.0.2

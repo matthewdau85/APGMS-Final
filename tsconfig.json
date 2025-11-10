@@ -12,7 +12,13 @@
                             "paths":  {
                                           "@apgms/shared/*":  [
                                                                   "shared/src/*"
-                                                              ]
+                                                              ],
+                                          "@apgms/auth": [
+                                                            "packages/auth/src/index.ts"
+                                                          ],
+                                          "@apgms/auth/*": [
+                                                               "packages/auth/src/*"
+                                                             ]
                                       },
                             "types":  [
                                           "node",

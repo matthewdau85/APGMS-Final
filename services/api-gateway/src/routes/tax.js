@@ -1,7 +1,7 @@
 import { SpanStatusCode, trace } from "@opentelemetry/api";
 import { z } from "zod";
 import { safeLogAttributes, safeLogError } from "@apgms/shared";
-import { authenticateRequest } from "../lib/auth";
+import { authenticateRequest } from "@apgms/auth";
 const tracer = trace.getTracer("apgms-api-gateway");
 const TAX_HEALTH_TIMEOUT_MS = 5_000;
 const TAX_ALLOWED_ROLES = ["admin", "analyst", "finance"];
