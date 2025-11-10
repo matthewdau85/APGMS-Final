@@ -132,7 +132,7 @@ def train_fraud_anomaly_detection(config: BaselineTrainingConfig) -> BaselineRes
 
     with start_run(config.experiment_name, config.run_name, tags={"task": "fraud_detection"}) as active_run:
         pipeline.fit(feature_frame)
-        scores = pipeline[-1].score_samples(feature_frame)
+        scores = pipeline.score_samples(feature_frame)
         anomaly_threshold = np.percentile(scores, 5)
         predicted_labels = (scores < anomaly_threshold).astype(int)
 
