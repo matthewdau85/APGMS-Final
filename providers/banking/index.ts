@@ -4,6 +4,7 @@ import { NabBankingProvider } from "./nab.js";
 import type { BankingProvider, BankingProviderId } from "./types.js";
 
 export * from "./types.js";
+export * from "./partner-api.js";
 
 export function createBankingProvider(
   id: BankingProviderId | string,

@@ -3,6 +3,7 @@ import { prisma } from "@apgms/shared/db.js";
 import {
   generateDesignatedAccountReconciliationArtifact,
 } from "../../../domain/policy/designated-accounts.js";
+import { orchestrateBasLodgment } from "../../../domain/bas/orchestrator.js";
 
 const SYSTEM_ACTOR = "system";
 
@@ -35,6 +36,14 @@ export async function runNightlyDesignatedAccountReconciliation(): Promise<void>
       },
       org.id,
       SYSTEM_ACTOR,
+    );
+
+    await orchestrateBasLodgment(
+      {
+        prisma,
+        auditLogger: recordAuditLog,
+      },
+      org.id,
     );
   }
 }

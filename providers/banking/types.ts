@@ -5,6 +5,29 @@ import type {
   ApplyDesignatedTransferInput,
 } from "../../domain/policy/designated-accounts.js";
 
+export type PartnerDesignatedCreditRequest = {
+  orgId: string;
+  accountId: string;
+  amountCents: number;
+  source: string;
+  actorId: string;
+  clientReference: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type PartnerDesignatedCreditResponse = {
+  status: "ACCEPTED" | "SETTLED" | "PENDING" | "REJECTED";
+  partnerReference: string;
+  settledAmountCents?: number;
+  raw?: unknown;
+};
+
+export interface PartnerBankingApi {
+  creditDesignatedAccount(
+    request: PartnerDesignatedCreditRequest,
+  ): Promise<PartnerDesignatedCreditResponse>;
+}
+
 export type BankingProviderId = "nab" | "anz" | "mock";
 
 export type BankingProviderCapabilities = {
@@ -22,6 +45,7 @@ export type BankingProviderContext = {
     action: string;
     metadata: Record<string, unknown>;
   }) => Promise<void>;
+  partnerBankingApi?: PartnerBankingApi;
 };
 
 export type CreditDesignatedAccountInput = Omit<

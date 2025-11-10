@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import { Prisma, type PrismaClient } from "@prisma/client";
 
-import { conflict, notFound } from "@apgms/shared";
+import { conflict, notFound } from "../../shared/src/errors.js";
 import {
   evaluateDesignatedAccountPolicy,
   normalizeTransferSource,
