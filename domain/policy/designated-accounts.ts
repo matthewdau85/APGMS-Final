@@ -9,12 +9,14 @@ import {
   type DesignatedTransferSource,
 } from "@apgms/shared/ledger";
 
-type AuditLogger = (entry: {
+export type DesignatedAccountAuditEntry = {
   orgId: string;
   actorId: string;
   action: string;
   metadata: Record<string, unknown>;
-}) => Promise<void>;
+};
+
+type AuditLogger = (entry: DesignatedAccountAuditEntry) => Promise<void>;
 
 type PolicyContext = {
   prisma: PrismaClient;
@@ -182,19 +184,18 @@ export type DesignatedReconciliationSummary = {
   }>;
 };
 
-export async function generateDesignatedAccountReconciliationArtifact(
-  context: PolicyContext,
-  orgId: string,
-  actorId = "system",
-): Promise<{
+type DesignatedAccountSnapshot = {
   summary: DesignatedReconciliationSummary;
-  artifactId: string;
-  sha256: string;
-}> {
+};
+
+async function buildDesignatedAccountSnapshot(
+  prisma: PrismaClient,
+  orgId: string,
+): Promise<DesignatedAccountSnapshot> {
   const now = new Date();
   const cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-  const accounts = await context.prisma.designatedAccount.findMany({
+  const accounts = await prisma.designatedAccount.findMany({
     where: { orgId },
     include: {
       transfers: {
@@ -240,6 +241,29 @@ export async function generateDesignatedAccountReconciliationArtifact(
     movementsLast24h: movements,
   };
 
+  return { summary };
+}
+
+export async function getDesignatedAccountSummary(
+  context: PolicyContext,
+  orgId: string,
+): Promise<DesignatedReconciliationSummary> {
+  const snapshot = await buildDesignatedAccountSnapshot(context.prisma, orgId);
+  return snapshot.summary;
+}
+
+export async function generateDesignatedAccountReconciliationArtifact(
+  context: PolicyContext,
+  orgId: string,
+  actorId = "system",
+): Promise<{
+  summary: DesignatedReconciliationSummary;
+  artifactId: string;
+  sha256: string;
+}> {
+  const snapshot = await buildDesignatedAccountSnapshot(context.prisma, orgId);
+  const { summary } = snapshot;
+
   const sha256 = createHash("sha256")
     .update(JSON.stringify(summary))
     .digest("hex");
@@ -271,7 +295,7 @@ export async function generateDesignatedAccountReconciliationArtifact(
       metadata: {
         artifactId: artifact.id,
         sha256,
-        totals,
+        totals: summary.totals,
       },
     });
   }

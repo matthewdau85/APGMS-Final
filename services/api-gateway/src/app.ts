@@ -10,6 +10,8 @@ import { config } from "./config.js";
 import rateLimit from "./plugins/rate-limit.js";
 import { authGuard, createAuthGuard, REGULATOR_AUDIENCE } from "./auth.js";
 import { registerAuthRoutes } from "./routes/auth.js";
+import { registerBasRoutes } from "./routes/bas.js";
+import { registerDesignatedAccountRoutes } from "./routes/designated-accounts.js";
 import { registerRegulatorAuthRoutes } from "./routes/regulator-auth.js";
 import { prisma } from "./db.js";
 import { parseWithSchema } from "./lib/validation.js";
@@ -183,6 +185,8 @@ export async function buildServer(): Promise<FastifyInstance> {
   registerMetricsRoute(app);
 
   await registerAuthRoutes(app);
+  await registerBasRoutes(app);
+  await registerDesignatedAccountRoutes(app);
   await registerRegulatorAuthRoutes(app);
 
   const regulatorAuthGuard = createAuthGuard(REGULATOR_AUDIENCE, {
