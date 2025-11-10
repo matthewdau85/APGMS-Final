@@ -209,6 +209,30 @@ model BalanceSnapshot {
   @@unique([orgId, accountId, asOfSeq])
 }
 
+model RiskDecisionLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  orgId          String?  @db.Uuid
+  subjectType    String
+  subjectId      String?
+  modelName      String
+  modelVersion   String
+  score          Float
+  threshold      Float
+  recommendation String
+  decision       String
+  approved       Boolean
+  rationale      String?
+  operatorId     String?
+  operatorName   String?
+  metadata       Json?
+  prevHash       String?
+  hash           String
+  createdAt      DateTime @default(now())
+
+  @@index([subjectType, createdAt])
+  @@index([orgId, createdAt])
+}
+
 model EventEnvelope {
   id            String   @id
   orgId         String   @db.Uuid

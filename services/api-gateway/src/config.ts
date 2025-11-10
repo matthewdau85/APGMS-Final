@@ -44,6 +44,12 @@ export interface AppConfig {
     readonly maxReadTransactions: number;
     readonly maxWriteCents: number;
   };
+  readonly mlService: {
+    readonly baseUrl: string;
+    readonly shortfallThreshold: number;
+    readonly fraudThreshold: number;
+    readonly complianceThreshold: number;
+  };
   readonly redis?: {
     readonly url: string;
   };
@@ -78,6 +84,18 @@ const parseIntegerEnv = (name: string, fallback: number): number => {
   const parsed = Number.parseInt(raw, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new Error(`${name} must be a positive integer`);
+  }
+  return parsed;
+};
+
+const parseFloatEnv = (name: string, fallback: number): number => {
+  const raw = process.env[name];
+  if (!raw || raw.trim().length === 0) {
+    return fallback;
+  }
+  const parsed = Number.parseFloat(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`${name} must be a positive number`);
   }
   return parsed;
 };
@@ -312,6 +330,25 @@ export function loadConfig(): AppConfig {
     5_000_000,
   );
 
+  const mlServiceBaseUrl = ensureUrl(
+    process.env.ML_SERVICE_BASE_URL?.trim()?.length
+      ? process.env.ML_SERVICE_BASE_URL.trim()
+      : "http://ml-service:4006",
+    "ML_SERVICE_BASE_URL",
+  );
+  const mlShortfallThreshold = parseFloatEnv(
+    "ML_SHORTFALL_THRESHOLD",
+    0.65,
+  );
+  const mlFraudThreshold = parseFloatEnv(
+    "ML_FRAUD_THRESHOLD",
+    0.7,
+  );
+  const mlComplianceThreshold = parseFloatEnv(
+    "ML_COMPLIANCE_THRESHOLD",
+    0.5,
+  );
+
   const redisUrlRaw = process.env.REDIS_URL?.trim();
   const redis =
     redisUrlRaw && redisUrlRaw.length > 0
@@ -371,6 +408,12 @@ export function loadConfig(): AppConfig {
       providerId: bankingProvider.length > 0 ? bankingProvider : "mock",
       maxReadTransactions: bankingMaxRead,
       maxWriteCents: bankingMaxWrite,
+    },
+    mlService: {
+      baseUrl: mlServiceBaseUrl,
+      shortfallThreshold: mlShortfallThreshold,
+      fraudThreshold: mlFraudThreshold,
+      complianceThreshold: mlComplianceThreshold,
     },
     redis,
     nats,

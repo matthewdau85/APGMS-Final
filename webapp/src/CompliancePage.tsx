@@ -6,6 +6,7 @@ import {
   fetchEvidenceArtifactDetail,
 } from "./api";
 import { getToken } from "./auth";
+import { ComplianceGovernancePanel } from "./features/compliance/ComplianceGovernancePanel";
 
 type ComplianceReport = Awaited<ReturnType<typeof fetchComplianceReport>>;
 
@@ -121,6 +122,8 @@ export default function CompliancePage() {
           Everything the regulator needs in one place: BAS history, outstanding alerts, and the next due lodgment.
         </p>
       </header>
+
+      <ComplianceGovernancePanel token={token} />
 
       {loading && <div style={infoTextStyle}>Building compliance view...</div>}
       {error && <div style={errorTextStyle}>{error}</div>}

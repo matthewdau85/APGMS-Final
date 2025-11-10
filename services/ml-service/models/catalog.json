@@ -1,0 +1,112 @@
+{
+  "models": [
+    {
+      "name": "bas_shortfall",
+      "version": "2025-02-01",
+      "type": "risk",
+      "threshold": 0.65,
+      "bias": -0.35,
+      "features": [
+        { "key": "liquidityRatio", "weight": -0.9, "description": "Higher cash buffers reduce the likelihood of shortfall." },
+        { "key": "burnRate", "weight": 0.6, "description": "Aggressive cash burn increases risk." },
+        { "key": "variance", "weight": 0.4, "description": "Volatility in inflows reduces confidence in forecasts." }
+      ],
+      "explanations": {
+        "liquidityRatio": {
+          "low": "Liquidity under 1.0 indicates insufficient reserves for BAS obligations.",
+          "high": "Healthy liquidity gives coverage for near-term remittances."
+        },
+        "burnRate": {
+          "low": "Managed operating burn keeps exposure low.",
+          "high": "Elevated outflows are consuming BAS escrows faster than planned."
+        },
+        "variance": {
+          "low": "Stable inflows provide predictability for lodgment planning.",
+          "high": "Spiky inflows make escrow sizing harder to forecast."
+        }
+      },
+      "driftBaseline": {
+        "liquidityRatio": 1.4,
+        "burnRate": 0.25,
+        "variance": 0.1
+      },
+      "driftTolerance": 0.3,
+      "fairness": {
+        "protected": "entityType",
+        "maxDelta": 0.1
+      }
+    },
+    {
+      "name": "fraud_review",
+      "version": "2025-02-01",
+      "type": "risk",
+      "threshold": 0.7,
+      "bias": -0.2,
+      "features": [
+        { "key": "amount", "weight": 0.5, "description": "Large transfers require more scrutiny." },
+        { "key": "velocity", "weight": 0.7, "description": "Burst activity across multiple accounts increases risk." },
+        { "key": "geoRisk", "weight": 0.8, "description": "High risk geographies need manual escalation." }
+      ],
+      "explanations": {
+        "amount": {
+          "low": "Typical payment size.",
+          "high": "Transfer exceeds the organization's 95th percentile." 
+        },
+        "velocity": {
+          "low": "No unusual payment burst detected.",
+          "high": "High payment velocity in the past 24h triggers fraud guard." 
+        },
+        "geoRisk": {
+          "low": "Counterparty location matches historical patterns.",
+          "high": "New jurisdiction observed; confirm counterparty onboarding." 
+        }
+      },
+      "driftBaseline": {
+        "amount": 0.35,
+        "velocity": 0.25,
+        "geoRisk": 0.15
+      },
+      "driftTolerance": 0.25,
+      "fairness": {
+        "protected": "channel",
+        "maxDelta": 0.12
+      }
+    },
+    {
+      "name": "compliance_plan",
+      "version": "2025-01-15",
+      "type": "plan",
+      "threshold": 0.5,
+      "bias": -0.1,
+      "features": [
+        { "key": "controlCoverage", "weight": -0.6, "description": "Coverage of mandatory controls." },
+        { "key": "openFindings", "weight": 0.5, "description": "Outstanding regulator findings." },
+        { "key": "trainingCompletion", "weight": -0.4, "description": "Staff completion of compliance training." }
+      ],
+      "explanations": {
+        "controlCoverage": {
+          "low": "Gaps in key controls drive remediation requirements.",
+          "high": "Controls are operating effectively across domains." 
+        },
+        "openFindings": {
+          "low": "No overdue regulator actions outstanding.",
+          "high": "Multiple findings remain unresolved beyond SLA." 
+        },
+        "trainingCompletion": {
+          "low": "Mandatory training adoption below threshold.",
+          "high": "Training completion is on track across teams." 
+        }
+      },
+      "driftBaseline": {
+        "controlCoverage": 0.8,
+        "openFindings": 0.15,
+        "trainingCompletion": 0.9
+      },
+      "driftTolerance": 0.2,
+      "fairness": {
+        "protected": "region",
+        "maxDelta": 0.08
+      }
+    }
+  ]
+}

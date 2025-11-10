@@ -1,0 +1,126 @@
+name: ML Governance Checks
+
+on:
+  push:
+    paths:
+      - 'services/ml-service/**'
+      - '.github/workflows/ml-governance.yml'
+      - 'runbooks/ml-operations.md'
+  pull_request:
+    paths:
+      - 'services/ml-service/**'
+      - '.github/workflows/ml-governance.yml'
+      - 'runbooks/ml-operations.md'
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  model-integrity:
+    name: Model catalog validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Validate model catalog
+        run: pnpm --filter @apgms/ml-service run validate
+
+  drift-alerts:
+    name: Drift guardrails
+    runs-on: ubuntu-latest
+    needs: model-integrity
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Emit drift baseline snapshot
+        run: pnpm --filter @apgms/ml-service run drift:check
+
+  fairness-regression:
+    name: Fairness regression
+    runs-on: ubuntu-latest
+    needs: model-integrity
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify fairness deltas
+        run: pnpm --filter @apgms/ml-service run fairness:test
+
+  security-hardening:
+    name: Targeted security scan
+    runs-on: ubuntu-latest
+    needs: model-integrity
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Scan ml-service dependencies
+        run: pnpm --filter @apgms/ml-service audit --audit-level high || true
+      - name: Trivy container scan
+        uses: aquasecurity/trivy-action@0.12.0
+        with:
+          scan-type: fs
+          scan-ref: services/ml-service
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+  scheduled-retraining:
+    name: Retraining coordination
+    runs-on: ubuntu-latest
+    needs: [drift-alerts, fairness-regression]
+    if: github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Capture retraining note
+        run: |
+          echo "Retraining window triggered on $(date -u)" >> runbooks/ml-operations.md
+          tail -n 40 runbooks/ml-operations.md
+      - name: Upload attestation memo stub
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsp-attestation-context
+          path: runbooks/ml-operations.md
+
+  dsp-attestation:
+    name: DSP attestation reminder
+    runs-on: ubuntu-latest
+    needs: scheduled-retraining
+    if: github.event_name == 'schedule'
+    steps:
+      - name: Reminder
+        run: echo "Review DSP controls per runbooks/ml-operations.md"

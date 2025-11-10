@@ -642,3 +642,101 @@ export async function fetchRegulatorBankSummary(token: string) {
     }>;
   }>;
 }
+
+export type ShortfallDecisionPayload = {
+  orgId?: string;
+  basCycleId?: string;
+  metrics: {
+    liquidityRatio: number;
+    burnRate: number;
+    variance: number;
+  };
+  decision: "approve" | "block";
+  rationale?: string;
+};
+
+export async function submitShortfallDecision(token: string, payload: ShortfallDecisionPayload) {
+  const res = await fetch(`${API_BASE}/risk/shortfall/decision`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("shortfall_decision_failed");
+  return res.json();
+}
+
+export type FraudDecisionPayload = {
+  orgId?: string;
+  transactionId: string;
+  metrics: {
+    amount: number;
+    velocity: number;
+    geoRisk: number;
+  };
+  decision: "approve" | "block";
+  rationale?: string;
+};
+
+export async function submitFraudDecision(token: string, payload: FraudDecisionPayload) {
+  const res = await fetch(`${API_BASE}/risk/fraud/decision`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("fraud_decision_failed");
+  return res.json();
+}
+
+export type ComplianceMetricsPayload = {
+  orgId?: string;
+  metrics: {
+    controlCoverage: number;
+    openFindings: number;
+    trainingCompletion: number;
+  };
+};
+
+export async function fetchCompliancePlan(token: string, payload: ComplianceMetricsPayload) {
+  const res = await fetch(`${API_BASE}/plan/compliance`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("compliance_plan_failed");
+  return res.json();
+}
+
+export async function submitComplianceDecision(
+  token: string,
+  payload: ComplianceMetricsPayload & {
+    planId?: string;
+    decision: "adopt" | "defer";
+    rationale?: string;
+  },
+) {
+  const res = await fetch(`${API_BASE}/plan/compliance/decision`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("compliance_decision_failed");
+  return res.json();
+}
+
+export async function listRiskDecisions(token: string, subjectType: string, limit = 20) {
+  const params = new URLSearchParams({ subjectType, limit: String(limit) });
+  const res = await fetch(`${API_BASE}/risk/decisions?${params.toString()}`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error("risk_decisions_failed");
+  return res.json();
+}
+
+export async function listPlanDecisions(token: string, subjectType = "compliance_plan", limit = 20) {
+  const params = new URLSearchParams({ subjectType, limit: String(limit) });
+  const res = await fetch(`${API_BASE}/plan/decisions?${params.toString()}`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error("plan_decisions_failed");
+  return res.json();
+}
