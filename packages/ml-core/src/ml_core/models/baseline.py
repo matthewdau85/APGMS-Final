@@ -13,7 +13,11 @@ import mlflow
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import GradientBoostingClassifier, IsolationForest
-from sklearn.metrics import PrecisionRecallDisplay, average_precision_score, classification_report
+from sklearn.metrics import (
+    PrecisionRecallDisplay,
+    average_precision_score,
+    classification_report,
+)
 from sklearn.model_selection import train_test_split
 
 from ..artifacts import write_dataframe
@@ -90,6 +94,35 @@ class BaselineTrainer:
             except Exception:
                 self._tracking_enabled = False
 
+    @staticmethod
+    def _infer_positive_label(y: pd.Series) -> Any:
+        """Best-effort heuristic for choosing the positive label for binary targets."""
+
+        labels = list(pd.unique(y.dropna()))
+        if not labels:
+            msg = "Cannot infer positive label from empty target series."
+            raise ValueError(msg)
+
+        if pd.api.types.is_bool_dtype(y):
+            return True
+
+        unique_set = set(labels)
+        if unique_set.issuperset({0, 1}) and 1 in unique_set:
+            return 1
+
+        if pd.api.types.is_numeric_dtype(y):
+            return max(labels)
+
+        for candidate in ("1", "true", "True", "yes", "YES", "Yes"):
+            if candidate in unique_set:
+                return candidate
+
+        if len(labels) == 1:
+            return labels[0]
+
+        # Fallback to the last label under the assumption it is the "positive" case.
+        return labels[-1]
+
     def _log_json(self, payload: dict, name: str) -> Path:
         dest = artifact_dir() / f"{name}.json"
         dest.write_text(json.dumps(payload, indent=2, default=str))
@@ -124,10 +157,21 @@ class BaselineTrainer:
             report = classification_report(y_test, model.predict(X_test), output_dict=True)
             display = PrecisionRecallDisplay.from_predictions(y_test, y_scores)
 
+            positive_label = self._infer_positive_label(y_test)
+            class_key = str(positive_label)
+            class_metrics = report.get(class_key)
+            if class_metrics is None:
+                class_metrics = report.get("weighted avg") or report.get("macro avg")
+
+            if class_metrics is None:
+                msg = "classification_report did not return class metrics for evaluation"
+                raise ValueError(msg)
+
             metrics = {
                 "average_precision": float(avg_precision),
-                "precision_at_threshold": float(report["1"]["precision"]),
-                "recall_at_threshold": float(report["1"]["recall"]),
+                "precision_at_threshold": float(class_metrics["precision"]),
+                "recall_at_threshold": float(class_metrics["recall"]),
+                "positive_label": str(positive_label),
             }
 
             feature_snapshot = write_dataframe(features, f"shortfall_features_{run.info.run_id}")
