@@ -1,4 +1,5 @@
 import "fastify";
+import type { RiskEventPublisher } from "../lib/risk-events.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -17,6 +18,7 @@ declare module "fastify" {
       redis?: { ping: () => Promise<string> } | null;
       nats?: { flush: () => Promise<void> } | null;
     };
+    riskEvents?: RiskEventPublisher;
   }
 
   interface FastifyRequest {

@@ -52,6 +52,8 @@ export interface AppConfig {
     readonly token?: string;
     readonly username?: string;
     readonly password?: string;
+    readonly stream?: string;
+    readonly subjectPrefix?: string;
   };
 }
 
@@ -328,6 +330,8 @@ export function loadConfig(): AppConfig {
           token: process.env.NATS_TOKEN?.trim() || undefined,
           username: process.env.NATS_USERNAME?.trim() || undefined,
           password: process.env.NATS_PASSWORD?.trim() || undefined,
+          stream: process.env.NATS_STREAM?.trim() || "APGMS_RISK",
+          subjectPrefix: process.env.NATS_SUBJECT_PREFIX?.trim() || "apgms.risk",
         }
       : undefined;
 

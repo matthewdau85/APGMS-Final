@@ -45,6 +45,27 @@ enum AlertStatus {
   CLOSED
 }
 
+enum FraudAlertStatus {
+  OPEN
+  INVESTIGATING
+  ESCALATED
+  RESOLVED
+}
+
+enum RemediationActionStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentPlanCommitmentStatus {
+  SCHEDULED
+  COMPLETED
+  MISSED
+  CANCELLED
+}
+
 // =========================
 // Payroll domain
 // =========================
@@ -304,6 +325,107 @@ model EvidenceArtifact {
   @@index([orgId, kind])
 }
 
+model DiscrepancyEvent {
+  id             String   @id @default(cuid())
+  org            Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId          String
+  eventType      String
+  severity       String
+  source         String
+  key            String
+  schemaVersion  String
+  occurredAt     DateTime @default(now())
+  receivedAt     DateTime @default(now())
+  traceId        String?
+  dedupeId       String
+  details        Json
+  acknowledgedAt DateTime?
+  createdAt      DateTime @default(now())
+
+  fraudAlerts        FraudAlert[]
+  remediationActions RemediationAction[]
+  paymentCommitments PaymentPlanCommitment[]
+  trainingSnapshots  TrainingSnapshot[]
+
+  @@index([orgId, occurredAt])
+  @@index([eventType])
+  @@unique([orgId, dedupeId])
+}
+
+model FraudAlert {
+  id             String           @id @default(cuid())
+  org            Org              @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId          String
+  discrepancy    DiscrepancyEvent? @relation(fields: [discrepancyId], references: [id], onDelete: SetNull)
+  discrepancyId  String?
+  status         FraudAlertStatus  @default(OPEN)
+  severity       String
+  summary        String
+  evidence       Json?
+  openedAt       DateTime          @default(now())
+  closedAt       DateTime?
+  resolutionNote String?
+
+  remediationActions RemediationAction[]
+
+  @@index([orgId, status])
+}
+
+model RemediationAction {
+  id                String                  @id @default(cuid())
+  org               Org                     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId             String
+  discrepancy       DiscrepancyEvent?        @relation(fields: [discrepancyId], references: [id], onDelete: SetNull)
+  discrepancyId     String?
+  fraudAlert        FraudAlert?              @relation(fields: [fraudAlertId], references: [id], onDelete: SetNull)
+  fraudAlertId      String?
+  actionType        String
+  status            RemediationActionStatus  @default(PENDING)
+  createdAt         DateTime                 @default(now())
+  createdBy         String?
+  executedAt        DateTime?
+  notes             Json?
+
+  paymentCommitments PaymentPlanCommitment[]
+
+  @@index([orgId, status])
+}
+
+model PaymentPlanCommitment {
+  id                  String                      @id @default(cuid())
+  org                 Org                         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId               String
+  discrepancy         DiscrepancyEvent?            @relation(fields: [discrepancyId], references: [id], onDelete: SetNull)
+  discrepancyId       String?
+  remediationAction   RemediationAction?           @relation(fields: [remediationActionId], references: [id], onDelete: SetNull)
+  remediationActionId String?
+  paymentPlanRequest  PaymentPlanRequest?          @relation(fields: [paymentPlanRequestId], references: [id], onDelete: SetNull)
+  paymentPlanRequestId String?
+  dueDate             DateTime
+  amount              Decimal                      @default(0)
+  status              PaymentPlanCommitmentStatus  @default(SCHEDULED)
+  createdAt           DateTime                     @default(now())
+  fulfilledAt         DateTime?
+  metadata            Json?
+
+  @@index([orgId, status])
+  @@index([paymentPlanRequestId])
+}
+
+model TrainingSnapshot {
+  id            String   @id @default(cuid())
+  org           Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId         String
+  discrepancy   DiscrepancyEvent? @relation(fields: [discrepancyId], references: [id], onDelete: SetNull)
+  discrepancyId String?
+  snapshotType  String
+  effectiveAt   DateTime
+  createdAt     DateTime @default(now())
+  payload       Json
+
+  @@index([orgId, snapshotType, effectiveAt])
+}
+
 // =========================
 // Legacy models still used by the live Fastify API
 // =========================
@@ -347,6 +469,12 @@ model Org {
   // payroll backrefs
   employees  Employee[]
   payRuns    PayRun[]
+
+  discrepancyEvents     DiscrepancyEvent[]
+  fraudAlerts           FraudAlert[]
+  remediationActions    RemediationAction[]
+  paymentPlanCommitments PaymentPlanCommitment[]
+  trainingSnapshots     TrainingSnapshot[]
 }
 
 model User {
@@ -449,6 +577,8 @@ model PaymentPlanRequest {
   status      String    @default("SUBMITTED")
   detailsJson Json
   resolvedAt  DateTime?
+
+  commitments PaymentPlanCommitment[]
 
   @@index([orgId, basCycleId])
   @@index([orgId, status])

@@ -20,6 +20,7 @@ import { withIdempotency } from "./lib/idempotency.js";
 import { metrics, installHttpMetrics, registerMetricsRoute } from "./observability/metrics.js";
 import { instrumentPrisma } from "./observability/prisma-metrics.js";
 import { closeProviders, initProviders } from "./providers.js";
+import { createRiskEventPublisher } from "./lib/risk-events.js";
 
 // ---- keep your other domain code (types, helpers, shapes) exactly as you had ----
 // (omitted here for brevity — unchanged from your last working content)
@@ -36,6 +37,14 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   const providers = await initProviders(app.log);
   (app as any).providers = providers;
+  app.decorate(
+    "riskEvents",
+    createRiskEventPublisher(providers.nats, app.log, {
+      stream: config.nats?.stream ?? "APGMS_RISK",
+      subjectPrefix: config.nats?.subjectPrefix ?? "apgms.risk",
+      subject: `${config.nats?.subjectPrefix ?? "apgms.risk"}.events`,
+    }),
+  );
   app.addHook("onClose", async () => {
     await closeProviders(providers, app.log);
   });
