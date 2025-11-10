@@ -642,3 +642,71 @@ export async function fetchRegulatorBankSummary(token: string) {
     }>;
   }>;
 }
+
+export type MlRiskSummary = {
+  modelVersion: string;
+  riskScore: number;
+  riskLevel: string;
+  recommendedMitigations: string[];
+  explanation: string;
+  contributingFactors: Array<{ feature: string; weight: number; impact: number }>;
+};
+
+export type LedgerRiskPayload = {
+  orgId: string;
+  totalExposure: number;
+  securedPercentage: number;
+  varianceAmount: number;
+  unreconciledEntries: number;
+  basWindowDays: number;
+};
+
+export async function evaluateLedgerReconciliationRisk(
+  payload: LedgerRiskPayload,
+  token?: string,
+) {
+  const res = await fetch(`${API_BASE}/risk/ledger-reconciliation`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  const body = await res.json().catch(() => null);
+  if (!res.ok) {
+    const error = new Error(
+      (body as { error?: string; code?: string } | null)?.error ?? "ledger_risk_failed",
+    );
+    (error as any).payload = body;
+    throw error;
+  }
+  return body as { blocked: boolean; warning?: string; risk: MlRiskSummary };
+}
+
+export type FraudScreenPayload = {
+  transactionId: string;
+  amount: number;
+  channelRisk: number;
+  velocity: number;
+  geoDistance: number;
+  accountTenureDays: number;
+  previousIncidents: number;
+};
+
+export async function evaluateFraudScreening(
+  payload: FraudScreenPayload,
+  token?: string,
+) {
+  const res = await fetch(`${API_BASE}/risk/fraud-screen`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  const body = await res.json().catch(() => null);
+  if (!res.ok) {
+    const error = new Error(
+      (body as { error?: string; code?: string } | null)?.error ?? "fraud_screen_failed",
+    );
+    (error as any).payload = body;
+    throw error;
+  }
+  return body as { blocked: boolean; warning?: string; risk: MlRiskSummary };
+}

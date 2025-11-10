@@ -1,4 +1,11 @@
-﻿import './Home.css';
+import { useEffect, useState } from 'react';
+
+import './Home.css';
+import {
+  evaluateFraudScreening,
+  type FraudScreenPayload,
+  type MlRiskSummary,
+} from '../api';
 
 const metrics = [
   {
@@ -40,7 +47,69 @@ const activities = [
   }
 ];
 
+type FraudInsightState = {
+  loading: boolean;
+  data: { blocked: boolean; warning?: string; risk: MlRiskSummary } | null;
+  error?: string;
+};
+
+const fallbackFraudInsight: FraudInsightState['data'] = {
+  blocked: true,
+  warning: 'fraud_screen_medium',
+  risk: {
+    modelVersion: '2025.01-fallback',
+    riskScore: 0.71,
+    riskLevel: 'high',
+    recommendedMitigations: [
+      'Hold disbursement until treasury verifies counterparty credentials.',
+      'Escalate to fraud operations for manual review within 1 hour.'
+    ],
+    explanation: 'Using cached heuristics while fraud screening service is offline.',
+    contributingFactors: []
+  }
+};
+
 export default function HomePage() {
+  const [fraudInsight, setFraudInsight] = useState<FraudInsightState>({ loading: true, data: null });
+
+  useEffect(() => {
+    let cancelled = false;
+    const payload: FraudScreenPayload = {
+      transactionId: 'txn-synthetic-1',
+      amount: 125_000,
+      channelRisk: 0.82,
+      velocity: 4.2,
+      geoDistance: 1750,
+      accountTenureDays: 42,
+      previousIncidents: 1
+    };
+
+    const load = async () => {
+      try {
+        const response = await evaluateFraudScreening(payload);
+        if (!cancelled) {
+          setFraudInsight({ loading: false, data: response });
+        }
+      } catch (error) {
+        console.error('fraud-screen-fallback', error);
+        if (!cancelled) {
+          setFraudInsight({
+            loading: false,
+            data: fallbackFraudInsight,
+            error: 'Fraud ML service unreachable — using cached guardrails.'
+          });
+        }
+      }
+    };
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const fraudScore = fraudInsight.data ? fraudInsight.data.risk.riskScore.toFixed(2) : '0.00';
+
   return (
     <div className="page">
       <header className="page__header">
@@ -80,6 +149,51 @@ export default function HomePage() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="fraud-insights" aria-live="polite">
+        <header className="fraud-insights__header">
+          <div>
+            <h2>Fraud screening highlights</h2>
+            <p>
+              Real-time inference flags anomalous payments before funds leave designated accounts.
+            </p>
+          </div>
+          <span className={`fraud-insights__pill fraud-insights__pill--${fraudInsight.data?.risk.riskLevel ?? 'loading'}`}>
+            {fraudInsight.data ? fraudInsight.data.risk.riskLevel.toUpperCase() : 'LOADING'}
+          </span>
+        </header>
+
+        {fraudInsight.loading && <p>Scoring priority payments and ledger holds…</p>}
+
+        {fraudInsight.data && (
+          <div className="fraud-insights__body">
+            <p className="fraud-insights__score">
+              Risk score: <strong>{fraudScore}</strong> (model {fraudInsight.data.risk.modelVersion})
+            </p>
+            <p className="fraud-insights__explanation">{fraudInsight.data.risk.explanation}</p>
+            {fraudInsight.data.warning && (
+              <p className="fraud-insights__warning">
+                {fraudInsight.data.warning === 'fraud_screen_medium'
+                  ? 'Analyst review recommended: velocity and channel risk exceed treasury guardrails.'
+                  : fraudInsight.data.warning}
+              </p>
+            )}
+            {fraudInsight.data.blocked && (
+              <p className="fraud-insights__blocked">
+                Transaction hold enforced until a senior approver clears the payout.
+              </p>
+            )}
+            <h3>Next best actions</h3>
+            <ul className="fraud-insights__mitigations">
+              {fraudInsight.data.risk.recommendedMitigations.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {fraudInsight.error && <p className="fraud-insights__note">{fraudInsight.error}</p>}
       </section>
     </div>
   );

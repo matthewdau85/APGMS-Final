@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "vite --strictPort",
     "build": "vite build",
-    "preview": "vite preview --strictPort"
+    "preview": "vite preview --strictPort",
+    "test": "vitest run"
   },
   "dependencies": {
     "react": "^18.2.0",
@@ -15,6 +16,10 @@
   "devDependencies": {
     "vite": "^5.4.8",
     "@vitejs/plugin-react": "^4.2.0",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "vitest": "^1.6.0",
+    "@testing-library/react": "^14.1.2",
+    "@testing-library/jest-dom": "^6.4.2",
+    "jsdom": "^24.0.0"
   }
 }

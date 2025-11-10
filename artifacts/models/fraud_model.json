@@ -1,0 +1,29 @@
+{
+  "version": "2025.01",
+  "bias": -2.4,
+  "weights": {
+    "amount": 0.0028,
+    "channelRisk": 1.35,
+    "velocity": 0.54,
+    "geoDistance": 0.32,
+    "accountTenureDays": -0.004,
+    "previousIncidents": 0.88
+  },
+  "thresholds": {
+    "medium": 0.35,
+    "high": 0.65
+  },
+  "mitigations": {
+    "low": [
+      "Auto-clear transaction and continue passive monitoring."
+    ],
+    "medium": [
+      "Queue for analyst review within 2 business hours.",
+      "Collect secondary verification from treasury contacts."
+    ],
+    "high": [
+      "Place immediate hold on payout and notify fraud operations.",
+      "File suspicious matter report draft for compliance review."
+    ]
+  }
+}

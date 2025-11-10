@@ -1,11 +1,14 @@
 import "fastify";
+import type { MlRiskClient } from "../clients/ml-service";
 
 declare module "fastify" {
   interface FastifyInstance {
     config: {
       taxEngineUrl?: string;
+      mlServiceUrl?: string;
       [k: string]: unknown;
     };
+    mlClient?: MlRiskClient;
     metrics?: {
       recordSecurityEvent?: (code: string) => void;
       httpRequestTotal?: any;

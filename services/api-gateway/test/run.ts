@@ -17,6 +17,7 @@ const defaultTestEnv: Record<string, string> = {
   API_RATE_LIMIT_WINDOW: "1 minute",
   AUTH_FAILURE_THRESHOLD: "5",
   TAX_ENGINE_URL: "http://tax-engine:8000",
+  ML_SERVICE_URL: "http://ml-service:8000",
   CORS_ALLOWED_ORIGINS: "http://localhost:5173",
   REGULATOR_ACCESS_CODE: "regulator-dev-code",
   REGULATOR_JWT_AUDIENCE: "urn:apgms:regulator",

@@ -1,0 +1,29 @@
+{
+  "version": "2025.02",
+  "bias": -1.1,
+  "weights": {
+    "liquidityCoverage": -1.25,
+    "escrowCoverage": -1.1,
+    "outstandingAlerts": 0.48,
+    "basWindowDays": 0.16,
+    "recentShortfalls": 0.75
+  },
+  "thresholds": {
+    "medium": 0.45,
+    "high": 0.72
+  },
+  "mitigations": {
+    "low": [
+      "Continue daily cash sweeps into BAS escrow.",
+      "Run auto-reconciliation once per settlement window."
+    ],
+    "medium": [
+      "Escalate treasury review for PAYGW coverage.",
+      "Trigger contingency funding plan before lodgment."
+    ],
+    "high": [
+      "Freeze non-essential disbursements until buffers recover.",
+      "Notify regulator liaison and initiate manual readiness runbook."
+    ]
+  }
+}

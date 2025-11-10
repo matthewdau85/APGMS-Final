@@ -12,6 +12,7 @@ import { authGuard, createAuthGuard, REGULATOR_AUDIENCE } from "./auth.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerRegulatorAuthRoutes } from "./routes/regulator-auth.js";
 import { prisma } from "./db.js";
+import { createMlClient, type MlRiskClient, type RiskAssessment } from "./clients/ml-service.js";
 import { parseWithSchema } from "./lib/validation.js";
 import { verifyChallenge, requireRecentVerification, type VerifyChallengeResult } from "./security/mfa.js";
 import { recordAuditLog } from "./lib/audit.js";
@@ -20,6 +21,7 @@ import { withIdempotency } from "./lib/idempotency.js";
 import { metrics, installHttpMetrics, registerMetricsRoute } from "./observability/metrics.js";
 import { instrumentPrisma } from "./observability/prisma-metrics.js";
 import { closeProviders, initProviders } from "./providers.js";
+import { registerRiskRoutes } from "./routes/risk.js";
 
 // ---- keep your other domain code (types, helpers, shapes) exactly as you had ----
 // (omitted here for brevity — unchanged from your last working content)
@@ -31,6 +33,10 @@ export async function buildServer(): Promise<FastifyInstance> {
   const app = Fastify({ logger: true });
 
   installHttpMetrics(app);
+
+  (app as any).config = config;
+  const mlClient = createMlClient(config.mlServiceUrl);
+  (app as any).mlClient = mlClient as MlRiskClient;
 
   const allowedOrigins = new Set(config.cors.allowedOrigins);
 
@@ -173,11 +179,77 @@ export async function buildServer(): Promise<FastifyInstance> {
 
     const healthy = results.db && (results.redis !== false) && (results.nats !== false);
     if (!healthy) {
-      reply.code(503).send({ ok: false, components: results });
+      reply.code(503).send({ ok: false, ready: false, components: results, blocked: true });
       return;
     }
 
-    reply.send({ ok: true, components: results });
+    const mlRiskClient: MlRiskClient | undefined = (app as any).mlClient;
+    let readinessRisk: RiskAssessment | null = null;
+    if (mlRiskClient) {
+      try {
+        const latestBas = await prisma.basCycle.findFirst({ orderBy: { periodEnd: "desc" } });
+        const now = new Date();
+        const paygwRequired = Number(latestBas?.paygwRequired ?? 0);
+        const paygwSecured = Number(latestBas?.paygwSecured ?? 0);
+        const gstRequired = Number(latestBas?.gstRequired ?? 0);
+        const gstSecured = Number(latestBas?.gstSecured ?? 0);
+        const totalRequired = paygwRequired + gstRequired;
+        const totalSecured = paygwSecured + gstSecured;
+        const liquidityCoverage = totalRequired > 0 ? totalSecured / totalRequired : 1;
+        const escrowCoverage = paygwRequired > 0 ? paygwSecured / paygwRequired : liquidityCoverage;
+        const basWindowDays = latestBas && latestBas.periodEnd > now
+          ? Math.max(0, Math.round((latestBas.periodEnd.getTime() - now.getTime()) / 86400000))
+          : 0;
+        const outstandingAlerts = latestBas
+          ? await prisma.alert.count({ where: { orgId: latestBas.orgId, resolvedAt: null } })
+          : 0;
+        const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        const recentShortfalls = latestBas
+          ? await prisma.basCycle.count({
+              where: {
+                orgId: latestBas.orgId,
+                periodEnd: { gte: ninetyDaysAgo },
+                overallStatus: { not: "READY" },
+              },
+            })
+          : 0;
+
+        readinessRisk = await mlRiskClient.evaluateShortfall({
+          orgId: latestBas?.orgId ?? "unknown",
+          liquidityCoverage,
+          escrowCoverage,
+          outstandingAlerts,
+          basWindowDays,
+          recentShortfalls,
+        });
+      } catch (error) {
+        app.log.error({ err: error }, "ml_shortfall_readiness_failed");
+      }
+    }
+
+    if (readinessRisk?.riskLevel === "high") {
+      app.metrics?.recordSecurityEvent?.("readiness.blocked.high_risk");
+      reply
+        .code(503)
+        .send({ ok: false, ready: false, components: results, blocked: true, risk: readinessRisk });
+      return;
+    }
+
+    const responsePayload: Record<string, unknown> = {
+      ok: true,
+      ready: true,
+      components: results,
+      blocked: false,
+    };
+
+    if (readinessRisk) {
+      responsePayload.risk = readinessRisk;
+      if (readinessRisk.riskLevel === "medium") {
+        responsePayload.warning = "readiness_risk_medium";
+      }
+    }
+
+    reply.send(responsePayload);
   });
 
   registerMetricsRoute(app);
@@ -204,11 +276,17 @@ export async function buildServer(): Promise<FastifyInstance> {
     { prefix: "/regulator" }
   );
 
+  await registerRiskRoutes(app);
+
   // register the rest of your routes (unchanged), e.g.:
   // await registerAdminDataRoutes(app);
   // await registerTaxRoutes(app);
   // ... plus all your existing routes already in this file.
 
   return app;
+}
+
+export async function createApp(): Promise<FastifyInstance> {
+  return buildServer();
 }
 

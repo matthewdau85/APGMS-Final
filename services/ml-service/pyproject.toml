@@ -1,0 +1,9 @@
+[tool.poetry]
+name = "apgms-ml-service"
+version = "0.1.0"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+fastapi = "^0.115.0"
+uvicorn = "^0.30.0"
+pydantic = "^2.9.0"
