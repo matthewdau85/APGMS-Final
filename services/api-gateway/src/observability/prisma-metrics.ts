@@ -2,11 +2,12 @@ import type { PrismaClient } from "@prisma/client";
 
 import { metrics } from "./metrics.js";
 
-const attached = new WeakSet<PrismaClient>();
+const attached = new WeakMap<PrismaClient, PrismaClient>();
 
-export function attachPrismaMetrics(client: PrismaClient): void {
-  if (attached.has(client)) {
-    return;
+export function attachPrismaMetrics<T extends PrismaClient>(client: T): T {
+  const existing = attached.get(client);
+  if (existing) {
+    return existing as T;
   }
 
   type QueryContext = {
@@ -46,8 +47,10 @@ export function attachPrismaMetrics(client: PrismaClient): void {
         },
       },
     },
-  });
+  }) as T;
 
-  Object.assign(client, instrumented);
-  attached.add(client);
+  attached.set(client, instrumented as PrismaClient);
+  attached.set(instrumented as PrismaClient, instrumented as PrismaClient);
+
+  return instrumented;
 }
