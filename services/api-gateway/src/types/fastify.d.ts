@@ -1,5 +1,5 @@
 import "fastify";
-import type { MlRiskClient } from "../clients/ml-service";
+import type { MlRiskClient } from "../clients/ml-service.js";
 
 declare module "fastify" {
   interface FastifyInstance {
