@@ -1,23 +1,22 @@
-﻿# node/ts
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Data staging
+data/external/**/extracted/
+
+# Tests
+tests/__pycache__/
+
+# Node
 node_modules/
 dist/
-.build/
-coverage/
-*.log
-*.tsbuildinfo
+build/
+*.map
 
-# tooling
-.playwright/
+# OS/IDE
+.DS_Store
+Thumbs.db
 .vscode/
-.env
-.env.*
-
-webapp/dist
-
-webapp/test-results
-
-*.bak
-
-Verify-APGMS.ps1
-
-shared/prisma/.env
+.idea/
