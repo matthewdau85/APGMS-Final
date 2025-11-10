@@ -5,9 +5,9 @@ import {
   createEvidenceArtifact,
   fetchEvidenceArtifactDetail,
 } from "./api";
+import type { ComplianceReport } from "./api";
 import { getToken } from "./auth";
-
-type ComplianceReport = Awaited<ReturnType<typeof fetchComplianceReport>>;
+import { ComplianceRiskPanel } from "./features/compliance";
 
 type PaymentPlan = ComplianceReport["paymentPlans"][number];
 
@@ -121,6 +121,8 @@ export default function CompliancePage() {
           Everything the regulator needs in one place: BAS history, outstanding alerts, and the next due lodgment.
         </p>
       </header>
+
+      {report && <ComplianceRiskPanel report={report} />}
 
       {loading && <div style={infoTextStyle}>Building compliance view...</div>}
       {error && <div style={errorTextStyle}>{error}</div>}

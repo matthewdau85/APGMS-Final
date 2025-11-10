@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { fetchAlerts, resolveAlert, initiateMfa } from "./api";
 import { getToken, getSessionUser } from "./auth";
+import { FraudRiskPanel } from "./features/fraud";
 
 type AlertRecord = Awaited<ReturnType<typeof fetchAlerts>>["alerts"][number];
 
@@ -118,6 +119,8 @@ export default function AlertsPage() {
           Real-time compliance alerts flag shortfalls and anomalies that could block BAS lodgment.
         </p>
       </header>
+
+      <FraudRiskPanel alerts={alerts} />
 
       {loading && <div style={infoTextStyle}>Loading alerts...</div>}
       {error && <div style={errorTextStyle}>{error}</div>}

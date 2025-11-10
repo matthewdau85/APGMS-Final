@@ -11,6 +11,7 @@ import rateLimit from "./plugins/rate-limit.js";
 import { authGuard, createAuthGuard, REGULATOR_AUDIENCE } from "./auth.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerRegulatorAuthRoutes } from "./routes/regulator-auth.js";
+import { registerRiskRoutes } from "./routes/risk.js";
 import { prisma } from "./db.js";
 import { parseWithSchema } from "./lib/validation.js";
 import { verifyChallenge, requireRecentVerification, type VerifyChallengeResult } from "./security/mfa.js";
@@ -20,6 +21,7 @@ import { withIdempotency } from "./lib/idempotency.js";
 import { metrics, installHttpMetrics, registerMetricsRoute } from "./observability/metrics.js";
 import { instrumentPrisma } from "./observability/prisma-metrics.js";
 import { closeProviders, initProviders } from "./providers.js";
+import { MlServiceClient } from "./clients/ml-service.js";
 
 // ---- keep your other domain code (types, helpers, shapes) exactly as you had ----
 // (omitted here for brevity — unchanged from your last working content)
@@ -31,6 +33,13 @@ export async function buildServer(): Promise<FastifyInstance> {
   const app = Fastify({ logger: true });
 
   installHttpMetrics(app);
+
+  const mlClient = new MlServiceClient({
+    baseUrl: config.risk.serviceUrl,
+    thresholds: config.risk.thresholds,
+    logger: app.log,
+  });
+  app.decorate("mlClient", mlClient);
 
   const allowedOrigins = new Set(config.cors.allowedOrigins);
 
@@ -184,6 +193,7 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   await registerAuthRoutes(app);
   await registerRegulatorAuthRoutes(app);
+  await registerRiskRoutes(app);
 
   const regulatorAuthGuard = createAuthGuard(REGULATOR_AUDIENCE, {
     validate: async (claims, request) => {

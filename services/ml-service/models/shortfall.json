@@ -1,0 +1,36 @@
+{
+  "id": "shortfall-risk",
+  "version": "2025.02.15",
+  "intercept": -1.15,
+  "weights": {
+    "cashCoverageRatio": -2.1,
+    "varianceIndex": 1.2,
+    "openAlertRatio": 1.05
+  },
+  "confidence": {
+    "margin": 0.12
+  },
+  "recommendations": [
+    {
+      "threshold": 0.75,
+      "actions": [
+        "Escalate to CFO for contingency funding",
+        "Block BAS lodgment until balances reconciled"
+      ]
+    },
+    {
+      "threshold": 0.55,
+      "actions": [
+        "Trigger designated transfer playbook",
+        "Schedule accelerated cash sweep"
+      ]
+    },
+    {
+      "threshold": 0,
+      "actions": [
+        "Continue automated monitoring",
+        "Refresh designated account snapshot"
+      ]
+    }
+  ]
+}

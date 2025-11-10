@@ -493,6 +493,24 @@ model AuditLog {
   @@index([actorId, createdAt])
 }
 
+model RiskFeedback {
+  id           String   @id @default(cuid())
+  org          Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId        String
+  caseType     String
+  caseId       String
+  label        String
+  override     String?
+  modelId      String
+  modelVersion String
+  score        Float
+  submittedBy  String
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  @@index([orgId, caseType, caseId], map: "RiskFeedback_lookup_idx")
+}
+
 model RegulatorSession {
   id         String   @id @default(cuid())
   org        Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)

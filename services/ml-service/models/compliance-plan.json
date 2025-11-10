@@ -1,0 +1,35 @@
+{
+  "id": "compliance-plan",
+  "version": "2025.02.05",
+  "intercept": -0.9,
+  "weights": {
+    "installmentReliability": -1.4,
+    "liquidityBuffer": -0.8,
+    "planHistory": 1.1
+  },
+  "confidence": {
+    "margin": 0.14
+  },
+  "recommendations": [
+    {
+      "threshold": 0.7,
+      "actions": [
+        "Request regulator engagement call",
+        "Escalate to legal for remediation plan"
+      ]
+    },
+    {
+      "threshold": 0.5,
+      "actions": [
+        "Collect updated financial statements",
+        "Increase payment plan monitoring cadence"
+      ]
+    },
+    {
+      "threshold": 0,
+      "actions": [
+        "Auto-approve standard payment plan"
+      ]
+    }
+  ]
+}

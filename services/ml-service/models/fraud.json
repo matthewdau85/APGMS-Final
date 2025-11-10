@@ -1,0 +1,35 @@
+{
+  "id": "fraud-risk",
+  "version": "2025.02.10",
+  "intercept": -0.6,
+  "weights": {
+    "velocityScore": 1.8,
+    "patternDeviation": 1.35,
+    "vendorConcentration": 0.9
+  },
+  "confidence": {
+    "margin": 0.18
+  },
+  "recommendations": [
+    {
+      "threshold": 0.8,
+      "actions": [
+        "Pause payout batch for manual inspection",
+        "Notify fraud response duty officer"
+      ]
+    },
+    {
+      "threshold": 0.6,
+      "actions": [
+        "Collect enhanced due diligence evidence",
+        "Require dual-operator approval"
+      ]
+    },
+    {
+      "threshold": 0,
+      "actions": [
+        "Maintain standard screening cadence"
+      ]
+    }
+  ]
+}

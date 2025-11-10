@@ -19,6 +19,14 @@ export interface AppConfig {
     readonly allowedOrigins: string[];
   };
   readonly taxEngineUrl: string;
+  readonly risk: {
+    readonly serviceUrl: string;
+    readonly thresholds: {
+      readonly shortfall: number;
+      readonly fraud: number;
+      readonly compliance: number;
+    };
+  };
 
   // auth bits we actually use at runtime (these were in env before)
   readonly auth: {
@@ -78,6 +86,25 @@ const parseIntegerEnv = (name: string, fallback: number): number => {
   const parsed = Number.parseInt(raw, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new Error(`${name} must be a positive integer`);
+  }
+  return parsed;
+};
+
+const parseFloatEnv = (
+  name: string,
+  fallback: number,
+  { min = 0, max = 1 }: { min?: number; max?: number } = {},
+): number => {
+  const raw = process.env[name];
+  if (!raw || raw.trim().length === 0) {
+    return fallback;
+  }
+  const parsed = Number.parseFloat(raw);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`${name} must be a number`);
+  }
+  if (parsed < min || parsed > max) {
+    throw new Error(`${name} must be between ${min} and ${max}`);
   }
   return parsed;
 };
@@ -283,6 +310,29 @@ export function loadConfig(): AppConfig {
     "TAX_ENGINE_URL",
   );
 
+  const mlServiceUrl = ensureUrl(
+    process.env.ML_SERVICE_URL?.trim() &&
+      process.env.ML_SERVICE_URL.trim().length > 0
+      ? process.env.ML_SERVICE_URL.trim()
+      : "http://ml-service:9100",
+    "ML_SERVICE_URL",
+  );
+  const shortfallThreshold = parseFloatEnv(
+    "RISK_SHORTFALL_THRESHOLD",
+    0.6,
+    { min: 0, max: 1 },
+  );
+  const fraudThreshold = parseFloatEnv(
+    "RISK_FRAUD_THRESHOLD",
+    0.65,
+    { min: 0, max: 1 },
+  );
+  const complianceThreshold = parseFloatEnv(
+    "RISK_COMPLIANCE_THRESHOLD",
+    0.55,
+    { min: 0, max: 1 },
+  );
+
   const regulatorAccessCode = envString("REGULATOR_ACCESS_CODE");
   const regulatorAudience =
     process.env.REGULATOR_JWT_AUDIENCE &&
@@ -349,6 +399,14 @@ export function loadConfig(): AppConfig {
       ),
     },
     taxEngineUrl,
+    risk: {
+      serviceUrl: mlServiceUrl,
+      thresholds: {
+        shortfall: shortfallThreshold,
+        fraud: fraudThreshold,
+        compliance: complianceThreshold,
+      },
+    },
     auth: {
       audience,
       issuer,

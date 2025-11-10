@@ -268,36 +268,156 @@ export async function lodgeBas(
   }>;
 }
 
+export type ComplianceReport = {
+  orgId: string;
+  basHistory: Array<{
+    period: string;
+    lodgedAt: string;
+    status: string;
+    notes: string;
+  }>;
+  alertsSummary: {
+    openHighSeverity: number;
+    resolvedThisQuarter: number;
+  };
+  nextBasDue: string | null;
+  designatedTotals: {
+    paygw: number;
+    gst: number;
+  };
+  paymentPlans: Array<{
+    id: string;
+    basCycleId: string;
+    requestedAt: string;
+    status: string;
+    reason: string;
+    details: Record<string, unknown>;
+    resolvedAt: string | null;
+  }>;
+};
+
 export async function fetchComplianceReport(token: string) {
   const res = await fetch(`${API_BASE}/compliance/report`, {
     headers: authHeaders(token),
   });
   if (!res.ok) throw new Error("failed_compliance");
+  return res.json() as Promise<ComplianceReport>;
+}
+
+export type RiskAssessment = {
+  modelId: string;
+  modelVersion: string;
+  score: number;
+  confidenceInterval: [number, number];
+  recommendedActions: string[];
+  contributingFeatures: Record<string, number>;
+  requiresManualReview: boolean;
+  decision: "allow" | "hold";
+  threshold: number;
+  caseId: string | null;
+};
+
+export async function evaluateShortfallRisk(
+  token: string,
+  payload: {
+    basCycleId?: string;
+    cashCoverageRatio: number;
+    varianceIndex: number;
+    openAlertRatio: number;
+  },
+) {
+  const res = await fetch(`${API_BASE}/risk/shortfall`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("failed_shortfall_risk");
+  return res.json() as Promise<{ risk: RiskAssessment }>;
+}
+
+export async function evaluateFraudRisk(
+  token: string,
+  payload: {
+    caseId?: string;
+    velocityScore: number;
+    patternDeviation: number;
+    vendorConcentration: number;
+  },
+) {
+  const res = await fetch(`${API_BASE}/risk/fraud`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("failed_fraud_risk");
+  return res.json() as Promise<{ risk: RiskAssessment }>;
+}
+
+export async function evaluateCompliancePlanRisk(
+  token: string,
+  payload: {
+    caseId?: string;
+    installmentReliability: number;
+    liquidityBuffer: number;
+    planHistory: number;
+  },
+) {
+  const res = await fetch(`${API_BASE}/plan/compliance`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("failed_compliance_plan_risk");
+  return res.json() as Promise<{ risk: RiskAssessment }>;
+}
+
+export async function submitRiskFeedback(
+  token: string,
+  payload: {
+    caseType: string;
+    caseId: string;
+    label: string;
+    override?: string;
+    modelId: string;
+    modelVersion: string;
+    score: number;
+    metadata?: Record<string, unknown>;
+  },
+) {
+  const res = await fetch(`${API_BASE}/risk/feedback`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("failed_risk_feedback");
+  return res.json() as Promise<{ feedback: { id: string; createdAt: string } }>;
+}
+
+export async function fetchRiskFeedback(
+  token: string,
+  caseType: string,
+  caseId: string,
+) {
+  const res = await fetch(
+    `${API_BASE}/risk/feedback/${encodeURIComponent(caseType)}/${encodeURIComponent(caseId)}`,
+    {
+      headers: authHeaders(token),
+    },
+  );
+  if (!res.ok) throw new Error("failed_fetch_risk_feedback");
   return res.json() as Promise<{
-    orgId: string;
-    basHistory: Array<{
-      period: string;
-      lodgedAt: string;
-      status: string;
-      notes: string;
-    }>;
-    alertsSummary: {
-      openHighSeverity: number;
-      resolvedThisQuarter: number;
-    };
-    nextBasDue: string | null;
-    designatedTotals: {
-      paygw: number;
-      gst: number;
-    };
-    paymentPlans: Array<{
+    feedback: Array<{
       id: string;
-      basCycleId: string;
-      requestedAt: string;
-      status: string;
-      reason: string;
-      details: Record<string, unknown>;
-      resolvedAt: string | null;
+      caseType: string;
+      caseId: string;
+      label: string;
+      override: string | null;
+      modelId: string;
+      modelVersion: string;
+      score: number;
+      submittedBy: string;
+      metadata: Record<string, unknown> | null;
+      createdAt: string;
     }>;
   }>;
 }
