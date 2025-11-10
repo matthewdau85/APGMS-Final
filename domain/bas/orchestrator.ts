@@ -40,8 +40,8 @@ export async function orchestrateBasLodgment(
     where: { orgId },
   });
 
-  const paygwBalance = lookupBalance(designatedAccounts, "PAYGW");
-  const gstBalance = lookupBalance(designatedAccounts, "GST");
+  let remainingPaygwBalance = lookupBalance(designatedAccounts, "PAYGW");
+  let remainingGstBalance = lookupBalance(designatedAccounts, "GST");
 
   let ready = 0;
   let blocked = 0;
@@ -50,8 +50,14 @@ export async function orchestrateBasLodgment(
     const requiredPaygw = toNumber(cycle.paygwRequired);
     const requiredGst = toNumber(cycle.gstRequired);
 
-    const paygwShortfall = Math.max(0, requiredPaygw - paygwBalance);
-    const gstShortfall = Math.max(0, requiredGst - gstBalance);
+    const paygwAvailable = Math.max(0, remainingPaygwBalance);
+    const gstAvailable = Math.max(0, remainingGstBalance);
+
+    const paygwSecured = Math.min(requiredPaygw, paygwAvailable);
+    const gstSecured = Math.min(requiredGst, gstAvailable);
+
+    const paygwShortfall = Math.max(0, requiredPaygw - paygwSecured);
+    const gstShortfall = Math.max(0, requiredGst - gstSecured);
     const status = paygwShortfall === 0 && gstShortfall === 0 ? "READY" : "BLOCKED";
 
     if (status === "READY") {
@@ -62,12 +68,12 @@ export async function orchestrateBasLodgment(
 
     const updates: Record<string, unknown> = {};
 
-    if (!decimalEquals(cycle.paygwSecured, paygwBalance)) {
-      updates.paygwSecured = new Prisma.Decimal(paygwBalance);
+    if (!decimalEquals(cycle.paygwSecured, paygwSecured)) {
+      updates.paygwSecured = new Prisma.Decimal(paygwSecured);
     }
 
-    if (!decimalEquals(cycle.gstSecured, gstBalance)) {
-      updates.gstSecured = new Prisma.Decimal(gstBalance);
+    if (!decimalEquals(cycle.gstSecured, gstSecured)) {
+      updates.gstSecured = new Prisma.Decimal(gstSecured);
     }
 
     if (cycle.overallStatus !== status) {
@@ -88,8 +94,8 @@ export async function orchestrateBasLodgment(
           metadata: {
             basCycleId: cycle.id,
             status,
-            paygwSecured: paygwBalance,
-            gstSecured: gstBalance,
+            paygwSecured,
+            gstSecured,
           },
         });
       }
@@ -100,7 +106,7 @@ export async function orchestrateBasLodgment(
       type: "PAYGW_SHORTFALL",
       shortfall: paygwShortfall,
       message: paygwShortfall
-        ? `PAYGW secured ${formatCurrency(paygwBalance)} below required ${formatCurrency(requiredPaygw)}.`
+        ? `PAYGW secured ${formatCurrency(paygwSecured)} below required ${formatCurrency(requiredPaygw)}.`
         : "PAYGW shortfall resolved.",
     });
 
@@ -109,9 +115,12 @@ export async function orchestrateBasLodgment(
       type: "GST_SHORTFALL",
       shortfall: gstShortfall,
       message: gstShortfall
-        ? `GST secured ${formatCurrency(gstBalance)} below required ${formatCurrency(requiredGst)}.`
+        ? `GST secured ${formatCurrency(gstSecured)} below required ${formatCurrency(requiredGst)}.`
         : "GST shortfall resolved.",
     });
+
+    remainingPaygwBalance = Math.max(0, remainingPaygwBalance - paygwSecured);
+    remainingGstBalance = Math.max(0, remainingGstBalance - gstSecured);
   }
 
   return { orgId, cyclesEvaluated: cycles.length, ready, blocked };
