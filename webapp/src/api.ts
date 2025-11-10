@@ -108,8 +108,34 @@ export async function createBankLine(
     headers: authHeaders(token),
     body: JSON.stringify(line),
   });
-  if (!res.ok) throw new Error("create failed");
-  return res.json();
+  if (!res.ok) {
+    let payload: unknown = null;
+    try {
+      payload = await res.json();
+    } catch (err) {
+      // swallow JSON parse errors
+    }
+    const error = new Error("create failed");
+    (error as any).payload = payload;
+    throw error;
+  }
+  return res.json() as Promise<{
+    line: {
+      id: string;
+      orgId: string;
+      amount: number;
+      createdAt: string;
+      postedAt: string;
+      description: string;
+    };
+    risk: {
+      orgId: string;
+      score: number;
+      riskLevel: "low" | "medium" | "high";
+      recommendedAction: string;
+      explanations: string[];
+    } | null;
+  }>;
 }
 
 export async function fetchCurrentObligations(token: string) {
@@ -277,7 +303,7 @@ export async function fetchComplianceReport(token: string) {
     orgId: string;
     basHistory: Array<{
       period: string;
-      lodgedAt: string;
+      lodgedAt: string | null;
       status: string;
       notes: string;
     }>;
@@ -299,6 +325,22 @@ export async function fetchComplianceReport(token: string) {
       details: Record<string, unknown>;
       resolvedAt: string | null;
     }>;
+    mlInsights: {
+      shortfall: {
+        orgId: string;
+        score: number;
+        riskLevel: "low" | "medium" | "high";
+        recommendedAction: string;
+        explanations: string[];
+      } | null;
+      fraud: {
+        orgId: string;
+        score: number;
+        riskLevel: "low" | "medium" | "high";
+        recommendedAction: string;
+        explanations: string[];
+      } | null;
+    };
   }>;
 }
 

@@ -53,12 +53,9 @@ export function redactBankLine(row: any) {
   return {
     id: row.id,
     orgId: row.orgId,
-    // safe fields:
-    accountRef: row.accountRef,
-    amountCents: row.amountCents,
-    currency: row.currency,
-    createdAt: row.createdAt,
-    // hide or mask anything sensitive:
-    // e.g. bankAccountNumber, taxFileNumber, rawNarrative, etc
+    amount: Number(row.amount ?? 0),
+    postedAt: row.date instanceof Date ? row.date.toISOString() : row.date,
+    createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt,
+    description: "***",
   };
 }

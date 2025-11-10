@@ -17,10 +17,12 @@ else {
             await app.close();
             await prisma.$disconnect();
         });
-        it("returns 200 when DB is reachable", async () => {
-            const res = await app.inject({ method: "GET", url: "/ready" });
-            assert.equal(res.statusCode, 200);
-            assert.deepEqual(res.json(), { ready: true });
-        });
+    it("returns 200 when DB is reachable", async () => {
+      const res = await app.inject({ method: "GET", url: "/ready" });
+      assert.equal(res.statusCode, 200);
+      const payload = res.json();
+      assert.equal(payload.ok, true);
+      assert.ok(payload.components);
     });
+  });
 }

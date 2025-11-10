@@ -1,0 +1,11 @@
+{
+  "name": "@apgms/tests-api-gateway",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "tsx --test src/**/*.test.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.6"
+  }
+}

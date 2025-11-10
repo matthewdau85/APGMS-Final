@@ -1,0 +1,24 @@
+{
+  "bias": -2.2,
+  "weights": {
+    "amount_zscore": 2.1,
+    "same_day_velocity": 1.6,
+    "payee_concentration": 1.3,
+    "recent_velocity": 0.9
+  },
+  "thresholds": {
+    "medium": 0.35,
+    "high": 0.65
+  },
+  "actions": {
+    "low": "Allow the transfer but keep standard audit trail.",
+    "medium": "Queue the transfer for secondary approval and notify compliance analyst.",
+    "high": "Block the transfer and open a fraud investigation ticket."
+  },
+  "factors": {
+    "amount_zscore": "Transfer amount is an outlier compared to the org's recent activity.",
+    "same_day_velocity": "Spike in transfers recorded for the same settlement date.",
+    "payee_concentration": "Transfers heavily concentrated to a single counterparty.",
+    "recent_velocity": "High volume of transfers in the last hour."
+  }
+}

@@ -8,7 +8,8 @@
         "shared",
         "worker",
         "apps/*",
-        "packages/*"
+        "packages/*",
+        "tests/*"
     ],
   "scripts": {
     "db:migrate": "pnpm --filter @apgms/shared exec prisma migrate dev --schema prisma/schema.prisma",

@@ -1,6 +1,8 @@
 ﻿import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { prisma } from "../db.js";
+import { mlServiceClient } from "../clients/mlServiceClient.js";
+import { fetchFraudRisk, shouldBlockTransfer } from "../lib/risk.js";
 import { assertOrgAccess, redactBankLine } from "../utils/orgScope.js";
 
 // Accept the fields Prisma requires for a BankLine create
@@ -39,6 +41,24 @@ export const registerBankLinesRoutes: FastifyPluginAsync = async (app) => {
       return;
     }
 
+    let fraudRisk = null;
+    try {
+      fraudRisk = await fetchFraudRisk(mlServiceClient, {
+        orgId: data.orgId,
+        amount: data.amount,
+        settlementDate: data.date,
+        payeeFingerprint: data.payeeCiphertext,
+      });
+    } catch (error) {
+      req.log?.warn({ err: error }, "ml_fraud_risk_failed");
+    }
+
+    if (shouldBlockTransfer(fraudRisk)) {
+      app.metrics?.recordSecurityEvent?.("bank_line.blocked_high_risk");
+      reply.code(403).send({ error: "transfer_blocked", risk: fraudRisk });
+      return;
+    }
+
     const rec = await prisma.bankLine.upsert({
       where: {
         orgId_idempotencyKey: {
@@ -59,7 +79,7 @@ export const registerBankLinesRoutes: FastifyPluginAsync = async (app) => {
       }
     });
 
-    reply.code(201).send(redactBankLine(rec));
+    reply.code(201).send({ line: redactBankLine(rec), risk: fraudRisk });
   });
 
   // List for current org

@@ -35,6 +35,20 @@ services:
     networks:
       - apgmsnet
 
+  ml-service:
+    build:
+      context: .
+      dockerfile: ./services/ml-service/Dockerfile
+    image: apgms-ml-service:latest
+    container_name: apgms-ml-service
+    restart: unless-stopped
+    environment:
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8001:8001"
+    networks:
+      - apgmsnet
+
   api-gateway:
     build:
       context: .
@@ -45,6 +59,7 @@ services:
       - db
       - redis
       - tax-engine
+      - ml-service
     restart: unless-stopped
     environment:
       # --- DB URLs ---
@@ -81,6 +96,7 @@ services:
 
       # --- service-to-service URL for tax-engine ---
       TAX_ENGINE_URL: "http://tax-engine:8000"
+      ML_SERVICE_URL: "http://ml-service:8001"
     ports:
       - "3000:3000"
     networks:

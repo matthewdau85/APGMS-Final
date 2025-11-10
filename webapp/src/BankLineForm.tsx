@@ -14,15 +14,27 @@ export function BankLineForm({
   const [payee, setPayee] = useState("Test Vendor");
   const [desc, setDesc] = useState("Laptop purchase");
   const [error, setError] = useState("");
+  const [riskMessage, setRiskMessage] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     try {
-      await createBankLine(token, { date, amount, payee, desc });
+      const response = await createBankLine(token, { date, amount, payee, desc });
+      if (response.risk) {
+        setRiskMessage(`${response.risk.riskLevel.toUpperCase()} risk — ${response.risk.recommendedAction}`);
+      } else {
+        setRiskMessage("Transfer accepted without ML flags.");
+      }
       onCreated();
     } catch (err) {
-      setError("Failed to create");
+      const payload = (err as any)?.payload as { risk?: { riskLevel: string; recommendedAction: string } } | undefined;
+      if (payload?.risk) {
+        setError(`${payload.risk.riskLevel.toUpperCase()} risk — ${payload.risk.recommendedAction}`);
+      } else {
+        setError("Failed to create");
+      }
+      setRiskMessage(null);
     }
   }
 
@@ -59,6 +71,7 @@ export function BankLineForm({
         <input value={desc} onChange={(e) => setDesc(e.target.value)} />
       </label>
 
+      {riskMessage && <div style={{ color: "#1a202c" }}>{riskMessage}</div>}
       {error && <div style={{ color: "red" }}>{error}</div>}
 
       <button type="submit">Create Line</button>

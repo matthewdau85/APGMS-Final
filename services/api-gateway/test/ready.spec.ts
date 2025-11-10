@@ -25,7 +25,9 @@ if (!runReadySuite) {
     it("returns 200 when DB is reachable", async () => {
       const res = await app.inject({ method: "GET", url: "/ready" });
       assert.equal(res.statusCode, 200);
-      assert.deepEqual(res.json(), { ready: true });
+      const payload = res.json();
+      assert.equal(payload.ok, true);
+      assert.ok(payload.components);
     });
   });
 }

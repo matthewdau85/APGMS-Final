@@ -19,6 +19,7 @@ export interface AppConfig {
     readonly allowedOrigins: string[];
   };
   readonly taxEngineUrl: string;
+  readonly mlServiceUrl: string;
 
   // auth bits we actually use at runtime (these were in env before)
   readonly auth: {
@@ -283,6 +284,14 @@ export function loadConfig(): AppConfig {
     "TAX_ENGINE_URL",
   );
 
+  const mlServiceUrl = ensureUrl(
+    process.env.ML_SERVICE_URL?.trim() &&
+      process.env.ML_SERVICE_URL.trim().length > 0
+      ? process.env.ML_SERVICE_URL.trim()
+      : "http://ml-service:8001",
+    "ML_SERVICE_URL",
+  );
+
   const regulatorAccessCode = envString("REGULATOR_ACCESS_CODE");
   const regulatorAudience =
     process.env.REGULATOR_JWT_AUDIENCE &&
@@ -349,6 +358,7 @@ export function loadConfig(): AppConfig {
       ),
     },
     taxEngineUrl,
+    mlServiceUrl,
     auth: {
       audience,
       issuer,

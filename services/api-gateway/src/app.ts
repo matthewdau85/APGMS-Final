@@ -6,11 +6,14 @@ import { context, trace } from "@opentelemetry/api";
 
 import { AppError, badRequest, conflict, forbidden, notFound, unauthorized } from "./shared-shims.js";
 import { config } from "./config.js";
+import { mlServiceClient } from "./clients/mlServiceClient.js";
+import { fetchShortfallRisk, shouldDeferReadiness } from "./lib/risk.js";
 
 import rateLimit from "./plugins/rate-limit.js";
 import { authGuard, createAuthGuard, REGULATOR_AUDIENCE } from "./auth.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerRegulatorAuthRoutes } from "./routes/regulator-auth.js";
+import { registerComplianceRoutes } from "./routes/compliance.js";
 import { prisma } from "./db.js";
 import { parseWithSchema } from "./lib/validation.js";
 import { verifyChallenge, requireRecentVerification, type VerifyChallengeResult } from "./security/mfa.js";
@@ -130,7 +133,7 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   app.get("/health", async () => ({ ok: true, service: "api-gateway" }));
 
-  app.get("/ready", async (_request, reply) => {
+  app.get("/ready", async (request, reply) => {
     if ((app as any).isDraining?.() === true) {
       reply.code(503).send({ ok: false, draining: true });
       return;
@@ -172,18 +175,39 @@ export async function buildServer(): Promise<FastifyInstance> {
     }
 
     const healthy = results.db && (results.redis !== false) && (results.nats !== false);
-    if (!healthy) {
-      reply.code(503).send({ ok: false, components: results });
+
+    let shortfallRisk = null;
+    try {
+      shortfallRisk = await fetchShortfallRisk(mlServiceClient, null);
+    } catch (error) {
+      request.log?.warn({ err: error }, "ml_shortfall_risk_failed");
+    }
+
+    const blockedByRisk = shouldDeferReadiness(shortfallRisk);
+
+    if (!healthy || blockedByRisk) {
+      app.metrics?.recordSecurityEvent?.(
+        blockedByRisk ? "readiness.shortfall_block" : "readiness.fail",
+      );
+      reply
+        .code(503)
+        .send({
+          ok: false,
+          components: results,
+          risk: shortfallRisk,
+          reason: blockedByRisk ? "ml_shortfall_high" : "component_unhealthy",
+        });
       return;
     }
 
-    reply.send({ ok: true, components: results });
+    reply.send({ ok: true, components: results, risk: shortfallRisk });
   });
 
   registerMetricsRoute(app);
 
   await registerAuthRoutes(app);
   await registerRegulatorAuthRoutes(app);
+  await registerComplianceRoutes(app);
 
   const regulatorAuthGuard = createAuthGuard(REGULATOR_AUDIENCE, {
     validate: async (claims, request) => {

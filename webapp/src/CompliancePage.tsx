@@ -6,6 +6,7 @@ import {
   fetchEvidenceArtifactDetail,
 } from "./api";
 import { getToken } from "./auth";
+import { RiskSummary } from "./features/compliance";
 
 type ComplianceReport = Awaited<ReturnType<typeof fetchComplianceReport>>;
 
@@ -134,6 +135,36 @@ export default function CompliancePage() {
             <SummaryCard label="PAYGW Secured" value={currencyFormatter.format(report.designatedTotals.paygw)} />
             <SummaryCard label="GST Secured" value={currencyFormatter.format(report.designatedTotals.gst)} />
           </section>
+
+          {(() => {
+            const insights = report.mlInsights;
+            const highShortfall = insights?.shortfall?.riskLevel === "high";
+            const highFraud = insights?.fraud?.riskLevel === "high";
+            if (!highShortfall && !highFraud) {
+              return null;
+            }
+            const message = [
+              highShortfall ? "Shortfall risk is elevated" : null,
+              highFraud ? "Fraud screening flagged transfers" : null,
+            ]
+              .filter(Boolean)
+              .join(". ");
+            return (
+              <div
+                style={{
+                  padding: "12px 16px",
+                  borderRadius: "8px",
+                  background: "#fef2f2",
+                  color: "#b91c1c",
+                  fontWeight: 600,
+                }}
+              >
+                {message}. Follow the ML recommended actions before releasing funds.
+              </div>
+            );
+          })()}
+
+          <RiskSummary insights={report.mlInsights ?? null} />
 
           <section style={cardStyle}>
             <h2 style={sectionTitleStyle}>Payment Plans & Requests</h2>

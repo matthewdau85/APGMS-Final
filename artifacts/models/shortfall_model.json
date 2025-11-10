@@ -1,0 +1,24 @@
+{
+  "bias": -1.15,
+  "weights": {
+    "liquidity_gap": 2.4,
+    "open_alerts": 1.2,
+    "lodgment_gap": 1.0,
+    "volatility": 0.8
+  },
+  "thresholds": {
+    "medium": 0.45,
+    "high": 0.72
+  },
+  "actions": {
+    "low": "Continue scheduled transfers and monitoring.",
+    "medium": "Escalate to finance for manual review before BAS lodgment.",
+    "high": "Freeze discretionary payments and trigger regulator notification runbook."
+  },
+  "factors": {
+    "liquidity_gap": "Outstanding obligations are outpacing cash reserves.",
+    "open_alerts": "Multiple unresolved compliance alerts increase likelihood of a shortfall.",
+    "lodgment_gap": "Recent BAS lodgments have not fully secured PAYGW/GST balances.",
+    "volatility": "Cash buffers have swung significantly over the last cycle."
+  }
+}
