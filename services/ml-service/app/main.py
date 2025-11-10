@@ -10,7 +10,7 @@ from typing import Dict, Iterable, List, Mapping, MutableMapping, Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 MODEL_DIR = REPO_ROOT / "artifacts" / "models"
 
 
