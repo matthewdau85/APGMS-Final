@@ -158,13 +158,14 @@ describe("POST /admin/data/delete", () => {
         assert.equal(body.action, "anonymized");
         assert.equal(body.userId, user.id);
         assert.equal(typeof body.occurredAt, "string");
+        assert.equal(body.retentionDays, 365);
         assert.equal(findCalls, 1);
         assert.equal(countCalls.length, 1);
         assert.deepEqual(countCalls[0].where, { orgId: defaultPayload.orgId });
         assert.equal(deleteCalled, false);
         assert.equal(updateCalls.length, 1);
         const updateArgs = updateCalls[0];
-        assert.match(updateArgs.data.email, /^deleted\+[a-f0-9]{12}@example.com$/);
+        assert.match(updateArgs.data.email, /^deleted\+\d+d-[a-f0-9]{12}@example.com$/);
         assert.match(updateArgs.data.password, /^\$argon2id\$/);
         const lastLog = securityLogs[securityLogs.length - 1] ?? null;
         assert.deepEqual(lastLog, {
@@ -173,9 +174,10 @@ describe("POST /admin/data/delete", () => {
             principal: "admin-1",
             subjectUserId: user.id,
             mode: "anonymized",
+            retentionDays: 365,
         });
     });
-    it("hard deletes user when no constraint risk", async () => {
+    it("anonymizes user within retention window when no constraint risk", async () => {
         const user = {
             id: "user-2",
             email: defaultPayload.email,
@@ -203,8 +205,52 @@ describe("POST /admin/data/delete", () => {
         assert.equal(response.statusCode, 202);
         const body = response.json();
         assert.doesNotThrow(() => adminDataDeleteResponseSchema.parse(body));
+        assert.equal(body.action, "anonymized");
+        assert.equal(body.userId, user.id);
+        assert.equal(body.retentionDays, 365);
+        assert.equal(updateCalled, true);
+        assert.equal(deleteArgs, null);
+        const lastLog = securityLogs[securityLogs.length - 1] ?? null;
+        assert.deepEqual(lastLog, {
+            event: "data_delete",
+            orgId: defaultPayload.orgId,
+            principal: "principal",
+            subjectUserId: user.id,
+            mode: "anonymized",
+            retentionDays: 365,
+        });
+    });
+    it("hard deletes user when retention window has elapsed", async () => {
+        const user = {
+            id: "user-3",
+            email: defaultPayload.email,
+            password: "secret",
+            createdAt: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000),
+            orgId: defaultPayload.orgId,
+        };
+        prismaStub.user.findFirst = async () => user;
+        prismaStub.bankLine.count = async () => 0;
+        let updateCalled = false;
+        prismaStub.user.update = async () => {
+            updateCalled = true;
+            return user;
+        };
+        let deleteArgs = null;
+        prismaStub.user.delete = async (args) => {
+            deleteArgs = args;
+            return user;
+        };
+        const response = await app.inject({
+            method: "POST",
+            url: "/admin/data/delete",
+            payload: defaultPayload,
+        });
+        assert.equal(response.statusCode, 202);
+        const body = response.json();
+        assert.doesNotThrow(() => adminDataDeleteResponseSchema.parse(body));
         assert.equal(body.action, "deleted");
         assert.equal(body.userId, user.id);
+        assert.equal(body.retentionDays, 365);
         assert.equal(updateCalled, false);
         assert.deepEqual(deleteArgs, { where: { id: user.id } });
         const lastLog = securityLogs[securityLogs.length - 1] ?? null;
@@ -214,6 +260,7 @@ describe("POST /admin/data/delete", () => {
             principal: "principal",
             subjectUserId: user.id,
             mode: "deleted",
+            retentionDays: 365,
         });
     });
 });

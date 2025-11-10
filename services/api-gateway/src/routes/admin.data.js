@@ -3,6 +3,25 @@ import { adminDataDeleteRequestSchema, subjectDataExportRequestSchema, subjectDa
 import { hashPassword } from "@apgms/shared";
 import { authenticateRequest, } from "../lib/auth";
 const PASSWORD_PLACEHOLDER = "__deleted__";
+const DEFAULT_RETENTION_DAYS = 365;
+
+function resolveRetentionDays() {
+    const raw = process.env.DATA_RETENTION_DAYS;
+    if (!raw) {
+        return DEFAULT_RETENTION_DAYS;
+    }
+    const parsed = Number.parseInt(raw, 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+        return DEFAULT_RETENTION_DAYS;
+    }
+    return parsed;
+}
+
+function computeRetentionCutoff(retentionDays) {
+    const now = Date.now();
+    const windowMs = retentionDays * 24 * 60 * 60 * 1000;
+    return new Date(now - windowMs);
+}
 async function buildDefaultPrisma() {
     const module = (await import("../../../../shared/src/db.js"));
     return module.prisma;
@@ -59,8 +78,12 @@ export async function registerAdminDataRoutes(app, deps = {}) {
             where: { orgId: payload.orgId },
         });
         const occurredAt = new Date().toISOString();
-        if (referencedLines > 0) {
-            const anonymizedEmail = anonymizeEmail(targetUser.email, targetUser.id);
+        const retentionDays = resolveRetentionDays();
+        const retentionCutoff = computeRetentionCutoff(retentionDays);
+        const createdAtDate = targetUser.createdAt ? new Date(targetUser.createdAt) : null;
+        const shouldHardDelete = referencedLines === 0 && createdAtDate !== null && createdAtDate < retentionCutoff;
+        if (!shouldHardDelete) {
+            const anonymizedEmail = anonymizeEmail(targetUser.email, targetUser.id, retentionDays);
             const hashedPlaceholder = await hash(PASSWORD_PLACEHOLDER);
             await prisma.user.update({
                 where: { id: targetUser.id },
@@ -76,6 +99,7 @@ export async function registerAdminDataRoutes(app, deps = {}) {
                     principal: principal.id,
                     subjectUserId: targetUser.id,
                     mode: "anonymized",
+                    retentionDays,
                 });
             }
             app.metrics?.recordSecurityEvent("data_delete");
@@ -85,12 +109,14 @@ export async function registerAdminDataRoutes(app, deps = {}) {
                 principal: principal.id,
                 subjectUserId: targetUser.id,
                 mode: "anonymized",
+                retentionDays,
                 occurredAt,
             });
             const response = {
                 action: "anonymized",
                 userId: targetUser.id,
                 occurredAt,
+                retentionDays,
             };
             void reply.code(202).send(response);
             return;
@@ -103,6 +129,7 @@ export async function registerAdminDataRoutes(app, deps = {}) {
                 principal: principal.id,
                 subjectUserId: targetUser.id,
                 mode: "deleted",
+                retentionDays,
             });
         }
         app.metrics?.recordSecurityEvent("data_delete");
@@ -112,12 +139,14 @@ export async function registerAdminDataRoutes(app, deps = {}) {
             principal: principal.id,
             subjectUserId: targetUser.id,
             mode: "deleted",
+            retentionDays,
             occurredAt,
         });
         const response = {
             action: "deleted",
             userId: targetUser.id,
             occurredAt,
+            retentionDays,
         };
         void reply.code(202).send(response);
     });
@@ -208,15 +237,20 @@ const adminDataRoutes = async (app) => {
     });
 };
 export default adminDataRoutes;
-function anonymizeEmail(email, userId) {
-    const hash = createHash("sha256").update(`${email}:${userId}`).digest("hex");
-    return `deleted+${hash.slice(0, 12)}@example.com`;
+function anonymizeEmail(email, userId, retentionDays) {
+    const hash = createHash("sha256")
+        .update(`${email}:${userId}:${retentionDays}`)
+        .digest("hex");
+    return `deleted+${retentionDays}d-${hash.slice(0, 12)}@example.com`;
 }
 function buildAuditMetadata(payload) {
     return {
         ...(payload.subjectUserId ? { subjectUserId: payload.subjectUserId } : {}),
         ...(payload.subjectEmail ? { subjectEmail: payload.subjectEmail } : {}),
         ...(payload.mode ? { mode: payload.mode } : {}),
+        ...(payload.retentionDays
+            ? { retentionDays: payload.retentionDays }
+            : {}),
     };
 }
 async function logAuditForDb(db, auditLogFn, payload) {

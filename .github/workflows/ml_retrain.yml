@@ -1,0 +1,44 @@
+name: ML Retraining
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'data/ml/training/**'
+      - 'scripts/ml-retrain.mjs'
+      - 'services/ml-inference/**'
+  workflow_dispatch:
+  schedule:
+    - cron: '0 5 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  retrain:
+    name: Trigger model retraining when fresh data arrives
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Execute retraining orchestration
+        env:
+          ML_TRAINING_DIRS: data/ml/training
+          ML_RETRAIN_COMMAND: node services/ml-inference/pipeline/retrain.mjs
+        run: |
+          node scripts/ml-retrain.mjs
+      - name: Upload latest model metadata
+        if: ${{ always() && exists('artifacts/ml/model-metadata.json') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ml-model-metadata
+          path: |
+            artifacts/ml/model-metadata.json
+            artifacts/ml/telemetry/**
+          if-no-files-found: warn

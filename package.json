@@ -33,8 +33,9 @@
     "lint:markdown": "pnpm exec markdownlint **/*.md",
     "compliance:evidence": "node scripts/collect-evidence.mjs",
     "security:rotate-keys": "node scripts/rotate-pii-keys.mjs",
-        "backup:evidence-pack": "tsx scripts/export-evidence-pack.ts"
-    },
+    "backup:evidence-pack": "tsx scripts/export-evidence-pack.ts",
+    "ml:retrain": "node scripts/ml-retrain.mjs"
+  },
     "devDependencies": {
         "@axe-core/playwright": "^4.9.2",
         "@cyclonedx/cyclonedx-npm": "^4.0.3",

@@ -14,6 +14,7 @@ export const adminDataDeleteResponseSchema = z.object({
     .refine((value) => !Number.isNaN(Date.parse(value)), {
       message: "occurredAt must be ISO string",
     }),
+  retentionDays: z.number().int().positive(),
 });
 
 export type AdminDataDeleteRequest = z.infer<typeof adminDataDeleteRequestSchema>;
