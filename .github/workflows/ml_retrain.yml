@@ -34,7 +34,7 @@ jobs:
         run: |
           node scripts/ml-retrain.mjs
       - name: Upload latest model metadata
-        if: ${{ always() && exists('artifacts/ml/model-metadata.json') }}
+        if: ${{ always() && hashFiles('artifacts/ml/model-metadata.json') != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: ml-model-metadata
