@@ -19,8 +19,21 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Detect ML assets
+        id: assets
+        run: |
+          if [ -d "apgms-ml" ] && [ -d "data" ]; then
+            echo "missing=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "missing=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Skip training (assets not present)
+        if: steps.assets.outputs.missing == 'true'
+        run: echo "Skipping ML training because required assets are not present in this repository."
       - name: Install dependencies
+        if: steps.assets.outputs.missing == 'false'
         run: pip install -r apgms-ml/requirements.txt
       - name: Run training scripts
+        if: steps.assets.outputs.missing == 'false'
         shell: pwsh
         run: apgms-ml/scripts/Train-All.ps1
