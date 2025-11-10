@@ -2,10 +2,11 @@ import { createHash } from "node:crypto";
 
 import { Prisma, type PrismaClient } from "@prisma/client";
 
-import { conflict, notFound } from "@apgms/shared";
+import { conflict, notFound } from "@apgms/shared/errors.js";
 import {
   evaluateDesignatedAccountPolicy,
   normalizeTransferSource,
+  type DesignatedAccountType,
   type DesignatedTransferSource,
 } from "@apgms/shared/ledger";
 
@@ -34,6 +35,14 @@ export type ApplyDesignatedTransferResult = {
   newBalance: number;
   transferId: string;
   source: DesignatedTransferSource;
+};
+
+export type CreditDesignatedAccountInput = {
+  orgId: string;
+  accountType: DesignatedAccountType;
+  amount: number;
+  source: DesignatedTransferSource;
+  actorId: string;
 };
 
 async function ensureViolationAlert(
@@ -165,6 +174,33 @@ export async function applyDesignatedAccountTransfer(
   }
 
   return result;
+}
+
+export async function creditDesignatedAccountForObligation(
+  context: PolicyContext,
+  input: CreditDesignatedAccountInput,
+): Promise<ApplyDesignatedTransferResult> {
+  const account = await context.prisma.designatedAccount.findFirst({
+    where: {
+      orgId: input.orgId,
+      type: input.accountType,
+    },
+  });
+
+  if (!account) {
+    throw notFound(
+      "designated_account_not_found",
+      `Designated account '${input.accountType}' not found for organisation`,
+    );
+  }
+
+  return applyDesignatedAccountTransfer(context, {
+    orgId: input.orgId,
+    accountId: account.id,
+    amount: input.amount,
+    source: input.source,
+    actorId: input.actorId,
+  });
 }
 
 export type DesignatedReconciliationSummary = {
