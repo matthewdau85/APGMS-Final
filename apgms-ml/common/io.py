@@ -65,19 +65,7 @@ def dump_model_artifact(
     """Persist *payload* to *path* using joblib and return the SHA-256 hash."""
     ensure_directory(path.parent)
     joblib.dump(payload, path)
-    sha = compute_sha256(path)
-    payload = dict(payload)
-    metadata = dict(payload.get("metadata", {}))
-    metadata["sha256"] = sha
-    payload["metadata"] = metadata
-    joblib.dump(payload, path)
-    final_sha = compute_sha256(path)
-    if final_sha != sha:
-        metadata["sha256"] = final_sha
-        payload["metadata"] = metadata
-        joblib.dump(payload, path)
-        final_sha = compute_sha256(path)
-    return final_sha
+    return compute_sha256(path)
 
 
 def make_metadata(
