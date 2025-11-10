@@ -45,6 +45,16 @@ enum AlertStatus {
   CLOSED
 }
 
+enum FeedbackLabel {
+  FALSE_POSITIVE
+  FALSE_NEGATIVE
+}
+
+enum FeedbackSource {
+  REGULATOR
+  FINANCE
+}
+
 // =========================
 // Payroll domain
 // =========================
@@ -327,6 +337,24 @@ model IdempotencyEntry {
 
   @@unique([orgId, key])
 }
+model ModelFeedback {
+  id            String          @id @default(uuid()) @db.Uuid
+  modelId       String
+  modelVersion  String
+  predictionId  String
+  label         FeedbackLabel
+  source        FeedbackSource
+  submittedBy   String
+  submittedAt   DateTime?
+  createdAt     DateTime        @default(now())
+  notes         String?
+  metadata      Json?
+
+  @@index([modelId, modelVersion])
+  @@index([predictionId])
+  @@index([label, source])
+}
+
 model Org {
   id         String         @id @default(cuid())
   name       String

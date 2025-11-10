@@ -1,0 +1,30 @@
+{
+  "modelId": "fraud-detection",
+  "version": "2024-10-15",
+  "provenance": {
+    "registry": "s3://ml-apgms/fraud-detection/2024-10-15",
+    "gitCommit": "9f5d2a7",
+    "trainingDataset": "s3://ml-apgms-datasets/fraud/v7",
+    "featureStoreSnapshot": "feature-store://fraud/v2024.09",
+    "generatedAt": "2024-10-15T09:00:00Z",
+    "approvedBy": "RiskOps Governance Board"
+  },
+  "checksum": {
+    "artifactPath": "artifacts/model.onnx",
+    "sha256": "ad70245000c93175390f14212b85b75fdb36738354083fe51edd2785b47492e9"
+  },
+  "slo": {
+    "targetErrorRate": 0.015,
+    "windowHours": 24
+  },
+  "baselineFeatureStats": {
+    "transactionAmount": {
+      "mean": 118.42,
+      "stdDev": 47.3
+    },
+    "merchantTenureMonths": {
+      "mean": 38.6,
+      "stdDev": 15.2
+    }
+  }
+}

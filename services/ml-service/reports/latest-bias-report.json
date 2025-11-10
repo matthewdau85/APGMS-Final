@@ -1,0 +1,19 @@
+{
+  "modelId": "fraud-detection",
+  "version": "2024-10-15",
+  "evaluatedAt": "2024-10-20T11:00:00Z",
+  "approved": true,
+  "summary": "Parity difference and adverse impact ratios within risk appetite across gender and region segments.",
+  "metrics": {
+    "maxParityDifference": 0.042,
+    "adverseImpactRatio": 0.91
+  },
+  "thresholds": {
+    "maxParityDifference": 0.08,
+    "adverseImpactRatio": 0.8
+  },
+  "signoff": {
+    "approver": "Regulatory Affairs",
+    "ticket": "MLGOV-4821"
+  }
+}

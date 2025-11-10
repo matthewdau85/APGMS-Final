@@ -1,0 +1,45 @@
+name: ML Governance
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'services/ml-service/**'
+      - 'shared/prisma/**'
+      - 'runbooks/ml-operations.md'
+      - '.github/workflows/ml-governance.yml'
+  pull_request:
+    paths:
+      - 'services/ml-service/**'
+      - 'shared/prisma/**'
+      - 'runbooks/ml-operations.md'
+      - '.github/workflows/ml-governance.yml'
+
+jobs:
+  governance:
+    name: Validate model governance artefacts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up PNPM
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check ml-service
+        run: pnpm --filter @apgms/ml-service run build
+
+      - name: Run governance verification
+        run: pnpm --filter @apgms/ml-service run governance:check
