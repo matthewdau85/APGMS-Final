@@ -14,6 +14,14 @@ import RegulatorLayout from "./RegulatorLayout";
 import RegulatorOverviewPage from "./RegulatorOverviewPage";
 import RegulatorEvidencePage from "./RegulatorEvidencePage";
 import RegulatorMonitoringPage from "./RegulatorMonitoringPage";
+import { appConfig } from "./config";
+import {
+  AdminPrototypeGuard,
+  AdminPrototypeLayout,
+  OverviewPage as AdminPrototypeOverviewPage,
+  OnboardingFlowPage,
+  RiskReviewFlowPage,
+} from "./admin-prototype";
 
 export default function App() {
   return (
@@ -36,6 +44,20 @@ export default function App() {
           <Route path="/compliance" element={<CompliancePage />} />
           <Route path="/security" element={<SecurityPage />} />
         </Route>
+        {appConfig.featureFlags.adminPrototype && (
+          <Route
+            path="/admin-prototype"
+            element={
+              <AdminPrototypeGuard>
+                <AdminPrototypeLayout />
+              </AdminPrototypeGuard>
+            }
+          >
+            <Route index element={<AdminPrototypeOverviewPage />} />
+            <Route path="onboarding" element={<OnboardingFlowPage />} />
+            <Route path="risk-review" element={<RiskReviewFlowPage />} />
+          </Route>
+        )}
         {/* catch-all */}
         <Route
           path="*"
