@@ -227,7 +227,7 @@ def train_model(data_path: Path, out_path: Path, metrics_path: Path) -> None:
     val_scores = model.predict_proba(X_val)[:, 1]
     test_scores = model.predict_proba(X_test)[:, 1]
 
-    selected = _select_threshold(y_test.to_numpy(), test_scores)
+    selected = _select_threshold(y_val.to_numpy(), val_scores)
     threshold = float(selected["threshold"])
 
     roc_auc = float(roc_auc_score(y_test, test_scores))
@@ -243,6 +243,7 @@ def train_model(data_path: Path, out_path: Path, metrics_path: Path) -> None:
 
     metrics_payload = {
         "threshold": threshold,
+        "validation_selected": selected,
         "validation": val_metrics_by_threshold,
         "test": {
             "roc_auc": roc_auc,
