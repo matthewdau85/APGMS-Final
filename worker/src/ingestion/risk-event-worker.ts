@@ -68,9 +68,26 @@ async function persistRiskEvent(
   message: BusEnvelope<RiskEventPayload>,
   logger: Logger,
 ): Promise<void> {
-  const existing = await prisma.discrepancyEvent.findUnique({ where: { id: message.id } });
+  let existing: { id: string } | null = null;
+
+  if (typeof message.dedupeId === "string" && message.dedupeId.length > 0) {
+    existing = await prisma.discrepancyEvent.findUnique({
+      where: {
+        orgId_dedupeId: { orgId: message.orgId, dedupeId: message.dedupeId },
+      },
+      select: { id: true },
+    });
+  }
+
+  if (!existing) {
+    existing = await prisma.discrepancyEvent.findUnique({
+      where: { id: message.id },
+      select: { id: true },
+    });
+  }
+
   if (existing) {
-    logger.info({ id: message.id }, "risk_event_duplicate_skipped");
+    logger.info({ id: existing.id, dedupeId: message.dedupeId }, "risk_event_duplicate_skipped");
     return;
   }
 
