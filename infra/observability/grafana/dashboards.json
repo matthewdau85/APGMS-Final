@@ -1,1 +1,145 @@
-{}
+{
+  "folderUid": "ml-observability",
+  "folderTitle": "ML Observability",
+  "overwrite": true,
+  "dashboard": {
+    "id": null,
+    "uid": "ml-service-overview",
+    "title": "ML Service Inference Overview",
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 0,
+    "refresh": "10s",
+    "tags": ["ml", "inference", "production"],
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "type": "timeseries",
+        "title": "Inference latency percentiles",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "green", "value": null },
+                { "color": "orange", "value": 1.5 },
+                { "color": "red", "value": 2 }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": { "displayMode": "table", "placement": "bottom" },
+          "tooltip": { "mode": "multi" }
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "ml_inference:latency:p50_seconds",
+            "legendFormat": "p50"
+          },
+          {
+            "refId": "B",
+            "expr": "ml_inference:latency:p95_seconds",
+            "legendFormat": "p95"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "type": "stat",
+        "title": "5m error rate",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "gridPos": { "h": 9, "w": 6, "x": 12, "y": 0 },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "decimals": 2,
+            "thresholds": {
+              "mode": "percentage",
+              "steps": [
+                { "color": "green", "value": null },
+                { "color": "orange", "value": 0.03 },
+                { "color": "red", "value": 0.05 }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "reduceOptions": {
+            "calcs": ["lastNotNull"],
+            "fields": "",
+            "values": false
+          },
+          "orientation": "horizontal",
+          "colorMode": "value",
+          "graphMode": "none"
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "ml_inference:error_rate:5m",
+            "legendFormat": "error rate"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "type": "timeseries",
+        "title": "Feature drift score",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "gridPos": { "h": 9, "w": 18, "x": 0, "y": 9 },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "none",
+            "min": 0,
+            "max": 1,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                { "color": "green", "value": null },
+                { "color": "orange", "value": 0.3 },
+                { "color": "red", "value": 0.5 }
+              ]
+            }
+          },
+          "overrides": []
+        },
+        "options": {
+          "legend": { "displayMode": "table", "placement": "bottom" },
+          "tooltip": { "mode": "multi" }
+        },
+        "targets": [
+          {
+            "refId": "A",
+            "expr": "ml_inference:drift_score:15m",
+            "legendFormat": "avg drift"
+          },
+          {
+            "refId": "B",
+            "expr": "ml_feature_drift_score",
+            "legendFormat": "raw drift"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -45,6 +45,11 @@ enum AlertStatus {
   CLOSED
 }
 
+enum ModelFeedbackLabel {
+  FALSE_POSITIVE
+  FALSE_NEGATIVE
+}
+
 // =========================
 // Payroll domain
 // =========================
@@ -343,6 +348,7 @@ model Org {
   paymentPlanRequests PaymentPlanRequest[]
   regulatorSessions RegulatorSession[]
   monitoringSnapshots MonitoringSnapshot[]
+  modelFeedback ModelFeedback[]
 
   // payroll backrefs
   employees  Employee[]
@@ -360,6 +366,7 @@ model User {
   org            Org             @relation(fields: [orgId], references: [id], onDelete: Cascade)
   orgId          String
   mfaCredentials MfaCredential[]
+  submittedFeedback ModelFeedback[]
 }
 
 model MfaCredential {
@@ -518,4 +525,27 @@ model MonitoringSnapshot {
 
   @@index([orgId, createdAt])
   @@index([orgId, type, createdAt])
+}
+
+model ModelFeedback {
+  id             String              @id @default(cuid())
+  org            Org                 @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId          String
+  inferenceId    String
+  modelName      String
+  modelVersion   String?
+  predictedLabel String?
+  expectedLabel  String?
+  label          ModelFeedbackLabel
+  submittedBy    User?               @relation(fields: [submittedById], references: [id], onDelete: SetNull)
+  submittedById  String?
+  notes          String?
+  payload        Json?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([orgId, inferenceId])
+  @@index([orgId, modelName, modelVersion])
+  @@index([label])
+  @@unique([orgId, inferenceId])
 }

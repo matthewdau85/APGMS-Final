@@ -1,0 +1,31 @@
+# Prometheus configuration for APGMS observability stack
+# Focused on scraping application metrics for the ML inference service
+# and the API gateway so dashboards/alerts have the latest data.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - rules/ml-service.rules.yml
+
+scrape_configs:
+  - job_name: apgms-ml-service
+    honor_labels: true
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets:
+          - ml-service:9464
+        labels:
+          service: ml-service
+          component: inference
+  - job_name: apgms-api-gateway
+    honor_labels: true
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - api-gateway:3000
+        labels:
+          service: api-gateway
+          component: edge

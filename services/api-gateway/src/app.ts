@@ -11,6 +11,7 @@ import rateLimit from "./plugins/rate-limit.js";
 import { authGuard, createAuthGuard, REGULATOR_AUDIENCE } from "./auth.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerRegulatorAuthRoutes } from "./routes/regulator-auth.js";
+import { registerMlFeedbackRoutes } from "./routes/ml-feedback.js";
 import { prisma } from "./db.js";
 import { parseWithSchema } from "./lib/validation.js";
 import { verifyChallenge, requireRecentVerification, type VerifyChallengeResult } from "./security/mfa.js";
@@ -205,6 +206,7 @@ export async function buildServer(): Promise<FastifyInstance> {
   );
 
   // register the rest of your routes (unchanged), e.g.:
+  await registerMlFeedbackRoutes(app);
   // await registerAdminDataRoutes(app);
   // await registerTaxRoutes(app);
   // ... plus all your existing routes already in this file.

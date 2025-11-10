@@ -1,0 +1,36 @@
+name: Model artifact policy
+
+on:
+  pull_request:
+    paths:
+      - 'artifacts/models/**'
+      - 'tools/ci/**'
+      - '.github/workflows/model-artifact-checks.yml'
+  workflow_dispatch: {}
+
+jobs:
+  verify:
+    name: Verify model artifact integrity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate model artifacts
+        run: |
+          node tools/ci/verify-model-artifacts.mjs
+
+      - name: Upload validation log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-artifact-validation-log
+          path: |
+            artifacts/models
+            tools/ci/verify-model-artifacts.mjs
+          if-no-files-found: warn

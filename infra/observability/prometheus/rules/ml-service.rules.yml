@@ -1,0 +1,58 @@
+# Recording and alerting rules for ML inference observability
+# These rules transform raw Prometheus metrics exported by services/ml-service
+# into actionable latency, reliability, and drift indicators.
+
+groups:
+  - name: ml-service-recording
+    interval: 30s
+    rules:
+      - record: ml_inference:latency:p50_seconds
+        expr: histogram_quantile(0.50, sum by (le) (rate(ml_inference_latency_seconds_bucket[5m])))
+      - record: ml_inference:latency:p95_seconds
+        expr: histogram_quantile(0.95, sum by (le) (rate(ml_inference_latency_seconds_bucket[5m])))
+      - record: ml_inference:error_rate:5m
+        expr: |
+          clamp_min(
+            rate(ml_inference_errors_total[5m])
+            /
+            rate(ml_inference_requests_total[5m]),
+            0
+          )
+      - record: ml_inference:drift_score:15m
+        expr: avg_over_time(ml_feature_drift_score[15m])
+
+  - name: ml-service-alerts
+    rules:
+      - alert: MLInferenceLatencySLOBreached
+        expr: ml_inference:latency:p95_seconds > 1.5
+        for: 10m
+        labels:
+          severity: warning
+          service: ml-service
+        annotations:
+          summary: "ML inference p95 latency above 1.5s"
+          description: |
+            The 95th percentile inference latency from services/ml-service has exceeded
+            1.5 seconds for more than 10 minutes. Investigate recent deployments or load.
+      - alert: MLInferenceErrorBudgetBurn
+        expr: ml_inference:error_rate:5m > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: ml-service
+        annotations:
+          summary: "ML inference error rate above 5%"
+          description: |
+            More than five percent of inference requests from services/ml-service are failing.
+            Check upstream feature pipelines and model health before continuing deployment.
+      - alert: MLInferenceDriftDetected
+        expr: ml_inference:drift_score:15m > 0.3
+        for: 30m
+        labels:
+          severity: warning
+          service: ml-service
+        annotations:
+          summary: "Model drift score trending high"
+          description: |
+            The average feature drift score reported by services/ml-service exceeded 0.3 in the
+            past 30 minutes. Review feature distributions and consider retraining the model.
