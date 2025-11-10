@@ -55,6 +55,7 @@ export default function SecurityPage() {
       updateSession({
         token: verification.token,
         user: verification.user,
+        prototypeEnv: verification.prototypeEnv,
       });
       setEnableSuccess("Multi-factor authentication enabled for your account.");
       const refreshedToken = getToken();

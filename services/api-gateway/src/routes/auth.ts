@@ -53,6 +53,7 @@ import {
   createAuthenticationOptions,
   verifyPasskeyAuthentication,
 } from "../security/webauthn.js";
+import { includePrototypeEnv } from "../lib/prototype-env.js";
 
 type PendingTotpSetup = {
   secret: string;
@@ -83,10 +84,16 @@ function cleanupPendingTotp(): void {
 }
 
 export async function registerAuthRoutes(app: FastifyInstance) {
+  const verifyCredentialsFn: typeof verifyCredentials = (
+    (app as FastifyInstance & {
+      verifyCredentials?: typeof verifyCredentials;
+    }).verifyCredentials ?? verifyCredentials
+  );
+
   app.post("/auth/login", async (request, reply) => {
     const body = parseWithSchema(LoginBodySchema, request.body);
 
-    const user = await verifyCredentials(body.email, body.password);
+    const user = await verifyCredentialsFn(body.email, body.password);
 
     if (!user) {
       throw unauthorized("bad_credentials", "Invalid email/password");
@@ -100,10 +107,16 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       mfaEnabled: authUser.mfaEnabled,
     });
 
-    reply.send({
-      token,
-      user: buildClientUser(authUser),
-    });
+    const payload = includePrototypeEnv(
+      reply,
+      {
+        token,
+        user: buildClientUser(authUser),
+      },
+      authUser.role,
+    );
+
+    reply.send(payload);
   });
 
   app.get(

@@ -1,26 +1,39 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { clearToken, getToken } from "./auth";
+import { clearToken } from "./auth";
+import { useSessionContext } from "./auth/SessionContext";
 
-const navItems: Array<{ to: string; label: string }> = [
+const navItems: Array<{ to: string; label: string; prototypeOnly?: boolean }> = [
   { to: "/dashboard", label: "Dashboard" },
-  { to: "/feeds", label: "Payroll & GST Feeds" },
-  { to: "/alerts", label: "Alerts" },
-  { to: "/bas", label: "BAS Lodgment" },
-  { to: "/compliance", label: "Compliance" },
+  { to: "/feeds", label: "Payroll & GST Feeds", prototypeOnly: true },
+  { to: "/alerts", label: "Alerts", prototypeOnly: true },
+  { to: "/bas", label: "BAS Lodgment", prototypeOnly: true },
+  { to: "/compliance", label: "Compliance", prototypeOnly: true },
   { to: "/security", label: "Security / Access" },
 ];
+
+const prototypeRoutes = new Set(navItems.filter((item) => item.prototypeOnly).map((item) => item.to));
 
 export default function ProtectedLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const token = getToken();
+  const { session, hasPrototypeAccess, prototypeEnv } = useSessionContext();
+  const token = session?.token ?? null;
+
+  const visibleNavItems = useMemo(
+    () => navItems.filter((item) => hasPrototypeAccess || !item.prototypeOnly),
+    [hasPrototypeAccess],
+  );
 
   useEffect(() => {
     if (!token) {
       navigate("/", { replace: true, state: { from: location.pathname } });
+      return;
     }
-  }, [token, navigate, location.pathname]);
+    if (!hasPrototypeAccess && prototypeRoutes.has(location.pathname)) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [token, navigate, location.pathname, hasPrototypeAccess]);
 
   if (!token) {
     return null;
@@ -36,8 +49,11 @@ export default function ProtectedLayout() {
       <aside style={sidebarStyle}>
         <div>
           <div style={brandStyle}>APGMS Admin</div>
+          {prototypeEnv && (
+            <div style={prototypePillStyle}>Prototype: {prototypeEnv}</div>
+          )}
           <nav style={{ display: "grid", gap: "8px" }}>
-            {navItems.map((item) => (
+            {visibleNavItems.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
@@ -56,6 +72,11 @@ export default function ProtectedLayout() {
               </NavLink>
             ))}
           </nav>
+          {!hasPrototypeAccess && (
+            <div style={prototypeNoticeStyle}>
+              Prototype modules are hidden outside pilot environments.
+            </div>
+          )}
         </div>
         <button type="button" onClick={handleLogout} style={logoutButtonStyle}>
           Log out
@@ -92,6 +113,26 @@ const brandStyle: React.CSSProperties = {
   fontSize: "18px",
   fontWeight: 700,
   marginBottom: "24px",
+};
+
+const prototypePillStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "6px",
+  backgroundColor: "rgba(11, 95, 255, 0.12)",
+  color: "#0b5fff",
+  fontSize: "12px",
+  fontWeight: 600,
+  borderRadius: "999px",
+  padding: "4px 10px",
+  marginBottom: "16px",
+};
+
+const prototypeNoticeStyle: React.CSSProperties = {
+  marginTop: "16px",
+  fontSize: "12px",
+  color: "#475569",
+  lineHeight: 1.4,
 };
 
 const mainAreaStyle: React.CSSProperties = {

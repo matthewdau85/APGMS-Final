@@ -19,6 +19,7 @@ export type ApiSession = {
     role: string;
     mfaEnabled: boolean;
   };
+  prototypeEnv?: string;
 };
 
 export async function login(email: string, password: string) {
@@ -66,6 +67,7 @@ export async function verifyMfa(token: string, code: string) {
       expiresInSeconds: number;
       verifiedAt: string;
     };
+    prototypeEnv?: string;
   }>;
 }
 

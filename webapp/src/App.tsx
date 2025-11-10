@@ -14,11 +14,13 @@ import RegulatorLayout from "./RegulatorLayout";
 import RegulatorOverviewPage from "./RegulatorOverviewPage";
 import RegulatorEvidencePage from "./RegulatorEvidencePage";
 import RegulatorMonitoringPage from "./RegulatorMonitoringPage";
+import { SessionProvider } from "./auth/SessionContext";
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
+    <SessionProvider>
+      <BrowserRouter>
+        <Routes>
         {/* login */}
         <Route path="/" element={<LoginPage />} />
         <Route path="/regulator" element={<RegulatorLoginPage />} />
@@ -45,7 +47,8 @@ export default function App() {
             </div>
           }
         />
-      </Routes>
-    </BrowserRouter>
+        </Routes>
+      </BrowserRouter>
+    </SessionProvider>
   );
 }
