@@ -179,14 +179,22 @@ async function ensureStream(connection: NatsConnection): Promise<void> {
         if (!manager) {
           throw error;
         }
-        await manager.streams.add({
-          name: config.nats.stream,
-          subjects: [`${config.nats.subjectPrefix}.>`],
-          retention: RetentionPolicy.Limits,
-          discard: DiscardPolicy.Old,
-          storage: StorageType.File,
-          num_replicas: 1,
-        });
+        try {
+          await manager.streams.add({
+            name: config.nats.stream,
+            subjects: [`${config.nats.subjectPrefix}.>`],
+            retention: RetentionPolicy.Limits,
+            discard: DiscardPolicy.Old,
+            storage: StorageType.File,
+            num_replicas: 1,
+          });
+        } catch (addError) {
+          if (isStreamAlreadyExistsError(addError)) {
+            await manager.streams.info(config.nats.stream);
+            return;
+          }
+          throw addError;
+        }
       }
     })();
   }
@@ -196,4 +204,28 @@ async function ensureStream(connection: NatsConnection): Promise<void> {
     streamReady = null;
     throw error;
   }
+}
+
+function isStreamAlreadyExistsError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const err = error as {
+    code?: string;
+    message?: string;
+    api_error?: { description?: string } | null;
+  };
+
+  const message =
+    err.api_error?.description ?? err.message ?? (typeof error === "string" ? error : "");
+  if (!message) {
+    return false;
+  }
+
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("stream already in use") ||
+    normalized.includes("stream name already in use")
+  );
 }
