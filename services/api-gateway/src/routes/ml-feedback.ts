@@ -88,7 +88,8 @@ export async function registerMlFeedbackRoutes(app: FastifyInstance, deps: Depen
       return;
     }
 
-    const parsed = captureSchema.safeParse(req.body ?? {});
+    const body = req.body;
+    const parsed = captureSchema.safeParse(body ?? {});
     if (!parsed.success) {
       reply.code(400).send({ error: "invalid_body", details: parsed.error.flatten() });
       return;
@@ -96,6 +97,9 @@ export async function registerMlFeedbackRoutes(app: FastifyInstance, deps: Depen
 
     const data = parsed.data;
     const label = parseLabel(data.label as LabelInput);
+    const rawBody =
+      typeof body === "object" && body !== null ? (body as Record<string, unknown>) : {};
+    const hasBodyProp = (key: string) => Object.prototype.hasOwnProperty.call(rawBody, key);
 
     if (data.orgId !== principal.orgId) {
       reply.code(403).send({ error: "forbidden" });
@@ -107,13 +111,17 @@ export async function registerMlFeedbackRoutes(app: FastifyInstance, deps: Depen
         where: { orgId_inferenceId: { orgId: data.orgId, inferenceId: data.inferenceId } },
         update: {
           modelName: data.modelName,
-          modelVersion: data.modelVersion ?? null,
-          predictedLabel: data.predictedLabel ?? null,
-          expectedLabel: data.expectedLabel ?? null,
           label,
-          notes: data.notes ?? null,
-          payload: data.payload ?? undefined,
           submittedById: principal.id,
+          ...(hasBodyProp("modelVersion") ? { modelVersion: data.modelVersion ?? null } : {}),
+          ...(hasBodyProp("predictedLabel")
+            ? { predictedLabel: data.predictedLabel ?? null }
+            : {}),
+          ...(hasBodyProp("expectedLabel")
+            ? { expectedLabel: data.expectedLabel ?? null }
+            : {}),
+          ...(hasBodyProp("notes") ? { notes: data.notes ?? null } : {}),
+          ...(hasBodyProp("payload") ? { payload: data.payload ?? undefined } : {}),
         },
         create: {
           orgId: data.orgId,
