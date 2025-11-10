@@ -1,0 +1,11 @@
+{
+  "name": "@apgms/ato-client",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "echo build ato-client",
+    "test": "echo test ato-client"
+  }
+}
+

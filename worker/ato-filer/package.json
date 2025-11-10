@@ -1,0 +1,11 @@
+{
+  "name": "@apgms/ato-filer",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "echo build ato-filer",
+    "test": "echo test ato-filer"
+  }
+}
+

@@ -1,0 +1,11 @@
+{
+  "name": "@apgms/connectors",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "echo build connectors",
+    "test": "echo test connectors"
+  }
+}
+

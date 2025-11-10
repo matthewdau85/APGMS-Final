@@ -45,6 +45,13 @@ enum AlertStatus {
   CLOSED
 }
 
+enum DesignatedAccountStatus {
+  ACTIVE
+  SUSPENDED
+  LOCKED
+  CLOSED
+}
+
 // =========================
 // Payroll domain
 // =========================
@@ -340,9 +347,12 @@ model Org {
   basCycles  BasCycle[]
   designatedAccounts DesignatedAccount[]
   designatedTransfers DesignatedTransfer[]
+  designatedAccountStates DesignatedAccountState[]
+  designatedAccountDepositLogs DesignatedAccountDepositLog[]
   paymentPlanRequests PaymentPlanRequest[]
   regulatorSessions RegulatorSession[]
   monitoringSnapshots MonitoringSnapshot[]
+  reconciliationSnapshots ReconciliationSnapshot[]
 
   // payroll backrefs
   employees  Employee[]
@@ -421,6 +431,8 @@ model DesignatedAccount {
   updatedAt DateTime @default(now())
 
   transfers DesignatedTransfer[]
+  states    DesignatedAccountState[]
+  depositAuditTrail DesignatedAccountDepositLog[]
 
   @@index([orgId, type])
 }
@@ -436,6 +448,39 @@ model DesignatedTransfer {
   createdAt DateTime           @default(now())
 
   @@index([orgId, accountId, createdAt])
+}
+
+model DesignatedAccountState {
+  id         String                   @id @default(cuid())
+  account    DesignatedAccount        @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId  String
+  org        Org                     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId      String
+  status     DesignatedAccountStatus
+  reason     String?
+  actorId    String?
+  effectiveAt DateTime                @default(now())
+  createdAt  DateTime                 @default(now())
+
+  @@index([accountId, effectiveAt])
+  @@index([orgId, status])
+}
+
+model DesignatedAccountDepositLog {
+  id          String             @id @default(cuid())
+  org         Org                @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId       String
+  account     DesignatedAccount  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId   String
+  depositCents BigInt            @db.BigInt
+  recordedBy  String
+  reference   String
+  createdAt   DateTime           @default(now())
+  hash        String
+  prevHash    String?
+
+  @@index([orgId, accountId, createdAt])
+  @@unique([orgId, hash])
 }
 
 model PaymentPlanRequest {
@@ -491,6 +536,7 @@ model AuditLog {
 
   @@index([orgId, createdAt])
   @@index([actorId, createdAt])
+  @@unique([orgId, hash])
 }
 
 model RegulatorSession {
@@ -518,4 +564,23 @@ model MonitoringSnapshot {
 
   @@index([orgId, createdAt])
   @@index([orgId, type, createdAt])
+}
+
+model ReconciliationSnapshot {
+  id               String @id @default(cuid())
+  org              Org    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId            String
+  scope            String
+  periodStart      DateTime
+  periodEnd        DateTime
+  ledgerBalanceCents BigInt @db.BigInt
+  bankBalanceCents   BigInt @db.BigInt
+  varianceCents      BigInt @db.BigInt
+  preparedBy       String?
+  evidenceArtifactId String?
+  lockedAt         DateTime?
+  createdAt        DateTime @default(now())
+
+  @@index([orgId, periodEnd])
+  @@index([orgId, scope, periodStart, periodEnd])
 }
