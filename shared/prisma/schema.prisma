@@ -45,6 +45,31 @@ enum AlertStatus {
   CLOSED
 }
 
+enum DiscrepancyEventKind {
+  DATA_INTEGRITY
+  CONTROL_OVERRIDE
+  FRAUD_SIGNAL
+}
+
+enum DiscrepancySeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum FraudAlertStatus {
+  OPEN
+  INVESTIGATING
+  CLOSED
+}
+
+enum RemediationStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
 // =========================
 // Payroll domain
 // =========================
@@ -302,6 +327,79 @@ model EvidenceArtifact {
   createdAt DateTime @default(now())
 
   @@index([orgId, kind])
+}
+
+model DiscrepancyEvent {
+  id               String                @id @default(cuid())
+  orgId            String
+  org              Org                   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  busEventId       String                @unique
+  dedupeId         String                @unique
+  kind             DiscrepancyEventKind
+  category         String
+  severity         DiscrepancySeverity
+  source           String
+  description      String?
+  actorType        String
+  actorId          String?
+  actorRole        String?
+  metadata         Json?
+  occurredAt       DateTime
+  detectedAt       DateTime              @default(now())
+  schemaVersion    String
+  orgNameSnapshot  String
+  traceId          String?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  fraudAlerts        FraudAlert[]
+  remediationActions RemediationAction[]
+
+  @@index([orgId, occurredAt], map: "DiscrepancyEvent_orgId_occurredAt_idx")
+  @@index([orgId, severity], map: "DiscrepancyEvent_orgId_severity_idx")
+}
+
+model FraudAlert {
+  id             String            @id @default(cuid())
+  orgId          String
+  org            Org               @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  discrepancyId  String?
+  discrepancy    DiscrepancyEvent? @relation(fields: [discrepancyId], references: [id], onDelete: SetNull)
+  sourceEventId  String?           @unique
+  status         FraudAlertStatus  @default(OPEN)
+  riskScore      Int?
+  summary        String
+  details        Json?
+  openedAt       DateTime          @default(now())
+  closedAt       DateTime?
+  updatedAt      DateTime          @updatedAt
+
+  remediationActions RemediationAction[]
+
+  @@index([orgId, status], map: "FraudAlert_orgId_status_idx")
+  @@index([orgId, openedAt], map: "FraudAlert_orgId_openedAt_idx")
+}
+
+model RemediationAction {
+  id             String             @id @default(cuid())
+  orgId          String
+  org            Org                @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  discrepancyId  String?
+  discrepancy    DiscrepancyEvent?  @relation(fields: [discrepancyId], references: [id], onDelete: SetNull)
+  fraudAlertId   String?
+  fraudAlert     FraudAlert?        @relation(fields: [fraudAlertId], references: [id], onDelete: SetNull)
+  sourceEventId  String?            @unique
+  actionType     String
+  status         RemediationStatus  @default(PENDING)
+  takenBy        String?
+  takenAt        DateTime?
+  dueAt          DateTime?
+  notes          String?
+  metadata       Json?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([orgId, status], map: "RemediationAction_orgId_status_idx")
 }
 
 // =========================

@@ -52,6 +52,12 @@ export interface AppConfig {
     readonly token?: string;
     readonly username?: string;
     readonly password?: string;
+    readonly stream: string;
+    readonly subjectPrefix: string;
+    readonly subjects: {
+      readonly discrepancy: string;
+      readonly override: string;
+    };
   };
 }
 
@@ -321,6 +327,18 @@ export function loadConfig(): AppConfig {
       : undefined;
 
   const natsUrlRaw = process.env.NATS_URL?.trim();
+  const natsSubjectPrefix =
+    process.env.NATS_SUBJECT_PREFIX && process.env.NATS_SUBJECT_PREFIX.trim().length > 0
+      ? process.env.NATS_SUBJECT_PREFIX.trim()
+      : "apgms.dev";
+  const natsStream =
+    process.env.NATS_STREAM && process.env.NATS_STREAM.trim().length > 0
+      ? process.env.NATS_STREAM.trim()
+      : "APGMS";
+  const natsSubjects = {
+    discrepancy: `${natsSubjectPrefix}.compliance.discrepancy`,
+    override: `${natsSubjectPrefix}.compliance.override`,
+  } as const;
   const nats =
     natsUrlRaw && natsUrlRaw.length > 0
       ? {
@@ -328,6 +346,9 @@ export function loadConfig(): AppConfig {
           token: process.env.NATS_TOKEN?.trim() || undefined,
           username: process.env.NATS_USERNAME?.trim() || undefined,
           password: process.env.NATS_PASSWORD?.trim() || undefined,
+          stream: natsStream,
+          subjectPrefix: natsSubjectPrefix,
+          subjects: natsSubjects,
         }
       : undefined;
 

@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 
 import { runNightlyDesignatedAccountReconciliation } from "./jobs/designated-reconciliation.js";
 
+export { startComplianceIngestor } from "../compliance-ingestor/index.js";
+
 export { runNightlyDesignatedAccountReconciliation } from "./jobs/designated-reconciliation.js";
 
 const modulePath = fileURLToPath(import.meta.url);

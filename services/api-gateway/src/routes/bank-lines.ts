@@ -1,6 +1,7 @@
 ﻿import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { prisma } from "../db.js";
+import { publishComplianceEvent } from "../lib/compliance-events.js";
 import { assertOrgAccess, redactBankLine } from "../utils/orgScope.js";
 
 // Accept the fields Prisma requires for a BankLine create
@@ -18,6 +19,8 @@ const createBankLineSchema = z.object({
   descCiphertext: z.string().min(1),
   descKid: z.string().min(1)
 });
+
+const LARGE_MANUAL_AMOUNT = 100_000;
 
 export const registerBankLinesRoutes: FastifyPluginAsync = async (app) => {
   // Create (idempotent on (orgId, idempotencyKey))
@@ -58,6 +61,43 @@ export const registerBankLinesRoutes: FastifyPluginAsync = async (app) => {
         descKid: data.descKid
       }
     });
+
+    await publishComplianceEvent(app, {
+      kind: "OVERRIDE",
+      orgId: data.orgId,
+      category: "bank_line.manual_entry",
+      severity: "MEDIUM",
+      description: "Manual bank line recorded via API gateway",
+      metadata: {
+        bankLineId: rec.id,
+        amount: data.amount,
+        occurredOn: data.date.toISOString(),
+        idempotencyKey: data.idempotencyKey,
+      },
+      actor: { type: "user", id: user.sub, role: user.role },
+      occurredAt: data.date,
+      request: req,
+      source: "api-gateway.bank-lines",
+    });
+
+    if (Math.abs(data.amount) >= LARGE_MANUAL_AMOUNT) {
+      await publishComplianceEvent(app, {
+        kind: "DISCREPANCY",
+        orgId: data.orgId,
+        category: "bank_line.large_manual_entry",
+        severity: "HIGH",
+        description: "High-value manual bank line requires reconciliation review",
+        metadata: {
+          bankLineId: rec.id,
+          amount: data.amount,
+          threshold: LARGE_MANUAL_AMOUNT,
+        },
+        actor: { type: "user", id: user.sub, role: user.role },
+        occurredAt: data.date,
+        request: req,
+        source: "api-gateway.bank-lines",
+      });
+    }
 
     reply.code(201).send(redactBankLine(rec));
   });
