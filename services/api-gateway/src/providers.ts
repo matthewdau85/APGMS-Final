@@ -1,11 +1,14 @@
+// services/api-gateway/src/providers.ts
 import type { FastifyBaseLogger } from "fastify";
 import { createClient, type RedisClientType } from "redis";
 import { connect, type ConnectionOptions, type NatsConnection } from "nats";
-
 import { config } from "./config.js";
 
+// Accept any-augmented redis client variants
+type AnyRedisClient = RedisClientType<any, any, any>;
+
 export type Providers = {
-  redis: RedisClientType | null;
+  redis: AnyRedisClient | null;
   nats: NatsConnection | null;
 };
 
@@ -18,7 +21,7 @@ export async function initProviders(
   };
 
   if (config.redis?.url) {
-    const redisClient = createClient({ url: config.redis.url });
+    const redisClient = createClient({ url: config.redis.url }) as AnyRedisClient;
     redisClient.on("error", (err) => {
       logger.error({ err }, "redis_client_error");
     });
@@ -36,15 +39,9 @@ export async function initProviders(
     const options: ConnectionOptions = {
       servers: config.nats.url,
     };
-    if (config.nats.token) {
-      options.token = config.nats.token;
-    }
-    if (config.nats.username) {
-      options.user = config.nats.username;
-    }
-    if (config.nats.password) {
-      options.pass = config.nats.password;
-    }
+    if (config.nats.token) options.token = config.nats.token;
+    if (config.nats.username) options.user = config.nats.username;
+    if (config.nats.password) options.pass = config.nats.password;
 
     try {
       const natsConnection = await connect(options);
@@ -84,4 +81,3 @@ export async function closeProviders(
     }
   }
 }
-

@@ -1,99 +1,84 @@
+// services/api-gateway/src/lib/idempotency.ts
+import type { PrismaClient } from "@prisma/client";
+import { conflict } from "@apgms/shared";
 
-import type { FastifyReply, FastifyRequest } from "fastify";
-import { Prisma } from "@prisma/client";
-import {
-  badRequest,
-  conflict,
-  computePayloadHash,
-  findIdempotentResponse,
-  registerIdempotencyRecord,
-  type IdempotencyContext,
-} from "@apgms/shared";
-
-export type IdempotentHandlerResult = {
-  statusCode: number;
-  body: unknown;
-  resource?: string;
-  resourceId?: string;
-};
-
-export type IdempotentHandler = (args: {
-  idempotencyKey: string;
-}) => Promise<IdempotentHandlerResult>;
-
-type WithIdempotencyOptions = {
-  prisma: IdempotencyContext["prisma"];
+type Ctx = {
+  prisma: PrismaClient;
   orgId: string;
-  actorId: string;
-  requestPayload?: unknown;
-  resource?: string;
+  actorId?: string;          // not persisted
+  requestPayload?: unknown;  // not persisted
+  resource?: string | null;
 };
 
-export async function withIdempotency(
-  request: FastifyRequest,
-  reply: FastifyReply,
-  options: WithIdempotencyOptions,
-  handler: IdempotentHandler,
-) {
-  const rawHeader = request.headers["idempotency-key"];
-  const headerValue = Array.isArray(rawHeader) ? rawHeader[0] : rawHeader;
-  const idempotencyKey = headerValue?.trim();
+type HandlerResult = {
+  statusCode: number;
+  resource?: string | null;
+  resourceId?: string | null;
+  body?: unknown;
+};
 
-  if (!idempotencyKey) {
-    throw badRequest("missing_idempotency_key", "Idempotency-Key header is required");
+function getIdempotencyKeyFromHeaders(req: any): string {
+  const h = (req?.headers ?? {}) as Record<string, unknown>;
+  for (const k of ["idempotency-key", "Idempotency-Key", "IDEMPOTENCY-KEY"]) {
+    const v = h[k];
+    if (typeof v === "string" && v.trim()) return v.trim();
   }
+  return `auto:${cryptoSafe()}`;
+}
 
-  const ctx: IdempotencyContext = {
-    prisma: options.prisma,
-    orgId: options.orgId,
-    actorId: options.actorId,
-  };
+function cryptoSafe(): string {
+  return (
+    Math.random().toString(36).slice(2, 10) +
+    Math.random().toString(36).slice(2, 10)
+  );
+}
 
-  const payload = options.requestPayload ?? request.body ?? null;
-  const requestHash = computePayloadHash(payload);
+/**
+ * Wrap a route handler with idempotency.
+ * Prisma model uses: @@unique([orgId, key], name: "orgId_key")
+ */
+export async function withIdempotency<T extends HandlerResult>(
+  request: unknown,
+  _reply: unknown,
+  ctx: Ctx,
+  handler: (args: { idempotencyKey: string }) => Promise<T>
+): Promise<T> {
+  const key = getIdempotencyKeyFromHeaders(request as any);
 
-  const existing = await findIdempotentResponse(ctx, idempotencyKey);
+  // 1) Guard: fail if key already seen for this org
+  const existing = await ctx.prisma.idempotencyKey.findUnique({
+    where: { orgId_key: { orgId: ctx.orgId, key } },
+    select: { id: true, key: true, orgId: true, firstSeenAt: true },
+  });
   if (existing) {
-    if (existing.actorId !== options.actorId || existing.requestHash !== requestHash) {
-      throw conflict(
-        "idempotency_conflict",
-        "Idempotency key re-used with different payload or actor context",
-      );
-    }
-
-    reply.header("Idempotent-Replay", "true");
-    reply.status(existing.statusCode).send(existing.response);
-    return { replayed: true, body: existing.response };
+    throw conflict("idempotent_replay", "Request already processed");
   }
 
-  const result = await handler({ idempotencyKey });
+  // 2) Create the record
+  await ctx.prisma.idempotencyKey.create({
+    data: {
+      key,
+      orgId: ctx.orgId,
+      resource: ctx.resource ?? null,
+      resourceId: null,
+    },
+  });
 
+  // 3) Run the handler
+  const result = await handler({ idempotencyKey: key });
+
+  // 4) Best-effort update (resource/resourceId)
   try {
-    await registerIdempotencyRecord(ctx, {
-      key: idempotencyKey,
-      requestHash,
-      statusCode: result.statusCode,
-      responsePayload: result.body,
-      resource: result.resource,
-      resourceId: result.resourceId,
+    await ctx.prisma.idempotencyKey.update({
+      where: { orgId_key: { orgId: ctx.orgId, key } },
+      data: {
+        resource: result.resource ?? ctx.resource ?? null,
+        resourceId: result.resourceId ?? null,
+      },
     });
-  } catch (error) {
-    if ((error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") || (error as any)?.code === "P2002") {
-      const latest = await findIdempotentResponse(ctx, idempotencyKey);
-      if (latest && latest.actorId === options.actorId && latest.requestHash === requestHash) {
-        reply.header("Idempotent-Replay", "true");
-        reply.status(latest.statusCode).send(latest.response);
-        return { replayed: true, body: latest.response };
-      }
-      throw conflict(
-        "idempotency_conflict",
-        "Idempotency key already used with a different payload",
-      );
-    }
-    throw error;
+  } catch {
+    // ignore
   }
 
-  reply.header("Idempotent-Replay", "false");
-  reply.status(result.statusCode).send(result.body);
-  return { replayed: false, body: result.body };
+  return result;
 }

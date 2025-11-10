@@ -1,10 +1,41 @@
 import { buildServer } from "./app.js";
+import { startTracing, stopTracing } from "./observability/tracing.js";
 
-(async () => {
+
+const port = Number(process.env.PORT ?? 3000);
+const host = process.env.HOST ?? "0.0.0.0";
+
+async function main() {
+  await startTracing();
+
   const app = await buildServer();
-  await app.listen({
-    port: 3000,
-    host: "0.0.0.0",
-  });
-  app.log.info("api-gateway listening on 3000");
-})();
+
+  const shutdown = async (signal: string) => {
+    try {
+      app.log.info({ signal }, "shutdown_start");
+      try {
+        // @ts-ignore custom decorator defined in app.ts
+        app.setDraining?.(true);
+      } catch {}
+      await app.close();
+      await stopTracing();
+      app.log.info("shutdown_complete");
+    } catch (err) {
+      app.log.error({ err }, "shutdown_error");
+    } finally {
+      process.exit(0);
+    }
+  };
+
+  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+
+  await app.listen({ port, host });
+  app.log.info({ url: `http://${host}:${port}` }, "api-gateway_up");
+}
+
+main().catch(async (err) => {
+  console.error("fatal_startup_error", err);
+  await stopTracing();
+  process.exit(1);
+});

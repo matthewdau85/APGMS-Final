@@ -1,4 +1,4 @@
-// services/api-gateway/src/config.ts
+﻿// services/api-gateway/src/config.ts
 import { Buffer } from "node:buffer";
 import { URL } from "node:url";
 import { z } from "zod";
@@ -379,3 +379,4 @@ export function loadConfig(): AppConfig {
 
 // 🔥 THIS is what app.ts imports
 export const config: AppConfig = loadConfig();
+

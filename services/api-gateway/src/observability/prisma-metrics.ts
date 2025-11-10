@@ -1,38 +1,28 @@
+// services/api-gateway/src/observability/prisma-metrics.ts
 import type { PrismaClient } from "@prisma/client";
-
 import { metrics } from "./metrics.js";
 
-const attached = new WeakSet<object>();
-
-export function attachPrismaMetrics(client: PrismaClient): void {
-  if (attached.has(client)) {
-    return;
-  }
-
-  client.$use(async (params, next) => {
-    const model = params.model ?? "raw";
-    const operation = params.action ?? params.type ?? "unknown";
-
-    const stop = metrics.dbQueryDuration.startTimer({
-      model,
-      operation,
-    });
-
-    try {
-      const result = await next(params);
-      metrics.dbQueryTotal
-        .labels(model, operation, "success")
-        .inc();
-      stop();
-      return result;
-    } catch (error) {
-      metrics.dbQueryTotal
-        .labels(model, operation, "error")
-        .inc();
-      stop();
-      throw error;
-    }
+/**
+ * Return a Prisma client extended with query-level timing (Prisma v6+).
+ * NOTE: You must use the returned client.
+ */
+export function instrumentPrisma<T extends PrismaClient>(client: T): T {
+  const extended = client.$extends({
+    query: {
+      $allModels: {
+        async $allOperations(ctx: any) {
+          const model = ctx.model ?? "UnknownModel";
+          const operation = ctx.operation ?? "unknown";
+          const end = metrics.dbQueryDuration.startTimer({ model, operation });
+          try {
+            return await ctx.query(ctx.args as any);
+          } finally {
+            end();
+          }
+        },
+      },
+    },
   });
 
-  attached.add(client);
+  return extended as unknown as T;
 }

@@ -1,78 +1,73 @@
-import crypto from "node:crypto";
+// shared/src/idempotency.ts
 import type { PrismaClient } from "@prisma/client";
+import { conflict } from "./errors.js";
 
-export type IdempotencyContext = {
+type Ctx = {
   prisma: PrismaClient;
   orgId: string;
-  actorId: string;
+  actorId?: string;        // not persisted
+  requestPayload?: unknown;
+  resource?: string | null;
 };
 
-export const computePayloadHash = (payload: unknown): string => {
-  const json = JSON.stringify(payload ?? null);
-  return crypto.createHash("sha256").update(json, "utf8").digest("hex");
-};
-
-type RegisterInput = {
-  key: string;
-  requestHash: string;
+type HandlerResult = {
   statusCode: number;
-  responsePayload: unknown;
-  resource?: string;
-  resourceId?: string;
+  resource?: string | null;
+  resourceId?: string | null;
+  body?: unknown;
 };
 
-export async function registerIdempotencyRecord(
-  ctx: IdempotencyContext,
-  input: RegisterInput,
-) {
-  const responseHash = computePayloadHash(input.responsePayload);
+export async function withIdempotency<T extends HandlerResult>(
+  request: { headers?: Record<string, unknown> },
+  _reply: unknown,
+  ctx: Ctx,
+  handler: (args: { idempotencyKey: string }) => Promise<T>
+): Promise<T> {
+  const rawKey =
+    request?.headers?.["idempotency-key"] ??
+    request?.headers?.["Idempotency-Key"] ??
+    request?.headers?.["IDEMPOTENCY-KEY"];
 
-  return ctx.prisma.idempotencyEntry.create({
+  const key =
+    typeof rawKey === "string" && rawKey.trim()
+      ? rawKey.trim()
+      : `auto:${cryptoSafe()}`;
+
+  const existing = await ctx.prisma.idempotencyKey.findUnique({
+    where: { orgId_key: { orgId: ctx.orgId, key } },
+    select: { id: true, key: true, orgId: true, firstSeenAt: true },
+  });
+  if (existing) throw conflict("idempotent_replay", "Request already processed");
+
+  await ctx.prisma.idempotencyKey.create({
     data: {
+      key,
       orgId: ctx.orgId,
-      actorId: ctx.actorId,
-      key: input.key,
-      requestHash: input.requestHash,
-      responseHash,
-      statusCode: input.statusCode,
-      responsePayload: input.responsePayload,
-      resource: input.resource ?? null,
-      resourceId: input.resourceId ?? null,
+      resource: ctx.resource ?? null,
+      resourceId: null,
     },
   });
-}
 
-export async function findIdempotentResponse(
-  ctx: IdempotencyContext,
-  key: string,
-): Promise<
-  | {
-      response: unknown;
-      responseHash: string;
-      requestHash: string;
-      statusCode: number;
-      actorId: string;
-    }
-  | null
-> {
-  const existing = await ctx.prisma.idempotencyEntry.findUnique({
-    where: {
-      orgId_key: {
-        orgId: ctx.orgId,
-        key,
+  const result = await handler({ idempotencyKey: key });
+
+  try {
+    await ctx.prisma.idempotencyKey.update({
+      where: { orgId_key: { orgId: ctx.orgId, key } },
+      data: {
+        resource: result.resource ?? ctx.resource ?? null,
+        resourceId: result.resourceId ?? null,
       },
-    },
-  });
-
-  if (!existing) {
-    return null;
+    });
+  } catch {
+    // ignore
   }
 
-  return {
-    response: existing.responsePayload,
-    responseHash: existing.responseHash,
-    requestHash: existing.requestHash,
-    statusCode: existing.statusCode,
-    actorId: existing.actorId,
-  };
+  return result;
+}
+
+function cryptoSafe(): string {
+  return (
+    Math.random().toString(36).slice(2, 10) +
+    Math.random().toString(36).slice(2, 10)
+  );
 }
