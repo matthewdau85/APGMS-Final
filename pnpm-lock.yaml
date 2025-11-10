@@ -98,6 +98,21 @@ importers:
         specifier: ^10.0.0
         version: 10.0.0
 
+  packages/remittances:
+    devDependencies:
+      '@types/jest':
+        specifier: ^29.5.12
+        version: 29.5.14
+      jest:
+        specifier: ^29.7.0
+        version: 29.7.0(@types/node@24.7.1)(ts-node@10.9.2(@types/node@24.7.1)(typescript@5.9.3))
+      ts-jest:
+        specifier: ^29.2.5
+        version: 29.4.5(@babel/core@7.28.4)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.28.4))(jest-util@29.7.0)(jest@29.7.0(@types/node@24.7.1)(ts-node@10.9.2(@types/node@24.7.1)(typescript@5.9.3)))(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   services/api-gateway:
     dependencies:
       '@fastify/helmet':

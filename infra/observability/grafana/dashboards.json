@@ -1,1 +1,50 @@
-{}
+{
+  "dashboards": [
+    {
+      "title": "Remittance Resilience",
+      "panels": [
+        {
+          "title": "Manual Review Volume",
+          "type": "stat",
+          "targetMetric": "remittance_manual_reviews_total",
+          "description": "Count of remittances routed to human reviewers after anomaly checks"
+        },
+        {
+          "title": "Retry Queue Depth",
+          "type": "graph",
+          "targetMetric": "remittance_retry_scheduled_total",
+          "description": "Attempts scheduled for replay with exponential backoff"
+        },
+        {
+          "title": "Fallback Detection Invocations",
+          "type": "stat",
+          "targetMetric": "remittance_detection_fallback_total",
+          "description": "Primary model outages that triggered heuristic fallbacks"
+        }
+      ]
+    },
+    {
+      "title": "Adaptive Authentication",
+      "panels": [
+        {
+          "title": "Device Risk Events",
+          "type": "graph",
+          "targetMetric": "device_risk_events_total",
+          "description": "Volume of medium/high device risk assessments by reason"
+        },
+        {
+          "title": "MFA Policy Enforcement",
+          "type": "stat",
+          "targetMetric": "mfa_policy_enforcement_total",
+          "description": "Blocks and step-up prompts issued by the adaptive MFA engine"
+        },
+        {
+          "title": "Security Events",
+          "type": "graph",
+          "targetMetric": "security_events_total",
+          "description": "Authentication, authorisation, and override events emitted by the API gateway"
+        }
+      ]
+    }
+  ]
+}

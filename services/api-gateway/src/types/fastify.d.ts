@@ -8,6 +8,8 @@ declare module "fastify" {
     };
     metrics?: {
       recordSecurityEvent?: (code: string) => void;
+      recordDeviceRiskEvent?: (level: string, reason: string) => void;
+      recordMfaEnforcement?: (reason: string) => void;
       httpRequestTotal?: any;
       httpRequestDuration?: { startTimer: (labels?: Record<string,string>) => (labels?: Record<string,string>) => void };
     };
@@ -25,6 +27,12 @@ declare module "fastify" {
       orgId: string;
       role: string;
       mfaEnabled: boolean;
+    };
+    mutualTls?: {
+      subject?: string;
+      issuer?: string;
+      validTo?: string;
+      fingerprint256?: string;
     };
   }
 }

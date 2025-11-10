@@ -37,6 +37,24 @@ const dbQueryTotal = new Counter({
   labelNames: ['model', 'operation', 'status'] as const,
 });
 
+const securityEventsTotal = new Counter({
+  name: 'security_events_total',
+  help: 'Count of security-relevant events (auth failures, policy blocks, etc.)',
+  labelNames: ['event'] as const,
+});
+
+const deviceRiskEventsTotal = new Counter({
+  name: 'device_risk_events_total',
+  help: 'Device risk assessments that exceeded the low threshold',
+  labelNames: ['level', 'reason'] as const,
+});
+
+const mfaPolicyEnforcementTotal = new Counter({
+  name: 'mfa_policy_enforcement_total',
+  help: 'MFA policy challenges and blocks by reason',
+  labelNames: ['reason'] as const,
+});
+
 // ---- Background job metrics ----
 const jobDuration = new Histogram({
   name: 'apgms_job_duration_seconds',
@@ -52,6 +70,9 @@ export const metrics = {
   dbQueryDuration,
   dbQueryTotal,
   jobDuration,
+  securityEventsTotal,
+  deviceRiskEventsTotal,
+  mfaPolicyEnforcementTotal,
 
   async observeJob<T>(job: string, fn: () => Promise<T>): Promise<T> {
     const stop = jobDuration.startTimer({ job });
@@ -63,6 +84,18 @@ export const metrics = {
       stop();
       throw err;
     }
+  },
+
+  recordSecurityEvent(event: string): void {
+    securityEventsTotal.inc({ event });
+  },
+
+  recordDeviceRiskEvent(level: string, reason: string): void {
+    deviceRiskEventsTotal.inc({ level, reason });
+  },
+
+  recordMfaEnforcement(reason: string): void {
+    mfaPolicyEnforcementTotal.inc({ reason });
   },
 };
 

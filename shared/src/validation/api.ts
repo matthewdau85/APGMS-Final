@@ -6,6 +6,17 @@ export const LoginBodySchema = z
   .object({
     email: trimmed().email(),
     password: z.string().min(8).max(128),
+    deviceId: z.string().trim().min(1).max(128).optional(),
+    deviceFingerprint: z.string().trim().min(10).max(512).optional(),
+    anomalyScore: z.number().min(0).max(1).optional(),
+    platform: z.string().trim().max(120).optional(),
+    geo: z
+      .object({
+        country: z.string().trim().length(2).optional(),
+        region: z.string().trim().max(100).optional(),
+        city: z.string().trim().max(120).optional(),
+      })
+      .optional(),
   })
   .strict();
 

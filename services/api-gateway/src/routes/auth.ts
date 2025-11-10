@@ -16,6 +16,8 @@ import {
   requireRecentVerification,
   verifyChallenge,
 } from "../security/mfa.js";
+import { globalDeviceRiskService } from "../security/device-risk.js";
+import { evaluateMfaPolicy } from "../security/mfa-policy.js";
 import {
   generateTotpSecret,
   verifyTotpToken,
@@ -93,6 +95,64 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     }
 
     const authUser = buildSessionUser(user);
+    const deviceSignals = {
+      deviceId: body.deviceId,
+      deviceFingerprint: body.deviceFingerprint,
+      anomalyScore: body.anomalyScore,
+      platform: body.platform,
+      geo: body.geo,
+      ipAddress: request.ip,
+      userAgent:
+        typeof request.headers["user-agent"] === "string"
+          ? request.headers["user-agent"]
+          : Array.isArray(request.headers["user-agent"])
+            ? request.headers["user-agent"][0]
+            : undefined,
+    } as const;
+
+    const risk = globalDeviceRiskService.assess(
+      authUser.orgId,
+      authUser.sub,
+      deviceSignals,
+    );
+
+    if (risk.level === "high") {
+      await recordAuditLog({
+        orgId: authUser.orgId,
+        actorId: authUser.sub,
+        action: "auth.login.deviceRiskHigh",
+        metadata: { reasons: risk.reasons },
+      });
+    }
+
+    const mfaDecision = evaluateMfaPolicy(
+      authUser.role,
+      authUser.mfaEnabled,
+      risk.level,
+    );
+
+    const metricsFacade = (
+      request.server as FastifyInstance & {
+        metrics?: {
+          recordMfaEnforcement?: (reason: string) => void;
+        };
+      }
+    ).metrics;
+
+    if (mfaDecision.enforced && !authUser.mfaEnabled) {
+      metricsFacade?.recordMfaEnforcement?.(mfaDecision.reason ?? "policy_block");
+      await recordAuditLog({
+        orgId: authUser.orgId,
+        actorId: authUser.sub,
+        action: "auth.login.blocked.mfa",
+        metadata: { reason: mfaDecision.reason },
+      });
+      throw forbidden(
+        "mfa_required",
+        "MFA enrollment required before signing in",
+      );
+    }
+
     const token = signToken({
       id: authUser.sub,
       orgId: authUser.orgId,
@@ -100,9 +160,19 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       mfaEnabled: authUser.mfaEnabled,
     });
 
+    if (mfaDecision.stepUpRequired) {
+      metricsFacade?.recordMfaEnforcement?.("step_up_challenge");
+    }
+
     reply.send({
       token,
       user: buildClientUser(authUser),
+      deviceRisk: { level: risk.level, reasons: risk.reasons },
+      mfa: {
+        enforced: mfaDecision.enforced,
+        stepUpRequired: mfaDecision.stepUpRequired,
+        reason: mfaDecision.reason,
+      },
     });
   });
 

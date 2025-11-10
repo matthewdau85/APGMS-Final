@@ -14,6 +14,14 @@ export interface AppConfig {
     readonly authFailureThreshold: number;
     readonly kmsKeysetLoaded?: boolean;
     readonly requireHttps: boolean;
+    readonly mutualTls: {
+      readonly required: boolean;
+      readonly allowedSubjects: string[];
+    };
+    readonly deviceRisk: {
+      readonly anomalyThreshold: number;
+      readonly trustOnFirstUse: boolean;
+    };
   };
   readonly cors: {
     readonly allowedOrigins: string[];
@@ -78,6 +86,43 @@ const parseIntegerEnv = (name: string, fallback: number): number => {
   const parsed = Number.parseInt(raw, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new Error(`${name} must be a positive integer`);
+  }
+  return parsed;
+};
+
+const parseBooleanEnv = (name: string, fallback: boolean): boolean => {
+  const raw = process.env[name];
+  if (!raw || raw.trim().length === 0) {
+    return fallback;
+  }
+  const normalised = raw.trim().toLowerCase();
+  if (["true", "1", "yes"].includes(normalised)) {
+    return true;
+  }
+  if (["false", "0", "no"].includes(normalised)) {
+    return false;
+  }
+  throw new Error(`${name} must be a boolean value`);
+};
+
+const parseFloatEnv = (
+  name: string,
+  fallback: number,
+  { min, max }: { min?: number; max?: number } = {},
+): number => {
+  const raw = process.env[name];
+  if (!raw || raw.trim().length === 0) {
+    return fallback;
+  }
+  const parsed = Number.parseFloat(raw);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`${name} must be a number`);
+  }
+  if (typeof min === "number" && parsed < min) {
+    throw new Error(`${name} must be >= ${min}`);
+  }
+  if (typeof max === "number" && parsed > max) {
+    throw new Error(`${name} must be <= ${max}`);
   }
   return parsed;
 };
@@ -252,7 +297,21 @@ export function loadConfig(): AppConfig {
 
   // if we reached here, PII is valid
   const kmsKeysetLoaded = true;
-  const requireHttps = process.env.REQUIRE_TLS === "true";
+  const requireHttps = parseBooleanEnv("REQUIRE_TLS", false);
+  const mutualTlsRequired = parseBooleanEnv("REQUIRE_MUTUAL_TLS", false);
+  const mutualTlsSubjects = (process.env.MTLS_ALLOWED_SUBJECTS ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  const deviceRiskAnomalyThreshold = parseFloatEnv(
+    "DEVICE_RISK_ANOMALY_THRESHOLD",
+    0.65,
+    { min: 0, max: 1 },
+  );
+  const deviceRiskTrustOnFirstUse = parseBooleanEnv(
+    "DEVICE_RISK_TRUST_ON_FIRST_USE",
+    false,
+  );
 
   // rate limit config
   const rateLimitMax = parseIntegerEnv(
@@ -342,6 +401,14 @@ export function loadConfig(): AppConfig {
       authFailureThreshold,
       kmsKeysetLoaded,
       requireHttps,
+      mutualTls: {
+        required: mutualTlsRequired,
+        allowedSubjects: mutualTlsSubjects,
+      },
+      deviceRisk: {
+        anomalyThreshold: deviceRiskAnomalyThreshold,
+        trustOnFirstUse: deviceRiskTrustOnFirstUse,
+      },
     },
     cors: {
       allowedOrigins: splitOrigins(

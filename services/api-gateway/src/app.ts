@@ -11,6 +11,7 @@ import rateLimit from "./plugins/rate-limit.js";
 import { authGuard, createAuthGuard, REGULATOR_AUDIENCE } from "./auth.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerRegulatorAuthRoutes } from "./routes/regulator-auth.js";
+import { registerMlDecisionRoutes } from "./routes/ml-decisions.js";
 import { prisma } from "./db.js";
 import { parseWithSchema } from "./lib/validation.js";
 import { verifyChallenge, requireRecentVerification, type VerifyChallengeResult } from "./security/mfa.js";
@@ -20,6 +21,8 @@ import { withIdempotency } from "./lib/idempotency.js";
 import { metrics, installHttpMetrics, registerMetricsRoute } from "./observability/metrics.js";
 import { instrumentPrisma } from "./observability/prisma-metrics.js";
 import { closeProviders, initProviders } from "./providers.js";
+import mutualTls from "./plugins/mutual-tls.js";
+import { deviceRiskEvents, globalDeviceRiskService } from "./security/device-risk.js";
 
 // ---- keep your other domain code (types, helpers, shapes) exactly as you had ----
 // (omitted here for brevity — unchanged from your last working content)
@@ -31,6 +34,30 @@ export async function buildServer(): Promise<FastifyInstance> {
   const app = Fastify({ logger: true });
 
   installHttpMetrics(app);
+
+  (app as any).metrics = {
+    recordSecurityEvent: (event: string) => metrics.recordSecurityEvent(event),
+    recordDeviceRiskEvent: (level: string, reason: string) =>
+      metrics.recordDeviceRiskEvent(level, reason ?? "unspecified"),
+    recordMfaEnforcement: (reason: string) =>
+      metrics.recordMfaEnforcement(reason ?? "unspecified"),
+  };
+
+  globalDeviceRiskService.updateOptions({
+    anomalyThreshold: config.security.deviceRisk.anomalyThreshold,
+    trustOnFirstUse: config.security.deviceRisk.trustOnFirstUse,
+  });
+
+  const deviceRiskListener = (event: {
+    level: string;
+    reasons: string[];
+  }) => {
+    metrics.recordDeviceRiskEvent(event.level, event.reasons[0] ?? "unspecified");
+  };
+  deviceRiskEvents.on("risk", deviceRiskListener);
+  app.addHook("onClose", async () => {
+    deviceRiskEvents.off("risk", deviceRiskListener);
+  });
 
   const allowedOrigins = new Set(config.cors.allowedOrigins);
 
@@ -97,6 +124,12 @@ export async function buildServer(): Promise<FastifyInstance> {
     }
     request.log.error({ err: error }, "Unhandled error");
     reply.status(500).send({ error: { code: "internal_error", message: "Internal server error" } });
+  });
+
+  await app.register(mutualTls, {
+    required: config.security.mutualTls.required,
+    allowedSubjects: config.security.mutualTls.allowedSubjects,
+    requireHttpsHeader: config.security.requireHttps,
   });
 
   await app.register(rateLimit);
@@ -184,6 +217,7 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   await registerAuthRoutes(app);
   await registerRegulatorAuthRoutes(app);
+  await registerMlDecisionRoutes(app);
 
   const regulatorAuthGuard = createAuthGuard(REGULATOR_AUDIENCE, {
     validate: async (claims, request) => {

@@ -192,6 +192,8 @@ export function hashIdentifier(value: string): string {
 
 type MetricsRecorder = {
   recordSecurityEvent: (event: string) => void;
+  recordDeviceRiskEvent?: (level: string, reason?: string) => void;
+  recordMfaEnforcement?: (reason?: string | null) => void;
 };
 
 export async function authenticateRequest(

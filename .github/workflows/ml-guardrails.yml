@@ -1,0 +1,41 @@
+name: ML Guardrails
+
+on:
+  push:
+    paths:
+      - 'config/ml/**'
+      - 'artifacts/models/**'
+      - 'scripts/check-ml-controls.ts'
+      - '.github/workflows/ml-guardrails.yml'
+      - 'packages/remittances/**'
+      - 'services/api-gateway/**'
+  pull_request:
+    paths:
+      - 'config/ml/**'
+      - 'artifacts/models/**'
+      - 'scripts/check-ml-controls.ts'
+      - '.github/workflows/ml-guardrails.yml'
+      - 'packages/remittances/**'
+      - 'services/api-gateway/**'
+
+jobs:
+  guardrails:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Model integrity
+        run: pnpm ml:integrity
+      - name: Bias and fairness checks
+        run: pnpm ml:bias
+      - name: Drift detection window
+        run: pnpm ml:drift
+      - name: Security scan validation
+        run: pnpm ml:security-scan

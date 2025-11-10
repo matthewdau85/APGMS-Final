@@ -1,0 +1,10 @@
+{
+  "modelVersion": "2025.02.01",
+  "integrityChecksum": "sha256:9f0cbbf16ed517ef0ed8ac2d0464a110d6382f9b8a1c873b3524ddf4c5f8f1ab",
+  "biasReportPath": "artifacts/models/bias-report.json",
+  "driftWindowDays": 7,
+  "securityScanPath": "artifacts/models/security-scan.json",
+  "lastRetrainedAt": "2025-02-01T04:00:00Z",
+  "approvedBy": ["risk_officer", "ml_lead"],
+  "rollbackModelVersion": "2025.01.05"
+}

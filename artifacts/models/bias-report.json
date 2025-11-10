@@ -1,0 +1,6 @@
+{
+  "modelVersion": "2025.02.01",
+  "equalOpportunityGap": 0.012,
+  "demographicParityRatio": 0.96,
+  "notes": "All protected classes within thresholds"
+}
