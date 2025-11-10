@@ -1,0 +1,963 @@
+{
+  "version": "0.1.0",
+  "generatedAt": "2025-11-10T09:18:01.095Z",
+  "source": "shared/prisma/schema.prisma",
+  "datasets": [
+    {
+      "name": "payroll_core",
+      "description": "Employees, pay runs, and payslips needed for payroll analytics.",
+      "models": [
+        {
+          "name": "Employee",
+          "fields": [
+            {
+              "name": "id",
+              "type": "String",
+              "isList": false,
+              "attributes": [
+                "@id"
+              ]
+            },
+            {
+              "name": "orgId",
+              "type": "String",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "org",
+              "type": "Org",
+              "isList": false,
+              "attributes": [
+                "@relation(fields:",
+                "[orgId],",
+                "references:",
+                "[id],",
+                "onDelete:",
+                "Cascade)"
+              ]
+            },
+            {
+              "name": "fullNameCiphertext",
+              "type": "String",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "fullNameKid",
+              "type": "String",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "tfnProvided",
+              "type": "Boolean",
+              "isList": false,
+              "attributes": [
+                "@default(false)"
+              ]
+            },
+            {
+              "name": "employmentType",
+              "type": "String",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "baseRate",
+              "type": "Decimal",
+              "isList": false,
+              "attributes": [
+                "@db.Decimal(12,",
+                "2)",
+                "@default(\"0\")"
+              ]
+            },
+            {
+              "name": "superRate",
+              "type": "Decimal",
+              "isList": false,
+              "attributes": [
+                "@db.Decimal(5,",
+                "2)",
+                "@default(\"11.0\")"
+              ]
+            },
+            {
+              "name": "status",
+              "type": "String",
+              "isList": false,
+              "attributes": [
+                "@default(\"active\")"
+              ]
+            },
+            {
+              "name": "createdAt",
+              "type": "DateTime",
+              "isList": false,
+              "attributes": [
+                "@default(now())"
+              ]
+            },
+            {
+              "name": "payslips",
+              "type": "Payslip",
+              "isList": true,
+              "attributes": []
+            }
+          ]
+        },
+        {
+          "name": "PayRun",
+          "fields": [
+            {
+              "name": "id",
+              "type": "String",
+              "isList": false,
+              "attributes": [
+                "@id"
+              ]
+            },
+            {
+              "name": "orgId",
+              "type": "String",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "org",
+              "type": "Org",
+              "isList": false,
+              "attributes": [
+                "@relation(fields:",
+                "[orgId],",
+                "references:",
+                "[id],",
+                "onDelete:",
+                "Cascade)"
+              ]
+            },
+            {
+              "name": "periodStart",
+              "type": "DateTime",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "periodEnd",
+              "type": "DateTime",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "paymentDate",
+              "type": "DateTime",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "status",
+              "type": "String",
+              "isList": false,
+              "attributes": [
+                "@default(\"draft\")"
+              ]
+            },
+            {
+              "name": "createdAt",
+              "type": "DateTime",
+              "isList": false,
+              "attributes": [
+                "@default(now())"
+              ]
+            },
+            {
+              "name": "payslips",
+              "type": "Payslip",
+              "isList": true,
+              "attributes": []
+            }
+          ]
+        },
+        {
+          "name": "Payslip",
+          "fields": [
+            {
+              "name": "id",
+              "type": "String",
+              "isList": false,
+              "attributes": [
+                "@id"
+              ]
+            },
+            {
+              "name": "payRunId",
+              "type": "String",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "payRun",
+              "type": "PayRun",
+              "isList": false,
+              "attributes": [
+                "@relation(fields:",
+                "[payRunId],",
+                "references:",
+                "[id],",
+                "onDelete:",
+                "Cascade)"
+              ]
+            },
+            {
+              "name": "employeeId",
+              "type": "String",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "employee",
+              "type": "Employee",
+              "isList": false,
+              "attributes": [
+                "@relation(fields:",
+                "[employeeId],",
+                "references:",
+                "[id],",
+                "onDelete:",
+                "Cascade)"
+              ]
+            },
+            {
+              "name": "grossPay",
+              "type": "Decimal",
+              "isList": false,
+              "attributes": [
+                "@db.Decimal(12,",
+                "2)"
+              ]
+            },
+            {
+              "name": "paygWithheld",
+              "type": "Decimal",
+              "isList": false,
+              "attributes": [
+                "@db.Decimal(12,",
+                "2)"
+              ]
+            },
+            {
+              "name": "superAccrued",
+              "type": "Decimal",
+              "isList": false,
+              "attributes": [
+                "@db.Decimal(12,",
+                "2)"
+              ]
+            },
+            {
+              "name": "notesCiphertext",
+              "type": "String",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "notesKid",
+              "type": "String",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "createdAt",
+              "type": "DateTime",
+              "isList": false,
+              "attributes": [
+                "@default(now())"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "PayrollItem",
+          "fields": [
+            {
+              "name": "id",
+              "type": "String",
+              "isList": false,
+              "attributes": [
+                "@id",
+                "@default(uuid())",
+                "@db.Uuid"
+              ]
+            },
+            {
+              "name": "orgId",
+              "type": "String",
+              "isList": false,
+              "attributes": [
+                "@db.Uuid"
+              ]
+            },
+            {
+              "name": "employeeId",
+              "type": "String",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "payPeriodStart",
+              "type": "DateTime",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "payPeriodEnd",
+              "type": "DateTime",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "grossCents",
+              "type": "BigInt",
+              "isList": false,
+              "attributes": [
+                "@db.BigInt"
+              ]
+            },
+            {
+              "name": "paygwCents",
+              "type": "BigInt",
+              "isList": false,
+              "attributes": [
+                "@db.BigInt"
+              ]
+            },
+            {
+              "name": "stslCents",
+              "type": "BigInt",
+              "isList": false,
+              "attributes": [
+                "@db.BigInt"
+              ]
+            },
+            {
+              "name": "journalId",
+              "type": "String?",
+              "isList": false,
+              "attributes": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ledger_core",
+      "description": "Core double-entry ledger postings, balances, and journals.",
+      "models": [
+        {
+          "name": "Organization",
+          "fields": [
+            {
+              "name": "id",
+              "type": "String",
+              "isList": false,
+              "attributes": [
+                "@id",
+                "@default(uuid())",
+                "@db.Uuid"
+              ]
+            },
+            {
+              "name": "name",
+              "type": "String",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "createdAt",
+              "type": "DateTime",
+              "isList": false,
+              "attributes": [
+                "@default(now())"
+              ]
+            },
+            {
+              "name": "accounts",
+              "type": "Account",
+              "isList": true,
+              "attributes": []
+            },
+            {
+              "name": "journals",
+              "type": "Journal",
+              "isList": true,
+              "attributes": []
+            }
+          ]
+        },
+        {
+          "name": "Account",
+          "fields": [
+            {
+              "name": "id",
+              "type": "String",
+              "isList": false,
+              "attributes": [
+                "@id",
+                "@default(uuid())",
+                "@db.Uuid"
+              ]
+            },
+            {
+              "name": "orgId",
+              "type": "String",
+              "isList": false,
+              "attributes": [
+                "@db.Uuid"
+              ]
+            },
+            {
+              "name": "code",
+              "type": "String",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "name",
+              "type": "String",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "type",
+              "type": "AccountType",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "subtype",
+              "type": "AccountSubtype?",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "currency",
+              "type": "String",
+              "isList": false,
+              "attributes": [
+                "@default(\"AUD\")"
+              ]
+            },
+            {
+              "name": "isActive",
+              "type": "Boolean",
+              "isList": false,
+              "attributes": [
+                "@default(true)"
+              ]
+            },
+            {
+              "name": "createdAt",
+              "type": "DateTime",
+              "isList": false,
+              "attributes": [
+                "@default(now())"
+              ]
+            },
+            {
+              "name": "postings",
+              "type": "Posting",
+              "isList": true,
+              "attributes": []
+            },
+            {
+              "name": "balances",
+              "type": "BalanceSnapshot",
+              "isList": true,
+              "attributes": []
+            },
+            {
+              "name": "organization",
+              "type": "Organization",
+              "isList": false,
+              "attributes": [
+                "@relation(fields:",
+                "[orgId],",
+                "references:",
+                "[id],",
+                "onDelete:",
+                "Cascade)"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Journal",
+          "fields": [
+            {
+              "name": "id",
+              "type": "String",
+              "isList": false,
+              "attributes": [
+                "@id",
+                "@default(uuid())",
+                "@db.Uuid"
+              ]
+            },
+            {
+              "name": "orgId",
+              "type": "String",
+              "isList": false,
+              "attributes": [
+                "@db.Uuid"
+              ]
+            },
+            {
+              "name": "seq",
+              "type": "BigInt",
+              "isList": false,
+              "attributes": [
+                "@db.BigInt"
+              ]
+            },
+            {
+              "name": "type",
+              "type": "JournalType",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "eventId",
+              "type": "String",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "dedupeId",
+              "type": "String",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "occurredAt",
+              "type": "DateTime",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "recordedAt",
+              "type": "DateTime",
+              "isList": false,
+              "attributes": [
+                "@default(now())"
+              ]
+            },
+            {
+              "name": "source",
+              "type": "String",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "description",
+              "type": "String?",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "hash",
+              "type": "String?",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "prevHash",
+              "type": "String?",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "postings",
+              "type": "Posting",
+              "isList": true,
+              "attributes": []
+            },
+            {
+              "name": "organization",
+              "type": "Organization",
+              "isList": false,
+              "attributes": [
+                "@relation(fields:",
+                "[orgId],",
+                "references:",
+                "[id],",
+                "onDelete:",
+                "Cascade)"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Posting",
+          "fields": [
+            {
+              "name": "id",
+              "type": "String",
+              "isList": false,
+              "attributes": [
+                "@id",
+                "@default(uuid())",
+                "@db.Uuid"
+              ]
+            },
+            {
+              "name": "orgId",
+              "type": "String",
+              "isList": false,
+              "attributes": [
+                "@db.Uuid"
+              ]
+            },
+            {
+              "name": "journalId",
+              "type": "String",
+              "isList": false,
+              "attributes": [
+                "@db.Uuid"
+              ]
+            },
+            {
+              "name": "accountId",
+              "type": "String",
+              "isList": false,
+              "attributes": [
+                "@db.Uuid"
+              ]
+            },
+            {
+              "name": "amountCents",
+              "type": "BigInt",
+              "isList": false,
+              "attributes": [
+                "@db.BigInt"
+              ]
+            },
+            {
+              "name": "memo",
+              "type": "String?",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "journal",
+              "type": "Journal",
+              "isList": false,
+              "attributes": [
+                "@relation(fields:",
+                "[journalId],",
+                "references:",
+                "[id],",
+                "onDelete:",
+                "Cascade)"
+              ]
+            },
+            {
+              "name": "account",
+              "type": "Account",
+              "isList": false,
+              "attributes": [
+                "@relation(fields:",
+                "[accountId],",
+                "references:",
+                "[id],",
+                "onDelete:",
+                "Cascade)"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "BalanceSnapshot",
+          "fields": [
+            {
+              "name": "id",
+              "type": "String",
+              "isList": false,
+              "attributes": [
+                "@id",
+                "@default(uuid())",
+                "@db.Uuid"
+              ]
+            },
+            {
+              "name": "orgId",
+              "type": "String",
+              "isList": false,
+              "attributes": [
+                "@db.Uuid"
+              ]
+            },
+            {
+              "name": "accountId",
+              "type": "String",
+              "isList": false,
+              "attributes": [
+                "@db.Uuid"
+              ]
+            },
+            {
+              "name": "asOfSeq",
+              "type": "BigInt",
+              "isList": false,
+              "attributes": [
+                "@db.BigInt"
+              ]
+            },
+            {
+              "name": "balanceCents",
+              "type": "BigInt",
+              "isList": false,
+              "attributes": [
+                "@db.BigInt"
+              ]
+            },
+            {
+              "name": "createdAt",
+              "type": "DateTime",
+              "isList": false,
+              "attributes": [
+                "@default(now())"
+              ]
+            },
+            {
+              "name": "account",
+              "type": "Account",
+              "isList": false,
+              "attributes": [
+                "@relation(fields:",
+                "[accountId],",
+                "references:",
+                "[id],",
+                "onDelete:",
+                "Cascade)"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cashflow_support",
+      "description": "Bank and GST transactions used for auxiliary reconciliation.",
+      "models": [
+        {
+          "name": "BankTransaction",
+          "fields": [
+            {
+              "name": "id",
+              "type": "String",
+              "isList": false,
+              "attributes": [
+                "@id",
+                "@default(uuid())",
+                "@db.Uuid"
+              ]
+            },
+            {
+              "name": "orgId",
+              "type": "String",
+              "isList": false,
+              "attributes": [
+                "@db.Uuid"
+              ]
+            },
+            {
+              "name": "extRef",
+              "type": "String?",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "accountName",
+              "type": "String",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "txDate",
+              "type": "DateTime",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "amountCents",
+              "type": "BigInt",
+              "isList": false,
+              "attributes": [
+                "@db.BigInt"
+              ]
+            },
+            {
+              "name": "description",
+              "type": "String?",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "matchedJournalId",
+              "type": "String?",
+              "isList": false,
+              "attributes": []
+            }
+          ]
+        },
+        {
+          "name": "GstTransaction",
+          "fields": [
+            {
+              "name": "id",
+              "type": "String",
+              "isList": false,
+              "attributes": [
+                "@id",
+                "@default(uuid())",
+                "@db.Uuid"
+              ]
+            },
+            {
+              "name": "orgId",
+              "type": "String",
+              "isList": false,
+              "attributes": [
+                "@db.Uuid"
+              ]
+            },
+            {
+              "name": "sourceRef",
+              "type": "String?",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "txDate",
+              "type": "DateTime",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "netCents",
+              "type": "BigInt",
+              "isList": false,
+              "attributes": [
+                "@db.BigInt"
+              ]
+            },
+            {
+              "name": "gstCents",
+              "type": "BigInt",
+              "isList": false,
+              "attributes": [
+                "@db.BigInt"
+              ]
+            },
+            {
+              "name": "code",
+              "type": "String",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "basPeriodId",
+              "type": "String?",
+              "isList": false,
+              "attributes": []
+            }
+          ]
+        },
+        {
+          "name": "EventEnvelope",
+          "fields": [
+            {
+              "name": "id",
+              "type": "String",
+              "isList": false,
+              "attributes": [
+                "@id"
+              ]
+            },
+            {
+              "name": "orgId",
+              "type": "String",
+              "isList": false,
+              "attributes": [
+                "@db.Uuid"
+              ]
+            },
+            {
+              "name": "eventType",
+              "type": "String",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "key",
+              "type": "String",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "ts",
+              "type": "DateTime",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "schemaVersion",
+              "type": "String",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "source",
+              "type": "String",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "traceId",
+              "type": "String?",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "payload",
+              "type": "Json",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "processedAt",
+              "type": "DateTime?",
+              "isList": false,
+              "attributes": []
+            },
+            {
+              "name": "status",
+              "type": "String",
+              "isList": false,
+              "attributes": [
+                "@default(\"processed\")"
+              ]
+            },
+            {
+              "name": "error",
+              "type": "String?",
+              "isList": false,
+              "attributes": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

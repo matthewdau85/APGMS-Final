@@ -1,0 +1,17 @@
+{
+  "version": "0.1.0",
+  "updatedAt": "2025-11-10T00:00:00.000Z",
+  "fields": [
+    { "name": "employeeId", "type": "string", "description": "Foreign key referencing the employee record." },
+    { "name": "payRunId", "type": "string", "description": "Identifier for the pay run containing the payslip." },
+    { "name": "periodStart", "type": "string", "description": "ISO-8601 timestamp for the start of the pay period." },
+    { "name": "periodEnd", "type": "string", "description": "ISO-8601 timestamp for the end of the pay period." },
+    { "name": "paymentDate", "type": "string", "description": "ISO-8601 timestamp when the payslip was scheduled for payment." },
+    { "name": "grossPay", "type": "number", "description": "Total gross pay for the payslip in AUD." },
+    { "name": "paygWithheld", "type": "number", "description": "Total PAYG withheld amount in AUD." },
+    { "name": "superAccrued", "type": "number", "description": "Total superannuation accrued in AUD." },
+    { "name": "netPay", "type": "number", "description": "Computed net pay in AUD after PAYG withholding." },
+    { "name": "payPeriodDays", "type": "number", "description": "Duration of the pay period in days." },
+    { "name": "grossPerDay", "type": "number", "description": "Average gross pay per day across the period." }
+  ]
+}

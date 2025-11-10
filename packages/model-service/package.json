@@ -1,0 +1,18 @@
+{
+  "name": "@apgms/model-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "data:inspect": "tsx data/inspect-prisma-schema.ts",
+    "data:export:payroll": "tsx data/export-payroll-data.ts",
+    "pipeline:payroll": "tsx src/cli/payroll-features.ts"
+  },
+  "dependencies": {
+    "@apgms/shared": "workspace:*",
+    "@prisma/client": "^6.17.1"
+  }
+}
