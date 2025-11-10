@@ -54,7 +54,7 @@ def _build_pipeline(
     model_params: Dict,
     unsupervised: bool,
 ) -> Pipeline:
-    categorical_transformer = OneHotEncoder(handle_unknown="ignore")
+    categorical_transformer = OneHotEncoder(handle_unknown="ignore", sparse_output=False)
     numerical_transformer = Pipeline(steps=[("scaler", StandardScaler())])
 
     categorical_features = [col for col in feature_config.categorical_columns if col in feature_columns]
