@@ -1,7 +1,9 @@
 // services/api-gateway/src/providers.ts
 import type { FastifyBaseLogger } from "fastify";
 import { createClient, type RedisClientType } from "redis";
-import { connect, type ConnectionOptions, type NatsConnection } from "nats";
+
+import { NatsBus } from "@apgms/shared";
+
 import { config } from "./config.js";
 
 // Accept any-augmented redis client variants
@@ -9,7 +11,7 @@ type AnyRedisClient = RedisClientType<any, any, any>;
 
 export type Providers = {
   redis: AnyRedisClient | null;
-  nats: NatsConnection | null;
+  eventBus: NatsBus | null;
 };
 
 export async function initProviders(
@@ -17,7 +19,7 @@ export async function initProviders(
 ): Promise<Providers> {
   const providers: Providers = {
     redis: null,
-    nats: null,
+    eventBus: null,
   };
 
   if (config.redis?.url) {
@@ -36,17 +38,15 @@ export async function initProviders(
   }
 
   if (config.nats?.url) {
-    const options: ConnectionOptions = {
-      servers: config.nats.url,
-    };
-    if (config.nats.token) options.token = config.nats.token;
-    if (config.nats.username) options.user = config.nats.username;
-    if (config.nats.password) options.pass = config.nats.password;
-
     try {
-      const natsConnection = await connect(options);
-      providers.nats = natsConnection;
-      logger.info("nats_connected");
+      const bus = await NatsBus.connect({
+        url: config.nats.url,
+        stream: config.nats.stream,
+        subjectPrefix: config.nats.subjectPrefix,
+        connectionName: "api-gateway",
+      });
+      providers.eventBus = bus;
+      logger.info("nats_bus_connected");
     } catch (error) {
       logger.error({ err: error }, "nats_connection_failed");
     }
@@ -67,17 +67,11 @@ export async function closeProviders(
     }
   }
 
-  if (providers.nats) {
+  if (providers.eventBus) {
     try {
-      await providers.nats.drain();
+      await providers.eventBus.close();
     } catch (error) {
-      logger.error({ err: error }, "nats_drain_failed");
-    } finally {
-      try {
-        await providers.nats.close();
-      } catch (closeError) {
-        logger.error({ err: closeError }, "nats_close_failed");
-      }
+      logger.error({ err: error }, "nats_close_failed");
     }
   }
 }

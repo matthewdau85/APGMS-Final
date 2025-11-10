@@ -52,6 +52,9 @@ export interface AppConfig {
     readonly token?: string;
     readonly username?: string;
     readonly password?: string;
+    readonly stream: string;
+    readonly subjectPrefix: string;
+    readonly schemaVersion: string;
   };
 }
 
@@ -321,6 +324,9 @@ export function loadConfig(): AppConfig {
       : undefined;
 
   const natsUrlRaw = process.env.NATS_URL?.trim();
+  const natsStream = process.env.NATS_STREAM?.trim() || "APGMS";
+  const natsPrefix = process.env.NATS_SUBJECT_PREFIX?.trim() || "apgms.events";
+  const natsSchemaVersion = process.env.NATS_SCHEMA_VERSION?.trim() || "apgms.ops.v1";
   const nats =
     natsUrlRaw && natsUrlRaw.length > 0
       ? {
@@ -328,6 +334,9 @@ export function loadConfig(): AppConfig {
           token: process.env.NATS_TOKEN?.trim() || undefined,
           username: process.env.NATS_USERNAME?.trim() || undefined,
           password: process.env.NATS_PASSWORD?.trim() || undefined,
+          stream: natsStream,
+          subjectPrefix: natsPrefix,
+          schemaVersion: natsSchemaVersion,
         }
       : undefined;
 

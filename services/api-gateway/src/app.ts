@@ -11,6 +11,9 @@ import rateLimit from "./plugins/rate-limit.js";
 import { authGuard, createAuthGuard, REGULATOR_AUDIENCE } from "./auth.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerRegulatorAuthRoutes } from "./routes/regulator-auth.js";
+import { registerBankLinesRoutes } from "./routes/bank-lines.js";
+import { registerPaymentsRoutes } from "./routes/payments.js";
+import { registerComplianceRoutes } from "./routes/compliance.js";
 import { prisma } from "./db.js";
 import { parseWithSchema } from "./lib/validation.js";
 import { verifyChallenge, requireRecentVerification, type VerifyChallengeResult } from "./security/mfa.js";
@@ -137,10 +140,10 @@ export async function buildServer(): Promise<FastifyInstance> {
     }
 
     const providerState = (app as any).providers ?? {};
-    const results: { db: boolean; redis: boolean | null; nats: boolean | null } = {
+    const results: { db: boolean; redis: boolean | null; events: boolean | null } = {
       db: false,
       redis: providerState.redis ? false : null,
-      nats: providerState.nats ? false : null
+      events: providerState.eventBus ? false : null
     };
 
     try {
@@ -161,17 +164,17 @@ export async function buildServer(): Promise<FastifyInstance> {
       }
     }
 
-    if (providerState.nats) {
+    if (providerState.eventBus) {
       try {
-        await providerState.nats.flush();
-        results.nats = true;
+        await providerState.eventBus.ping();
+        results.events = true;
       } catch (error) {
-        results.nats = false;
-        app.log.error({ err: error }, "readiness_nats_flush_failed");
+        results.events = false;
+        app.log.error({ err: error }, "readiness_event_bus_ping_failed");
       }
     }
 
-    const healthy = results.db && (results.redis !== false) && (results.nats !== false);
+    const healthy = results.db && (results.redis !== false) && (results.events !== false);
     if (!healthy) {
       reply.code(503).send({ ok: false, components: results });
       return;
@@ -184,6 +187,9 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   await registerAuthRoutes(app);
   await registerRegulatorAuthRoutes(app);
+  await registerBankLinesRoutes(app);
+  await registerPaymentsRoutes(app);
+  await registerComplianceRoutes(app);
 
   const regulatorAuthGuard = createAuthGuard(REGULATOR_AUDIENCE, {
     validate: async (claims, request) => {

@@ -15,7 +15,7 @@ declare module "fastify" {
     setDraining?: (v: boolean) => void;
     providers?: {
       redis?: { ping: () => Promise<string> } | null;
-      nats?: { flush: () => Promise<void> } | null;
+      eventBus?: { ping: () => Promise<void> } | null;
     };
   }
 

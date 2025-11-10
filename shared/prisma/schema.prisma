@@ -343,6 +343,10 @@ model Org {
   paymentPlanRequests PaymentPlanRequest[]
   regulatorSessions RegulatorSession[]
   monitoringSnapshots MonitoringSnapshot[]
+  discrepancyEvents DiscrepancyEvent[]
+  fraudAlerts FraudAlert[]
+  remediationActions RemediationAction[]
+  paymentPlanAgreements PaymentPlanAgreement[]
 
   // payroll backrefs
   employees  Employee[]
@@ -407,6 +411,7 @@ model BasCycle {
   overallStatus String
   lodgedAt      DateTime?
   paymentPlanRequests PaymentPlanRequest[]
+  paymentPlanAgreements PaymentPlanAgreement[]
 
   @@index([orgId, periodStart, periodEnd])
   @@index([orgId, lodgedAt])
@@ -449,9 +454,105 @@ model PaymentPlanRequest {
   status      String    @default("SUBMITTED")
   detailsJson Json
   resolvedAt  DateTime?
+  agreements  PaymentPlanAgreement[]
 
   @@index([orgId, basCycleId])
   @@index([orgId, status])
+}
+
+model DiscrepancyEvent {
+  id                  String                 @id @default(cuid())
+  org                 Org                    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId               String
+  orgNameSnapshot     String
+  eventType           String
+  category            String
+  severity            String
+  status              String                 @default("OPEN")
+  source              String
+  detectedAt          DateTime               @default(now())
+  resolvedAt          DateTime?
+  resolutionNote      String?
+  context             Json
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+
+  fraudAlerts         FraudAlert[]
+  remediationActions  RemediationAction[]
+  paymentPlans        PaymentPlanAgreement[]
+
+  @@index([orgId, detectedAt])
+  @@index([orgId, status])
+}
+
+model FraudAlert {
+  id                 String            @id @default(cuid())
+  org                Org               @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId              String
+  orgNameSnapshot    String
+  discrepancyEvent   DiscrepancyEvent? @relation(fields: [discrepancyEventId], references: [id], onDelete: SetNull)
+  discrepancyEventId String?
+  alertType          String
+  severity           String
+  status             String            @default("OPEN")
+  triggeredAt        DateTime          @default(now())
+  details            Json
+  resolvedAt         DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  remediationActions RemediationAction[]
+
+  @@index([orgId, status])
+  @@index([orgId, triggeredAt])
+}
+
+model RemediationAction {
+  id                 String            @id @default(cuid())
+  org                Org               @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId              String
+  orgNameSnapshot    String
+  discrepancyEvent   DiscrepancyEvent? @relation(fields: [discrepancyEventId], references: [id], onDelete: SetNull)
+  discrepancyEventId String?
+  fraudAlert         FraudAlert?       @relation(fields: [fraudAlertId], references: [id], onDelete: SetNull)
+  fraudAlertId       String?
+  actionType         String
+  owner              String?
+  dueAt              DateTime?
+  completedAt        DateTime?
+  status             String            @default("PENDING")
+  notes              String?
+  metadata           Json?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@index([orgId, status])
+  @@index([orgId, dueAt])
+}
+
+model PaymentPlanAgreement {
+  id                   String             @id @default(cuid())
+  org                  Org                @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId                String
+  orgNameSnapshot      String
+  paymentPlanRequest   PaymentPlanRequest? @relation(fields: [paymentPlanRequestId], references: [id], onDelete: SetNull)
+  paymentPlanRequestId String?
+  discrepancyEvent     DiscrepancyEvent?   @relation(fields: [discrepancyEventId], references: [id], onDelete: SetNull)
+  discrepancyEventId   String?
+  basCycle             BasCycle?           @relation(fields: [basCycleId], references: [id], onDelete: SetNull)
+  basCycleId           String?
+  authority            String
+  reference            String
+  status               String             @default("ACTIVE")
+  startDate            DateTime
+  endDate              DateTime?
+  terms                Json
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@index([orgId, status])
+  @@index([orgId, startDate])
+  @@index([orgId, basCycleId])
 }
 
 model BankLine {
