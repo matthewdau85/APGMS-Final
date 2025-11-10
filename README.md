@@ -53,6 +53,7 @@ pnpm -r build
 docker compose up -d
 pnpm -w exec prisma migrate deploy
 pnpm --filter @apgms/api-gateway dev   # API on :3000
+pnpm --filter @apgms/inference dev     # Inference service on :3100
 ```
 
 Verify:
