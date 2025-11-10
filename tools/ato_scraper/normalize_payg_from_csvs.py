@@ -12,13 +12,11 @@ FORTNIGHT = EXTRACTED / "fortnightly.csv"
 MONTHLY   = EXTRACTED / "monthly.csv"
 
 def _read_csv_any(path: Path) -> pd.DataFrame:
-    # Try common encodings found in Windows-extracted CSVs
     for enc in ("utf-8", "utf-8-sig", "cp1252", "latin-1"):
         try:
             return pd.read_csv(path, encoding=enc)
         except UnicodeDecodeError:
             continue
-    # Last resort: replace undecodable bytes
     return pd.read_csv(path, encoding="utf-8", encoding_errors="replace")
 
 def _read_period_csv(p: Path, period: str) -> pd.DataFrame:
@@ -31,7 +29,7 @@ def _read_period_csv(p: Path, period: str) -> pd.DataFrame:
         raise ValueError(f"No columns found in {p}")
     income_col = cols[0]
 
-    withheld_like = [c for c in cols if "withheld" in c.lower()]
+    withheld_like = [c for c in cols if "withheld" in str(c).lower()]
     if not withheld_like:
         withheld_like = [c for c in cols[1:] if pd.api.types.is_numeric_dtype(df.get(c))]
 
@@ -46,14 +44,15 @@ def _read_period_csv(p: Path, period: str) -> pd.DataFrame:
     }).dropna(subset=["income"])
 
     if period == "weekly":
-        out["withholding_weekly"] = out["tax"].clip(lower=0)
+        wk = out["tax"]
     elif period == "fortnightly":
-        out["withholding_weekly"] = (out["tax"] / 2.0).clip(lower=0)
+        wk = out["tax"] / 2.0
     elif period == "monthly":
-        out["withholding_weekly"] = (out["tax"] / (52.0 / 12.0)).clip(lower=0)
+        wk = out["tax"] / (52.0 / 12.0)
     else:
         raise ValueError(f"unknown period: {period}")
 
+    out["withholding_weekly"] = wk.clip(lower=0)
     return out[["income", "withholding_weekly"]]
 
 def main():
@@ -77,16 +76,23 @@ def main():
     if not pieces:
         raise SystemExit("No source CSVs found under extracted/. Nothing to normalize.")
 
+    # Merge, take conservative (min) per income across periods
     df = pd.concat(pieces, ignore_index=True)
     df = (df.groupby("income", as_index=False)["withholding_weekly"]
-            .min().sort_values("income").reset_index(drop=True))
+            .min()
+            .sort_values("income")
+            .reset_index(drop=True))
+
+    # Smooth to non-decreasing (cumulative max), then round to nearest whole dollar
     df["withholding_weekly"] = df["withholding_weekly"].fillna(0).clip(lower=0)
+    df["withholding_weekly"] = df["withholding_weekly"].cummax()
+    df["withholding_weekly"] = df["withholding_weekly"].round(0).astype(int)
 
     OUT_CSV.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(OUT_CSV, index=False)
     print(f"WROTE {OUT_CSV}")
     print(f"ROWS: {len(df)} MIN/MAX income: {df['income'].min()} {df['income'].max()}")
-    nz = int((df['withholding_weekly'] > 0).sum())
+    nz = int((df['withholding_weekly'] > 0).count())
     print(f"NONZERO rows: {nz}")
 
 if __name__ == "__main__":
