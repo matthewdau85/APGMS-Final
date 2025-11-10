@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-inference
+  labels:
+    app: ml-inference
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ml-inference
+  template:
+    metadata:
+      labels:
+        app: ml-inference
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3005"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: ml-inference
+          image: ghcr.io/apgms/ml-inference:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3005
+          env:
+            - name: PORT
+              value: "3005"
+            - name: EVENT_BUS_MODE
+              value: "nats"
+            - name: NATS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: nats-credentials
+                  key: url
+            - name: NATS_STREAM
+              value: "apgms_ml_events"
+            - name: NATS_SUBJECT_PREFIX
+              value: "ml"
+            - name: SERVICE_NAME
+              value: "apgms-ml-inference"
+            - name: SCHEMA_VERSION
+              value: "1.0.0"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 3005
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 3005
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ml-inference
+  labels:
+    app: ml-inference
+spec:
+  selector:
+    app: ml-inference
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3005
+      protocol: TCP

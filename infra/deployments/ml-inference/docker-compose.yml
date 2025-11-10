@@ -1,0 +1,16 @@
+version: "3.9"
+services:
+  ml-inference:
+    build:
+      context: ../../services/ml-inference
+    environment:
+      PORT: "3005"
+      EVENT_BUS_MODE: "in-memory"
+    ports:
+      - "3005:3005"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3005/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s

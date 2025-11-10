@@ -1,0 +1,33 @@
+{
+  "model": {
+    "version": "1.0.0",
+    "features": [
+      "amount",
+      "velocity",
+      "accountAgeDays",
+      "chargebackRate"
+    ],
+    "weights": [
+      0.82,
+      1.37,
+      -0.45,
+      1.9
+    ],
+    "bias": -2.8,
+    "scaler": {
+      "mean": [
+        2450.0,
+        3.4,
+        280.0,
+        0.03
+      ],
+      "std": [
+        1540.0,
+        1.2,
+        120.0,
+        0.015
+      ]
+    },
+    "threshold": 0.72
+  }
+}
