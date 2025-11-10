@@ -24,6 +24,8 @@ SHADOW_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/apgms_shadow?s
 AUTH_AUDIENCE=urn:apgms:local
 AUTH_ISSUER=urn:apgms:issuer
 AUTH_DEV_SECRET=local-dev-shared-secret-change-me # HS256 signing key shared by gateway + tests
+# TODO: remove once gateway stops requiring ensureJwksConfigured
+AUTH_JWKS={"keys":[]} # required placeholder until JWKS validation is retired
 ENCRYPTION_MASTER_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 API_RATE_LIMIT_MAX=120
 API_RATE_LIMIT_WINDOW=1 minute
