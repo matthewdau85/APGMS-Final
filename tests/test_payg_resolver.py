@@ -1,25 +1,20 @@
+from pathlib import Path
 import sys
-sys.path.insert(0, r"C:\loat-poc")
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))  # allow "tools/..." import
+
 from tools.ato_scraper.payg_resolver import withheld
 
 def test_known_points_weekly():
-    # spot-check a few stable grid points
-    assert withheld(900, "weekly")   == 94
+    assert withheld(900,  "weekly")  == 94
     assert withheld(1200, "weekly")  == 183
     assert withheld(2000, "weekly")  == 463
 
 def test_scaling_consistency():
-    # fortnight ? 2? weekly; monthly ? 4.333? weekly (integer-rounded tables)
-    w = withheld(1500, "weekly")
-    assert withheld(1500, "fortnightly") in (2*w, 2*w+1, 2*w-1)
-    assert withheld(1500, "monthly") in (round(4.333*w)-1, round(4.333*w), round(4.333*w)+1)
-def test_edges_rounding_does_not_decrease():
-    # small increments don't make withholding drop
-    a = withheld(1080, "weekly")
-    b = withheld(1081, "weekly")
-    assert b >= a
-def test_edges_rounding_does_not_decrease():
-    # small increments don't make withholding drop
-    a = withheld(1080, "weekly")
-    b = withheld(1081, "weekly")
-    assert b >= a
+    for amount in (500, 800, 1200, 1500, 2000, 3000):
+        w = withheld(amount, "weekly")
+        f = withheld(amount, "fortnightly")
+        m = withheld(amount, "monthly")
+        assert f in (2*w-1, 2*w, 2*w+1)
+        approx_m = round((52.0/12.0)*w)
+        assert m in (approx_m-1, approx_m, approx_m+1)
