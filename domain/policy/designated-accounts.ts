@@ -123,6 +123,13 @@ export async function applyDesignatedAccountTransfer(
       );
     }
 
+    if (account.depositOnly === false) {
+      throw conflict(
+        "designated_account_not_deposit_only",
+        "Designated accounts must be flagged as deposit-only",
+      );
+    }
+
     const updatedBalance = account.balance.add(amountDecimal);
 
     await tx.designatedAccount.update({
@@ -139,6 +146,53 @@ export async function applyDesignatedAccountTransfer(
         accountId: account.id,
         amount: amountDecimal,
         source: normalizedSource,
+      },
+    });
+
+    const previousAudit = await tx.designatedAccountAuditLog.findFirst({
+      where: { orgId: input.orgId, accountId: account.id },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const auditPayload = {
+      transferId: transfer.id,
+      amount: amountDecimal.toString(),
+      source: normalizedSource,
+      actorId: input.actorId,
+      occurredAt: new Date().toISOString(),
+    };
+
+    const hash = createHash("sha256")
+      .update(previousAudit?.hash ?? "")
+      .update(JSON.stringify(auditPayload))
+      .digest("hex");
+
+    await tx.designatedAccountAuditLog.create({
+      data: {
+        orgId: input.orgId,
+        accountId: account.id,
+        transferId: transfer.id,
+        actorId: input.actorId,
+        action: "designatedAccount.credit",
+        amount: amountDecimal,
+        metadata: { source: normalizedSource },
+        hash,
+        prevHash: previousAudit?.hash,
+      },
+    });
+
+    await tx.designatedAccountReconciliation.create({
+      data: {
+        orgId: input.orgId,
+        accountId: account.id,
+        transferId: transfer.id,
+        expectedCredit: amountDecimal,
+        recordedBalance: updatedBalance,
+        observedBalance: updatedBalance,
+        details: {
+          source: normalizedSource,
+          actorId: input.actorId,
+        },
       },
     });
 
@@ -261,6 +315,41 @@ export async function generateDesignatedAccountReconciliationArtifact(
         wormUri: `internal:designated/${created.id}`,
       },
     });
+  });
+
+  await context.prisma.$transaction(async (tx) => {
+    for (const account of accounts) {
+      const pending = await tx.designatedAccountReconciliation.findMany({
+        where: { accountId: account.id, status: "PENDING" },
+      });
+
+      if (!pending.length) continue;
+
+      const observed = new Prisma.Decimal(account.balance);
+
+      for (const entry of pending) {
+        const discrepancy = observed.minus(entry.recordedBalance);
+        const severityThreshold = new Prisma.Decimal(0.01);
+        const status = discrepancy.abs().greaterThan(severityThreshold)
+          ? "ESCALATED"
+          : "RECONCILED";
+
+        await tx.designatedAccountReconciliation.update({
+          where: { id: entry.id },
+          data: {
+            observedBalance: observed,
+            discrepancy,
+            status,
+            reconciledAt: now,
+            details: {
+              ...(entry.details ?? {}),
+              movements: account.transfers.length,
+              reconciledAt: now.toISOString(),
+            },
+          },
+        });
+      }
+    }
   });
 
   if (context.auditLogger) {

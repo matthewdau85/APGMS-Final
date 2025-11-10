@@ -45,6 +45,12 @@ enum AlertStatus {
   CLOSED
 }
 
+enum DesignatedReconciliationStatus {
+  PENDING
+  RECONCILED
+  ESCALATED
+}
+
 // =========================
 // Payroll domain
 // =========================
@@ -90,6 +96,10 @@ model PayRun {
 
   // "draft" | "committed"
   status       String    @default("draft")
+
+  stpStatus        String?  @default("pending")
+  stpSubmittedAt   DateTime?
+  stpLodgementId   String?
 
   createdAt    DateTime  @default(now())
 
@@ -276,6 +286,8 @@ model BasPeriod {
   releasedAt DateTime?
   lodgedAt   DateTime?
   evidenceId String?
+  atoLodgementReference String?
+  atoStatus             String?  @default("pending")
 
   @@unique([orgId, start, end])
 }
@@ -419,8 +431,11 @@ model DesignatedAccount {
   type      String
   balance   Decimal  @default(0)
   updatedAt DateTime @default(now())
+  depositOnly Boolean @default(true)
 
   transfers DesignatedTransfer[]
+  reconciliations DesignatedAccountReconciliation[]
+  auditTrail DesignatedAccountAuditLog[]
 
   @@index([orgId, type])
 }
@@ -434,6 +449,46 @@ model DesignatedTransfer {
   amount    Decimal
   source    String
   createdAt DateTime           @default(now())
+  reconciliation DesignatedAccountReconciliation? @relation("TransferReconciliation")
+  auditLog      DesignatedAccountAuditLog?        @relation("TransferAuditLog")
+
+  @@index([orgId, accountId, createdAt])
+}
+
+model DesignatedAccountReconciliation {
+  id             String    @id @default(cuid())
+  orgId          String
+  account        DesignatedAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId      String
+  transfer       DesignatedTransfer @relation("TransferReconciliation", fields: [transferId], references: [id], onDelete: Cascade)
+  transferId     String @unique
+  expectedCredit Decimal
+  recordedBalance Decimal
+  observedBalance Decimal?
+  discrepancy    Decimal? @default(0)
+  status         DesignatedReconciliationStatus @default(PENDING)
+  recordedAt     DateTime @default(now())
+  reconciledAt   DateTime?
+  details        Json?
+
+  @@index([orgId, accountId, recordedAt])
+  @@index([orgId, status, recordedAt])
+}
+
+model DesignatedAccountAuditLog {
+  id        String   @id @default(cuid())
+  orgId     String
+  account   DesignatedAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId String
+  transfer  DesignatedTransfer? @relation("TransferAuditLog", fields: [transferId], references: [id], onDelete: SetNull)
+  transferId String?
+  actorId   String
+  action    String
+  amount    Decimal?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  hash      String
+  prevHash  String?
 
   @@index([orgId, accountId, createdAt])
 }
