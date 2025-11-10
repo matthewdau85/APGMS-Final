@@ -1,82 +1,28 @@
-import { SpanStatusCode, trace } from "@opentelemetry/api";
-import { FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
-import { z } from "zod";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { context, trace } from "@opentelemetry/api";
+import { authenticateRequest, type Role } from "../lib/auth.js";
 
-import { safeLogAttributes, safeLogError } from "@apgms/shared";
-import { authenticateRequest, type Role } from "../lib/auth";
+export async function registerTaxRoutes(app: FastifyInstance) {
+  const guard = (roles: readonly Role[] = []) =>
+    async (req: FastifyRequest, reply: FastifyReply) =>
+      authenticateRequest(app, req, reply, roles);
 
-const tracer = trace.getTracer("apgms-api-gateway");
-const TAX_HEALTH_TIMEOUT_MS = 5_000;
-const TAX_ALLOWED_ROLES: ReadonlyArray<Role> = ["admin", "analyst", "finance"];
-
-const TaxHealthResponseSchema = z
-  .object({
-    ok: z.boolean(),
-  })
-  .passthrough();
-
-export default async function taxRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/tax/health", async (request, reply) => {
-    const principal = await authenticateRequest(app, request, reply, TAX_ALLOWED_ROLES);
-    if (!principal) {
-      return;
-    }
-
-    const span = tracer.startSpan("tax.health.fetch");
-    span.setAttribute("upstream.url", app.config.taxEngineUrl);
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), TAX_HEALTH_TIMEOUT_MS);
-
+  app.get("/tax/health", { preHandler: guard([]) }, async (_req, reply) => {
+    const span = trace.getTracer("api").startSpan("tax.health");
+    const ctx = trace.setSpan(context.active(), span);
     try {
-      const res = await fetch(`${app.config.taxEngineUrl}/health`, {
-        signal: controller.signal,
-      });
-      if (!res.ok) {
-        span.setStatus({
-          code: SpanStatusCode.ERROR,
-          message: `upstream responded with ${res.status}`,
-        });
-        app.metrics?.recordSecurityEvent("tax.health.upstream_fail");
-        return sendUpstreamError(reply, "tax-engine unavailable", res.status);
+      const upstream = String((app as any).config?.taxEngineUrl ?? "");
+      if (!upstream) {
+        reply.send({ ok: true, upstream: null });
+        return;
       }
-
-      const json = await res.json();
-      const parsed = TaxHealthResponseSchema.safeParse(json);
-      if (!parsed.success) {
-        span.setStatus({
-          code: SpanStatusCode.ERROR,
-          message: "invalid upstream payload",
-        });
-        app.log.warn(
-          safeLogAttributes({ err: parsed.error.flatten(), upstream: json }),
-          "invalid tax-engine payload",
-        );
-        return sendUpstreamError(reply, "tax-engine payload invalid", 502);
-      }
-
-      return reply.send(parsed.data);
-    } catch (error) {
-      span.setStatus({ code: SpanStatusCode.ERROR, message: "tax health check failed" });
-      app.log.error(
-        safeLogAttributes({ err: safeLogError(error) }),
-        "tax health request failed",
-      );
-      app.metrics?.recordSecurityEvent("tax.health.error");
-      return sendUpstreamError(reply, "tax-engine unavailable", 502);
+      const res = await fetch(`${upstream}/health`, { signal: AbortSignal.timeout(2000) });
+      reply.send({ ok: res.ok, upstream });
+    } catch (err) {
+      app.metrics?.recordSecurityEvent?.("tax.health.error");
+      reply.code(502).send({ ok: false });
     } finally {
-      clearTimeout(timeout);
       span.end();
     }
   });
-}
-
-function sendUpstreamError(reply: FastifyReply, message: string, status: number) {
-  const payload = {
-    error: {
-      code: "tax_upstream_unavailable",
-      message,
-    },
-  };
-  return reply.code(status).send(payload);
 }

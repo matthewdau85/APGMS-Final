@@ -1,78 +1,79 @@
-// services/api-gateway/src/routes/bank-lines.ts
-import { FastifyPluginAsync } from "fastify";
+﻿import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
-import { assertOrgAccess, assertRoleForBankLines, redactBankLine } from "../utils/orgScope";
-import prisma from "../db/client"; // adjust import to wherever your Prisma client lives
+import { prisma } from "../db.js";
+import { assertOrgAccess, redactBankLine } from "../utils/orgScope.js";
 
+// Accept the fields Prisma requires for a BankLine create
 const createBankLineSchema = z.object({
   orgId: z.string().min(1),
   idempotencyKey: z.string().min(1),
-  accountRef: z.string().min(1),
-  amountCents: z.number().int(),
-  currency: z.string().min(1)
-  // add anything else you already validate
+  amount: z.number(),
+  // Accept ISO string or Date and coerce to Date
+  date: z.preprocess(
+    (v) => (typeof v === "string" || v instanceof Date ? new Date(v as any) : v),
+    z.date()
+  ),
+  payeeCiphertext: z.string().min(1),
+  payeeKid: z.string().min(1),
+  descCiphertext: z.string().min(1),
+  descKid: z.string().min(1)
 });
 
-const bankLinesRoute: FastifyPluginAsync = async (fastify) => {
-  fastify.post(
-    "/bank-lines",
-    async (request, reply) => {
-      // 1. schema validation
-      const parseResult = createBankLineSchema.safeParse(request.body);
-      if (!parseResult.success) {
-        reply.code(400).send({
-          error: "invalid_body",
-          details: parseResult.error.flatten()
-        });
-        return;
-      }
-      const data = parseResult.data;
+export const registerBankLinesRoutes: FastifyPluginAsync = async (app) => {
+  // Create (idempotent on (orgId, idempotencyKey))
+  app.post("/bank-lines", async (req, reply) => {
+    // Authorize org access for the caller's org
+    const user = (req as any).user!;
+    assertOrgAccess(req, reply, user.orgId);
 
-      // 2. authz: same org + allowed role
-      if (!assertOrgAccess(request, reply, data.orgId)) return;
-      if (!assertRoleForBankLines(request, reply)) return;
+    const parsed = createBankLineSchema.safeParse(req.body);
+    if (!parsed.success) {
+      reply.code(400).send({ error: "invalid_body", details: parsed.error.flatten() });
+      return;
+    }
+    const data = parsed.data;
 
-      // 3. upsert-like logic using unique(orgId, idempotencyKey)
-      // so we don't double-write money movements
-      const record = await prisma.bankLine.upsert({
-        where: {
-          orgId_idempotencyKey: {
-            orgId: data.orgId,
-            idempotencyKey: data.idempotencyKey
-          }
-        },
-        update: {},
-        create: {
+    // Enforce caller may only write to their own org
+    if (data.orgId !== user.orgId) {
+      reply.code(403).send({ error: "forbidden" });
+      return;
+    }
+
+    const rec = await prisma.bankLine.upsert({
+      where: {
+        orgId_idempotencyKey: {
           orgId: data.orgId,
-          idempotencyKey: data.idempotencyKey,
-          accountRef: data.accountRef,
-          amountCents: data.amountCents,
-          currency: data.currency
+          idempotencyKey: data.idempotencyKey
         }
-      });
+      },
+      update: {}, // idempotent
+      create: {
+        orgId: data.orgId,
+        idempotencyKey: data.idempotencyKey,
+        amount: data.amount,
+        date: data.date,
+        payeeCiphertext: data.payeeCiphertext,
+        payeeKid: data.payeeKid,
+        descCiphertext: data.descCiphertext,
+        descKid: data.descKid
+      }
+    });
 
-      // 4. redact before replying
-      reply.code(201).send(redactBankLine(record));
-    }
-  );
+    reply.code(201).send(redactBankLine(rec));
+  });
 
-  // Example GET (read)
-  fastify.get(
-    "/bank-lines/:orgId",
-    async (request, reply) => {
-      const orgId = String((request.params as any).orgId);
+  // List for current org
+  app.get("/bank-lines", async (req, reply) => {
+    const user = (req as any).user!;
+    assertOrgAccess(req, reply, user.orgId);
 
-      // authz
-      if (!assertOrgAccess(request, reply, orgId)) return;
+    const rows = await prisma.bankLine.findMany({
+      where: { orgId: user.orgId },
+      orderBy: { createdAt: "desc" }
+    });
 
-      const rows = await prisma.bankLine.findMany({
-        where: { orgId },
-        orderBy: { createdAt: "desc" }
-      });
-
-      reply.send(rows.map(redactBankLine));
-    }
-  );
+    reply.send({ lines: rows.map(redactBankLine) });
+  });
 };
 
-export default bankLinesRoute;
+export default registerBankLinesRoutes;

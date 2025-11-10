@@ -1,41 +1,14 @@
 {
-    "name":  "@apgms/shared",
-    "version":  "0.1.0",
-    "private":  true,
-    "type":  "module",
-    "main":  "src/index.ts",
-    "types":  "src/index.ts",
-    "scripts":  {
-                    "prisma:generate":  "prisma generate --schema=prisma/schema.prisma",
-                    "build":  "echo building shared",
-                    "typecheck":  "tsc --noEmit -p tsconfig.json",
-                    "test":  "tsx --test ./test/event-bus.test.ts ./test/tax.test.ts ./test/redaction.test.ts ./test/envelope.test.ts"
-                },
-    "dependencies":  {
-                         "@prisma/client":  "6.17.1",
-                         "argon2":  "^0.41.1",
-                         "otplib": "^12.0.1"
-                     },
-    "devDependencies":  {
-                            "prisma":  "6.17.1",
-                            "tsx":  "^4.20.6",
-                            "typescript":  "^5.9.3"
-                        },
-    "exports":  {
-                    ".":  "./src/index.ts",
-                    "./db":  "./src/db.ts",
-                    "./masking":  "./src/masking.ts",
-                    "./errors": "./src/errors.ts",
-                    "./security/password":  "./src/security/password.ts",
-                    "./security/totp": "./src/security/totp.ts",
-                    "./security/secret-manager": "./src/security/secret-manager.ts",
-                    "./validation": "./src/validation/index.ts",
-                    "./crypto/envelope": "./src/crypto/envelope.ts",
-                    "./ledger": "./src/ledger/index.ts",
-                    "./tax":  "./src/tax/index.ts",
-                    "./tax/tables": "./src/tax/tables.ts",
-                    "./messaging":  "./src/messaging/event-bus.ts",
-                    "./messaging/in-memory": "./src/messaging/in-memory-bus.ts",
-                    "./messaging/nats": "./src/messaging/nats-bus.ts"
-                }
+  "name": "@apgms/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
 }
