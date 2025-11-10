@@ -6,9 +6,11 @@ export function enforceAdminStepUp(
   reply: FastifyReply,
   action: string,
 ): boolean {
-  const user = (request as any).user as { id?: string; mfaEnabled?: boolean } | undefined;
+  const user =
+    (request as any).user as { id?: string; sub?: string; mfaEnabled?: boolean } | undefined;
+  const userId = user?.id ?? user?.sub;
 
-  if (!user?.id) {
+  if (!userId) {
     reply.code(401).send({ error: { code: "unauthorized", message: "User context missing" } });
     return false;
   }
@@ -23,7 +25,7 @@ export function enforceAdminStepUp(
     return false;
   }
 
-  if (!requireRecentVerification(user.id)) {
+  if (!requireRecentVerification(userId)) {
     reply.code(428).send({
       error: {
         code: "mfa_step_up_required",
