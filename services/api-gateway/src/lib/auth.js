@@ -2,6 +2,9 @@ import { Buffer } from "node:buffer";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { importJWK, jwtVerify, } from "jose";
 const clockToleranceSeconds = Number(process.env.AUTH_CLOCK_TOLERANCE_S ?? "5");
+const prototypeEnvFeatureRaw = process.env.FEATURE_PROTOTYPE_ENV_ENABLED;
+const prototypeEnvFeatureEnabled = typeof prototypeEnvFeatureRaw === "string" &&
+    ["1", "true", "yes", "on"].includes(prototypeEnvFeatureRaw.trim().toLowerCase());
 const keyCache = new Map();
 export class AuthError extends Error {
     statusCode;
@@ -137,6 +140,13 @@ export async function authenticateRequest(app, request, reply, roles) {
     try {
         const principal = await verifyRequest(request, reply);
         requireRole(principal, roles);
+        const hasAdminRole = principal.roles.includes("admin");
+        const isPrototypeEnvRequest = prototypeEnvFeatureEnabled && hasAdminRole;
+        const existingFeatures = request.features ?? { prototypeEnv: false };
+        request.features = {
+            ...existingFeatures,
+            prototypeEnv: isPrototypeEnvRequest,
+        };
         metrics?.recordSecurityEvent("auth.success");
         return principal;
     }

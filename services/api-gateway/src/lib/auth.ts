@@ -11,6 +11,12 @@ import {
 
 const clockToleranceSeconds = Number(process.env.AUTH_CLOCK_TOLERANCE_S ?? "5");
 
+const prototypeEnvFeatureRaw = process.env.FEATURE_PROTOTYPE_ENV_ENABLED;
+
+const prototypeEnvFeatureEnabled =
+  typeof prototypeEnvFeatureRaw === "string" &&
+  ["1", "true", "yes", "on"].includes(prototypeEnvFeatureRaw.trim().toLowerCase());
+
 export type Role = "admin" | "analyst" | "finance" | "auditor";
 
 export interface Principal {
@@ -204,6 +210,15 @@ export async function authenticateRequest(
   try {
     const principal = await verifyRequest(request, reply);
     requireRole(principal, roles);
+
+    const hasAdminRole = principal.roles.includes("admin");
+    const isPrototypeEnvRequest = prototypeEnvFeatureEnabled && hasAdminRole;
+    const existingFeatures = request.features ?? { prototypeEnv: false };
+    request.features = {
+      ...existingFeatures,
+      prototypeEnv: isPrototypeEnvRequest,
+    };
+
     metrics?.recordSecurityEvent("auth.success");
     return principal;
   } catch (error) {

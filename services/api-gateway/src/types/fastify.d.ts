@@ -26,5 +26,6 @@ declare module "fastify" {
       role: string;
       mfaEnabled: boolean;
     };
+    features?: import("fastify").RequestFeatures;
   }
 }
