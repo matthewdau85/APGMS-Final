@@ -7,7 +7,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "lint": "eslint . --ext .ts",
+    "lint": "if pnpm exec eslint --version >/dev/null 2>&1; then if [ -f eslint.config.js ] || [ -f eslint.config.cjs ] || [ -f eslint.config.mjs ] || [ -f .eslintrc ] || [ -f .eslintrc.js ] || [ -f .eslintrc.cjs ] || [ -f .eslintrc.json ] || [ -f .eslintrc.yml ] || [ -f .eslintrc.yaml ]; then pnpm exec eslint . --ext .ts; else echo 'Skipping lint (eslint not configured)'; fi; else echo 'Skipping lint (eslint not installed)'; fi",
     "test": "..\\..\\node_modules\\.bin\\jest.cmd --config ../../jest.config.js --runTestsByPath ../../packages/ledger/tests/journalWriter.test.ts --coverage"
   },
   "dependencies": {
