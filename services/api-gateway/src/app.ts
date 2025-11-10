@@ -8,6 +8,7 @@ import { AppError, badRequest, conflict, forbidden, notFound, unauthorized } fro
 import { config } from "./config.js";
 
 import rateLimit from "./plugins/rate-limit.js";
+import structuredEvents from "./plugins/structured-events.js";
 import { authGuard, createAuthGuard, REGULATOR_AUDIENCE } from "./auth.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerRegulatorAuthRoutes } from "./routes/regulator-auth.js";
@@ -100,6 +101,7 @@ export async function buildServer(): Promise<FastifyInstance> {
   });
 
   await app.register(rateLimit);
+  await app.register(structuredEvents);
   await app.register(helmet, {
     frameguard: { action: "deny" },
     contentSecurityPolicy: {

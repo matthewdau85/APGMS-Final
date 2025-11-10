@@ -1,5 +1,6 @@
-﻿import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
+import type { StructuredEvent } from "../plugins/structured-events.js";
 import { prisma } from "../db.js";
 import { assertOrgAccess, redactBankLine } from "../utils/orgScope.js";
 
@@ -60,6 +61,42 @@ export const registerBankLinesRoutes: FastifyPluginAsync = async (app) => {
     });
 
     reply.code(201).send(redactBankLine(rec));
+
+    if (typeof req.publishStructuredEvent === "function") {
+      const amount = Number((rec as any).amount ?? data.amount ?? 0);
+      const amountCents = Math.round(amount * 100);
+      const highValue = Math.abs(amount) >= 5000;
+
+      const event: StructuredEvent = {
+        type: "discrepancy.detected",
+        entityType: "discrepancy",
+        entityId: rec.id,
+        orgId: rec.orgId,
+        status: "open",
+        severity: highValue ? "high" : "low",
+        summary: `Bank line ${rec.id} ingested`,
+        tags: ["bank_line", "compliance"],
+        payload: {
+          bankLineId: rec.id,
+          orgId: rec.orgId,
+          amount,
+          amountCents,
+          currency: "AUD",
+          trigger: "bank_line_ingest",
+          riskScore: Math.min(1, Math.abs(amount) / 10000),
+          category: highValue ? "high_value_payment" : "standard_payment",
+          label: highValue ? "requires_review" : "auto_clear",
+          sensitiveAttribute: highValue ? "high_volume" : "standard_volume",
+          createdAt: rec.createdAt,
+        },
+      };
+
+      try {
+        await req.publishStructuredEvent(event);
+      } catch (error) {
+        req.log.error({ err: error, bankLineId: rec.id }, "bank_line_event_publish_failed");
+      }
+    }
   });
 
   // List for current org

@@ -4,6 +4,7 @@ packages:
   - shared
   - apps/*
   - worker
+  - worker/*
   - packages/*
 
 ignoredBuiltDependencies:

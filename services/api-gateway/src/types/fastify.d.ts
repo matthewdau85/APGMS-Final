@@ -1,4 +1,5 @@
 import "fastify";
+import type { StructuredEvent } from "../plugins/structured-events.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -17,6 +18,7 @@ declare module "fastify" {
       redis?: { ping: () => Promise<string> } | null;
       nats?: { flush: () => Promise<void> } | null;
     };
+    publishStructuredEvent?: (event: StructuredEvent) => Promise<void>;
   }
 
   interface FastifyRequest {
@@ -26,5 +28,6 @@ declare module "fastify" {
       role: string;
       mfaEnabled: boolean;
     };
+    publishStructuredEvent?: (event: StructuredEvent) => Promise<void>;
   }
 }

@@ -7,6 +7,7 @@
         "webapp",
         "shared",
         "worker",
+        "worker/*",
         "apps/*",
         "packages/*"
     ],
