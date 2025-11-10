@@ -526,71 +526,74 @@ model MonitoringSnapshot {
 model DiscrepancyEvent {
   id               String   @id @default(uuid()) @db.Uuid
   org              Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  orgId            String
-  eventKey         String
+  orgId            String   @map("org_id")
+  eventKey         String   @map("event_key")
   category         String
-  eventType        String
+  eventType        String   @map("event_type")
   status           String   @default("open")
   severity         String?
   source           String
-  traceId          String?
-  detectedAt       DateTime
-  shortfallCents   BigInt?  @db.BigInt
+  traceId          String?  @map("trace_id")
+  detectedAt       DateTime @map("detected_at")
+  shortfallCents   BigInt?  @db.BigInt @map("shortfall_cents")
   payload          Json
   context          Json?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  resolvedAt       DateTime?
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  resolvedAt       DateTime? @map("resolved_at")
 
   manualResolutions ManualResolution[]
   paymentPlan       PaymentPlanMetadata?
 
   @@unique([orgId, eventKey])
   @@index([orgId, detectedAt])
+  @@map("discrepancy_events")
 }
 
 model ManualResolution {
   id                  String            @id @default(uuid()) @db.Uuid
   discrepancy         DiscrepancyEvent  @relation(fields: [discrepancyId], references: [id], onDelete: Cascade)
-  discrepancyId       String            @db.Uuid
+  discrepancyId       String            @db.Uuid @map("discrepancy_id")
   org                 Org               @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  orgId               String
-  resolvedBy          String
-  resolvedByRole      String?
-  resolutionType      String
-  overrideAmountCents BigInt?           @db.BigInt
+  orgId               String            @map("org_id")
+  resolvedBy          String            @map("resolved_by")
+  resolvedByRole      String?           @map("resolved_by_role")
+  resolutionType      String            @map("resolution_type")
+  overrideAmountCents BigInt?           @db.BigInt @map("override_amount_cents")
   notes               String?
   payload             Json?
-  appliedAt           DateTime?
-  createdAt           DateTime          @default(now())
+  appliedAt           DateTime?         @map("applied_at")
+  createdAt           DateTime          @default(now()) @map("created_at")
 
   @@index([orgId, createdAt])
+  @@map("manual_resolutions")
 }
 
 model PaymentPlanMetadata {
   id                     String            @id @default(uuid()) @db.Uuid
   org                    Org               @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  orgId                  String
+  orgId                  String            @map("org_id")
   discrepancy            DiscrepancyEvent? @relation(fields: [discrepancyId], references: [id], onDelete: SetNull)
-  discrepancyId          String?           @db.Uuid
+  discrepancyId          String?           @db.Uuid @map("discrepancy_id")
   status                 String
-  arrangementType        String
-  totalOutstandingCents  BigInt?           @db.BigInt
-  installmentAmountCents BigInt?           @db.BigInt
-  installmentFrequency   String?
-  firstPaymentDue        DateTime?
-  nextPaymentDue         DateTime?
-  lastPaymentReceived    DateTime?
-  missedInstallments     Int?
+  arrangementType        String            @map("arrangement_type")
+  totalOutstandingCents  BigInt?           @db.BigInt @map("total_outstanding_cents")
+  installmentAmountCents BigInt?           @db.BigInt @map("installment_amount_cents")
+  installmentFrequency   String?           @map("installment_frequency")
+  firstPaymentDue        DateTime?         @map("first_payment_due")
+  nextPaymentDue         DateTime?         @map("next_payment_due")
+  lastPaymentReceived    DateTime?         @map("last_payment_received")
+  missedInstallments     Int?              @map("missed_installments")
   terms                  Json?
   payload                Json
   notes                  String?
-  updatedBy              String?
-  source                 String?
+  updatedBy              String?           @map("updated_by")
+  source                 String?           @map("source")
   context                Json?
-  createdAt              DateTime          @default(now())
-  updatedAt              DateTime          @updatedAt
+  createdAt              DateTime          @default(now()) @map("created_at")
+  updatedAt              DateTime          @updatedAt @map("updated_at")
 
   @@index([orgId, status])
   @@index([orgId, discrepancyId])
+  @@map("payment_plan_metadata")
 }
