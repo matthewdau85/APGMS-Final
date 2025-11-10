@@ -23,7 +23,7 @@ export async function recordAuditLog({
   try {
     const previous = await prisma.auditLog.findFirst({
       where: { orgId },
-      orderBy: { createdAt: "desc" },
+      orderBy: { chainSeq: "desc" },
     });
 
     const createdAt = timestamp ?? new Date();
@@ -40,6 +40,11 @@ export async function recordAuditLog({
     });
 
     const hash = crypto.createHash("sha256").update(hashPayload).digest("hex");
+    const signaturePayload = JSON.stringify({
+      hash,
+      prevSignature: previous?.signature ?? null,
+    });
+    const signature = crypto.createHash("sha256").update(signaturePayload).digest("hex");
 
     await prisma.auditLog.create({
       data: {
@@ -50,6 +55,7 @@ export async function recordAuditLog({
         createdAt,
         hash,
         prevHash,
+        signature,
       },
     });
   } catch (error) {

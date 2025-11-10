@@ -1,6 +1,10 @@
-﻿import type { FastifyPluginAsync } from "fastify";
+import { Prisma } from "@prisma/client";
+import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
+
+import { generateDesignatedAccountReconciliationArtifact } from "../../../../domain/policy/designated-accounts.js";
 import { prisma } from "../db.js";
+import { recordAuditLog } from "../lib/audit.js";
 import { assertOrgAccess, redactBankLine } from "../utils/orgScope.js";
 
 // Accept the fields Prisma requires for a BankLine create
@@ -33,6 +37,14 @@ export const registerBankLinesRoutes: FastifyPluginAsync = async (app) => {
     }
     const data = parsed.data;
 
+    if (data.amount <= 0) {
+      reply.code(422).send({
+        error: "deposit_only",
+        message: "Designated accounts only accept deposit transactions"
+      });
+      return;
+    }
+
     // Enforce caller may only write to their own org
     if (data.orgId !== user.orgId) {
       reply.code(403).send({ error: "forbidden" });
@@ -58,6 +70,45 @@ export const registerBankLinesRoutes: FastifyPluginAsync = async (app) => {
         descKid: data.descKid
       }
     });
+
+    const actorId = (user as any).sub ?? (user as any).id ?? "api";
+
+    await prisma.scheduledRemittance.upsert({
+      where: { bankLineId: rec.id },
+      update: {
+        amount: new Prisma.Decimal(data.amount),
+        status: "QUEUED",
+        scheduledFor: new Date()
+      },
+      create: {
+        orgId: data.orgId,
+        bankLineId: rec.id,
+        amount: new Prisma.Decimal(data.amount),
+        purpose: "bas_remittance",
+        channel: "npp",
+        status: "QUEUED"
+      }
+    });
+
+    try {
+      await generateDesignatedAccountReconciliationArtifact(
+        {
+          prisma,
+          auditLogger: async (entry) => {
+            await recordAuditLog({
+              orgId: entry.orgId,
+              actorId: entry.actorId,
+              action: entry.action,
+              metadata: entry.metadata
+            });
+          }
+        },
+        data.orgId,
+        actorId
+      );
+    } catch (error) {
+      req.log.error({ err: error }, "failed to generate designated account reconciliation");
+    }
 
     reply.code(201).send(redactBankLine(rec));
   });

@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 
-import { Prisma, type PrismaClient } from "@prisma/client";
+import {
+  Prisma,
+  type PrismaClient,
+  DesignatedAccountStatus,
+  ReconciliationStatus,
+} from "@prisma/client";
 
 import { conflict, notFound } from "@apgms/shared";
 import {
@@ -64,6 +69,37 @@ async function ensureViolationAlert(
   });
 }
 
+async function recordDesignatedState(
+  prisma: PrismaClient,
+  entry: {
+    orgId: string;
+    accountId: string;
+    actorId: string;
+    status: DesignatedAccountStatus;
+    reason?: string;
+    context?: Record<string, unknown>;
+  },
+): Promise<void> {
+  try {
+    await prisma.designatedAccountState.create({
+      data: {
+        orgId: entry.orgId,
+        accountId: entry.accountId,
+        actorId: entry.actorId,
+        status: entry.status,
+        reason: entry.reason,
+        context: entry.context ?? {},
+      },
+    });
+  } catch (error) {
+    // Capture-but-don't-fail; the calling flow should not break if the
+    // designated account has been removed between validation and persistence.
+    if (process.env.NODE_ENV === "development") {
+      console.warn("designatedAccountState.persist_failed", error);
+    }
+  }
+}
+
 export async function applyDesignatedAccountTransfer(
   context: PolicyContext,
   input: ApplyDesignatedTransferInput,
@@ -74,6 +110,24 @@ export async function applyDesignatedAccountTransfer(
   });
 
   if (!evaluation.allowed) {
+    const account = await context.prisma.designatedAccount.findUnique({
+      where: { id: input.accountId },
+    });
+    if (account && account.orgId === input.orgId) {
+      await recordDesignatedState(context.prisma, {
+        orgId: input.orgId,
+        accountId: input.accountId,
+        actorId: input.actorId,
+        status: DesignatedAccountStatus.VIOLATION,
+        reason: evaluation.violation.message,
+        context: {
+          amount: input.amount,
+          source: input.source,
+          violation: evaluation.violation.code,
+        },
+      });
+    }
+
     await ensureViolationAlert(
       context.prisma,
       input.orgId,
@@ -138,6 +192,19 @@ export async function applyDesignatedAccountTransfer(
         orgId: input.orgId,
         accountId: account.id,
         amount: amountDecimal,
+        source: normalizedSource,
+      },
+    });
+
+    await recordDesignatedState(tx as unknown as PrismaClient, {
+      orgId: input.orgId,
+      accountId: account.id,
+      actorId: input.actorId,
+      status: DesignatedAccountStatus.ACTIVE,
+      reason: "Designated account credited",
+      context: {
+        transferId: transfer.id,
+        amount: input.amount,
         source: normalizedSource,
       },
     });
@@ -262,6 +329,55 @@ export async function generateDesignatedAccountReconciliationArtifact(
       },
     });
   });
+
+  const accountSnapshots = accounts.map((account) => ({
+    orgId,
+    accountId: account.id,
+    artifactId: artifact.id,
+    status: ReconciliationStatus.IN_BALANCE,
+    internalBalance: account.balance,
+    variance: new Prisma.Decimal(0),
+    details: {
+      inflow24h: account.transfers.reduce((acc, transfer) => acc + Number(transfer.amount), 0),
+      transferCount24h: account.transfers.length,
+    },
+  }));
+
+  const aggregateBalance = accounts.reduce(
+    (acc, account) => acc.add(account.balance),
+    new Prisma.Decimal(0),
+  );
+
+  await context.prisma.designatedAccountReconciliationSnapshot.createMany({
+    data: [
+      ...accountSnapshots,
+      {
+        orgId,
+        artifactId: artifact.id,
+        status: ReconciliationStatus.IN_BALANCE,
+        internalBalance: aggregateBalance,
+        variance: new Prisma.Decimal(0),
+        details: summary,
+      },
+    ],
+  });
+
+  if (accounts.length > 0) {
+    await context.prisma.designatedAccountState.createMany({
+      data: accounts.map((account) => ({
+        orgId,
+        accountId: account.id,
+        actorId,
+        status: DesignatedAccountStatus.RECONCILED,
+        reason: "Automated reconciliation completed",
+        context: {
+          artifactId: artifact.id,
+          balance: account.balance,
+          generatedAt: summary.generatedAt,
+        },
+      })),
+    });
+  }
 
   if (context.auditLogger) {
     await context.auditLogger({

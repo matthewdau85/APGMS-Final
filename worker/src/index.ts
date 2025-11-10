@@ -2,8 +2,18 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { runNightlyDesignatedAccountReconciliation } from "./jobs/designated-reconciliation.js";
+import {
+  dispatchQueuedStpReports,
+  processScheduledBasRemittances,
+  queueOutstandingStpReports,
+} from "./jobs/ato-submissions.js";
 
 export { runNightlyDesignatedAccountReconciliation } from "./jobs/designated-reconciliation.js";
+export {
+  dispatchQueuedStpReports,
+  processScheduledBasRemittances,
+  queueOutstandingStpReports,
+} from "./jobs/ato-submissions.js";
 
 const modulePath = fileURLToPath(import.meta.url);
 const invokedPath = process.argv[1] ? resolve(process.argv[1]) : null;

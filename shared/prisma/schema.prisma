@@ -45,6 +45,27 @@ enum AlertStatus {
   CLOSED
 }
 
+enum DesignatedAccountStatus {
+  ACTIVE
+  VIOLATION
+  SUSPENDED
+  RECONCILED
+}
+
+enum ReconciliationStatus {
+  PENDING
+  IN_BALANCE
+  OUT_OF_BALANCE
+  FAILED
+}
+
+enum RemittanceStatus {
+  QUEUED
+  DISPATCHED
+  SETTLED
+  FAILED
+}
+
 // =========================
 // Payroll domain
 // =========================
@@ -301,6 +322,8 @@ model EvidenceArtifact {
   payload   Json?
   createdAt DateTime @default(now())
 
+  reconciliations DesignatedAccountReconciliationSnapshot[]
+
   @@index([orgId, kind])
 }
 
@@ -340,6 +363,9 @@ model Org {
   basCycles  BasCycle[]
   designatedAccounts DesignatedAccount[]
   designatedTransfers DesignatedTransfer[]
+  designatedAccountStates DesignatedAccountState[]
+  reconciliationSnapshots DesignatedAccountReconciliationSnapshot[]
+  scheduledRemittances ScheduledRemittance[]
   paymentPlanRequests PaymentPlanRequest[]
   regulatorSessions RegulatorSession[]
   monitoringSnapshots MonitoringSnapshot[]
@@ -421,6 +447,8 @@ model DesignatedAccount {
   updatedAt DateTime @default(now())
 
   transfers DesignatedTransfer[]
+  states    DesignatedAccountState[]
+  snapshots DesignatedAccountReconciliationSnapshot[]
 
   @@index([orgId, type])
 }
@@ -467,8 +495,70 @@ model BankLine {
   createdAt       DateTime @default(now())
   idempotencyKey  String?
 
+  remittances ScheduledRemittance[]
+
   @@unique([orgId, idempotencyKey])
   @@index([orgId])
+}
+
+model DesignatedAccountState {
+  id          String                 @id @default(cuid())
+  org         Org                    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId       String
+  account     DesignatedAccount      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId   String
+  status      DesignatedAccountStatus
+  reason      String?
+  context     Json?
+  actorId     String
+  recordedAt  DateTime               @default(now())
+
+  @@index([orgId, accountId, recordedAt])
+  @@index([accountId, status])
+}
+
+model DesignatedAccountReconciliationSnapshot {
+  id              String               @id @default(cuid())
+  org             Org                  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId           String
+  account         DesignatedAccount?   @relation(fields: [accountId], references: [id])
+  accountId       String?
+  artifact        EvidenceArtifact?    @relation(fields: [artifactId], references: [id])
+  artifactId      String?
+  capturedAt      DateTime             @default(now())
+  status          ReconciliationStatus @default(PENDING)
+  externalBalance Decimal?             @db.Decimal(18, 2)
+  internalBalance Decimal              @db.Decimal(18, 2)
+  variance        Decimal?             @db.Decimal(18, 2)
+  details         Json?
+
+  @@index([orgId, capturedAt])
+  @@index([accountId, capturedAt])
+}
+
+model ScheduledRemittance {
+  id            String           @id @default(cuid())
+  org           Org              @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId         String
+  bankLine      BankLine?        @relation(fields: [bankLineId], references: [id], onDelete: SetNull)
+  bankLineId    String?
+  amount        Decimal          @db.Decimal(18, 2)
+  purpose       String
+  channel       String           @default("npp")
+  status        RemittanceStatus @default(QUEUED)
+  scheduledFor  DateTime         @default(now())
+  attempts      Int              @default(0)
+  lastAttemptAt DateTime?
+  dispatchedAt  DateTime?
+  settlementRef String?
+  referenceType String?
+  referenceId   String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([orgId, status, scheduledFor])
+  @@unique([bankLineId])
+  @@unique([referenceType, referenceId])
 }
 
 model OrgTombstone {
@@ -486,11 +576,14 @@ model AuditLog {
   action    String
   metadata  Json?
   createdAt DateTime @default(now())
+  chainSeq  BigInt   @db.BigInt @default(autoincrement())
   hash      String
   prevHash  String?
+  signature String?
 
   @@index([orgId, createdAt])
   @@index([actorId, createdAt])
+  @@unique([orgId, chainSeq])
 }
 
 model RegulatorSession {
