@@ -106,12 +106,32 @@ export async function runScheduledAtoSubmissions(): Promise<void> {
       paymentDate: { lte: new Date() },
       stpSubmittedAt: null,
     },
-    select: { id: true, orgId: true },
+    select: { id: true },
   });
 
   for (const payRun of duePayRuns) {
+    const claimed = await prisma.payRun.updateMany({
+      where: {
+        id: payRun.id,
+        stpSubmittedAt: null,
+        NOT: { stpStatus: "submitting" },
+      },
+      data: { stpStatus: "submitting" },
+    });
+
+    if (claimed.count === 0) {
+      continue;
+    }
+
     const payload = await buildStpPayload(payRun.id);
-    if (!payload) continue;
+    if (!payload) {
+      await prisma.payRun.update({
+        where: { id: payRun.id },
+        data: { stpStatus: "errored" },
+      });
+      console.error("Failed to build STP payload", { payRunId: payRun.id });
+      continue;
+    }
 
     try {
       const response = await stpClient.submit(payload);
@@ -143,8 +163,28 @@ export async function runScheduledAtoSubmissions(): Promise<void> {
   });
 
   for (const period of dueBasPeriods) {
+    const claimed = await prisma.basPeriod.updateMany({
+      where: {
+        id: period.id,
+        lodgedAt: null,
+        NOT: { atoStatus: "submitting" },
+      },
+      data: { atoStatus: "submitting" },
+    });
+
+    if (claimed.count === 0) {
+      continue;
+    }
+
     const payload = await buildBasPayload(period.id);
-    if (!payload) continue;
+    if (!payload) {
+      await prisma.basPeriod.update({
+        where: { id: period.id },
+        data: { atoStatus: "errored" },
+      });
+      console.error("Failed to build BAS payload", { periodId: period.id });
+      continue;
+    }
 
     try {
       const response = await basClient.submit(payload);

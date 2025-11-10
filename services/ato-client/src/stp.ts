@@ -1,5 +1,5 @@
 import { requestJson } from "./http.js";
-import { OAuthSession, type OAuthConfig } from "./oauth.ts";
+import { OAuthSession, type OAuthConfig } from "./oauth.js";
 
 export type StpSubmissionEmployee = {
   identifier: string;
