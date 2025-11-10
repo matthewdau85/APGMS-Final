@@ -1,0 +1,17 @@
+{
+  "modelVersion": "2025-02-01",
+  "generatedAt": "2025-02-01T02:15:00Z",
+  "artifacts": [
+    {
+      "name": "primary",
+      "path": "artifacts/model/model.bin",
+      "sha256": "8bcd99c8e6f052c9548c4ca5390ee1474389dc184e63daa34729d8b4c79cb699"
+    }
+  ],
+  "history": [
+    {
+      "modelVersion": "2025-01-15",
+      "sha256": "8bcd99c8e6f052c9548c4ca5390ee1474389dc184e63daa34729d8b4c79cb699"
+    }
+  ]
+}

@@ -1,1 +1,133 @@
-{}
+{
+  "apiVersion": 1,
+  "dashboards": [
+    {
+      "title": "ML Service Inference Overview",
+      "uid": "ml-inference-overview",
+      "tags": ["ml-service", "latency", "slo"],
+      "panels": [
+        {
+          "title": "Inference latency (p95)",
+          "type": "timeseries",
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(ml_inference_duration_seconds_bucket{service=\"ml-service\"}[5m])) by (le))",
+              "legendFormat": "p95 latency"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "orange", "value": 1 },
+                  { "color": "red", "value": 2 }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "Inference throughput by outcome",
+          "type": "bargauge",
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "sum(rate(ml_inference_duration_seconds_count{service=\"ml-service\"}[5m])) by (outcome)",
+              "legendFormat": "{{outcome}}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "ML Service SLO Guardrails",
+      "uid": "ml-slo-guardrails",
+      "tags": ["ml-service", "error-budget"],
+      "panels": [
+        {
+          "title": "Error budget remaining",
+          "type": "timeseries",
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "ml_inference_error_budget_remaining{service=\"ml-service\"}",
+              "legendFormat": "{{model_version}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "min": 0,
+              "max": 1,
+              "thresholds": {
+                "mode": "percentage",
+                "steps": [
+                  { "color": "green", "value": 0.25 },
+                  { "color": "orange", "value": 0.15 },
+                  { "color": "red", "value": 0.05 }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "Feedback volume by role",
+          "type": "piechart",
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "sum(increase(ml_feedback_labels_total{service=\"ml-service\"}[1h])) by (submitted_role)",
+              "legendFormat": "{{submitted_role}}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Model Drift Deep Dive",
+      "uid": "ml-drift-deep-dive",
+      "tags": ["ml-service", "drift"],
+      "panels": [
+        {
+          "title": "Feature drift scores",
+          "type": "heatmap",
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "ml_feature_drift_score{service=\"ml-service\"}",
+              "legendFormat": "{{model_version}} — {{feature}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": 0.2 },
+                  { "color": "orange", "value": 0.4 },
+                  { "color": "red", "value": 0.6 }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "title": "Recent drift alerts",
+          "type": "table",
+          "datasource": "Prometheus",
+          "targets": [
+            {
+              "expr": "topk(10, ml_feature_drift_score{service=\"ml-service\"})",
+              "legendFormat": "{{feature}}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

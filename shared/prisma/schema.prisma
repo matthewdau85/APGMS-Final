@@ -519,3 +519,24 @@ model MonitoringSnapshot {
   @@index([orgId, createdAt])
   @@index([orgId, type, createdAt])
 }
+
+enum FeedbackRole {
+  FINANCE
+  REGULATOR
+}
+
+model ModelFeedback {
+  id            String       @id @default(uuid()) @db.Uuid
+  predictionId  String
+  modelVersion  String
+  label         String
+  submittedBy   String
+  submittedRole FeedbackRole
+  confidence    Float?
+  notes         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([predictionId, modelVersion])
+  @@index([submittedRole, createdAt])
+}

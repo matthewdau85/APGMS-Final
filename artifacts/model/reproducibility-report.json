@@ -1,0 +1,17 @@
+{
+  "modelVersion": "2025-02-01",
+  "datasetSnapshot": "s3://ml-training-datasets/payments-2025-01-20.parquet",
+  "datasetHash": "b32f9c6bdc9d16d73222737d82c1ff2c",
+  "trainingCommit": "3d5ef1c48b2cfa0f5b8b7679f7906a561e8878f4",
+  "trainingEnvironment": {
+    "pythonVersion": "3.11.8",
+    "cudaVersion": "12.1",
+    "orchestrator": "kubeflow-pipelines@2.1"
+  },
+  "reproducibilityChecks": [
+    "feature store snapshot hash verified",
+    "training config matches production defaults",
+    "evaluation metrics within 0.5% of baseline"
+  ],
+  "passed": true
+}

@@ -1,0 +1,49 @@
+name: ML Governance Gates
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - 'services/ml-service/**'
+      - 'infra/observability/**'
+      - 'artifacts/model/**'
+      - 'tools/ml/**'
+      - '.github/workflows/ml-governance.yml'
+      - 'runbooks/ml-operations.md'
+
+jobs:
+  governance:
+    name: Validate model governance controls
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify model artifact integrity
+        run: pnpm exec node tools/ml/verify-artifacts.mjs
+
+      - name: Run bias control checks
+        run: pnpm exec node tools/ml/verify-bias.mjs
+
+      - name: Confirm reproducibility evidence
+        run: pnpm exec node tools/ml/verify-reproducibility.mjs
+
+      - name: Type-check ml-service
+        run: pnpm --filter @apgms/ml-service run typecheck
