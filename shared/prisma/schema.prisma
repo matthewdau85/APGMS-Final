@@ -493,6 +493,55 @@ model AuditLog {
   @@index([actorId, createdAt])
 }
 
+model HighRiskDecision {
+  id             String   @id @default(cuid())
+  orgId          String
+  eventType      String
+  eventId        String
+  reviewerId     String
+  reviewerEmail  String?
+  approvalStatus String
+  overrideNote   String?
+  decidedAt      DateTime @default(now())
+  createdAt      DateTime @default(now())
+  metadata       Json?
+  auditLogId     String?
+  auditLog       AuditLog? @relation(fields: [auditLogId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, eventType, eventId])
+  @@index([orgId, createdAt])
+}
+
+model BasFallbackTask {
+  id          String   @id @default(cuid())
+  orgId       String
+  basCycleId  String
+  trigger     String
+  payload     Json
+  status      String   @default("queued")
+  createdAt   DateTime @default(now())
+  scheduledAt DateTime?
+  processedAt DateTime?
+  error       String?
+
+  @@index([orgId, status])
+  @@index([basCycleId, status])
+}
+
+model ForensicLog {
+  id        String   @id @default(cuid())
+  orgId     String?
+  actorId   String?
+  category  String
+  message   String
+  payload   Json?
+  createdAt DateTime @default(now())
+  traceId   String?
+
+  @@index([category, createdAt])
+  @@index([orgId, createdAt])
+}
+
 model RegulatorSession {
   id         String   @id @default(cuid())
   org        Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)

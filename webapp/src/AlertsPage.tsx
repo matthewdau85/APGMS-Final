@@ -1,5 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { fetchAlerts, resolveAlert, initiateMfa } from "./api";
+import {
+  fetchAlerts,
+  resolveAlert,
+  initiateMfa,
+  type HighRiskDecisionPayload,
+} from "./api";
 import { getToken, getSessionUser } from "./auth";
 
 type AlertRecord = Awaited<ReturnType<typeof fetchAlerts>>["alerts"][number];
@@ -52,22 +57,70 @@ export default function AlertsPage() {
       return;
     }
 
+    const highRisk = alert.severity.toUpperCase() === "HIGH";
+    let decisionPayload: HighRiskDecisionPayload | undefined;
+    if (highRisk) {
+      const reviewerId = window.prompt(
+        "Enter reviewer ID/email for approval (required):",
+        sessionUser?.email ?? ""
+      );
+      if (!reviewerId || !reviewerId.trim()) {
+        setError("Reviewer approval is required for high-risk alerts.");
+        return;
+      }
+
+      const reviewerEmail = window.prompt(
+        "Reviewer contact email (optional)",
+        reviewerId.includes("@") ? reviewerId : ""
+      );
+
+      const override = window.confirm(
+        "Did the reviewer authorise an override of automated controls?"
+      );
+
+      let overrideNote: string | undefined;
+      if (override) {
+        const overrideInput = window.prompt(
+          "Document the override rationale (required)",
+          "Confirmed cash top-up from treasury"
+        );
+        if (!overrideInput || !overrideInput.trim()) {
+          setError("Override rationale is required when controls are bypassed.");
+          return;
+        }
+        overrideNote = overrideInput.trim();
+      }
+
+      decisionPayload = {
+        reviewerId: reviewerId.trim(),
+        reviewerEmail: reviewerEmail?.trim() ? reviewerEmail.trim() : undefined,
+        approvalStatus: override ? "OVERRIDDEN" : "APPROVED",
+        overrideNote,
+        decidedAt: new Date().toISOString(),
+      };
+    }
+
     setSubmittingId(alert.id);
     setError(null);
     setSuccess(null);
 
     let resolved = false;
     let requiresMfa = false;
+    let decisionResult: Awaited<ReturnType<typeof resolveAlert>>["decision"] = null;
 
     try {
-      await resolveAlert(token, alert.id, trimmedNote);
+      const result = await resolveAlert(token, alert.id, {
+        note: trimmedNote,
+        decision: decisionPayload,
+      });
+      decisionResult = result.decision;
       resolved = true;
     } catch (err) {
       if (
         err instanceof Error &&
         err.message === "mfa_required" &&
         sessionUser?.mfaEnabled &&
-        alert.severity.toUpperCase() === "HIGH"
+        highRisk
       ) {
         requiresMfa = true;
       } else {
@@ -89,7 +142,12 @@ export default function AlertsPage() {
         if (!supplied || supplied.trim().length === 0) {
           setError("MFA verification cancelled.");
         } else {
-          await resolveAlert(token, alert.id, trimmedNote, supplied.trim());
+          const result = await resolveAlert(token, alert.id, {
+            note: trimmedNote,
+            decision: decisionPayload,
+            mfaCode: supplied.trim(),
+          });
+          decisionResult = result.decision;
           resolved = true;
         }
       } catch (err) {
@@ -100,7 +158,13 @@ export default function AlertsPage() {
 
     if (resolved) {
       await loadAlerts();
-      setSuccess("Alert resolved and logged.");
+      if (decisionResult) {
+        setSuccess(
+          `Alert resolved with reviewer approval recorded (${decisionResult.approvalStatus}).`
+        );
+      } else {
+        setSuccess("Alert resolved and logged.");
+      }
     }
 
     setSubmittingId(null);
@@ -142,6 +206,25 @@ export default function AlertsPage() {
                     {alert.resolutionNote && (
                       <div style={resolutionNoteStyle}>
                         Note: {alert.resolutionNote}
+                      </div>
+                    )}
+                    {alert.decisions.length > 0 && (
+                      <div style={decisionTrailStyle}>
+                        <div style={decisionTrailHeadingStyle}>Reviewer decisions</div>
+                        <ul style={decisionTrailListStyle}>
+                          {alert.decisions.map((decision) => (
+                            <li key={decision.id} style={decisionTrailItemStyle}>
+                              <strong>{decision.approvalStatus}</strong> • {decision.reviewerId}
+                              {decision.reviewerEmail && ` (${decision.reviewerEmail})`} –
+                              decided {new Date(decision.decidedAt).toLocaleString()}
+                              {decision.overrideNote && (
+                                <div style={decisionTrailNoteStyle}>
+                                  Override note: {decision.overrideNote}
+                                </div>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     )}
                   </div>
@@ -286,6 +369,43 @@ const successTextStyle: React.CSSProperties = {
 const resolutionNoteStyle: React.CSSProperties = {
   fontSize: "12px",
   color: "#4b5563",
+};
+
+const decisionTrailStyle: React.CSSProperties = {
+  marginTop: "12px",
+  padding: "12px",
+  borderRadius: "8px",
+  backgroundColor: "#f9fafb",
+  border: "1px solid #e5e7eb",
+};
+
+const decisionTrailHeadingStyle: React.CSSProperties = {
+  fontSize: "12px",
+  fontWeight: 600,
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
+  color: "#4b5563",
+  marginBottom: "8px",
+};
+
+const decisionTrailListStyle: React.CSSProperties = {
+  listStyle: "none",
+  padding: 0,
+  margin: 0,
+  display: "grid",
+  gap: "8px",
+};
+
+const decisionTrailItemStyle: React.CSSProperties = {
+  fontSize: "13px",
+  color: "#1f2937",
+  lineHeight: 1.4,
+};
+
+const decisionTrailNoteStyle: React.CSSProperties = {
+  marginTop: "4px",
+  fontSize: "12px",
+  color: "#6b7280",
 };
 
 const resolveButtonStyle: React.CSSProperties = {

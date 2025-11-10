@@ -185,19 +185,42 @@ export async function fetchAlerts(token: string) {
       resolved: boolean;
       resolvedAt: string | null;
       resolutionNote: string | null;
+      decisions: Array<{
+        id: string;
+        reviewerId: string;
+        reviewerEmail: string | null;
+        approvalStatus: string;
+        overrideNote: string | null;
+        decidedAt: string;
+      }>;
     }>;
   }>;
 }
 
+export type HighRiskDecisionPayload = {
+  reviewerId: string;
+  reviewerEmail?: string;
+  approvalStatus: string;
+  overrideNote?: string;
+  decidedAt?: string;
+  deferredRemittanceUntil?: string;
+};
+
 export async function resolveAlert(
   token: string,
   alertId: string,
-  note: string,
-  mfaCode?: string
+  input: {
+    note: string;
+    decision?: HighRiskDecisionPayload;
+    mfaCode?: string;
+  }
 ) {
-  const payload: Record<string, unknown> = { note };
-  if (mfaCode) {
-    payload.mfaCode = mfaCode;
+  const payload: Record<string, unknown> = { note: input.note };
+  if (input.mfaCode) {
+    payload.mfaCode = input.mfaCode;
+  }
+  if (input.decision) {
+    payload.decision = input.decision;
   }
   const res = await fetch(`${API_BASE}/alerts/${alertId}/resolve`, {
     method: "POST",
@@ -220,6 +243,12 @@ export async function resolveAlert(
       resolvedAt: string | null;
       resolutionNote: string | null;
     };
+    decision: {
+      id: string;
+      approvalStatus: string;
+      decidedAt: string;
+      auditLogId: string | null;
+    } | null;
   }>;
 }
 
@@ -236,18 +265,27 @@ export async function fetchBasPreview(token: string) {
     gst: { required: number; secured: number; status: string };
     overallStatus: string;
     blockers: string[];
+    lastDecision: {
+      id: string;
+      approvalStatus: string;
+      decidedAt: string;
+      reviewerId: string;
+    } | null;
   }>;
 }
 
 export async function lodgeBas(
   token: string,
-  options?: {
+  input: {
+    decision: HighRiskDecisionPayload;
     mfaCode?: string;
   }
 ) {
-  const payload: Record<string, unknown> = {};
-  if (options?.mfaCode) {
-    payload.mfaCode = options.mfaCode;
+  const payload: Record<string, unknown> = {
+    decision: input.decision,
+  };
+  if (input.mfaCode) {
+    payload.mfaCode = input.mfaCode;
   }
   const res = await fetch(`${API_BASE}/bas/lodge`, {
     method: "POST",
@@ -264,7 +302,20 @@ export async function lodgeBas(
     throw error;
   }
   return res.json() as Promise<{
-    basCycle: { id: string; status: string; lodgedAt: string };
+    basCycle: { id: string; status: string; lodgedAt: string | null };
+    decision?: {
+      id: string;
+      approvalStatus: string;
+      decidedAt: string;
+      auditLogId: string | null;
+    };
+    fallbackTask?: {
+      id: string;
+      status: string;
+      createdAt: string;
+      trigger: string;
+    };
+    error?: { message: string };
   }>;
 }
 

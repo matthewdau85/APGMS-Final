@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
   Counter,
+  Gauge,
   Histogram,
   collectDefaultMetrics,
   register as promRegister,
@@ -21,6 +22,23 @@ const httpRequestDuration = new Histogram({
   help: 'HTTP request duration histogram',
   labelNames: ['method', 'route', 'status'] as const,
   buckets: [0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10],
+});
+
+const securityEventTotal = new Counter({
+  name: 'apgms_security_events_total',
+  help: 'Security event totals by event and outcome',
+  labelNames: ['event', 'outcome'] as const,
+});
+
+const integrationEventsTotal = new Counter({
+  name: 'apgms_integration_events_total',
+  help: 'External integration call outcomes',
+  labelNames: ['integration', 'outcome'] as const,
+});
+
+const basFallbackQueueDepth = new Gauge({
+  name: 'apgms_bas_fallback_queue_depth',
+  help: 'Queued BAS fallback tasks awaiting manual handling',
 });
 
 // ---- DB metrics (use from your Prisma middleware) ----
@@ -49,6 +67,9 @@ const jobDuration = new Histogram({
 export const metrics = {
   httpRequestTotal,
   httpRequestDuration,
+  securityEventTotal,
+  integrationEventsTotal,
+  basFallbackQueueDepth,
   dbQueryDuration,
   dbQueryTotal,
   jobDuration,

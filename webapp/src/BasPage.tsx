@@ -6,6 +6,7 @@ import {
   fetchPaymentPlanRequest,
   createPaymentPlanRequest,
   initiateMfa,
+  type HighRiskDecisionPayload,
 } from "./api";
 import { getToken, getSessionUser } from "./auth";
 
@@ -94,12 +95,64 @@ export default function BasPage() {
     setSuccess(null);
     setError(null);
 
+    const reviewerId = window.prompt(
+      "Enter reviewer ID/email for BAS approval (required):",
+      sessionUser?.email ?? ""
+    );
+    if (!reviewerId || !reviewerId.trim()) {
+      setError("Reviewer approval is required before lodging BAS.");
+      setSubmitting(false);
+      return;
+    }
+
+    const reviewerEmail = window.prompt(
+      "Reviewer contact email (optional)",
+      reviewerId.includes("@") ? reviewerId : ""
+    );
+    const override = window.confirm("Override automated blockers and proceed?");
+    let overrideNote: string | undefined;
+    if (override) {
+      const overrideInput = window.prompt(
+        "Document the override rationale (required)",
+        "Approved after treasury confirmed cash transfer"
+      );
+      if (!overrideInput || !overrideInput.trim()) {
+        setError("Override rationale is required when bypassing controls.");
+        setSubmitting(false);
+        return;
+      }
+      overrideNote = overrideInput.trim();
+    }
+
+    const deferRemittance = window.confirm(
+      "Defer remittance to the ATO (manual fallback)?"
+    );
+    let deferredRemittanceUntil: string | undefined;
+    if (deferRemittance) {
+      const deferDate = window.prompt(
+        "Enter deferred remittance date (YYYY-MM-DD)",
+        new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+      );
+      if (deferDate && deferDate.trim()) {
+        deferredRemittanceUntil = `${deferDate.trim()}T00:00:00.000Z`;
+      }
+    }
+
+    const decisionPayload: HighRiskDecisionPayload = {
+      reviewerId: reviewerId.trim(),
+      reviewerEmail: reviewerEmail?.trim() ? reviewerEmail.trim() : undefined,
+      approvalStatus: override ? "OVERRIDDEN" : deferRemittance ? "DEFERRED" : "APPROVED",
+      overrideNote,
+      decidedAt: new Date().toISOString(),
+      deferredRemittanceUntil,
+    };
+
     let lodged = false;
     let requiresMfa = false;
     let lodgmentResult: Awaited<ReturnType<typeof lodgeBas>> | null = null;
 
     try {
-      const result = await lodgeBas(token);
+      const result = await lodgeBas(token, { decision: decisionPayload });
       lodgmentResult = result;
       lodged = true;
     } catch (err) {
@@ -124,7 +177,10 @@ export default function BasPage() {
         if (!supplied || supplied.trim().length === 0) {
           setError("MFA verification cancelled.");
         } else {
-          const result = await lodgeBas(token, { mfaCode: supplied.trim() });
+          const result = await lodgeBas(token, {
+            decision: decisionPayload,
+            mfaCode: supplied.trim(),
+          });
           lodgmentResult = result;
           lodged = true;
         }
@@ -135,7 +191,16 @@ export default function BasPage() {
     }
 
     if (lodged && lodgmentResult) {
-      setSuccess(`BAS lodged at ${new Date(lodgmentResult.basCycle.lodgedAt).toLocaleString()}`);
+      if (lodgmentResult.fallbackTask) {
+        setSuccess(
+          "Core integration unavailable. Lodgment queued for manual action and audit trail captured."
+        );
+      } else {
+        const timestamp = lodgmentResult.basCycle.lodgedAt
+          ? new Date(lodgmentResult.basCycle.lodgedAt).toLocaleString()
+          : new Date().toLocaleString();
+        setSuccess(`BAS lodged at ${timestamp}.`);
+      }
       await loadPreview();
       if (lodgmentResult.basCycle.id) {
         await loadPaymentPlan(lodgmentResult.basCycle.id);
@@ -222,6 +287,15 @@ export default function BasPage() {
                 <div style={metaTextStyle}>
                   The ATO payment is automatically triggered if all obligations are secured.
                 </div>
+                {preview.lastDecision && (
+                  <div style={decisionMetaStyle}>
+                    Last reviewer {preview.lastDecision.reviewerId} at
+                    {" "}
+                    {new Date(preview.lastDecision.decidedAt).toLocaleString()} ·
+                    {" "}
+                    {preview.lastDecision.approvalStatus}
+                  </div>
+                )}
               </div>
             </div>
             {preview.overallStatus === "READY" && (
@@ -495,6 +569,12 @@ const overviewTitleStyle: React.CSSProperties = {
 const metaTextStyle: React.CSSProperties = {
   fontSize: "13px",
   color: "#6b7280",
+};
+
+const decisionMetaStyle: React.CSSProperties = {
+  fontSize: "12px",
+  color: "#1f2937",
+  marginTop: "6px",
 };
 
 const statusBadgeStyle = (status: string): React.CSSProperties => ({
