@@ -86,6 +86,10 @@ export async function initInferenceWorker(app: FastifyInstance): Promise<void> {
       recordInferenceError("nats", app.inferenceEngine.version, "execution_error");
       observeInference("nats", app.inferenceEngine.version, "error", duration);
       app.log.error({ err: safeLogError(error) }, "inference_nats_failed");
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error("inference_nats_failed");
     }
   });
 
