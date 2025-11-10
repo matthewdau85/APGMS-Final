@@ -17,6 +17,11 @@ export default function LoginPage() {
     try {
       const session = await login(email, password);
       saveSession(session);
+      if (session.deviceRisk && session.deviceRisk.level !== "low") {
+        window.alert(
+          `Login risk: ${session.deviceRisk.level.toUpperCase()}\nSignals: ${session.deviceRisk.signals.join(", ")}`,
+        );
+      }
       nav("/dashboard");
     } catch (_) {
       setError("Login failed");

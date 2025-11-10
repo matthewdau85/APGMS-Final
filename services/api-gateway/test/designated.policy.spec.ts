@@ -6,6 +6,8 @@ import { Prisma } from "@prisma/client";
 import {
   applyDesignatedAccountTransfer,
   generateDesignatedAccountReconciliationArtifact,
+  decryptDesignatedReconciliationArtifact,
+  type DesignatedArtifactEnvelope,
 } from "../../../domain/policy/designated-accounts.js";
 import { createBankingProvider } from "../../../providers/banking/index.js";
 
@@ -325,6 +327,11 @@ test("designated account reconciliation emits evidence artefact", async () => {
     state.evidenceArtifacts[0].kind,
     "designated-reconciliation",
   );
+  const sealed = state.evidenceArtifacts[0]
+    .payload as DesignatedArtifactEnvelope;
+  const decrypted = decryptDesignatedReconciliationArtifact(sealed);
+  assert.equal(decrypted.totals.paygw, 1500);
+  assert.equal(decrypted.totals.gst, 800);
   assert.equal(
     state.auditLogs.some(
       (entry) => entry.action === "designatedAccount.reconciliation",

@@ -53,6 +53,7 @@ import {
   createAuthenticationOptions,
   verifyPasskeyAuthentication,
 } from "../security/webauthn.js";
+import { scoreDeviceRisk } from "../security/device-risk.js";
 
 type PendingTotpSetup = {
   secret: string;
@@ -100,9 +101,14 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       mfaEnabled: authUser.mfaEnabled,
     });
 
+    const deviceRisk = scoreDeviceRisk(user.id, request, {
+      mfaEnabled: Boolean(user.mfaEnabled),
+    });
+
     reply.send({
       token,
       user: buildClientUser(authUser),
+      deviceRisk,
     });
   });
 

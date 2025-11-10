@@ -32,8 +32,12 @@
     "smoke:regulator": "node scripts/regulator-smoke.mjs",
     "lint:markdown": "pnpm exec markdownlint **/*.md",
     "compliance:evidence": "node scripts/collect-evidence.mjs",
-    "security:rotate-keys": "node scripts/rotate-pii-keys.mjs",
-        "backup:evidence-pack": "tsx scripts/export-evidence-pack.ts"
+        "security:rotate-keys": "node scripts/rotate-pii-keys.mjs",
+        "backup:evidence-pack": "tsx scripts/export-evidence-pack.ts",
+        "ml:integrity": "node scripts/ml-governance.mjs --check integrity",
+        "ml:bias-audit": "node scripts/ml-governance.mjs --check bias",
+        "ml:drift": "node scripts/ml-governance.mjs --check drift",
+        "ml:security-scan": "node scripts/ml-governance.mjs --check security"
     },
     "devDependencies": {
         "@axe-core/playwright": "^4.9.2",

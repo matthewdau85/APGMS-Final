@@ -12,6 +12,7 @@ export type SessionUser = {
 export type Session = {
   token: string;
   user: SessionUser;
+  deviceRisk?: import("./api").DeviceRisk;
 };
 
 function readSession(): Session | null {

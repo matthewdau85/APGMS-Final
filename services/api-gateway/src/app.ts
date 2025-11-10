@@ -11,6 +11,10 @@ import rateLimit from "./plugins/rate-limit.js";
 import { authGuard, createAuthGuard, REGULATOR_AUDIENCE } from "./auth.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerRegulatorAuthRoutes } from "./routes/regulator-auth.js";
+import { registerAdminDataRoutes } from "./routes/admin.data.js";
+import { registerBankLinesRoutes } from "./routes/bank-lines.js";
+import { registerOrgRoutes } from "./routes/org.js";
+import { registerBasRoutes } from "./routes/bas.js";
 import { prisma } from "./db.js";
 import { parseWithSchema } from "./lib/validation.js";
 import { verifyChallenge, requireRecentVerification, type VerifyChallengeResult } from "./security/mfa.js";
@@ -205,7 +209,10 @@ export async function buildServer(): Promise<FastifyInstance> {
   );
 
   // register the rest of your routes (unchanged), e.g.:
-  // await registerAdminDataRoutes(app);
+  await registerAdminDataRoutes(app);
+  await registerBankLinesRoutes(app);
+  await registerOrgRoutes(app);
+  await registerBasRoutes(app);
   // await registerTaxRoutes(app);
   // ... plus all your existing routes already in this file.
 

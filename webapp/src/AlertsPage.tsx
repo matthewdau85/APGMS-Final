@@ -65,7 +65,7 @@ export default function AlertsPage() {
     } catch (err) {
       if (
         err instanceof Error &&
-        err.message === "mfa_required" &&
+        ["mfa_required", "mfa_step_up_required"].includes(err.message) &&
         sessionUser?.mfaEnabled &&
         alert.severity.toUpperCase() === "HIGH"
       ) {

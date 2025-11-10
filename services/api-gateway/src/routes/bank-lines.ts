@@ -2,6 +2,7 @@
 import { z } from "zod";
 import { prisma } from "../db.js";
 import { assertOrgAccess, redactBankLine } from "../utils/orgScope.js";
+import { enforceAdminStepUp } from "../security/step-up.js";
 
 // Accept the fields Prisma requires for a BankLine create
 const createBankLineSchema = z.object({
@@ -22,6 +23,9 @@ const createBankLineSchema = z.object({
 export const registerBankLinesRoutes: FastifyPluginAsync = async (app) => {
   // Create (idempotent on (orgId, idempotencyKey))
   app.post("/bank-lines", async (req, reply) => {
+    if (!enforceAdminStepUp(req, reply, "bank_lines.write")) {
+      return;
+    }
     // Authorize org access for the caller's org
     const user = (req as any).user!;
     assertOrgAccess(req, reply, user.orgId);
@@ -64,6 +68,9 @@ export const registerBankLinesRoutes: FastifyPluginAsync = async (app) => {
 
   // List for current org
   app.get("/bank-lines", async (req, reply) => {
+    if (!enforceAdminStepUp(req, reply, "bank_lines.read")) {
+      return;
+    }
     const user = (req as any).user!;
     assertOrgAccess(req, reply, user.orgId);
 

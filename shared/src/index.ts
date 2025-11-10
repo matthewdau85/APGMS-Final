@@ -18,6 +18,7 @@ export * from "./tax/index.js";
 
 export * from "./tax/tables.js";
 export * from "./security/secret-manager.js";
+export * from "./security/kms-manager.js";
 export * from "./messaging/event-bus.js";
 export * from "./messaging/in-memory-bus.js";
 export * from "./messaging/nats-bus.js";

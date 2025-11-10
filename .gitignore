@@ -14,6 +14,7 @@ node_modules/
 dist/
 build/
 *.map
+artifacts/model-*.json
 
 # OS/IDE
 .DS_Store

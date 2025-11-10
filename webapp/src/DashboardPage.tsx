@@ -49,7 +49,13 @@ export default function DashboardPage() {
         setBankLines(bankLinesResponse.lines);
       } catch (err) {
         console.error(err);
-        setError("Unable to load dashboard data");
+        if (err instanceof Error && err.message === "mfa_step_up_required") {
+          setError(
+            "MFA verification required. Complete a step-up from the Security page to unlock dashboard data.",
+          );
+        } else {
+          setError("Unable to load dashboard data");
+        }
         setLoading(false);
         return;
       }
@@ -60,7 +66,16 @@ export default function DashboardPage() {
         setDesignatedError(null);
       } catch (designatedErr) {
         console.error(designatedErr);
-        setDesignatedError("Unable to load designated account balances");
+        if (
+          designatedErr instanceof Error &&
+          designatedErr.message === "mfa_step_up_required"
+        ) {
+          setDesignatedError(
+            "MFA verification required before viewing designated accounts. Verify in Security and retry.",
+          );
+        } else {
+          setDesignatedError("Unable to load designated account balances");
+        }
       }
       setLoading(false);
     })();

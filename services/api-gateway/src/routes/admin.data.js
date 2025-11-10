@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { adminDataDeleteRequestSchema, subjectDataExportRequestSchema, subjectDataExportResponseSchema, } from "../schemas/admin.data";
 import { hashPassword } from "@apgms/shared";
 import { authenticateRequest, } from "../lib/auth";
+import { enforceAdminStepUp } from "../security/step-up.js";
 const PASSWORD_PLACEHOLDER = "__deleted__";
 async function buildDefaultPrisma() {
     const module = (await import("../../../../shared/src/db.js"));
@@ -35,6 +36,9 @@ export async function registerAdminDataRoutes(app, deps = {}) {
     app.post("/admin/data/delete", async (req, reply) => {
         const principal = await authenticate(req, reply, ["admin"]);
         if (!principal) {
+            return;
+        }
+        if (!enforceAdminStepUp(req, reply, "admin.data.delete")) {
             return;
         }
         const parsed = adminDataDeleteRequestSchema.safeParse(req.body ?? {});
@@ -134,6 +138,9 @@ const adminDataRoutes = async (app) => {
     app.post("/admin/data/export", async (request, reply) => {
         const principal = await authenticate(request, reply, ["admin"]);
         if (!principal) {
+            return;
+        }
+        if (!enforceAdminStepUp(request, reply, "admin.data.export")) {
             return;
         }
         const payloadParse = subjectDataExportRequestSchema.safeParse(request.body ?? {});

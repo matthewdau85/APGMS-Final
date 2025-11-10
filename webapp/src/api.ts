@@ -11,6 +11,12 @@ function authHeaders(token?: string): Record<string, string> {
   return headers;
 }
 
+export type DeviceRisk = {
+  level: "low" | "medium" | "high";
+  fingerprint: string;
+  signals: string[];
+};
+
 export type ApiSession = {
   token: string;
   user: {
@@ -19,6 +25,7 @@ export type ApiSession = {
     role: string;
     mfaEnabled: boolean;
   };
+  deviceRisk: DeviceRisk;
 };
 
 export async function login(email: string, password: string) {
@@ -87,7 +94,13 @@ export async function fetchBankLines(token: string) {
   const res = await fetch(`${API_BASE}/bank-lines`, {
     headers: authHeaders(token),
   });
-  if (!res.ok) throw new Error("unauthorized");
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => null);
+    const errorCode =
+      (errorBody as { error?: { code?: string } } | null)?.error?.code ??
+      "failed_bank_lines";
+    throw new Error(errorCode);
+  }
   return res.json() as Promise<{
     lines: Array<{
       id: string;
@@ -108,7 +121,15 @@ export async function createBankLine(
     headers: authHeaders(token),
     body: JSON.stringify(line),
   });
-  if (!res.ok) throw new Error("create failed");
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => null);
+    const errorCode =
+      (errorBody as { error?: { code?: string } } | null)?.error?.code ??
+      "create_failed";
+    const error = new Error(errorCode);
+    (error as any).payload = errorBody;
+    throw error;
+  }
   return res.json();
 }
 
@@ -116,7 +137,13 @@ export async function fetchCurrentObligations(token: string) {
   const res = await fetch(`${API_BASE}/org/obligations/current`, {
     headers: authHeaders(token),
   });
-  if (!res.ok) throw new Error("failed_obligations");
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => null);
+    const errorCode =
+      (errorBody as { error?: { code?: string } } | null)?.error?.code ??
+      "failed_obligations";
+    throw new Error(errorCode);
+  }
   return res.json() as Promise<{
     basCycleId: string | null;
     basPeriodStart: string;
@@ -227,7 +254,13 @@ export async function fetchBasPreview(token: string) {
   const res = await fetch(`${API_BASE}/bas/preview`, {
     headers: authHeaders(token),
   });
-  if (!res.ok) throw new Error("failed_bas_preview");
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => null);
+    const errorCode =
+      (errorBody as { error?: { code?: string } } | null)?.error?.code ??
+      "failed_bas_preview";
+    throw new Error(errorCode);
+  }
   return res.json() as Promise<{
     basCycleId: string | null;
     periodStart: string | null;
@@ -323,7 +356,13 @@ export async function fetchDesignatedAccounts(token: string) {
   const res = await fetch(`${API_BASE}/org/designated-accounts`, {
     headers: authHeaders(token),
   });
-  if (!res.ok) throw new Error("failed_designated_accounts");
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => null);
+    const errorCode =
+      (errorBody as { error?: { code?: string } } | null)?.error?.code ??
+      "failed_designated_accounts";
+    throw new Error(errorCode);
+  }
   return res.json() as Promise<{
     totals: {
       paygw: number;

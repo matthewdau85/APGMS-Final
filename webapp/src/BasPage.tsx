@@ -46,7 +46,13 @@ export default function BasPage() {
       setDesignated(designatedData);
     } catch (err) {
       console.error(err);
-      setError("Unable to load BAS preview");
+      if (err instanceof Error && err.message === "mfa_step_up_required") {
+        setError(
+          "MFA verification required before accessing BAS workflows. Complete a step-up challenge in Security.",
+        );
+      } else {
+        setError("Unable to load BAS preview");
+      }
     } finally {
       setLoading(false);
     }
@@ -103,7 +109,11 @@ export default function BasPage() {
       lodgmentResult = result;
       lodged = true;
     } catch (err) {
-      if (err instanceof Error && err.message === "mfa_required" && sessionUser?.mfaEnabled) {
+      if (
+        err instanceof Error &&
+        ["mfa_required", "mfa_step_up_required"].includes(err.message) &&
+        sessionUser?.mfaEnabled
+      ) {
         requiresMfa = true;
       } else {
         console.error(err);

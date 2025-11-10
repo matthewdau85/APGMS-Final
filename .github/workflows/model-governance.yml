@@ -1,0 +1,50 @@
+name: Model Governance
+
+on:
+  pull_request:
+    paths:
+      - 'artifacts/ml/**'
+      - 'scripts/ml-governance.mjs'
+      - '.github/workflows/model-governance.yml'
+      - 'runbooks/ml-operations.md'
+  push:
+    branches: [main]
+    paths:
+      - 'artifacts/ml/**'
+      - 'scripts/ml-governance.mjs'
+      - '.github/workflows/model-governance.yml'
+      - 'runbooks/ml-operations.md'
+  workflow_dispatch:
+
+jobs:
+  governance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Model integrity check
+        run: node scripts/ml-governance.mjs --check integrity
+      - name: Bias audit gate
+        run: node scripts/ml-governance.mjs --check bias
+      - name: Drift detection gate
+        run: node scripts/ml-governance.mjs --check drift
+      - name: Model security scan gate
+        run: node scripts/ml-governance.mjs --check security
+      - name: Upload governance artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ml-governance-reports
+          path: |
+            artifacts/model-integrity.json
+            artifacts/bias-report.json
+            artifacts/drift-scan.json
+            artifacts/model-security.json

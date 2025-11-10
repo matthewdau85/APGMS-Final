@@ -407,9 +407,29 @@ model BasCycle {
   overallStatus String
   lodgedAt      DateTime?
   paymentPlanRequests PaymentPlanRequest[]
+  paymentAttempts    BasPaymentAttempt[]
 
   @@index([orgId, periodStart, periodEnd])
   @@index([orgId, lodgedAt])
+}
+
+model BasPaymentAttempt {
+  id             String   @id @default(cuid())
+  org            Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId          String
+  basCycle       BasCycle @relation(fields: [basCycleId], references: [id], onDelete: Cascade)
+  basCycleId     String
+  status         String   @default("PENDING")
+  attemptCount   Int      @default(0)
+  failureReason  String?
+  nextRunAt      DateTime?
+  offlineFallback Boolean @default(false)
+  offlineReference String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([orgId, status])
+  @@index([status, nextRunAt])
 }
 
 model DesignatedAccount {

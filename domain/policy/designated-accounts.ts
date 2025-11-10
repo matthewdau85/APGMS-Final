@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import { Prisma, type PrismaClient } from "@prisma/client";
 
-import { conflict, notFound } from "@apgms/shared";
+import { conflict, notFound, buildDefaultKmsManager, type EncryptionRecord } from "@apgms/shared";
 import {
   evaluateDesignatedAccountPolicy,
   normalizeTransferSource,
@@ -20,6 +20,13 @@ type PolicyContext = {
   prisma: PrismaClient;
   auditLogger?: AuditLogger;
 };
+
+const kms = buildDefaultKmsManager();
+
+export type DesignatedArtifactEnvelope = EncryptionRecord<{
+  orgId: string;
+  artifactId: string;
+}>;
 
 export type ApplyDesignatedTransferInput = {
   orgId: string;
@@ -190,6 +197,7 @@ export async function generateDesignatedAccountReconciliationArtifact(
   summary: DesignatedReconciliationSummary;
   artifactId: string;
   sha256: string;
+  payload: DesignatedArtifactEnvelope;
 }> {
   const now = new Date();
   const cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -251,16 +259,25 @@ export async function generateDesignatedAccountReconciliationArtifact(
         kind: "designated-reconciliation",
         wormUri: "internal:designated/pending",
         sha256,
-        payload: summary,
+        payload: null,
       },
     });
 
-    return tx.evidenceArtifact.update({
+    const sealedPayload = kms.encrypt({
+      alias: "designatedArtifacts",
+      context: { orgId, artifactId: created.id },
+      payload: summary,
+    });
+
+    const updated = await tx.evidenceArtifact.update({
       where: { id: created.id },
       data: {
         wormUri: `internal:designated/${created.id}`,
+        payload: sealedPayload,
       },
     });
+
+    return { record: updated, sealedPayload };
   });
 
   if (context.auditLogger) {
@@ -269,7 +286,7 @@ export async function generateDesignatedAccountReconciliationArtifact(
       actorId,
       action: "designatedAccount.reconciliation",
       metadata: {
-        artifactId: artifact.id,
+        artifactId: artifact.record.id,
         sha256,
         totals,
       },
@@ -278,7 +295,17 @@ export async function generateDesignatedAccountReconciliationArtifact(
 
   return {
     summary,
-    artifactId: artifact.id,
+    artifactId: artifact.record.id,
     sha256,
+    payload: artifact.sealedPayload,
   };
+}
+
+export function decryptDesignatedReconciliationArtifact(
+  envelope: DesignatedArtifactEnvelope,
+): DesignatedReconciliationSummary {
+  return kms.decrypt<DesignatedReconciliationSummary>(
+    "designatedArtifacts",
+    envelope,
+  );
 }

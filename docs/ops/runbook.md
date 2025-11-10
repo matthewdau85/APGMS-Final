@@ -36,6 +36,29 @@
 3. For repeated auth failures, rotate credentials and review audit logs (AuditLog table).
 4. Escalate via on-call Slack/PagerDuty channel.
 
+## Disaster Recovery & BAS Payment Resilience
+
+### BAS payment retry {#bas-payment-retry}
+- The worker `processBasPaymentRetryQueue` polls `BasPaymentAttempt` for
+  `PENDING`/`RETRYING` rows and applies exponential backoff (2^n minutes).
+- Alert: `bas_payment_retry_backlog` > 0 for 15m triggers the Grafana warning.
+- Run `pnpm --filter @apgms/worker exec node dist/index.js bas-retry` to drain
+  the queue manually after fixing upstream banking incidents.
+- Inspect `BasPaymentAttempt.failureReason` for root cause and file an incident
+  if retries exceed 5 attempts.
+
+### Offline submission fallback {#offline-submission-fallback}
+- API endpoint `POST /bas/offline-submissions` records offline remittances with
+  `offlineFallback=true`. These appear in Grafana via
+  `bas_offline_submission_backlog`.
+- When the bank connector is unavailable, instruct finance to submit via the
+  ATO portal and capture the reference number; create the fallback entry using
+  the reference.
+- Once the queue drains and funds reconcile, mark the attempt as succeeded via
+  `UPDATE BasPaymentAttempt SET status='SUCCEEDED', failureReason=NULL WHERE id=<attempt_id>`.
+- Document the fallback in the incident timeline and attach the reference
+  number in the evidence pack.
+
 ## Post-Incident
 - Record incident in status/README.md with timeline and resolution.
 - File follow-up tasks to improve automation or documentation.

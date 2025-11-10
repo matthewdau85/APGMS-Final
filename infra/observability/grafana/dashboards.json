@@ -1,1 +1,42 @@
-{}
+{
+  "basResilience": {
+    "panels": [
+      {
+        "title": "BAS Payment Retry Backlog",
+        "query": "bas_payment_retry_backlog",
+        "description": "Queued BAS payment attempts awaiting retry",
+        "thresholds": {
+          "warning": 1,
+          "critical": 5
+        }
+      },
+      {
+        "title": "Offline BAS Submissions",
+        "query": "bas_offline_submission_backlog",
+        "description": "Offline submissions waiting for manual processing",
+        "thresholds": {
+          "warning": 1,
+          "critical": 3
+        }
+      }
+    ],
+    "alerts": [
+      {
+        "name": "bas-payment-retry-saturation",
+        "expr": "bas_payment_retry_backlog > 0",
+        "for": "15m",
+        "severity": "warning",
+        "summary": "BAS payment retries are waiting longer than 15m",
+        "runbook": "docs/ops/runbook.md#bas-payment-retry"
+      },
+      {
+        "name": "bas-offline-fallback-backlog",
+        "expr": "bas_offline_submission_backlog > 0",
+        "for": "10m",
+        "severity": "critical",
+        "summary": "Offline BAS submissions require manual intervention",
+        "runbook": "docs/ops/runbook.md#offline-submission-fallback"
+      }
+    ]
+  }
+}

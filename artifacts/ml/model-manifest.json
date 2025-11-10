@@ -1,0 +1,22 @@
+{
+  "models": [
+    {
+      "modelId": "anomaly-router",
+      "version": "2025.10.01",
+      "artifactSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "kmsKeyId": "kms/model/anomaly-router",
+      "biasMetrics": {
+        "demographicParity": 0.07,
+        "equalOpportunity": 0.05
+      },
+      "driftMetrics": {
+        "psi": 0.08,
+        "lastEvaluatedAt": "2025-10-01T09:00:00Z"
+      },
+      "security": {
+        "scanTimestamp": "2025-10-01T08:30:00Z",
+        "dependencyFindings": []
+      }
+    }
+  ]
+}
