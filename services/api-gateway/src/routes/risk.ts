@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { prisma } from "../db.js";
 import { summarizeMitigations } from "../clients/ml-service.js";
+import { authGuard } from "../auth.js";
 
 const reconciliationSchema = z.object({
   cashOnHand: z.number().nonnegative(),
@@ -12,7 +13,7 @@ const reconciliationSchema = z.object({
 });
 
 export const registerRiskRoutes: FastifyPluginAsync = async (app) => {
-  app.get("/risk/dashboard", async (_req, reply) => {
+  app.get("/risk/dashboard", { preHandler: authGuard }, async (_req, reply) => {
     const aggregate = await prisma.bankLine.aggregate({ _sum: { amount: true } });
     const totalExposure = Number(aggregate._sum.amount ?? 0) / 1_000_000;
 
@@ -37,7 +38,7 @@ export const registerRiskRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
-  app.post("/risk/ledger-reconciliation", async (req, reply) => {
+  app.post("/risk/ledger-reconciliation", { preHandler: authGuard }, async (req, reply) => {
     const parsed = reconciliationSchema.safeParse(req.body);
     if (!parsed.success) {
       reply.code(400).send({ error: "invalid_body", details: parsed.error.flatten() });
