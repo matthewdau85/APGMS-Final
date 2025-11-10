@@ -20,6 +20,7 @@ import {
   requireRecentVerification,
   verifyChallenge,
 } from "../security/mfa.js";
+import type { Role } from "../lib/auth.js";
 
 type BasRouteDependencies = {
   prisma: typeof prisma;
@@ -42,6 +43,8 @@ const defaultDependencies: BasRouteDependencies = {
 };
 
 const EPSILON = 0.005;
+
+const ALLOWED_ROLES_FOR_BAS_ACTIONS: readonly Role[] = ["admin", "finance"];
 
 function roundTwo(value: number): number {
   return Math.round(value * 100) / 100;
@@ -163,6 +166,13 @@ export async function registerBasRoutes(
         throw unauthorized("unauthorized", "Missing user context");
       }
 
+      if (!ALLOWED_ROLES_FOR_BAS_ACTIONS.includes(user.role as Role)) {
+        throw forbidden(
+          "forbidden_role",
+          "You do not have permission to access BAS data",
+        );
+      }
+
       const { preview } = await loadBasState(user.orgId);
       reply.send(preview);
     },
@@ -175,6 +185,13 @@ export async function registerBasRoutes(
       const user = (request as any).user;
       if (!user) {
         throw unauthorized("unauthorized", "Missing user context");
+      }
+
+      if (!ALLOWED_ROLES_FOR_BAS_ACTIONS.includes(user.role as Role)) {
+        throw forbidden(
+          "forbidden_role",
+          "You do not have permission to lodge BAS",
+        );
       }
 
       const body = parseWithSchema(BasLodgeBodySchema, request.body);

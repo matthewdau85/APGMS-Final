@@ -9,6 +9,12 @@ import { registerDesignatedAccountRoutes } from "../src/routes/designated-accoun
 const USER_ID = "user-99";
 const ORG_ID = "org-88";
 const AUTH_TOKEN = signToken({ id: USER_ID, orgId: ORG_ID, role: "admin", mfaEnabled: true });
+const ANALYST_TOKEN = signToken({
+  id: "user-analyst",
+  orgId: ORG_ID,
+  role: "analyst",
+  mfaEnabled: true,
+});
 
 describe("Designated account routes", () => {
   let app: ReturnType<typeof Fastify> | null = null;
@@ -18,6 +24,31 @@ describe("Designated account routes", () => {
       await app.close();
       app = null;
     }
+  });
+
+  it("rejects credits from users without treasury roles", async () => {
+    app = Fastify();
+    await registerDesignatedAccountRoutes(app, {
+      prisma: {} as any,
+      applyTransfer: async () => {
+        throw new Error("should not be called");
+      },
+      recordAuditLog: async () => undefined,
+      requireRecentVerification: () => true,
+      verifyChallenge: async () => ({ success: true, expiresAt: new Date() }),
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/org/designated-accounts/acct-unauthorized/credit",
+      headers: { authorization: `Bearer ${ANALYST_TOKEN}` },
+      payload: { amount: 250, source: "MANUAL_TOP_UP" },
+    });
+
+    assert.equal(response.statusCode, 403);
+    const body = response.json() as { error?: { code?: string } };
+    assert.equal(body.error?.code, "forbidden_role");
   });
 
   it("requires MFA before crediting designated accounts", async () => {

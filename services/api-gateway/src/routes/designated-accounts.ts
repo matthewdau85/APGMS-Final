@@ -18,6 +18,7 @@ import {
   requireRecentVerification,
   verifyChallenge,
 } from "../security/mfa.js";
+import type { Role } from "../lib/auth.js";
 
 type DesignatedAccountRouteDependencies = {
   prisma: typeof prisma;
@@ -56,6 +57,11 @@ const CreditParamsSchema = z
   })
   .strict();
 
+const ALLOWED_ROLES_FOR_DESIGNATED_ACCOUNT_CREDIT: readonly Role[] = [
+  "admin",
+  "finance",
+];
+
 export async function registerDesignatedAccountRoutes(
   app: FastifyInstance,
   overrides: Partial<DesignatedAccountRouteDependencies> = {},
@@ -91,6 +97,17 @@ export async function registerDesignatedAccountRoutes(
       const user = (request as any).user;
       if (!user) {
         throw unauthorized("unauthorized", "Missing user context");
+      }
+
+      if (
+        !ALLOWED_ROLES_FOR_DESIGNATED_ACCOUNT_CREDIT.includes(
+          user.role as Role,
+        )
+      ) {
+        throw forbidden(
+          "forbidden_role",
+          "You do not have permission to credit designated accounts",
+        );
       }
 
       const params = parseWithSchema(CreditParamsSchema, request.params);

@@ -10,6 +10,12 @@ import { registerBasRoutes } from "../src/routes/bas";
 const USER_ID = "user-1";
 const ORG_ID = "org-1";
 const AUTH_TOKEN = signToken({ id: USER_ID, orgId: ORG_ID, role: "admin", mfaEnabled: true });
+const ANALYST_TOKEN = signToken({
+  id: "user-analyst",
+  orgId: ORG_ID,
+  role: "analyst",
+  mfaEnabled: true,
+});
 
 describe("BAS routes", () => {
   let app: ReturnType<typeof Fastify> | null = null;
@@ -19,6 +25,36 @@ describe("BAS routes", () => {
       await app.close();
       app = null;
     }
+  });
+
+  it("blocks BAS preview for roles without finance permissions", async () => {
+    const prismaStub = {
+      basCycle: { findFirst: async () => null, update: async () => null },
+    } as any;
+
+    app = Fastify();
+    await registerBasRoutes(app, {
+      prisma: prismaStub,
+      getDesignatedSummary: async () => ({
+        generatedAt: new Date().toISOString(),
+        totals: { paygw: 0, gst: 0 },
+        movementsLast24h: [],
+      }),
+      recordAuditLog: async () => undefined,
+      requireRecentVerification: () => true,
+      verifyChallenge: async () => ({ success: true, expiresAt: new Date() }),
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/bas/preview",
+      headers: { authorization: `Bearer ${ANALYST_TOKEN}` },
+    });
+
+    assert.equal(response.statusCode, 403);
+    const body = response.json() as { error?: { code?: string } };
+    assert.equal(body.error?.code, "forbidden_role");
   });
 
   it("computes preview using designated account totals", async () => {
@@ -121,6 +157,55 @@ describe("BAS routes", () => {
     assert.equal(response.statusCode, 403);
     const body = response.json() as { error?: { code?: string } };
     assert.equal(body.error?.code, "mfa_required");
+  });
+
+  it("blocks BAS lodgment for roles without finance permissions", async () => {
+    const cycle = {
+      id: "cycle-role-locked",
+      orgId: ORG_ID,
+      periodStart: new Date("2024-04-01T00:00:00Z"),
+      periodEnd: new Date("2024-06-30T23:59:59Z"),
+      paygwRequired: new Prisma.Decimal(1000),
+      gstRequired: new Prisma.Decimal(1000),
+      paygwSecured: new Prisma.Decimal(0),
+      gstSecured: new Prisma.Decimal(0),
+      overallStatus: "BLOCKED",
+      lodgedAt: null,
+    } as const;
+
+    const prismaStub = {
+      basCycle: {
+        findFirst: async () => cycle,
+        update: async () => {
+          throw new Error("should not update when forbidden");
+        },
+      },
+    } as any;
+
+    app = Fastify();
+    await registerBasRoutes(app, {
+      prisma: prismaStub,
+      getDesignatedSummary: async () => ({
+        generatedAt: new Date().toISOString(),
+        totals: { paygw: 1000, gst: 1000 },
+        movementsLast24h: [],
+      }),
+      recordAuditLog: async () => undefined,
+      requireRecentVerification: () => true,
+      verifyChallenge: async () => ({ success: true, expiresAt: new Date() }),
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/bas/lodge",
+      headers: { authorization: `Bearer ${ANALYST_TOKEN}` },
+      payload: { mfaCode: "999999" },
+    });
+
+    assert.equal(response.statusCode, 403);
+    const body = response.json() as { error?: { code?: string } };
+    assert.equal(body.error?.code, "forbidden_role");
   });
 
   it("lodges BAS when obligations are funded and MFA succeeds", async () => {
