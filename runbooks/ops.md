@@ -9,6 +9,24 @@
   - apgms_cors_reject_total{origin="..."}
   - readiness.ok / readiness.fail / readiness.draining events.
 
+## Periodic Security Attestation Checklist
+Run this checklist during the first week of each quarter and record outputs in the governance drive.
+1. Export quarterly control evidence (monitoring dashboards, audit log digests, incident summaries).
+2. Validate forensic log integrity by sampling hashes from the WORM store and matching them to the attestation manifest.
+3. Confirm key rotation tickets have been executed for data encryption and signing keys within SLA.
+4. Review outstanding security findings and document remediation status in the attestation report template.
+
+## Key Management Cadence
+- Schedule customer data key rotations via the KMS automation job (`scripts/kms-rotate.mjs`) every 90 days.
+- Signing and infrastructure keys rotate every 180 days; coordinate with platform engineering to avoid downtime.
+- Record each rotation in the change management system, attach KMS logs, and link to the quarterly attestation.
+- If an emergency rotation occurs, update the patent evidence package with revised key custody statements.
+
+## Forensic Logging Review
+- Daily: Verify ingestion success for the `forensic` log stream in the SIEM; alert on any gaps longer than 5 minutes.
+- Weekly: Run `pnpm audit:forensics` to reconcile log hashes against the WORM repository manifest.
+- Incident: When triggered, snapshot relevant log partitions, store them in the incident bucket, and document chain-of-custody in the NDB runbook.
+
 ## Common Alerts
 - High apgms_auth_failures_total => possible credential stuffing
 - readiness.fail spike => DB connectivity issue, check Postgres

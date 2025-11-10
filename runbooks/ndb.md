@@ -10,7 +10,7 @@ This runbook guides the incident commander through the steps required when a pot
 ## 2. Contain and preserve evidence
 - Isolate impacted infrastructure while maintaining availability for critical services.
 - Capture forensic artifacts (logs, snapshots, database exports) and store them in the incident bucket.
-- Rotate credentials that may have been exposed.
+- Rotate credentials that may have been exposed and document emergency key rotations for later attestation inclusion.
 
 ## 3. Escalate internally
 - Page the executive sponsor (COO) and security lead.
@@ -50,7 +50,7 @@ Likely harm: <Risk summary>
 Containment actions: <Short list>
 Number of individuals affected: <Count/estimate>
 Points of contact: <Legal counsel + incident commander>
-Supporting documents: Upload incident timeline and preliminary impact assessment.
+Supporting documents: Upload incident timeline, forensic log manifest, and preliminary impact assessment.
 ```
 
 ### 4.3 Internal announcement (Slack)
@@ -67,3 +67,4 @@ Heads-up: we have declared an NDB incident (INC-<number>). All external communic
 - Run the full retrospective within 7 days.
 - Capture lessons learned and preventive actions in Jira.
 - Update affected runbooks, playbooks, and controls.
+- Feed key learnings, emergency key rotation records, and forensic log manifests into the next quarterly security attestation and patent evidence package refresh.
