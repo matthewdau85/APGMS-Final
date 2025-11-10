@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { runNightlyDesignatedAccountReconciliation } from "./jobs/designated-reconciliation.js";
 
 export { runNightlyDesignatedAccountReconciliation } from "./jobs/designated-reconciliation.js";
+export { startComplianceIngestor } from "../compliance-ingestor/index.js";
 
 const modulePath = fileURLToPath(import.meta.url);
 const invokedPath = process.argv[1] ? resolve(process.argv[1]) : null;

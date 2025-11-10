@@ -53,6 +53,10 @@ export interface AppConfig {
     readonly username?: string;
     readonly password?: string;
   };
+  readonly events: {
+    readonly stream: string;
+    readonly subjectPrefix: string;
+  };
 }
 
 const base64Regex = /^[A-Za-z0-9+/=]+$/;
@@ -331,6 +335,9 @@ export function loadConfig(): AppConfig {
         }
       : undefined;
 
+  const natsStream = process.env.NATS_STREAM?.trim() ?? "APGMS";
+  const natsSubjectPrefix = process.env.NATS_SUBJECT_PREFIX?.trim() ?? "apgms.dev";
+
   return {
     databaseUrl,
     shadowDatabaseUrl,
@@ -374,6 +381,10 @@ export function loadConfig(): AppConfig {
     },
     redis,
     nats,
+    events: {
+      stream: natsStream,
+      subjectPrefix: natsSubjectPrefix,
+    },
   };
 }
 

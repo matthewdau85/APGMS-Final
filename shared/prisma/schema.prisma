@@ -137,6 +137,10 @@ model Organization {
 
   accounts    Account[]
   journals    Journal[]
+  discrepancies       Discrepancy[]
+  fraudAlerts         FraudAlert[]
+  remediationActions  RemediationAction[]
+  paymentPlans        PaymentPlanAgreement[]
 }
 
 model Account {
@@ -290,6 +294,99 @@ model ReconciliationAlert {
   resolvedAt DateTime?
 
   @@index([orgId, status])
+}
+
+model Discrepancy {
+  id             String    @id @default(uuid()) @db.Uuid
+  orgId          String    @db.Uuid
+  source         String
+  category       String
+  severity       String
+  status         String    @default("open")
+  summary        String
+  detectedAt     DateTime  @default(now())
+  resolvedAt     DateTime?
+  amountCents    BigInt?   @db.BigInt
+  details        Json?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization       Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  fraudAlerts        FraudAlert[]         @relation("DiscrepancyFraudAlerts")
+  remediationActions RemediationAction[]  @relation("DiscrepancyRemediations")
+  paymentPlans       PaymentPlanAgreement[] @relation("DiscrepancyPaymentPlans")
+
+  @@index([orgId, status])
+  @@index([orgId, detectedAt])
+}
+
+model FraudAlert {
+  id             String       @id @default(uuid()) @db.Uuid
+  orgId          String       @db.Uuid
+  discrepancyId  String?
+  alertCode      String
+  status         AlertStatus  @default(OPEN)
+  severity       String
+  summary        String
+  raisedAt       DateTime     @default(now())
+  acknowledgedAt DateTime?
+  closedAt       DateTime?
+  metadata       Json?
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  discrepancy  Discrepancy?  @relation("DiscrepancyFraudAlerts", fields: [discrepancyId], references: [id], onDelete: SetNull)
+  remediationActions RemediationAction[] @relation("FraudAlertRemediations")
+  paymentPlans       PaymentPlanAgreement[] @relation("FraudAlertPaymentPlans")
+
+  @@unique([orgId, alertCode])
+  @@index([orgId, status])
+  @@index([orgId, discrepancyId])
+}
+
+model RemediationAction {
+  id            String      @id @default(uuid()) @db.Uuid
+  orgId         String      @db.Uuid
+  discrepancyId String?
+  fraudAlertId  String?
+  actionType    String
+  status        String      @default("pending")
+  assignedTo    String?
+  dueAt         DateTime?
+  completedAt   DateTime?
+  notes         String?
+  metadata      Json?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  discrepancy  Discrepancy?  @relation("DiscrepancyRemediations", fields: [discrepancyId], references: [id], onDelete: SetNull)
+  fraudAlert   FraudAlert?   @relation("FraudAlertRemediations", fields: [fraudAlertId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, status])
+  @@index([orgId, dueAt])
+}
+
+model PaymentPlanAgreement {
+  id               String     @id @default(uuid()) @db.Uuid
+  orgId            String     @db.Uuid
+  discrepancyId    String?
+  fraudAlertId     String?
+  status           String     @default("draft")
+  agreedAt         DateTime?
+  startDate        DateTime?
+  endDate          DateTime?
+  paymentFrequency String?
+  totalAmountCents BigInt?    @db.BigInt
+  terms            Json?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  discrepancy  Discrepancy?  @relation("DiscrepancyPaymentPlans", fields: [discrepancyId], references: [id], onDelete: SetNull)
+  fraudAlert   FraudAlert?   @relation("FraudAlertPaymentPlans", fields: [fraudAlertId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, status])
+  @@index([orgId, discrepancyId])
 }
 
 model EvidenceArtifact {

@@ -17,6 +17,17 @@ declare module "fastify" {
       redis?: { ping: () => Promise<string> } | null;
       nats?: { flush: () => Promise<void> } | null;
     };
+    publishDomainEvent?: (event: {
+      subject: string;
+      eventType: string;
+      orgId: string;
+      key: string;
+      payload: unknown;
+      schemaVersion?: string;
+      dedupeId?: string;
+      source?: string;
+      timestamp?: Date | string;
+    }) => Promise<void>;
   }
 
   interface FastifyRequest {
@@ -26,5 +37,16 @@ declare module "fastify" {
       role: string;
       mfaEnabled: boolean;
     };
+    publishDomainEvent?: (event: {
+      subject: string;
+      eventType: string;
+      orgId: string;
+      key: string;
+      payload: unknown;
+      schemaVersion?: string;
+      dedupeId?: string;
+      source?: string;
+      timestamp?: Date | string;
+    }) => Promise<void>;
   }
 }
