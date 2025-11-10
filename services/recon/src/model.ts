@@ -6,6 +6,10 @@ import type { ReconModel } from "./types.js";
 
 let cachedModel: ReconModel | null = null;
 let cachedFile: string | null = null;
+const candidateSorter = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: "base",
+});
 
 async function readJson<T>(filePath: string): Promise<T> {
   const raw = await fs.readFile(filePath, "utf8");
@@ -18,7 +22,7 @@ async function listCandidateFiles(): Promise<string[]> {
     return entries
       .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
       .map((entry) => join(config.modelDirectory, entry.name))
-      .sort((a, b) => basename(a).localeCompare(b));
+      .sort((a, b) => candidateSorter.compare(basename(a), basename(b)));
   } catch (error) {
     throw new Error(`Failed to read model directory '${config.modelDirectory}': ${String(error)}`);
   }
