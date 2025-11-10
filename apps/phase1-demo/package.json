@@ -10,8 +10,8 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@apgms/ledger": "workspace:*",
-    "@apgms/shared": "workspace:*",
+    "@apgms/ledger": "file:../../packages/ledger",
+    "@apgms/shared": "file:../../shared",
     "@prisma/client": "^6.17.1",
     "fastify": "^5.6.1",
     "uuid": "^10.0.0"

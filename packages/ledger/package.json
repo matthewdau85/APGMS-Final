@@ -11,7 +11,7 @@
     "test": "..\\..\\node_modules\\.bin\\jest.cmd --config ../../jest.config.js --runTestsByPath ../../packages/ledger/tests/journalWriter.test.ts --coverage"
   },
   "dependencies": {
-    "@apgms/shared": "workspace:*",
+    "@apgms/shared": "file:../../shared",
     "@prisma/client": "^6.17.1",
     "uuid": "^10.0.0"
   }

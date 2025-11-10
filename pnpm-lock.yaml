@@ -67,10 +67,10 @@ importers:
   apps/phase1-demo:
     dependencies:
       '@apgms/ledger':
-        specifier: workspace:*
+        specifier: file:../../packages/ledger
         version: link:../../packages/ledger
       '@apgms/shared':
-        specifier: workspace:*
+        specifier: file:../../shared
         version: link:../../shared
       '@prisma/client':
         specifier: ^6.17.1
@@ -89,7 +89,7 @@ importers:
   packages/ledger:
     dependencies:
       '@apgms/shared':
-        specifier: workspace:*
+        specifier: file:../../shared
         version: link:../../shared
       '@prisma/client':
         specifier: ^6.17.1
