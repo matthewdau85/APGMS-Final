@@ -5,6 +5,7 @@ packages:
   - apps/*
   - worker
   - packages/*
+  - packages/ml-core
 
 ignoredBuiltDependencies:
   - '@prisma/client'
