@@ -11,6 +11,8 @@ import rateLimit from "./plugins/rate-limit.js";
 import { authGuard, createAuthGuard, REGULATOR_AUDIENCE } from "./auth.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerRegulatorAuthRoutes } from "./routes/regulator-auth.js";
+import { registerLedgerRoutes } from "./routes/ledger.js";
+import { registerComplianceRoutes } from "./routes/compliance.js";
 import { prisma } from "./db.js";
 import { parseWithSchema } from "./lib/validation.js";
 import { verifyChallenge, requireRecentVerification, type VerifyChallengeResult } from "./security/mfa.js";
@@ -184,6 +186,8 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   await registerAuthRoutes(app);
   await registerRegulatorAuthRoutes(app);
+  await registerLedgerRoutes(app);
+  await registerComplianceRoutes(app);
 
   const regulatorAuthGuard = createAuthGuard(REGULATOR_AUDIENCE, {
     validate: async (claims, request) => {

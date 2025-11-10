@@ -343,6 +343,9 @@ model Org {
   paymentPlanRequests PaymentPlanRequest[]
   regulatorSessions RegulatorSession[]
   monitoringSnapshots MonitoringSnapshot[]
+  discrepancyEvents DiscrepancyEvent[]
+  manualResolutions ManualResolution[]
+  paymentPlanMetadata PaymentPlanMetadata[]
 
   // payroll backrefs
   employees  Employee[]
@@ -518,4 +521,76 @@ model MonitoringSnapshot {
 
   @@index([orgId, createdAt])
   @@index([orgId, type, createdAt])
+}
+
+model DiscrepancyEvent {
+  id               String   @id @default(uuid()) @db.Uuid
+  org              Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId            String
+  eventKey         String
+  category         String
+  eventType        String
+  status           String   @default("open")
+  severity         String?
+  source           String
+  traceId          String?
+  detectedAt       DateTime
+  shortfallCents   BigInt?  @db.BigInt
+  payload          Json
+  context          Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  resolvedAt       DateTime?
+
+  manualResolutions ManualResolution[]
+  paymentPlan       PaymentPlanMetadata?
+
+  @@unique([orgId, eventKey])
+  @@index([orgId, detectedAt])
+}
+
+model ManualResolution {
+  id                  String            @id @default(uuid()) @db.Uuid
+  discrepancy         DiscrepancyEvent  @relation(fields: [discrepancyId], references: [id], onDelete: Cascade)
+  discrepancyId       String            @db.Uuid
+  org                 Org               @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId               String
+  resolvedBy          String
+  resolvedByRole      String?
+  resolutionType      String
+  overrideAmountCents BigInt?           @db.BigInt
+  notes               String?
+  payload             Json?
+  appliedAt           DateTime?
+  createdAt           DateTime          @default(now())
+
+  @@index([orgId, createdAt])
+}
+
+model PaymentPlanMetadata {
+  id                     String            @id @default(uuid()) @db.Uuid
+  org                    Org               @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId                  String
+  discrepancy            DiscrepancyEvent? @relation(fields: [discrepancyId], references: [id], onDelete: SetNull)
+  discrepancyId          String?           @db.Uuid
+  status                 String
+  arrangementType        String
+  totalOutstandingCents  BigInt?           @db.BigInt
+  installmentAmountCents BigInt?           @db.BigInt
+  installmentFrequency   String?
+  firstPaymentDue        DateTime?
+  nextPaymentDue         DateTime?
+  lastPaymentReceived    DateTime?
+  missedInstallments     Int?
+  terms                  Json?
+  payload                Json
+  notes                  String?
+  updatedBy              String?
+  source                 String?
+  context                Json?
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+
+  @@index([orgId, status])
+  @@index([orgId, discrepancyId])
 }

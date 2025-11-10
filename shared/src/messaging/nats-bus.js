@@ -18,6 +18,9 @@ export class NatsBus {
         const connection = await connect({
             servers: options.url,
             name: options.connectionName ?? "apgms-nats-bus",
+            token: options.token,
+            user: options.username,
+            pass: options.password,
         });
         const jetStream = connection.jetstream();
         const jetStreamManager = await connection.jetstreamManager();
@@ -98,6 +101,7 @@ async function ensureStream(jetStreamManager, stream, prefix) {
         discard: DiscardPolicy.Old,
         storage: StorageType.File,
         num_replicas: 1,
+        max_age: 14 * 24 * 60 * 60 * 1_000_000_000,
     });
 }
 function hashSubject(subject) {
