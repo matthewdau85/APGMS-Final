@@ -29,6 +29,20 @@ export async function registerLedgerRoutes(app: FastifyInstance): Promise<void> 
     { preHandler: guard(["analyst", "admin"]) },
     async (request, reply) => {
       const body = parseWithSchema(ledgerDiscrepancySchema, request.body);
+      const principalOrgId = request.principal?.orgId ?? request.user?.orgId;
+      if (!principalOrgId) {
+        request.log.error({ route: "/ledger/discrepancies" }, "missing_principal_org");
+        reply.code(500).send({
+          error: { code: "principal_missing", message: "Unable to resolve organisation" },
+        });
+        return;
+      }
+      if (body.orgId !== principalOrgId) {
+        reply.code(403).send({
+          error: { code: "forbidden_org_scope", message: "Organisation mismatch" },
+        });
+        return;
+      }
       const discrepancyId = body.discrepancyId ?? randomUUID();
       const detectedAt = body.detectedAt ?? new Date().toISOString();
       const status = body.status ?? "open";
@@ -39,7 +53,7 @@ export async function registerLedgerRoutes(app: FastifyInstance): Promise<void> 
         await request.publishDomainEvent({
           subject: "ledger.discrepancy",
           eventType: "ledger.discrepancy.recorded",
-          orgId: body.orgId,
+          orgId: principalOrgId,
           key: discrepancyId,
           payload: {
             discrepancyId,

@@ -36,6 +36,14 @@ declare module "fastify" {
       orgId: string;
       role: string;
       mfaEnabled: boolean;
+      roles?: string[];
+      token?: string;
+    };
+    principal?: {
+      id: string;
+      orgId: string;
+      roles: string[];
+      token: string;
     };
     publishDomainEvent?: (event: {
       subject: string;

@@ -204,6 +204,26 @@ export async function authenticateRequest(
   try {
     const principal = await verifyRequest(request, reply);
     requireRole(principal, roles);
+    const scopedRequest = request as FastifyRequest & {
+      principal?: Principal;
+      user?: {
+        sub: string;
+        orgId: string;
+        role: string;
+        roles?: Role[];
+        token?: string;
+        mfaEnabled?: boolean;
+      };
+    };
+    scopedRequest.principal = principal;
+    scopedRequest.user = {
+      sub: principal.id,
+      orgId: principal.orgId,
+      role: principal.roles[0] ?? principal.roles[principal.roles.length - 1] ?? "analyst",
+      roles: principal.roles,
+      token: principal.token,
+      mfaEnabled: false,
+    };
     metrics?.recordSecurityEvent("auth.success");
     return principal;
   } catch (error) {

@@ -39,6 +39,20 @@ export async function registerComplianceRoutes(app: FastifyInstance): Promise<vo
     { preHandler: guard(["analyst", "admin"]) },
     async (request, reply) => {
       const body = parseWithSchema(fraudAlertSchema, request.body);
+      const principalOrgId = request.principal?.orgId ?? request.user?.orgId;
+      if (!principalOrgId) {
+        request.log.error({ route: "/compliance/fraud-alerts" }, "missing_principal_org");
+        reply.code(500).send({
+          error: { code: "principal_missing", message: "Unable to resolve organisation" },
+        });
+        return;
+      }
+      if (body.orgId !== principalOrgId) {
+        reply.code(403).send({
+          error: { code: "forbidden_org_scope", message: "Organisation mismatch" },
+        });
+        return;
+      }
       const fraudAlertId = body.fraudAlertId ?? randomUUID();
 
       if (!request.publishDomainEvent) {
@@ -47,7 +61,7 @@ export async function registerComplianceRoutes(app: FastifyInstance): Promise<vo
         await request.publishDomainEvent({
           subject: "compliance.fraud",
           eventType: "compliance.fraud-alert.raised",
-          orgId: body.orgId,
+          orgId: principalOrgId,
           key: fraudAlertId,
           payload: {
             fraudAlertId,
@@ -70,6 +84,20 @@ export async function registerComplianceRoutes(app: FastifyInstance): Promise<vo
     { preHandler: guard(["analyst", "admin"]) },
     async (request, reply) => {
       const body = parseWithSchema(remediationSchema, request.body);
+      const principalOrgId = request.principal?.orgId ?? request.user?.orgId;
+      if (!principalOrgId) {
+        request.log.error({ route: "/compliance/remediations" }, "missing_principal_org");
+        reply.code(500).send({
+          error: { code: "principal_missing", message: "Unable to resolve organisation" },
+        });
+        return;
+      }
+      if (body.orgId !== principalOrgId) {
+        reply.code(403).send({
+          error: { code: "forbidden_org_scope", message: "Organisation mismatch" },
+        });
+        return;
+      }
       const remediationId = body.remediationId ?? randomUUID();
       const status = body.status ?? "pending";
 
@@ -79,7 +107,7 @@ export async function registerComplianceRoutes(app: FastifyInstance): Promise<vo
         await request.publishDomainEvent({
           subject: "compliance.remediation",
           eventType: "compliance.remediation.action-tracked",
-          orgId: body.orgId,
+          orgId: principalOrgId,
           key: remediationId,
           payload: {
             remediationId,

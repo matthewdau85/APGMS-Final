@@ -137,6 +137,15 @@ export async function authenticateRequest(app, request, reply, roles) {
     try {
         const principal = await verifyRequest(request, reply);
         requireRole(principal, roles);
+        request.principal = principal;
+        request.user = {
+            sub: principal.id,
+            orgId: principal.orgId,
+            role: principal.roles[0] ?? principal.roles[principal.roles.length - 1] ?? "analyst",
+            roles: principal.roles,
+            token: principal.token,
+            mfaEnabled: false,
+        };
         metrics?.recordSecurityEvent("auth.success");
         return principal;
     }
