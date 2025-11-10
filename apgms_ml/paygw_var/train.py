@@ -165,8 +165,13 @@ def _compute_metrics(
                 "f1": float(value.get("f1-score", 0.0)),
                 "support": int(value.get("support", 0)),
             }
-        else:
+        elif isinstance(value, dict):
             metrics[key] = {k: float(v) for k, v in value.items() if isinstance(v, (int, float))}
+        elif isinstance(value, (int, float)):
+            metrics[key] = {"value": float(value)}
+        else:
+            # Fallback for unexpected shapes such as nested labels or None entries.
+            metrics[key] = {}
 
     metrics["micro avg"] = {
         "precision": float(precision_micro),
