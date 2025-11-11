@@ -11,6 +11,7 @@ import rateLimit from "./plugins/rate-limit.js";
 import { authGuard, createAuthGuard, REGULATOR_AUDIENCE } from "./auth.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerRegulatorAuthRoutes } from "./routes/regulator-auth.js";
+import { registerBankLinesRoutes } from "./routes/bank-lines.js";
 import { prisma } from "./db.js";
 import { parseWithSchema } from "./lib/validation.js";
 import { verifyChallenge, requireRecentVerification, type VerifyChallengeResult } from "./security/mfa.js";
@@ -184,6 +185,14 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   await registerAuthRoutes(app);
   await registerRegulatorAuthRoutes(app);
+
+  app.register(
+    async (secureScope) => {
+      secureScope.addHook("onRequest", authGuard);
+      await registerBankLinesRoutes(secureScope);
+    },
+    { prefix: "/" }
+  );
 
   const regulatorAuthGuard = createAuthGuard(REGULATOR_AUDIENCE, {
     validate: async (claims, request) => {
