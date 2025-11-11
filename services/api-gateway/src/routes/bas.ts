@@ -49,6 +49,10 @@ export const registerBasRoutes: FastifyPluginAsync = async (app) => {
     });
 
     const evaluation = await evaluateBasReadiness(principal.orgId);
+    const issuedAt = new Date(evaluation.issuedAt);
+    const overrideApproved = evaluation.policyPassed
+      ? false
+      : await hasApprovedDecision(principal.orgId, "shortfall", issuedAt);
     const paygwRequired = decimalToNumber(basCycle?.paygwRequired);
     const paygwSecured = decimalToNumber(basCycle?.paygwSecured);
     const gstRequired = decimalToNumber(basCycle?.gstRequired);
@@ -60,7 +64,8 @@ export const registerBasRoutes: FastifyPluginAsync = async (app) => {
     const blockers: string[] = [];
     if (paygwShortfall > 0) blockers.push("PAYGW designated accounts under target");
     if (gstShortfall > 0) blockers.push("GST designated accounts under target");
-    if (!evaluation.policyPassed) blockers.push("Readiness ML gate requires approval or mitigation");
+    if (!evaluation.policyPassed && !overrideApproved)
+      blockers.push("Readiness ML gate requires approval or mitigation");
 
     reply.send({
       basCycleId: basCycle?.id ?? null,
@@ -77,9 +82,11 @@ export const registerBasRoutes: FastifyPluginAsync = async (app) => {
         status: gstShortfall > 0 ? "BLOCKED" : "READY",
       },
       overallStatus:
-        evaluation.policyPassed && basCycle?.overallStatus === "READY"
+        (evaluation.policyPassed || overrideApproved) && basCycle?.overallStatus === "READY"
           ? "READY"
-          : "BLOCKED",
+          : overrideApproved
+            ? "OVERRIDDEN"
+            : "BLOCKED",
       blockers,
       risk: {
         scenario: "shortfall",
