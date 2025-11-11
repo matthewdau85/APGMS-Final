@@ -2,7 +2,7 @@
 import type { Prisma, MfaCredential } from "@prisma/client";
 
 import { prisma } from "../db.js";
-import { sealObject, unsealObject, type any } from "./encryption.js";
+import { sealObject, unsealObject, type EncryptionEnvelope } from "./encryption.js";
 
 const TOTP_CONTEXT_PREFIX = "mfa:totp:";
 const PASSKEY_CONTEXT_PREFIX = "mfa:passkey:";
@@ -27,11 +27,11 @@ function buildContext(prefix: string, userId: string): string {
   return `${prefix}${userId}`;
 }
 
-function envelopeFromRecord(record: MfaCredential): any {
-  return record.data as unknown as any;
+function envelopeFromRecord(record: MfaCredential): EncryptionEnvelope {
+  return record.data as unknown as EncryptionEnvelope;
 }
 
-function toJson(envelope: any): Prisma.InputJsonValue {
+function toJson(envelope: EncryptionEnvelope): Prisma.InputJsonValue {
   return envelope as unknown as Prisma.InputJsonValue;
 }
 

@@ -4,7 +4,7 @@ import helmet from "@fastify/helmet";
 import crypto from "node:crypto";
 import { context, trace } from "@opentelemetry/api";
 
-import { AppError, badRequest, conflict, forbidden, notFound, unauthorized } from "./shared-shims.js";
+import { AppError, badRequest, conflict, forbidden, notFound, unauthorized } from "@apgms/shared";
 import { config } from "./config.js";
 
 import rateLimit from "./plugins/rate-limit.js";
@@ -84,7 +84,7 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof AppError) {
-      reply.status((error as any).status).send({ error: { code: error.code, message: error.message, fields: error.fields } });
+      reply.status(error.status).send({ error: { code: error.code, message: error.message, fields: error.fields } });
       return;
     }
     if ((error as any)?.validation) {
