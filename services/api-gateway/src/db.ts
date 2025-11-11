@@ -1,3 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 
-export const prisma = new PrismaClient();
+import { instrumentPrisma } from "./observability/prisma-metrics.js";
+
+const prismaClient = new PrismaClient();
+
+export const prisma = instrumentPrisma(prismaClient);
