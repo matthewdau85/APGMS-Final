@@ -1,13 +1,9 @@
 import { Buffer } from "node:buffer";
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import {
-  importJWK,
-  jwtVerify,
-  type JWTPayload,
-  type JWK,
-  type KeyLike,
-} from "jose";
+import { importJWK, jwtVerify, type JWTPayload, type JWK } from "jose";
+
+type ImportedKey = Awaited<ReturnType<typeof importJWK>>;
 
 const clockToleranceSeconds = Number(process.env.AUTH_CLOCK_TOLERANCE_S ?? "5");
 
@@ -22,7 +18,7 @@ export interface Principal {
 
 interface InternalKey {
   kid: string;
-  key: KeyLike | Uint8Array;
+  key: ImportedKey;
   alg: string;
 }
 

@@ -9,6 +9,11 @@
     ".": "./dist/index.js"
   },
   "scripts": {
+    "generate:prisma": "pnpm exec prisma generate --schema prisma/schema.prisma",
+    "prebuild": "pnpm run generate:prisma",
     "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "otplib": "^12.0.1"
   }
 }
