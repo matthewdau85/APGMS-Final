@@ -1,4 +1,5 @@
 {
+  "extends": "../../tsconfig.json",
   "compilerOptions": {
     "target": "ES2022",
     "module": "NodeNext",
@@ -12,7 +13,12 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "strict": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "baseUrl": "./src",
+    "paths": {
+      "@apgms/shared": ["../../../shared/dist/index.d.ts"],
+      "@apgms/shared/*": ["../../../shared/dist/*"]
+    }
   },
   "include": ["src"]
 }

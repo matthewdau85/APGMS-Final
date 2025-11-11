@@ -4,19 +4,19 @@ import helmet from "@fastify/helmet";
 import crypto from "node:crypto";
 import { context, trace } from "@opentelemetry/api";
 
-import { AppError, badRequest, conflict, forbidden, notFound, unauthorized } from "./shared-shims.js";
+import { AppError, badRequest, conflict, forbidden, notFound, unauthorized } from "@apgms/shared";
 import { config } from "./config.js";
 
 import rateLimit from "./plugins/rate-limit.js";
 import { authGuard, createAuthGuard, REGULATOR_AUDIENCE } from "./auth.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerRegulatorAuthRoutes } from "./routes/regulator-auth.js";
+import { registerBankLinesRoutes } from "./routes/bank-lines.js";
 import { prisma } from "./db.js";
 import { parseWithSchema } from "./lib/validation.js";
 import { verifyChallenge, requireRecentVerification, type VerifyChallengeResult } from "./security/mfa.js";
 import { recordAuditLog } from "./lib/audit.js";
 import { ensureRegulatorSessionActive } from "./lib/regulator-session.js";
-import { withIdempotency } from "./lib/idempotency.js";
 import { metrics, installHttpMetrics, registerMetricsRoute } from "./observability/metrics.js";
 import { instrumentPrisma } from "./observability/prisma-metrics.js";
 import { closeProviders, initProviders } from "./providers.js";
@@ -84,7 +84,8 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof AppError) {
-      reply.status((error as any).status).send({ error: { code: error.code, message: error.message, fields: error.fields } });
+      const appError = error as AppError;
+      reply.status(appError.status).send({ error: { code: appError.code, message: appError.message, fields: appError.fields } });
       return;
     }
     if ((error as any)?.validation) {
@@ -184,6 +185,11 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   await registerAuthRoutes(app);
   await registerRegulatorAuthRoutes(app);
+
+  await app.register(async (secureScope) => {
+    secureScope.addHook("onRequest", authGuard);
+    await secureScope.register(registerBankLinesRoutes);
+  });
 
   const regulatorAuthGuard = createAuthGuard(REGULATOR_AUDIENCE, {
     validate: async (claims, request) => {
