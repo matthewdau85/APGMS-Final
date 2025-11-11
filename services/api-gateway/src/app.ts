@@ -1,4 +1,4 @@
-﻿import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyPluginAsync, type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import crypto from "node:crypto";
@@ -11,23 +11,26 @@ import rateLimit from "./plugins/rate-limit.js";
 import { authGuard, createAuthGuard, REGULATOR_AUDIENCE } from "./auth.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerRegulatorAuthRoutes } from "./routes/regulator-auth.js";
+import { registerRegulatorRoutes } from "./routes/regulator.js";
+import { registerAdminDataRoutes } from "./routes/admin.data.js";
 import { registerBankLinesRoutes } from "./routes/bank-lines.js";
+import { registerTaxRoutes } from "./routes/tax.js";
 import { prisma } from "./db.js";
 import { parseWithSchema } from "./lib/validation.js";
 import { verifyChallenge, requireRecentVerification, type VerifyChallengeResult } from "./security/mfa.js";
 import { recordAuditLog } from "./lib/audit.js";
 import { ensureRegulatorSessionActive } from "./lib/regulator-session.js";
 import { metrics, installHttpMetrics, registerMetricsRoute } from "./observability/metrics.js";
-import { instrumentPrisma } from "./observability/prisma-metrics.js";
 import { closeProviders, initProviders } from "./providers.js";
 
 // ---- keep your other domain code (types, helpers, shapes) exactly as you had ----
-// (omitted here for brevity — unchanged from your last working content)
+// (omitted here for brevity - unchanged from your last working content)
 
-// IMPORTANT: ensure prisma instrumentation remains
-instrumentPrisma(prisma as any);
+type BuildServerOptions = {
+  bankLinesPlugin?: FastifyPluginAsync;
+};
 
-export async function buildServer(): Promise<FastifyInstance> {
+export async function buildServer(options: BuildServerOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: true });
 
   installHttpMetrics(app);
@@ -188,16 +191,17 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   await app.register(async (secureScope) => {
     secureScope.addHook("onRequest", authGuard);
-    await secureScope.register(registerBankLinesRoutes);
+    const bankLinesPlugin = options.bankLinesPlugin ?? registerBankLinesRoutes;
+    await secureScope.register(bankLinesPlugin);
+    await secureScope.register(registerAdminDataRoutes);
+    await secureScope.register(registerTaxRoutes);
   });
 
   const regulatorAuthGuard = createAuthGuard(REGULATOR_AUDIENCE, {
-    validate: async (claims, request) => {
-      const sessionId = (claims.sessionId ?? claims.sub) as string | undefined;
+    validate: async (principal, request) => {
+      const sessionId = (principal.sessionId ?? principal.id) as string | undefined;
       if (!sessionId) throw new Error("regulator_session_missing");
       const session = await ensureRegulatorSessionActive(sessionId);
-      (claims as any).orgId = session.orgId;
-      (claims as any).sessionId = session.id;
       (request as any).regulatorSession = session;
     }
   });
@@ -205,16 +209,13 @@ export async function buildServer(): Promise<FastifyInstance> {
   app.register(
     async (regScope) => {
       regScope.addHook("onRequest", regulatorAuthGuard);
-      // registerRegulatorRoutes(regScope) — keep your existing implementation
+      await registerRegulatorRoutes(regScope);
     },
     { prefix: "/regulator" }
   );
 
-  // register the rest of your routes (unchanged), e.g.:
-  // await registerAdminDataRoutes(app);
-  // await registerTaxRoutes(app);
-  // ... plus all your existing routes already in this file.
 
   return app;
 }
+
 
