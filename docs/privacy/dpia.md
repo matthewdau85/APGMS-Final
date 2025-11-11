@@ -1,25 +1,26 @@
 # Data Protection Impact Assessment
 
 ## Overview
-- **Processing**: APGMS ingests organisation profile details, user contact emails, and transactional bank-line summaries.
-- **Lawful basis**: Customer contracts and TFN handling consent; audit logging retains minimal metadata for compliance.
+- **Processing**: APGMS ingests organisation metadata, admin user accounts, and ciphertext summaries of bank-line movements. Plaintext conversion is performed by clients; the API stores only the encrypted fields that are supplied.
+- **Lawful basis**: Customer contracts plus TFN handling consent; audit logging captures minimal metadata for compliance evidence.
 
 ## Data Inventory & Flow
-- User credentials stored with Argon2id hashing and peppering (shared/src/security/password.ts:1).
-- Bank lines encrypted at rest via envelope keys managed by the runtime KMS provider; only decrypted when a privileged admin exports data (services/api-gateway/src/app.ts:333).
-- Audit logs capture actor, action, and timestamps in append-only records (shared/prisma/schema.prisma:47).
+- User credentials are hashed with bcrypt via `verifyCredentials` before comparison and are never stored or logged in plaintext (`services/api-gateway/src/auth.ts`).
+- `/bank-lines` accepts ciphertext for payee/description fields and persists them verbatim; only redacted metadata is returned to callers (`services/api-gateway/src/routes/bank-lines.ts`).
+- Auth and regulator actions append entries through `recordAuditLog`, providing actor, action, and timestamps in the shared Prisma schema (`services/api-gateway/src/lib/audit.ts`, `shared/prisma/schema.prisma`).
 
 ## Risk Assessment
-- **Unauthorised access**: Mitigated by RS256 JWT authentication, per-route RBAC, anomaly detection and Prometheus counters for failed auth; admin data erasure/export routes reuse the same JWT verifier so legacy bearer tokens are no longer accepted (services/api-gateway/src/app.ts:73, services/api-gateway/src/routes/admin.data.ts:67).
-- **Data leakage**: Responses redact emails, hash identifiers, and avoid sharing raw payee descriptions unless explicitly exported with admin scope (services/api-gateway/src/app.ts:247).
-- **Key compromise**: Encryption keys and salts are loaded via environment-driven KMS providers with rotation support (services/api-gateway/src/security/providers.ts:12).
+- **Unauthorised access**: Fastify `authGuard` enforces HS256 JWTs with issuer/audience validation and populates `request.user`, while `assertOrgAccess` and `assertRoleForBankLines` ensure requests stay within the caller's org and role (`services/api-gateway/src/auth.ts`, `services/api-gateway/src/utils/orgScope.ts`).
+- **Data leakage**: Bank-line responses intentionally drop ciphertext fields, but the admin data route is an in-memory stub and will lose context across restarts; sensitive exports are therefore not yet supported and are flagged as a compliance gap.
+- **Key compromise**: Encryption keys, redis/nats URLs, and JWT secrets are validated through the config loader which enforces encoding, length, and URL constraints before boot succeeds (`services/api-gateway/src/config.ts`).
 
 ## Controls & Monitoring
-- Helmet CSP/HSTS, a fail-closed CORS allow-list, and Playwright accessibility checks run in CI to guard regressions (services/api-gateway/src/app.ts:224, .github/workflows/ci.yml:36).
-- Tax-engine proxy inherits JWT enforcement and validates upstream responses before returning to clients (services/api-gateway/src/routes/tax.ts:1).
-- Security workflow runs SBOM generation, dependency SCA, Semgrep, Gitleaks, and Trivy scans on every push (.github/workflows/security.yml:23).
-- Metrics and audit events feed Prometheus (services/api-gateway/src/plugins/metrics.ts:4) enabling alerting when export/delete operations occur.
+- Helmet CSP, deny-by-default CORS, and rate limiting are installed on every request path in `buildServer`.
+- `/bank-lines` enforces idempotency keys (`orgId_idempotencyKey` constraint) and emits `idempotent-replay` headers to simplify replay detection.
+- `/metrics` exposes the actual Prometheus counters and histograms available today: `apgms_http_requests_total`, `apgms_http_request_duration_seconds`, `apgms_db_query_duration_seconds`, `apgms_db_queries_total`, and `apgms_job_duration_seconds` (`services/api-gateway/src/observability/metrics.ts`).
+- Health/readiness endpoints run direct Postgres/Redis/NATS checks before advertising readiness so resiliency tooling can gate deployments.
 
 ## Residual Risk & Actions
-- Residual risk rated **Low** given encryption, logging, and monitoring coverage. Key rotation documented in TFN SOP (docs/security/TFN-SOP.md).
-- Review DPIA quarterly or when introducing new data categories.
+- The admin deletion/export workflows described in older guidance are not implemented; all such requests must go through manual support until a durable route is delivered (tracked in the compliance backlog).
+- Regulator evidence routes beyond authentication are still TODO. DPIA reviewers should verify the backlog before closing audits.
+- Re-review this DPIA whenever new data categories are introduced or after significant auth/ledger changes.
