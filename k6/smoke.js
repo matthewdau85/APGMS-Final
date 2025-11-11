@@ -24,7 +24,7 @@ export default function () {
   const ready = http.get(READY_URL);
   check(ready, {
     "ready responds 200": (res) => res.status === 200,
-    "ready payload ready": (res) => res.json("ready") === true,
+    "ready payload ok": (res) => res.json("ok") === true,
   });
 
   sleep(1);
