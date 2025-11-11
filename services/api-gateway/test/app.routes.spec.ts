@@ -235,5 +235,65 @@ describe("buildServer domain wiring", () => {
     assert.equal(allowed.statusCode, 200);
     assert.equal(fetchCalls.length, 1);
   });
+
+  describe("/connectors/capture", () => {
+    const stubDeps = {
+      capturePayroll: async () => ({
+        transfer: { source: "PAYROLL_CAPTURE", amount: 100 },
+        artifact: { artifactId: "payroll-artifact", sha256: "abc", summary: { generatedAt: new Date().toISOString(), totals: { paygw: 1, gst: 0 }, movementsLast24h: [] } },
+      }),
+      capturePos: async () => ({
+        transfer: { source: "GST_CAPTURE", amount: 200 },
+        artifact: { artifactId: "pos-artifact", sha256: "def", summary: { generatedAt: new Date().toISOString(), totals: { paygw: 0, gst: 1 }, movementsLast24h: [] } },
+      }),
+    };
+
+    it("requires authentication", async () => {
+      const plugin = buildBankLinePlugin([]);
+      app = await buildServer({ bankLinesPlugin: plugin, connectorDeps: stubDeps });
+      await app.ready();
+
+      const response = await app.inject({ method: "POST", url: "/connectors/capture/payroll", payload: { orgId: "org-test", amount: 123 } });
+      assert.equal(response.statusCode, 401);
+    });
+
+    it("captures payroll with correct metadata", async () => {
+      const plugin = buildBankLinePlugin([]);
+      app = await buildServer({ bankLinesPlugin: plugin, connectorDeps: stubDeps });
+      await app.ready();
+
+      const token = signToken({ orgId: "org-test" });
+      const response = await app.inject({
+        method: "POST",
+        url: "/connectors/capture/payroll",
+        headers: { authorization: `Bearer ${token}` },
+        payload: { orgId: "org-test", amount: 99.5 },
+      });
+
+      assert.equal(response.statusCode, 200);
+      const body = response.json();
+      assert.equal(body.transfer.source, "PAYROLL_CAPTURE");
+      assert.equal(body.artifact.artifactId, "payroll-artifact");
+    });
+
+    it("captures POS transactions", async () => {
+      const plugin = buildBankLinePlugin([]);
+      app = await buildServer({ bankLinesPlugin: plugin, connectorDeps: stubDeps });
+      await app.ready();
+
+      const token = signToken({ orgId: "org-test" });
+      const response = await app.inject({
+        method: "POST",
+        url: "/connectors/capture/pos",
+        headers: { authorization: `Bearer ${token}` },
+        payload: { orgId: "org-test", amount: 200 },
+      });
+
+      assert.equal(response.statusCode, 200);
+      const body = response.json();
+      assert.equal(body.transfer.source, "GST_CAPTURE");
+      assert.equal(body.artifact.artifactId, "pos-artifact");
+    });
+  });
 });
 

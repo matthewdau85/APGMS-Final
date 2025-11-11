@@ -15,6 +15,7 @@ import { registerRegulatorRoutes } from "./routes/regulator.js";
 import { registerAdminDataRoutes } from "./routes/admin.data.js";
 import { registerBankLinesRoutes } from "./routes/bank-lines.js";
 import { registerTaxRoutes } from "./routes/tax.js";
+import { registerConnectorRoutes, type ConnectorRoutesDeps } from "./routes/connectors.js";
 import { prisma } from "./db.js";
 import { parseWithSchema } from "./lib/validation.js";
 import { verifyChallenge, requireRecentVerification, type VerifyChallengeResult } from "./security/mfa.js";
@@ -28,6 +29,7 @@ import { closeProviders, initProviders } from "./providers.js";
 
 type BuildServerOptions = {
   bankLinesPlugin?: FastifyPluginAsync;
+  connectorDeps?: ConnectorRoutesDeps;
 };
 
 export async function buildServer(options: BuildServerOptions = {}): Promise<FastifyInstance> {
@@ -195,6 +197,9 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
     await secureScope.register(bankLinesPlugin);
     await secureScope.register(registerAdminDataRoutes);
     await secureScope.register(registerTaxRoutes);
+    await secureScope.register(async (connectorScope) => {
+      registerConnectorRoutes(connectorScope, options.connectorDeps);
+    });
   });
 
   const regulatorAuthGuard = createAuthGuard(REGULATOR_AUDIENCE, {
