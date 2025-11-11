@@ -93,7 +93,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     }
 
     const authUser = buildSessionUser(user);
-    const token = signToken({
+    const token = await signToken({
       id: authUser.sub,
       orgId: authUser.orgId,
       role: authUser.role,

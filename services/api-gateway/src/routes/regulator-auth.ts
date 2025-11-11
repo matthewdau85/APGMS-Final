@@ -48,7 +48,7 @@ export async function registerRegulatorAuthRoutes(app: FastifyInstance): Promise
       mfaEnabled: false,
     });
 
-    const token = signToken(
+    const token = await signToken(
       {
         id: authUser.sub,
         orgId: authUser.orgId,

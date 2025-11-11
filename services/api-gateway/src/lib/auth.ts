@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import jwt from "jsonwebtoken";
 import {
   importJWK,
   jwtVerify,
@@ -17,6 +18,8 @@ export interface Principal {
   orgId: string;
   roles: Role[];
   token: string;
+  mfaEnabled: boolean;
+  regulator?: boolean;
 }
 
 interface InternalKey {
@@ -43,8 +46,8 @@ async function loadKeys(): Promise<void> {
     return;
   }
   const jwksEnv = process.env.AUTH_JWKS;
-  if (!jwksEnv) {
-    throw new AuthError("JWT configuration missing", 500, "jwt_config_missing");
+  if (!jwksEnv || jwksEnv.trim().length === 0) {
+    return;
   }
   let parsed: { keys?: JWK[] };
   try {
@@ -88,16 +91,22 @@ function normaliseRoles(raw: unknown): Role[] {
   return Array.from(new Set(roles));
 }
 
+type VerifyOptions = {
+  audience?: string;
+  issuer?: string;
+};
+
 export async function verifyRequest(
   request: FastifyRequest,
   reply: FastifyReply,
+  options?: VerifyOptions,
 ): Promise<Principal> {
   const header =
     request.headers.authorization ??
     request.headers["Authorization" as keyof typeof request.headers];
 
-  const audience = process.env.AUTH_AUDIENCE;
-  const issuer = process.env.AUTH_ISSUER;
+  const audience = options?.audience ?? process.env.AUTH_AUDIENCE;
+  const issuer = options?.issuer ?? process.env.AUTH_ISSUER;
   if (!audience || !issuer) {
     throw new AuthError("JWT configuration missing", 500, "jwt_config_missing");
   }
@@ -114,23 +123,44 @@ export async function verifyRequest(
   }
   const token = match[1];
 
-  let verification;
-  try {
-    verification = await jwtVerify(token, async (header) => {
-      const { kid } = header;
-      const key = await resolveKey(kid);
-      return key.key as any;
-    }, {
-      audience,
-      issuer,
-      clockTolerance: clockToleranceSeconds,
-    });
-  } catch (error) {
-    throw new AuthError("Token verification failed");
+  const hasJwks = keyCache.size > 0;
+  let payload: JWTPayload;
+  let kid: string | undefined;
+
+  if (hasJwks) {
+    let verification;
+    try {
+      verification = await jwtVerify(token, async (header) => {
+        const { kid: headerKid } = header;
+        const key = await resolveKey(headerKid);
+        kid = headerKid;
+        return key.key as any;
+      }, {
+        audience,
+        issuer,
+        clockTolerance: clockToleranceSeconds,
+      });
+    } catch (error) {
+      throw new AuthError("Token verification failed");
+    }
+    payload = verification.payload;
+  } else {
+    const secret = process.env.AUTH_DEV_SECRET;
+    if (!secret) {
+      throw new AuthError("Auth secret missing", 500, "auth_secret_missing");
+    }
+    try {
+      payload = jwt.verify(token, secret, {
+        audience,
+        issuer,
+        clockTolerance: clockToleranceSeconds,
+      }) as JWTPayload;
+    } catch (error) {
+      throw new AuthError("Token verification failed");
+    }
   }
 
-  const { payload, protectedHeader } = verification;
-  const principal = buildPrincipalFromPayload(payload, protectedHeader.kid, token);
+  const principal = buildPrincipalFromPayload(payload, kid, token);
   request.log.debug(
     {
       principal: {
@@ -154,6 +184,8 @@ function buildPrincipalFromPayload(
   const sub = payload.sub;
   const orgId = typeof payload.org === "string" ? payload.org : undefined;
   const roles = normaliseRoles(payload.roles);
+  const mfaEnabled = payload.mfaEnabled === true;
+  const regulator = payload.regulator === true;
 
   if (!sub || !orgId) {
     throw new AuthError("Token missing required claims");
@@ -167,6 +199,8 @@ function buildPrincipalFromPayload(
     orgId,
     roles,
     token,
+    mfaEnabled,
+    regulator,
   };
 }
 
