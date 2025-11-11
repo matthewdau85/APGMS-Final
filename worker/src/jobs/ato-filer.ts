@@ -34,7 +34,9 @@ async function processStpQueue(client: AtoStpClient): Promise<void> {
   const candidates = await prisma.payRun.findMany({
     where: {
       status: "committed",
-      stpStatus: { in: ["PENDING", "RETRY"] },
+      stpStatus: {
+        in: ["PENDING", "RETRY", "ESCROW_BLOCKED", "ESCROW_DEFICIT"],
+      },
       stpReleaseAt: { lte: now },
     },
     orderBy: { createdAt: "asc" },
@@ -80,6 +82,7 @@ async function processBasQueue(client: AtoBasClient): Promise<void> {
       readyAt: { not: null, lte: now },
       releasedAt: { not: null, lte: now },
       lodgedAt: null,
+      status: { notIn: ["failed", "lodged", "escrow_blocked"] },
     },
     orderBy: { start: "asc" },
     take: 10,
