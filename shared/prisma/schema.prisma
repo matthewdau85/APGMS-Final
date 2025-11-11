@@ -45,6 +45,13 @@ enum AlertStatus {
   CLOSED
 }
 
+enum DesignatedAccountState {
+  ACTIVE
+  INVESTIGATING
+  LOCKED
+  CLOSED
+}
+
 // =========================
 // Payroll domain
 // =========================
@@ -93,9 +100,17 @@ model PayRun {
 
   createdAt    DateTime  @default(now())
 
+  stpStatus         String   @default("PENDING")
+  stpSubmissionId   String?
+  stpReleaseAt      DateTime?
+  stpSubmittedAt    DateTime?
+  stpAttempts       Int       @default(0)
+  stpLastAttemptAt  DateTime?
+
   payslips     Payslip[]
 
   @@index([orgId], map: "PayRun_orgId_idx")
+  @@index([orgId, stpStatus])
 }
 
 model Payslip {
@@ -276,8 +291,12 @@ model BasPeriod {
   releasedAt DateTime?
   lodgedAt   DateTime?
   evidenceId String?
+  lodgementAttempts      Int       @default(0)
+  lodgementLastAttemptAt DateTime?
+  escrowVerifiedAt       DateTime?
 
   @@unique([orgId, start, end])
+  @@index([orgId, status])
 }
 
 model ReconciliationAlert {
@@ -300,6 +319,8 @@ model EvidenceArtifact {
   sha256    String
   payload   Json?
   createdAt DateTime @default(now())
+
+  designatedSnapshots DesignatedReconciliationSnapshot[]
 
   @@index([orgId, kind])
 }
@@ -340,6 +361,9 @@ model Org {
   basCycles  BasCycle[]
   designatedAccounts DesignatedAccount[]
   designatedTransfers DesignatedTransfer[]
+  designatedAccountStates DesignatedAccountStateTransition[]
+  designatedReconciliationSnapshots DesignatedReconciliationSnapshot[]
+  designatedViolationFlags DesignatedViolationFlag[]
   paymentPlanRequests PaymentPlanRequest[]
   regulatorSessions RegulatorSession[]
   monitoringSnapshots MonitoringSnapshot[]
@@ -421,6 +445,8 @@ model DesignatedAccount {
   updatedAt DateTime @default(now())
 
   transfers DesignatedTransfer[]
+  stateTransitions DesignatedAccountStateTransition[]
+  violationFlags DesignatedViolationFlag[]
 
   @@index([orgId, type])
 }
@@ -436,6 +462,59 @@ model DesignatedTransfer {
   createdAt DateTime           @default(now())
 
   @@index([orgId, accountId, createdAt])
+}
+
+model DesignatedAccountStateTransition {
+  id        String                 @id @default(cuid())
+  org       Org                    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId     String
+  account   DesignatedAccount      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId String
+  fromState DesignatedAccountState?
+  toState   DesignatedAccountState
+  actorId   String
+  reason    String?
+  metadata  Json?
+  createdAt DateTime               @default(now())
+
+  @@index([orgId, accountId, createdAt])
+  @@index([orgId, toState])
+}
+
+model DesignatedReconciliationSnapshot {
+  id                 String            @id @default(cuid())
+  org                Org               @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId              String
+  generatedAt        DateTime          @default(now())
+  paygwBalance       Decimal
+  gstBalance         Decimal
+  payload            Json
+  sha256             String
+  actorId            String
+  evidenceArtifact   EvidenceArtifact? @relation(fields: [evidenceArtifactId], references: [id], onDelete: SetNull)
+  evidenceArtifactId String?
+
+  @@index([orgId, generatedAt])
+  @@index([orgId, sha256])
+}
+
+model DesignatedViolationFlag {
+  id         String            @id @default(cuid())
+  org        Org               @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId      String
+  account    DesignatedAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  accountId  String?
+  code       String
+  severity   String
+  status     String            @default("OPEN")
+  detectedAt DateTime          @default(now())
+  resolvedAt DateTime?
+  metadata   Json?
+  auditLog   AuditLog?         @relation(fields: [auditLogId], references: [id], onDelete: SetNull)
+  auditLogId String?
+
+  @@index([orgId, status])
+  @@index([orgId, code, status])
 }
 
 model PaymentPlanRequest {
@@ -489,8 +568,20 @@ model AuditLog {
   hash      String
   prevHash  String?
 
+  seal      AuditLogSeal?
+  violationFlags DesignatedViolationFlag[]
+
   @@index([orgId, createdAt])
   @@index([actorId, createdAt])
+}
+
+model AuditLogSeal {
+  id         String   @id @default(cuid())
+  auditLog   AuditLog @relation(fields: [auditLogId], references: [id], onDelete: Cascade)
+  auditLogId String   @unique
+  sha256     String
+  sealedAt   DateTime @default(now())
+  sealedBy   String
 }
 
 model RegulatorSession {

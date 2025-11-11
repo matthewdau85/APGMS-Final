@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 
-import { Prisma, type PrismaClient } from "@prisma/client";
+import {
+  Prisma,
+  type PrismaClient,
+  DesignatedAccountState,
+} from "@prisma/client";
 
 import { conflict, notFound } from "@apgms/shared";
 import {
@@ -20,6 +24,127 @@ type PolicyContext = {
   prisma: PrismaClient;
   auditLogger?: AuditLogger;
 };
+
+type PrismaTx = Prisma.TransactionClient;
+
+async function getLatestAccountState(
+  tx: PrismaTx,
+  accountId: string,
+): Promise<DesignatedAccountState | null> {
+  const state = await tx.designatedAccountStateTransition.findFirst({
+    where: { accountId },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return state?.toState ?? null;
+}
+
+async function ensureAccountStateInitialized(
+  tx: PrismaTx,
+  orgId: string,
+  accountId: string,
+  actorId: string,
+): Promise<DesignatedAccountState> {
+  const existing = await getLatestAccountState(tx, accountId);
+  if (existing) {
+    return existing;
+  }
+
+  await tx.designatedAccountStateTransition.create({
+    data: {
+      orgId,
+      accountId,
+      fromState: null,
+      toState: DesignatedAccountState.ACTIVE,
+      actorId,
+      reason: "initialised",
+      metadata: {
+        note: "Automatically initialised on first touch",
+      },
+    },
+  });
+
+  return DesignatedAccountState.ACTIVE;
+}
+
+async function transitionAccountState(
+  tx: PrismaTx,
+  orgId: string,
+  accountId: string,
+  fromState: DesignatedAccountState | null,
+  toState: DesignatedAccountState,
+  actorId: string,
+  reason: string,
+  metadata: Record<string, unknown>,
+): Promise<void> {
+  await tx.designatedAccountStateTransition.create({
+    data: {
+      orgId,
+      accountId,
+      fromState,
+      toState,
+      actorId,
+      reason,
+      metadata,
+    },
+  });
+}
+
+async function flagDesignatedViolation(
+  prisma: PrismaClient,
+  input: {
+    orgId: string;
+    accountId: string;
+    actorId: string;
+    code: string;
+    severity: string;
+    message: string;
+    source: string;
+  },
+): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    const existingFlag = await tx.designatedViolationFlag.findFirst({
+      where: {
+        orgId: input.orgId,
+        accountId: input.accountId,
+        code: input.code,
+        status: "OPEN",
+      },
+    });
+
+    if (!existingFlag) {
+      await tx.designatedViolationFlag.create({
+        data: {
+          orgId: input.orgId,
+          accountId: input.accountId,
+          code: input.code,
+          severity: input.severity,
+          metadata: {
+            message: input.message,
+            source: input.source,
+          },
+        },
+      });
+    }
+
+    const currentState = await getLatestAccountState(tx, input.accountId);
+    if (currentState !== DesignatedAccountState.INVESTIGATING) {
+      await transitionAccountState(
+        tx,
+        input.orgId,
+        input.accountId,
+        currentState,
+        DesignatedAccountState.INVESTIGATING,
+        input.actorId,
+        "violation_detected",
+        {
+          code: input.code,
+          severity: input.severity,
+        },
+      );
+    }
+  });
+}
 
 export type ApplyDesignatedTransferInput = {
   orgId: string;
@@ -80,6 +205,16 @@ export async function applyDesignatedAccountTransfer(
       evaluation.violation.message,
     );
 
+    await flagDesignatedViolation(context.prisma, {
+      orgId: input.orgId,
+      accountId: input.accountId,
+      actorId: input.actorId,
+      code: evaluation.violation.code,
+      severity: evaluation.violation.severity,
+      message: evaluation.violation.message,
+      source: input.source,
+    });
+
     if (context.auditLogger) {
       await context.auditLogger({
         orgId: input.orgId,
@@ -120,6 +255,23 @@ export async function applyDesignatedAccountTransfer(
       throw notFound(
         "designated_account_not_found",
         "Designated account not found for organisation",
+      );
+    }
+
+    const currentState = await ensureAccountStateInitialized(
+      tx,
+      account.orgId,
+      account.id,
+      input.actorId,
+    );
+
+    if (
+      currentState === DesignatedAccountState.LOCKED ||
+      currentState === DesignatedAccountState.CLOSED
+    ) {
+      throw conflict(
+        "designated_account_locked",
+        "Designated account is locked pending manual review",
       );
     }
 
@@ -190,6 +342,7 @@ export async function generateDesignatedAccountReconciliationArtifact(
   summary: DesignatedReconciliationSummary;
   artifactId: string;
   sha256: string;
+  snapshotId: string;
 }> {
   const now = new Date();
   const cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -244,24 +397,40 @@ export async function generateDesignatedAccountReconciliationArtifact(
     .update(JSON.stringify(summary))
     .digest("hex");
 
-  const artifact = await context.prisma.$transaction(async (tx) => {
-    const created = await tx.evidenceArtifact.create({
-      data: {
-        orgId,
-        kind: "designated-reconciliation",
-        wormUri: "internal:designated/pending",
-        sha256,
-        payload: summary,
-      },
-    });
+  const { artifact, snapshot } = await context.prisma.$transaction(
+    async (tx) => {
+      const created = await tx.evidenceArtifact.create({
+        data: {
+          orgId,
+          kind: "designated-reconciliation",
+          wormUri: "internal:designated/pending",
+          sha256,
+          payload: summary,
+        },
+      });
 
-    return tx.evidenceArtifact.update({
-      where: { id: created.id },
-      data: {
-        wormUri: `internal:designated/${created.id}`,
-      },
-    });
-  });
+      const snapshotRecord = await tx.designatedReconciliationSnapshot.create({
+        data: {
+          orgId,
+          paygwBalance: new Prisma.Decimal(totals.paygw),
+          gstBalance: new Prisma.Decimal(totals.gst),
+          payload: summary,
+          sha256,
+          actorId,
+          evidenceArtifactId: created.id,
+        },
+      });
+
+      const finalArtifact = await tx.evidenceArtifact.update({
+        where: { id: created.id },
+        data: {
+          wormUri: `internal:designated/${created.id}`,
+        },
+      });
+
+      return { artifact: finalArtifact, snapshot: snapshotRecord };
+    },
+  );
 
   if (context.auditLogger) {
     await context.auditLogger({
@@ -272,6 +441,7 @@ export async function generateDesignatedAccountReconciliationArtifact(
         artifactId: artifact.id,
         sha256,
         totals,
+        snapshotId: snapshot.id,
       },
     });
   }
@@ -280,5 +450,6 @@ export async function generateDesignatedAccountReconciliationArtifact(
     summary,
     artifactId: artifact.id,
     sha256,
+    snapshotId: snapshot.id,
   };
 }

@@ -41,7 +41,7 @@ export async function recordAuditLog({
 
     const hash = crypto.createHash("sha256").update(hashPayload).digest("hex");
 
-    await prisma.auditLog.create({
+    const created = await prisma.auditLog.create({
       data: {
         orgId,
         actorId,
@@ -50,6 +50,14 @@ export async function recordAuditLog({
         createdAt,
         hash,
         prevHash,
+      },
+    });
+
+    await prisma.auditLogSeal.create({
+      data: {
+        auditLogId: created.id,
+        sha256: hash,
+        sealedBy: actorId,
       },
     });
   } catch (error) {

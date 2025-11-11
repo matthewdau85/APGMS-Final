@@ -1,0 +1,11 @@
+{
+  "name": "@apgms/connectors",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "echo build connectors",
+    "test": "echo test connectors",
+    "typecheck": "tsc --noEmit"
+  }
+}

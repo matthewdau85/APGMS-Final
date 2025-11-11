@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHash } from "node:crypto";
 import { Buffer } from "node:buffer";
 import { createSecretManager } from "@apgms/shared";
 function decodeKeyMaterial(raw) {
@@ -81,12 +81,44 @@ class PrismaAuditLogger {
     async record(event) {
         const payload = event;
         try {
-            await this.prisma.auditLog.create({
+            const orgId = payload.metadata?.orgId ?? "unknown";
+            const previous = await this.prisma.auditLog.findFirst({
+                where: { orgId },
+                orderBy: { createdAt: "desc" },
+            });
+
+            const createdAt = new Date();
+            const prevHash = previous?.hash ?? null;
+            const metadataValue = payload.metadata ?? {};
+
+            const hashPayload = JSON.stringify({
+                orgId,
+                actorId: payload.actorId,
+                action: payload.action,
+                metadata: metadataValue,
+                createdAt: createdAt.toISOString(),
+                prevHash,
+            });
+
+            const hash = createHash("sha256").update(hashPayload).digest("hex");
+
+            const created = await this.prisma.auditLog.create({
                 data: {
                     actorId: payload.actorId,
                     action: payload.action,
-                    orgId: payload.metadata?.orgId ?? "unknown",
-                    metadata: payload.metadata ?? {},
+                    orgId,
+                    metadata: metadataValue,
+                    createdAt,
+                    hash,
+                    prevHash,
+                },
+            });
+
+            await this.prisma.auditLogSeal.create({
+                data: {
+                    auditLogId: created.id,
+                    sha256: hash,
+                    sealedBy: payload.actorId,
                 },
             });
         }

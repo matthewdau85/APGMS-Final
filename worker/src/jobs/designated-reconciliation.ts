@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { prisma } from "@apgms/shared/db.js";
 
 import {
@@ -12,12 +14,41 @@ async function recordAuditLog(entry: {
   action: string;
   metadata: Record<string, unknown>;
 }): Promise<void> {
-  await prisma.auditLog.create({
+  const previous = await prisma.auditLog.findFirst({
+    where: { orgId: entry.orgId },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const createdAt = new Date();
+  const prevHash = previous?.hash ?? null;
+  const payload = JSON.stringify({
+    orgId: entry.orgId,
+    actorId: entry.actorId,
+    action: entry.action,
+    metadata: entry.metadata,
+    createdAt: createdAt.toISOString(),
+    prevHash,
+  });
+
+  const hash = createHash("sha256").update(payload).digest("hex");
+
+  const created = await prisma.auditLog.create({
     data: {
       orgId: entry.orgId,
       actorId: entry.actorId,
       action: entry.action,
       metadata: entry.metadata,
+      createdAt,
+      hash,
+      prevHash,
+    },
+  });
+
+  await prisma.auditLogSeal.create({
+    data: {
+      auditLogId: created.id,
+      sha256: hash,
+      sealedBy: entry.actorId,
     },
   });
 }

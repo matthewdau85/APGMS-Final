@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { test } from "node:test";
 
 import { Prisma } from "@prisma/client";
@@ -53,6 +54,50 @@ type AuditEntry = {
   action: string;
   metadata: Record<string, unknown>;
   createdAt: Date;
+  hash: string;
+  prevHash: string | null;
+};
+
+type DesignatedStateTransition = {
+  id: string;
+  orgId: string;
+  accountId: string;
+  fromState: string | null;
+  toState: string;
+  actorId: string;
+  reason?: string | null;
+  metadata?: Record<string, unknown> | null;
+  createdAt: Date;
+};
+
+type DesignatedViolationFlagState = {
+  id: string;
+  orgId: string;
+  accountId: string | null;
+  code: string;
+  severity: string;
+  status: string;
+  detectedAt: Date;
+  resolvedAt: Date | null;
+  metadata: Record<string, unknown>;
+};
+
+type ReconciliationSnapshotState = {
+  id: string;
+  orgId: string;
+  sha256: string;
+  actorId: string;
+  generatedAt: Date;
+  paygwBalance: number;
+  gstBalance: number;
+};
+
+type AuditLogSealState = {
+  id: string;
+  auditLogId: string;
+  sha256: string;
+  sealedAt: Date;
+  sealedBy: string;
 };
 
 type InMemoryState = {
@@ -61,6 +106,10 @@ type InMemoryState = {
   alerts: AlertState[];
   evidenceArtifacts: EvidenceArtifactState[];
   auditLogs: AuditEntry[];
+  designatedAccountStates: DesignatedStateTransition[];
+  designatedViolationFlags: DesignatedViolationFlagState[];
+  reconciliationSnapshots: ReconciliationSnapshotState[];
+  auditLogSeals: AuditLogSealState[];
 };
 
 const randomId = () => `id-${Math.random().toString(16).slice(2, 10)}`;
@@ -72,6 +121,10 @@ function createInMemoryPrisma(): { prisma: any; state: InMemoryState } {
     alerts: [],
     evidenceArtifacts: [],
     auditLogs: [],
+    designatedAccountStates: [],
+    designatedViolationFlags: [],
+    reconciliationSnapshots: [],
+    auditLogSeals: [],
   };
 
   const prisma = {
@@ -119,9 +172,7 @@ function createInMemoryPrisma(): { prisma: any; state: InMemoryState } {
         if (data.balance) {
           account.balance = data.balance;
         }
-        if (data.updatedAt) {
-          account.updatedAt = data.updatedAt;
-        }
+        account.updatedAt = data.updatedAt ?? new Date();
         return { ...account };
       },
       findMany: async ({ where, include }: any) => {
@@ -148,6 +199,35 @@ function createInMemoryPrisma(): { prisma: any; state: InMemoryState } {
         });
       },
     },
+    designatedAccountStateTransition: {
+      findFirst: async ({ where, orderBy }: any) => {
+        const matches = state.designatedAccountStates.filter((entry) => {
+          if (where?.accountId && entry.accountId !== where.accountId) return false;
+          if (where?.orgId && entry.orgId !== where.orgId) return false;
+          return true;
+        });
+        if (orderBy?.createdAt === "desc") {
+          matches.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        }
+        const found = matches[0];
+        return found ? { ...found } : null;
+      },
+      create: async ({ data }: any) => {
+        const transition: DesignatedStateTransition = {
+          id: data.id ?? randomId(),
+          orgId: data.orgId,
+          accountId: data.accountId,
+          fromState: data.fromState ?? null,
+          toState: data.toState,
+          actorId: data.actorId,
+          reason: data.reason ?? null,
+          metadata: data.metadata ?? null,
+          createdAt: data.createdAt ?? new Date(),
+        };
+        state.designatedAccountStates.push(transition);
+        return { ...transition };
+      },
+    },
     designatedTransfer: {
       create: async ({ data }: any) => {
         const transfer: DesignatedTransferState = {
@@ -160,6 +240,38 @@ function createInMemoryPrisma(): { prisma: any; state: InMemoryState } {
         };
         state.designatedTransfers.push(transfer);
         return { ...transfer };
+      },
+      findMany: async ({ where }: any) => {
+        return state.designatedTransfers
+          .filter((entry) => entry.orgId === where.orgId)
+          .map((entry) => ({ ...entry }));
+      },
+    },
+    designatedViolationFlag: {
+      findFirst: async ({ where }: any) => {
+        const match = state.designatedViolationFlags.find((entry) => {
+          if (entry.orgId !== where.orgId) return false;
+          if (where.accountId && entry.accountId !== where.accountId) return false;
+          if (where.code && entry.code !== where.code) return false;
+          if (where.status && entry.status !== where.status) return false;
+          return true;
+        });
+        return match ? { ...match } : null;
+      },
+      create: async ({ data }: any) => {
+        const flag: DesignatedViolationFlagState = {
+          id: data.id ?? randomId(),
+          orgId: data.orgId,
+          accountId: data.accountId ?? null,
+          code: data.code,
+          severity: data.severity,
+          status: data.status ?? "OPEN",
+          detectedAt: data.detectedAt ?? new Date(),
+          resolvedAt: data.resolvedAt ?? null,
+          metadata: (data.metadata as Record<string, unknown>) ?? {},
+        };
+        state.designatedViolationFlags.push(flag);
+        return { ...flag };
       },
     },
     evidenceArtifact: {
@@ -189,28 +301,80 @@ function createInMemoryPrisma(): { prisma: any; state: InMemoryState } {
         return { ...artifact };
       },
       findMany: async ({ where }: any) => {
-        const matches = state.evidenceArtifacts.filter(
-          (entry) => entry.orgId === where.orgId,
-        );
-        return matches.map((entry) => ({ ...entry }));
+        return state.evidenceArtifacts
+          .filter((entry) => entry.orgId === where.orgId)
+          .map((entry) => ({ ...entry }));
+      },
+    },
+    designatedReconciliationSnapshot: {
+      create: async ({ data }: any) => {
+        const snapshot: ReconciliationSnapshotState = {
+          id: data.id ?? randomId(),
+          orgId: data.orgId,
+          sha256: data.sha256,
+          actorId: data.actorId,
+          generatedAt: data.generatedAt ?? new Date(),
+          paygwBalance: Number(data.paygwBalance ?? 0),
+          gstBalance: Number(data.gstBalance ?? 0),
+        };
+        state.reconciliationSnapshots.push(snapshot);
+        return { ...snapshot };
       },
     },
     auditLog: {
+      findFirst: async ({ where }: any) => {
+        const match = state.auditLogs
+          .filter((entry) => entry.orgId === where.orgId)
+          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+        return match ? { ...match } : null;
+      },
       create: async ({ data }: any) => {
+        const previous = state.auditLogs
+          .filter((entry) => entry.orgId === data.orgId)
+          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+
+        const createdAt = data.createdAt ?? new Date();
+        const prevHash = data.prevHash ?? previous?.hash ?? null;
+        const metadata = (data.metadata as Record<string, unknown>) ?? {};
+        const payload = JSON.stringify({
+          orgId: data.orgId,
+          actorId: data.actorId,
+          action: data.action,
+          metadata,
+          createdAt: createdAt.toISOString(),
+          prevHash,
+        });
+        const hash =
+          data.hash ?? createHash("sha256").update(payload).digest("hex");
+
         const entry: AuditEntry = {
           id: data.id ?? randomId(),
           orgId: data.orgId,
           actorId: data.actorId,
           action: data.action,
-          metadata: data.metadata ?? {},
-          createdAt: data.createdAt ?? new Date(),
+          metadata,
+          createdAt,
+          hash,
+          prevHash,
         };
         state.auditLogs.push(entry);
         return { ...entry };
       },
     },
-    $transaction: async (callback: (tx: any) => Promise<any>) =>
-      callback(prisma),
+    auditLogSeal: {
+      create: async ({ data }: any) => {
+        const seal: AuditLogSealState = {
+          id: data.id ?? randomId(),
+          auditLogId: data.auditLogId,
+          sha256: data.sha256,
+          sealedAt: data.sealedAt ?? new Date(),
+          sealedBy: data.sealedBy,
+        };
+        state.auditLogSeals.push(seal);
+        return { ...seal };
+      },
+    },
+    $transaction: async (callback: (tx: any) => Promise<any>) => callback(prisma),
   };
 
   return { prisma, state };
@@ -304,7 +468,7 @@ test("designated account reconciliation emits evidence artefact", async () => {
     },
   );
 
-  const { summary, artifactId, sha256 } =
+  const { summary, artifactId, sha256, snapshotId } =
     await generateDesignatedAccountReconciliationArtifact(
       {
         prisma,
@@ -318,9 +482,12 @@ test("designated account reconciliation emits evidence artefact", async () => {
 
   assert.ok(artifactId.length > 0);
   assert.ok(sha256.length === 64);
+  assert.ok(snapshotId.length > 0);
   assert.equal(summary.totals.paygw, 1500);
   assert.equal(summary.totals.gst, 800);
   assert.equal(state.evidenceArtifacts.length, 1);
+  assert.equal(state.reconciliationSnapshots.length, 1);
+  assert.equal(state.reconciliationSnapshots[0]?.id, snapshotId);
   assert.equal(
     state.evidenceArtifacts[0].kind,
     "designated-reconciliation",
