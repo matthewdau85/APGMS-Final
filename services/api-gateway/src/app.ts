@@ -11,6 +11,7 @@ import rateLimit from "./plugins/rate-limit.js";
 import { authGuard, createAuthGuard, REGULATOR_AUDIENCE } from "./auth.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerRegulatorAuthRoutes } from "./routes/regulator-auth.js";
+import { registerComplianceRoutes } from "./routes/compliance.js";
 import { prisma } from "./db.js";
 import { parseWithSchema } from "./lib/validation.js";
 import { verifyChallenge, requireRecentVerification, type VerifyChallengeResult } from "./security/mfa.js";
@@ -140,7 +141,7 @@ export async function buildServer(): Promise<FastifyInstance> {
     const results: { db: boolean; redis: boolean | null; nats: boolean | null } = {
       db: false,
       redis: providerState.redis ? false : null,
-      nats: providerState.nats ? false : null
+      nats: providerState.eventBus ? false : null
     };
 
     try {
@@ -161,13 +162,18 @@ export async function buildServer(): Promise<FastifyInstance> {
       }
     }
 
-    if (providerState.nats) {
-      try {
-        await providerState.nats.flush();
+    if (providerState.eventBus) {
+      const bus = providerState.eventBus;
+      if (typeof bus.ping === "function") {
+        try {
+          await bus.ping();
+          results.nats = true;
+        } catch (error) {
+          results.nats = false;
+          app.log.error({ err: error }, "readiness_nats_flush_failed");
+        }
+      } else {
         results.nats = true;
-      } catch (error) {
-        results.nats = false;
-        app.log.error({ err: error }, "readiness_nats_flush_failed");
       }
     }
 
@@ -184,6 +190,7 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   await registerAuthRoutes(app);
   await registerRegulatorAuthRoutes(app);
+  await registerComplianceRoutes(app);
 
   const regulatorAuthGuard = createAuthGuard(REGULATOR_AUDIENCE, {
     validate: async (claims, request) => {

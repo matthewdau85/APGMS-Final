@@ -1,7 +1,11 @@
 // services/api-gateway/src/providers.ts
 import type { FastifyBaseLogger } from "fastify";
 import { createClient, type RedisClientType } from "redis";
-import { connect, type ConnectionOptions, type NatsConnection } from "nats";
+
+import { InMemoryEventBus } from "@apgms/shared/messaging/in-memory-bus.js";
+import { NatsBus } from "@apgms/shared/messaging/nats-bus.js";
+import type { EventBus } from "@apgms/shared/messaging/event-bus.js";
+
 import { config } from "./config.js";
 
 // Accept any-augmented redis client variants
@@ -9,7 +13,7 @@ type AnyRedisClient = RedisClientType<any, any, any>;
 
 export type Providers = {
   redis: AnyRedisClient | null;
-  nats: NatsConnection | null;
+  eventBus: EventBus | null;
 };
 
 export async function initProviders(
@@ -17,7 +21,7 @@ export async function initProviders(
 ): Promise<Providers> {
   const providers: Providers = {
     redis: null,
-    nats: null,
+    eventBus: null,
   };
 
   if (config.redis?.url) {
@@ -35,19 +39,21 @@ export async function initProviders(
     }
   }
 
-  if (config.nats?.url) {
-    const options: ConnectionOptions = {
-      servers: config.nats.url,
-    };
-    if (config.nats.token) options.token = config.nats.token;
-    if (config.nats.username) options.user = config.nats.username;
-    if (config.nats.password) options.pass = config.nats.password;
+  const fallbackBus = new InMemoryEventBus();
+  providers.eventBus = fallbackBus;
 
+  if (config.nats?.url) {
     try {
-      const natsConnection = await connect(options);
-      providers.nats = natsConnection;
+      const bus = await NatsBus.connect({
+        url: config.nats.url,
+        stream: config.nats.stream,
+        subjectPrefix: config.nats.subjectPrefix,
+        connectionName: "api-gateway",
+      });
+      providers.eventBus = bus;
       logger.info("nats_connected");
     } catch (error) {
+      providers.eventBus = fallbackBus;
       logger.error({ err: error }, "nats_connection_failed");
     }
   }
@@ -67,16 +73,15 @@ export async function closeProviders(
     }
   }
 
-  if (providers.nats) {
-    try {
-      await providers.nats.drain();
-    } catch (error) {
-      logger.error({ err: error }, "nats_drain_failed");
-    } finally {
+  if (providers.eventBus && "close" in providers.eventBus) {
+    const bus = providers.eventBus as unknown as {
+      close?: () => Promise<void>;
+    };
+    if (bus.close) {
       try {
-        await providers.nats.close();
-      } catch (closeError) {
-        logger.error({ err: closeError }, "nats_close_failed");
+        await bus.close();
+      } catch (error) {
+        logger.error({ err: error }, "nats_close_failed");
       }
     }
   }

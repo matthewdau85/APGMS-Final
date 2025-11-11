@@ -52,6 +52,8 @@ export interface AppConfig {
     readonly token?: string;
     readonly username?: string;
     readonly password?: string;
+    readonly stream: string;
+    readonly subjectPrefix: string;
   };
 }
 
@@ -321,6 +323,9 @@ export function loadConfig(): AppConfig {
       : undefined;
 
   const natsUrlRaw = process.env.NATS_URL?.trim();
+  const natsStream = process.env.NATS_STREAM?.trim() ?? "APGMS";
+  const natsSubjectPrefix =
+    process.env.NATS_SUBJECT_PREFIX?.trim() ?? "apgms";
   const nats =
     natsUrlRaw && natsUrlRaw.length > 0
       ? {
@@ -328,6 +333,9 @@ export function loadConfig(): AppConfig {
           token: process.env.NATS_TOKEN?.trim() || undefined,
           username: process.env.NATS_USERNAME?.trim() || undefined,
           password: process.env.NATS_PASSWORD?.trim() || undefined,
+          stream: natsStream.length > 0 ? natsStream : "APGMS",
+          subjectPrefix:
+            natsSubjectPrefix.length > 0 ? natsSubjectPrefix : "apgms",
         }
       : undefined;
 

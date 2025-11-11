@@ -343,6 +343,11 @@ model Org {
   paymentPlanRequests PaymentPlanRequest[]
   regulatorSessions RegulatorSession[]
   monitoringSnapshots MonitoringSnapshot[]
+  discrepancies ComplianceDiscrepancy[]
+  fraudCases ComplianceFraudCase[]
+  remediationActions ComplianceRemediationAction[]
+  compliancePaymentPlans CompliancePaymentPlan[]
+  complianceTrainingSamples ComplianceTrainingSample[]
 
   // payroll backrefs
   employees  Employee[]
@@ -407,6 +412,7 @@ model BasCycle {
   overallStatus String
   lodgedAt      DateTime?
   paymentPlanRequests PaymentPlanRequest[]
+  compliancePaymentPlans CompliancePaymentPlan[]
 
   @@index([orgId, periodStart, periodEnd])
   @@index([orgId, lodgedAt])
@@ -449,6 +455,7 @@ model PaymentPlanRequest {
   status      String    @default("SUBMITTED")
   detailsJson Json
   resolvedAt  DateTime?
+  compliancePaymentPlans CompliancePaymentPlan[]
 
   @@index([orgId, basCycleId])
   @@index([orgId, status])
@@ -518,4 +525,136 @@ model MonitoringSnapshot {
 
   @@index([orgId, createdAt])
   @@index([orgId, type, createdAt])
+}
+
+model ComplianceDiscrepancy {
+  id             String   @id @default(cuid())
+  org            Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId          String
+  reference      String
+  type           String
+  category       String
+  status         String   @default("OPEN")
+  severity       String   @default("MEDIUM")
+  description    String?
+  source         String?
+  context        Json?
+  detectedAt     DateTime @default(now())
+  resolvedAt     DateTime?
+  resolutionNote String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  fraudCases           ComplianceFraudCase[]
+  remediationActions   ComplianceRemediationAction[]
+  paymentPlan          CompliancePaymentPlan?
+  trainingSamples      ComplianceTrainingSample[]
+
+  @@unique([orgId, reference])
+  @@index([orgId, status])
+  @@index([orgId, detectedAt])
+}
+
+model ComplianceFraudCase {
+  id             String   @id @default(cuid())
+  org            Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId          String
+  discrepancy    ComplianceDiscrepancy @relation(fields: [discrepancyId], references: [id], onDelete: Cascade)
+  discrepancyId  String
+  status         String   @default("UNDER_REVIEW")
+  hypothesis     String
+  riskBand       String?
+  confidence     Decimal? @db.Decimal(5, 4)
+  detectedAt     DateTime @default(now())
+  resolvedAt     DateTime?
+  context        Json?
+  auditTrail     Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  remediationActions ComplianceRemediationAction[]
+  paymentPlan        CompliancePaymentPlan?
+  trainingSamples    ComplianceTrainingSample[]
+
+  @@index([orgId, status])
+  @@index([orgId, riskBand])
+}
+
+model ComplianceRemediationAction {
+  id                  String   @id @default(cuid())
+  org                 Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId               String
+  discrepancy         ComplianceDiscrepancy? @relation(fields: [discrepancyId], references: [id], onDelete: SetNull)
+  discrepancyId       String?
+  fraudCase           ComplianceFraudCase? @relation(fields: [fraudCaseId], references: [id], onDelete: SetNull)
+  fraudCaseId         String?
+  evidenceArtifact    EvidenceArtifact? @relation(fields: [evidenceArtifactId], references: [id], onDelete: SetNull)
+  evidenceArtifactId  String?
+  type                String
+  status              String   @default("PLANNED")
+  owner               String?
+  dueDate             DateTime?
+  completedAt         DateTime?
+  outcome             String?
+  notes               Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([orgId, status])
+  @@index([orgId, discrepancyId])
+  @@index([orgId, fraudCaseId])
+}
+
+model CompliancePaymentPlan {
+  id             String   @id @default(cuid())
+  org            Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId          String
+  discrepancy    ComplianceDiscrepancy? @relation(fields: [discrepancyId], references: [id], onDelete: SetNull)
+  discrepancyId  String?
+  fraudCase      ComplianceFraudCase? @relation(fields: [fraudCaseId], references: [id], onDelete: SetNull)
+  fraudCaseId    String?
+  basCycle       BasCycle? @relation(fields: [basCycleId], references: [id], onDelete: SetNull)
+  basCycleId     String?
+  request        PaymentPlanRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  requestId      String?
+  status         String   @default("PENDING_APPROVAL")
+  totalDue       Decimal  @db.Decimal(14, 2)
+  downPayment    Decimal? @db.Decimal(14, 2)
+  schedule       Json
+  activatedAt    DateTime?
+  cancelledAt    DateTime?
+  completedAt    DateTime?
+  auditTrail     Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  trainingSamples ComplianceTrainingSample[]
+
+  @@index([orgId, status])
+  @@index([orgId, discrepancyId])
+  @@index([orgId, fraudCaseId])
+}
+
+model ComplianceTrainingSample {
+  id                 String   @id @default(cuid())
+  org                Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId              String
+  discrepancy        ComplianceDiscrepancy? @relation(fields: [discrepancyId], references: [id], onDelete: SetNull)
+  discrepancyId      String?
+  fraudCase          ComplianceFraudCase? @relation(fields: [fraudCaseId], references: [id], onDelete: SetNull)
+  fraudCaseId        String?
+  paymentPlan        CompliancePaymentPlan? @relation(fields: [paymentPlanId], references: [id], onDelete: SetNull)
+  paymentPlanId      String?
+  evidenceArtifact   EvidenceArtifact? @relation(fields: [evidenceArtifactId], references: [id], onDelete: SetNull)
+  evidenceArtifactId String?
+  eventId            String   @unique
+  eventType          String
+  source             String
+  label              String?
+  features           Json
+  context            Json?
+  generatedAt        DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  @@index([orgId, generatedAt])
+  @@index([orgId, label])
 }
