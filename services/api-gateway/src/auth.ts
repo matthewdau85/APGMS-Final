@@ -1,18 +1,54 @@
 // services/api-gateway/src/auth.ts
 import { FastifyReply, FastifyRequest } from "fastify";
-import jwt, { JwtPayload, SignOptions } from "jsonwebtoken";
-import bcrypt from "bcryptjs";
+import jwt, { JwtPayload } from "jsonwebtoken";
+import { SignJWT, importJWK, type KeyLike, type JWK } from "jose";
+
+import { verifyPassword } from "@apgms/shared";
+import { verifyRequest, AuthError as JwtAuthError, type Principal } from "./lib/auth.js";
 
 import { prisma } from "./db.js";
 
 const AUD = process.env.AUTH_AUDIENCE!;
 const ISS = process.env.AUTH_ISSUER!;
-const SECRET = process.env.AUTH_DEV_SECRET!; // HS256 key
+const SECRET = process.env.AUTH_DEV_SECRET;
 const REGULATOR_AUD =
   process.env.REGULATOR_JWT_AUDIENCE?.trim().length
     ? process.env.REGULATOR_JWT_AUDIENCE!.trim()
     : "urn:apgms:regulator";
-const CLOCK_TOLERANCE_SECONDS = 60;
+
+type SigningKey = {
+  kid: string;
+  key: KeyLike;
+  alg: string;
+};
+
+let signingKeyCache: SigningKey | null = null;
+
+async function loadSigningKey(): Promise<SigningKey | null> {
+  if (signingKeyCache) {
+    return signingKeyCache;
+  }
+  const jwksEnv = process.env.AUTH_JWKS;
+  if (!jwksEnv) {
+    return null;
+  }
+  let parsed: { keys?: JWK[] };
+  try {
+    parsed = JSON.parse(jwksEnv) as { keys?: JWK[] };
+  } catch {
+    return null;
+  }
+  const jwk = (parsed.keys ?? []).find(
+    (entry) =>
+      entry.kid && entry.alg && typeof entry.d === "string" && entry.d.length > 0,
+  );
+  if (!jwk) {
+    return null;
+  }
+  const key = await importJWK(jwk, jwk.alg);
+  signingKeyCache = { kid: jwk.kid, key, alg: jwk.alg };
+  return signingKeyCache;
+}
 
 export type TokenClaims = JwtPayload & Record<string, unknown>;
 
@@ -52,7 +88,7 @@ function toSessionUser(user: {
   };
 }
 
-export function signToken(
+export async function signToken(
   user: {
     id: string;
     orgId: string;
@@ -60,7 +96,7 @@ export function signToken(
     mfaEnabled?: boolean;
   },
   options: SignTokenOptions = {},
-) {
+): Promise<string> {
   const payload: TokenClaims = {
     sub: options.subject ?? user.id,
     orgId: user.orgId,
@@ -69,19 +105,37 @@ export function signToken(
     ...(options.extraClaims ?? {}),
   };
 
+  const audience = options.audience ?? AUD;
+  const issuer = ISS;
+  const expiresIn = options.expiresIn ?? "1h";
 
-  const signOptions: SignOptions = {
+  const signingKey = await loadSigningKey();
+  if (signingKey) {
+    const token = await new SignJWT(payload)
+      .setProtectedHeader({ alg: signingKey.alg, kid: signingKey.kid })
+      .setAudience(audience)
+      .setIssuer(issuer)
+      .setSubject(String(payload.sub))
+      .setExpirationTime(expiresIn)
+      .setIssuedAt()
+      .sign(signingKey.key);
+    return token;
+  }
+
+  if (!SECRET) {
+    throw new Error("AUTH_DEV_SECRET is required when no JWKS signing key is configured");
+  }
+
+  return jwt.sign(payload, SECRET, {
     algorithm: "HS256",
-    expiresIn: (options.expiresIn ?? "1h") as SignOptions["expiresIn"],
-    audience: options.audience ?? AUD,
-    issuer: ISS,
-  };
-
-  return jwt.sign(payload, SECRET, signOptions);
+    audience,
+    issuer,
+    expiresIn,
+  });
 }
 
 type GuardValidateFn = (
-  payload: TokenClaims,
+  principal: Principal,
   request: FastifyRequest,
 ) => Promise<void> | void;
 
@@ -93,82 +147,36 @@ export function createAuthGuard(
   expectedAudience: string,
   options: GuardOptions = {},
 ) {
-  function validateClaims(payload: TokenClaims, request: FastifyRequest): AuthenticatedUser {
-    const audience = payload.aud;
-    if (Array.isArray(audience)) {
-      if (!audience.includes(expectedAudience)) {
-        throw new Error("unexpected_audience");
-      }
-    } else if (audience && audience !== expectedAudience) {
-      throw new Error("unexpected_audience");
-    }
-
-    const sub =
-      typeof payload.sub === "string"
-        ? payload.sub
-        : typeof (payload as any).id === "string"
-          ? (payload as any).id
-          : null;
-    if (!sub) {
-      throw new Error("missing_subject");
-    }
-
-    const orgId = typeof payload.orgId === "string" ? payload.orgId : null;
-    if (!orgId) {
-      throw new Error("missing_org_scope");
-    }
-
-    const role = typeof payload.role === "string" ? payload.role : null;
-    if (!role) {
-      throw new Error("missing_role_scope");
-    }
-
-    const mfaEnabled = payload.mfaEnabled === true;
-    const regulator = payload.regulator === true;
-    const sessionId =
-      typeof payload.sessionId === "string" ? payload.sessionId : undefined;
-
-    const authContext: AuthenticatedUser = {
-      sub,
-      orgId,
-      role,
-      mfaEnabled,
-      regulator,
-      sessionId,
-    };
-
-    return authContext;
-  }
-
   return async function authGuardInstance(
     request: FastifyRequest,
     reply: FastifyReply,
   ) {
-    const header = request.headers.authorization;
-    if (!header?.startsWith("Bearer ")) {
-      reply.code(401).send({
-        error: { code: "unauthorized", message: "Missing bearer token" },
-      });
-      return;
-    }
-
-    const token = header.substring("Bearer ".length).trim();
-
     try {
-      const decoded = jwt.verify(token, SECRET, {
-        algorithms: ["HS256"],
+      const principal = await verifyRequest(request, reply, {
         audience: expectedAudience,
-        issuer: ISS,
-        clockTolerance: CLOCK_TOLERANCE_SECONDS,
-      }) as TokenClaims;
+      });
 
       if (options.validate) {
-        await options.validate(decoded, request);
+        await options.validate(principal, request);
       }
 
-      const context = validateClaims(decoded, request);
+      const context: AuthenticatedUser = {
+        sub: principal.id,
+        orgId: principal.orgId,
+        role: principal.roles[0] ?? "admin",
+        mfaEnabled: principal.mfaEnabled,
+        regulator: principal.regulator,
+        sessionId: principal.sessionId,
+      };
+
       (request as any).user = context;
-    } catch {
+    } catch (error) {
+      if (error instanceof JwtAuthError) {
+        reply.code(error.statusCode).send({
+          error: { code: error.code ?? "unauthorized", message: error.message },
+        });
+        return;
+      }
       reply.code(401).send({
         error: { code: "unauthorized", message: "Invalid token" },
       });
@@ -196,7 +204,7 @@ export async function verifyCredentials(
   });
   if (!user) return null;
 
-  const ok = await bcrypt.compare(pw, user.password);
+  const ok = await verifyPassword(user.password, pw);
   if (!ok) return null;
 
   return {
@@ -224,4 +232,3 @@ export function buildClientUser(user: AuthenticatedUser) {
     mfaEnabled: user.mfaEnabled,
   };
 }
-
