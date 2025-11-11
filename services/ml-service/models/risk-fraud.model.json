@@ -1,0 +1,28 @@
+{
+  "id": "risk-fraud",
+  "version": "2025.01",
+  "type": "logistic_regression",
+  "threshold": 0.55,
+  "bias": -1.8,
+  "coefficients": {
+    "highSeverityAlerts": 0.65,
+    "suddenBalanceShift": 0.004,
+    "bankLineVariance": 0.0025,
+    "unusualVendors": 0.55,
+    "manualOverrides": 0.35
+  },
+  "explanations": {
+    "highSeverityAlerts": "Active critical alerts are strong fraud precursors.",
+    "suddenBalanceShift": "Rapid ledger swings suggest anomalous movement.",
+    "bankLineVariance": "Volatility across bank lines feeds the risk score.",
+    "unusualVendors": "New or risky vendors need human verification.",
+    "manualOverrides": "Manual overrides weaken standard fraud controls."
+  },
+  "featureStats": {
+    "highSeverityAlerts": { "mean": 0.6, "std": 0.9 },
+    "suddenBalanceShift": { "mean": 4200, "std": 3800 },
+    "bankLineVariance": { "mean": 2100, "std": 1500 },
+    "unusualVendors": { "mean": 0.8, "std": 0.9 },
+    "manualOverrides": { "mean": 0.3, "std": 0.5 }
+  }
+}

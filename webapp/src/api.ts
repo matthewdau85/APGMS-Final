@@ -236,6 +236,23 @@ export async function fetchBasPreview(token: string) {
     gst: { required: number; secured: number; status: string };
     overallStatus: string;
     blockers: string[];
+    risk?: {
+      scenario: "shortfall";
+      score: number;
+      policyThreshold: number;
+      modelThreshold: number;
+      modelId: string;
+      modelVersion: string;
+      policyPassed: boolean;
+      contributions: Array<{
+        feature: string;
+        value: number;
+        weight: number;
+        impact: number;
+        explanation?: string;
+      }>;
+      issuedAt: string;
+    };
   }>;
 }
 
@@ -266,6 +283,103 @@ export async function lodgeBas(
   return res.json() as Promise<{
     basCycle: { id: string; status: string; lodgedAt: string };
   }>;
+}
+
+export type RiskScenario = "shortfall" | "fraud" | "plan";
+
+export async function fetchRiskInsights(token: string) {
+  const res = await fetch(`${API_BASE}/risk/insights`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error("failed_risk_insights");
+  return res.json() as Promise<{
+    shortfall: {
+      scenario: RiskScenario;
+      score: number;
+      policyThreshold: number;
+      model: { id: string; version: string; threshold: number };
+      policyPassed: boolean;
+      contributions: Array<{
+        feature: string;
+        value: number;
+        weight: number;
+        impact: number;
+        explanation?: string;
+      }>;
+      features: Record<string, number>;
+      issuedAt: string;
+    };
+    fraud: {
+      scenario: RiskScenario;
+      score: number;
+      policyThreshold: number;
+      model: { id: string; version: string; threshold: number };
+      policyPassed: boolean;
+      contributions: Array<{
+        feature: string;
+        value: number;
+        weight: number;
+        impact: number;
+        explanation?: string;
+      }>;
+      features: Record<string, number>;
+      issuedAt: string;
+    };
+    plan: {
+      scenario: RiskScenario;
+      score: number;
+      policyThreshold: number;
+      model: { id: string; version: string; threshold: number };
+      policyPassed: boolean;
+      contributions: Array<{
+        feature: string;
+        value: number;
+        weight: number;
+        impact: number;
+        explanation?: string;
+      }>;
+      features: Record<string, number>;
+      issuedAt: string;
+    };
+    decisions: Array<{
+      id: string;
+      scenario: RiskScenario;
+      decision: string;
+      rationale: string;
+      createdAt: string;
+      createdBy: string;
+      score: number;
+      policyThreshold: number;
+      modelThreshold: number;
+      modelId: string;
+      modelVersion: string;
+      issuedAt: string;
+      policyPassed: boolean;
+    }>;
+  }>;
+}
+
+export async function submitRiskDecision(
+  token: string,
+  payload: {
+    scenario: RiskScenario;
+    decision: "APPROVED" | "OVERRIDDEN" | "BLOCKED";
+    rationale: string;
+    score: number;
+    policyThreshold: number;
+    modelThreshold: number;
+    modelId: string;
+    modelVersion: string;
+    issuedAt: string;
+  },
+) {
+  const res = await fetch(`${API_BASE}/risk/decisions`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("failed_risk_decision");
+  return res.json() as Promise<{ decision: { id: string } }>;
 }
 
 export async function fetchComplianceReport(token: string) {

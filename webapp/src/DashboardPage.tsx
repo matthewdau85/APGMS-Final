@@ -4,6 +4,9 @@ import {
   fetchCurrentObligations,
   createBankLine,
   fetchDesignatedAccounts,
+  fetchRiskInsights,
+  submitRiskDecision,
+  type RiskScenario,
 } from "./api";
 import { getToken } from "./auth";
 
@@ -26,6 +29,12 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [designatedError, setDesignatedError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [riskInsights, setRiskInsights] = useState<Awaited<ReturnType<typeof fetchRiskInsights>> | null>(null);
+  const [riskError, setRiskError] = useState<string | null>(null);
+  const [riskActionState, setRiskActionState] = useState<{ loading: boolean; message: string | null }>({
+    loading: false,
+    message: null,
+  });
   const [formState, setFormState] = useState({
     date: "2025-10-20T00:00:00.000Z",
     amount: "123.45",
@@ -41,12 +50,15 @@ export default function DashboardPage() {
     (async () => {
       setLoading(true);
       try {
-        const [obligationsResponse, bankLinesResponse] = await Promise.all([
+        const [obligationsResponse, bankLinesResponse, riskResponse] = await Promise.all([
           fetchCurrentObligations(token),
           fetchBankLines(token),
+          fetchRiskInsights(token),
         ]);
         setObligations(obligationsResponse);
         setBankLines(bankLinesResponse.lines);
+        setRiskInsights(riskResponse);
+        setRiskError(null);
       } catch (err) {
         console.error(err);
         setError("Unable to load dashboard data");
@@ -113,6 +125,38 @@ export default function DashboardPage() {
     }
   }
 
+  async function handleRiskDecision(scenario: RiskScenario, decision: "APPROVED" | "OVERRIDDEN" | "BLOCKED") {
+    if (!token || !riskInsights) return;
+    const current = riskInsights[scenario] as RiskInsight;
+    const rationale = window.prompt(
+      `Provide rationale for ${decision.toLowerCase()} decision on ${scenario} model`,
+      decision === "APPROVED" ? "Automated decision aligns with evidence" : "Manual mitigation documented",
+    );
+    if (!rationale || rationale.trim().length < 5) {
+      return;
+    }
+    setRiskActionState({ loading: true, message: null });
+    try {
+      await submitRiskDecision(token, {
+        scenario,
+        decision,
+        rationale: rationale.trim(),
+        score: current.score,
+        policyThreshold: current.policyThreshold,
+        modelThreshold: current.model.threshold,
+        modelId: current.model.id,
+        modelVersion: current.model.version,
+        issuedAt: current.issuedAt,
+      });
+      const refreshed = await fetchRiskInsights(token);
+      setRiskInsights(refreshed);
+      setRiskActionState({ loading: false, message: "Decision logged to immutable record" });
+    } catch (err) {
+      console.error(err);
+      setRiskActionState({ loading: false, message: "Unable to log decision. Try again later." });
+    }
+  }
+
   if (!token) {
     return null;
   }
@@ -128,6 +172,51 @@ export default function DashboardPage() {
 
       {loading && <div style={infoTextStyle}>Loading APGMS control panel…</div>}
       {error && <div style={errorTextStyle}>{error}</div>}
+
+      {riskInsights && (
+        <section style={riskSectionStyle}>
+          <div style={riskHeaderStyle}>
+            <h2 style={riskTitleStyle}>Model-driven controls</h2>
+            <p style={riskSubtitleStyle}>
+              ML scoring gates BAS readiness, fraud reviews, and payment plan requests. Capture human decisions for audit.
+            </p>
+          </div>
+          {riskError && <div style={errorTextStyle}>{riskError}</div>}
+          <div style={riskGridStyle}>
+            <RiskCard
+              insight={riskInsights.shortfall}
+              label="BAS readiness"
+              onDecision={handleRiskDecision}
+              disabled={riskActionState.loading}
+            />
+            <RiskCard
+              insight={riskInsights.fraud}
+              label="Fraud review"
+              onDecision={handleRiskDecision}
+              disabled={riskActionState.loading}
+            />
+            <RiskCard
+              insight={riskInsights.plan}
+              label="Payment plan compliance"
+              onDecision={handleRiskDecision}
+              disabled={riskActionState.loading}
+            />
+          </div>
+          {riskInsights.decisions.length > 0 && (
+            <div style={riskDecisionLogStyle}>
+              <div style={{ fontWeight: 600, marginBottom: "4px" }}>Recent reviewer decisions</div>
+              <ul style={{ margin: 0, paddingLeft: "16px", fontSize: "13px" }}>
+                {riskInsights.decisions.slice(0, 5).map((entry) => (
+                  <li key={entry.id}>
+                    <strong>{entry.scenario}</strong> {entry.decision} by {entry.createdBy} on {new Date(entry.createdAt).toLocaleString()}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {riskActionState.message && <div style={infoTextStyle}>{riskActionState.message}</div>}
+        </section>
+      )}
 
       {obligations && !error && (
         <>
@@ -348,6 +437,68 @@ function DesignatedAccountCard({
   );
 }
 
+type RiskInsight = Awaited<ReturnType<typeof fetchRiskInsights>>["shortfall"];
+
+function RiskCard({
+  insight,
+  label,
+  onDecision,
+  disabled,
+}: {
+  insight: RiskInsight;
+  label: string;
+  onDecision: (scenario: RiskScenario, decision: "APPROVED" | "OVERRIDDEN" | "BLOCKED") => void;
+  disabled: boolean;
+}) {
+  const statusColor = insight.policyPassed ? "#047857" : "#b91c1c";
+  return (
+    <div style={riskCardStyle}>
+      <div style={riskCardHeaderStyle}>
+        <div>
+          <div style={riskCardLabelStyle}>{label}</div>
+          <div style={riskScoreStyle(statusColor)}>{insight.score.toFixed(3)}</div>
+        </div>
+        <div style={riskThresholdStyle}>
+          Policy threshold <strong>{insight.policyThreshold.toFixed(2)}</strong>
+        </div>
+      </div>
+      <div style={riskFeatureListStyle}>
+        {insight.contributions.slice(0, 3).map((item) => (
+          <div key={item.feature}>
+            <strong>{item.feature}</strong>: {item.explanation ?? "Noted"}
+          </div>
+        ))}
+      </div>
+      <div style={riskActionsStyle}>
+        <button
+          type="button"
+          style={riskActionButtonStyle("#047857")}
+          onClick={() => onDecision(insight.scenario, "APPROVED")}
+          disabled={disabled}
+        >
+          Approve
+        </button>
+        <button
+          type="button"
+          style={riskActionButtonStyle("#92400e")}
+          onClick={() => onDecision(insight.scenario, "OVERRIDDEN")}
+          disabled={disabled}
+        >
+          Override
+        </button>
+        <button
+          type="button"
+          style={riskActionButtonStyle("#b91c1c")}
+          onClick={() => onDecision(insight.scenario, "BLOCKED")}
+          disabled={disabled}
+        >
+          Escalate
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ObligationSummary(props: {
   title: string;
   required: number;
@@ -435,6 +586,104 @@ const pageSubtitleStyle: React.CSSProperties = {
   fontSize: "14px",
   maxWidth: "680px",
 };
+
+const riskSectionStyle: React.CSSProperties = {
+  backgroundColor: "#ffffff",
+  borderRadius: "12px",
+  border: "1px solid #e2e8f0",
+  padding: "24px",
+  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.08)",
+  display: "grid",
+  gap: "16px",
+};
+
+const riskHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "4px",
+};
+
+const riskTitleStyle: React.CSSProperties = {
+  fontSize: "18px",
+  fontWeight: 600,
+  margin: 0,
+};
+
+const riskSubtitleStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: "13px",
+  color: "#4b5563",
+  maxWidth: "720px",
+};
+
+const riskGridStyle: React.CSSProperties = {
+  display: "grid",
+  gap: "16px",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+};
+
+const riskDecisionLogStyle: React.CSSProperties = {
+  borderTop: "1px solid #e2e8f0",
+  paddingTop: "12px",
+  fontSize: "13px",
+};
+
+const riskCardStyle: React.CSSProperties = {
+  border: "1px solid #e2e8f0",
+  borderRadius: "10px",
+  padding: "16px",
+  backgroundColor: "#f8fafc",
+  display: "grid",
+  gap: "12px",
+};
+
+const riskCardHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+};
+
+const riskCardLabelStyle: React.CSSProperties = {
+  fontSize: "14px",
+  fontWeight: 600,
+  color: "#1f2937",
+};
+
+const riskScoreStyle = (color: string): React.CSSProperties => ({
+  fontSize: "22px",
+  fontWeight: 700,
+  color,
+});
+
+const riskThresholdStyle: React.CSSProperties = {
+  fontSize: "12px",
+  color: "#4b5563",
+  textAlign: "right",
+};
+
+const riskFeatureListStyle: React.CSSProperties = {
+  fontSize: "12px",
+  color: "#334155",
+  display: "grid",
+  gap: "4px",
+};
+
+const riskActionsStyle: React.CSSProperties = {
+  display: "flex",
+  gap: "8px",
+};
+
+const riskActionButtonStyle = (color: string): React.CSSProperties => ({
+  flex: 1,
+  padding: "8px 10px",
+  borderRadius: "6px",
+  border: "none",
+  fontSize: "12px",
+  fontWeight: 600,
+  color: "#ffffff",
+  backgroundColor: color,
+  cursor: "pointer",
+});
 
 const summaryGridStyle: React.CSSProperties = {
   display: "grid",

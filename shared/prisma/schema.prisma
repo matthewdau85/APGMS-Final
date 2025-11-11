@@ -493,6 +493,28 @@ model AuditLog {
   @@index([actorId, createdAt])
 }
 
+model MlDecisionLog {
+  id              String   @id @default(cuid())
+  org             Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId           String
+  scenario        String
+  score           Decimal  @db.Decimal(6, 4)
+  policyThreshold Decimal  @db.Decimal(6, 4)
+  modelThreshold  Decimal  @db.Decimal(6, 4)
+  decision        String
+  rationale       String
+  createdAt       DateTime @default(now())
+  createdBy       String
+  payload         Json
+  modelId         String
+  modelVersion    String
+  issuedAt        DateTime
+  policyPassed    Boolean
+
+  @@index([orgId, scenario, createdAt])
+  @@index([orgId, createdBy, createdAt])
+}
+
 model RegulatorSession {
   id         String   @id @default(cuid())
   org        Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)

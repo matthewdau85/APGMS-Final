@@ -1,0 +1,23 @@
+{
+  "issuedAt": "2025-02-01T00:00:00.000Z",
+  "models": [
+    {
+      "id": "risk-shortfall",
+      "version": "2025.02",
+      "path": "risk-shortfall.model.json",
+      "sha256": "f285d62e45e21b171eb33943d063b1b6b2736df4b20c5348116d3f494181c9bc"
+    },
+    {
+      "id": "risk-fraud",
+      "version": "2025.01",
+      "path": "risk-fraud.model.json",
+      "sha256": "7169054869940065106a668b32079410f4b8bfbe2a7cdee04741e9c665b5df7f"
+    },
+    {
+      "id": "plan-compliance",
+      "version": "2025.02",
+      "path": "plan-compliance.model.json",
+      "sha256": "2ae281585f78d0eee5e0949618772ecf1d30d3c048e8f08bb923d4e291e1df69"
+    }
+  ]
+}

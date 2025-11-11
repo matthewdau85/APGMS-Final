@@ -44,6 +44,14 @@ export interface AppConfig {
     readonly maxReadTransactions: number;
     readonly maxWriteCents: number;
   };
+  readonly mlService: {
+    readonly url: string;
+    readonly thresholds: {
+      readonly shortfall: number;
+      readonly fraud: number;
+      readonly plan: number;
+    };
+  };
   readonly redis?: {
     readonly url: string;
   };
@@ -78,6 +86,25 @@ const parseIntegerEnv = (name: string, fallback: number): number => {
   const parsed = Number.parseInt(raw, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new Error(`${name} must be a positive integer`);
+  }
+  return parsed;
+};
+
+const parseFloatEnv = (
+  name: string,
+  fallback: number,
+  { min = 0, max = 1 }: { min?: number; max?: number } = {},
+): number => {
+  const raw = process.env[name];
+  if (!raw || raw.trim().length === 0) {
+    return fallback;
+  }
+  const parsed = Number.parseFloat(raw);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`${name} must be numeric`);
+  }
+  if (parsed < min || parsed > max) {
+    throw new Error(`${name} must be between ${min} and ${max}`);
   }
   return parsed;
 };
@@ -331,6 +358,26 @@ export function loadConfig(): AppConfig {
         }
       : undefined;
 
+  const mlServiceUrl = ensureUrl(
+    process.env.ML_SERVICE_URL?.trim() ?? "http://ml-service:4006",
+    "ML_SERVICE_URL",
+  );
+  const mlThresholdShortfall = parseFloatEnv(
+    "ML_THRESHOLD_SHORTFALL",
+    0.62,
+    { min: 0, max: 1 },
+  );
+  const mlThresholdFraud = parseFloatEnv(
+    "ML_THRESHOLD_FRAUD",
+    0.55,
+    { min: 0, max: 1 },
+  );
+  const mlThresholdPlan = parseFloatEnv(
+    "ML_THRESHOLD_PLAN",
+    0.48,
+    { min: 0, max: 1 },
+  );
+
   return {
     databaseUrl,
     shadowDatabaseUrl,
@@ -371,6 +418,14 @@ export function loadConfig(): AppConfig {
       providerId: bankingProvider.length > 0 ? bankingProvider : "mock",
       maxReadTransactions: bankingMaxRead,
       maxWriteCents: bankingMaxWrite,
+    },
+    mlService: {
+      url: mlServiceUrl,
+      thresholds: {
+        shortfall: mlThresholdShortfall,
+        fraud: mlThresholdFraud,
+        plan: mlThresholdPlan,
+      },
     },
     redis,
     nats,

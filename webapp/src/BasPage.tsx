@@ -6,6 +6,7 @@ import {
   fetchPaymentPlanRequest,
   createPaymentPlanRequest,
   initiateMfa,
+  submitRiskDecision,
 } from "./api";
 import { getToken, getSessionUser } from "./auth";
 
@@ -29,6 +30,9 @@ export default function BasPage() {
   const [planError, setPlanError] = useState<string | null>(null);
   const [planSuccess, setPlanSuccess] = useState<string | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
+  const [riskActionError, setRiskActionError] = useState<string | null>(null);
+  const [riskActionSuccess, setRiskActionSuccess] = useState<string | null>(null);
+  const [riskActionLoading, setRiskActionLoading] = useState(false);
 
   const basCycleId = preview?.basCycleId ?? null;
 
@@ -107,7 +111,13 @@ export default function BasPage() {
         requiresMfa = true;
       } else {
         console.error(err);
-        setError("BAS could not be lodged. Check blockers and try again.");
+        if (err instanceof Error && err.message === "bas_shortfall_blocked") {
+          setError(
+            "Lodgment blocked by readiness model. Capture an override decision in the risk panel before retrying.",
+          );
+        } else {
+          setError("BAS could not be lodged. Check blockers and try again.");
+        }
       }
     }
 
@@ -130,7 +140,13 @@ export default function BasPage() {
         }
       } catch (err) {
         console.error(err);
-        setError("MFA verification failed. Please try again.");
+        if (err instanceof Error && err.message === "bas_shortfall_blocked") {
+          setError(
+            "Lodgment blocked by readiness model. Capture an override decision in the risk panel before retrying.",
+          );
+        } else {
+          setError("MFA verification failed. Please try again.");
+        }
       }
     }
 
@@ -181,9 +197,49 @@ export default function BasPage() {
       setPlanSuccess("Payment plan request submitted and logged");
     } catch (err) {
       console.error(err);
-      setPlanError("Unable to submit payment plan request");
+      if (err instanceof Error && err.message === "payment_plan_blocked") {
+        setPlanError(
+          "Payment plan blocked by compliance guardrail. Capture an override in the risk panel to continue.",
+        );
+      } else {
+        setPlanError("Unable to submit payment plan request");
+      }
     } finally {
       setPlanLoading(false);
+    }
+  }
+
+  async function handleRiskOverride() {
+    if (!token || !preview?.risk) return;
+    const rationale = window.prompt(
+      "Explain the mitigation that justifies overriding the readiness model",
+      "Treasury approved manual top-up and evidence uploaded to ledger",
+    );
+    if (!rationale || rationale.trim().length < 5) {
+      return;
+    }
+    setRiskActionError(null);
+    setRiskActionSuccess(null);
+    setRiskActionLoading(true);
+    try {
+      await submitRiskDecision(token, {
+        scenario: "shortfall",
+        decision: "OVERRIDDEN",
+        rationale: rationale.trim(),
+        score: preview.risk.score,
+        policyThreshold: preview.risk.policyThreshold,
+        modelThreshold: preview.risk.modelThreshold,
+        modelId: preview.risk.modelId,
+        modelVersion: preview.risk.modelVersion,
+        issuedAt: preview.risk.issuedAt,
+      });
+      setRiskActionSuccess("Override captured. Lodgment will allow pending refresh.");
+      await loadPreview();
+    } catch (err) {
+      console.error(err);
+      setRiskActionError("Unable to persist override. Try again once service is healthy.");
+    } finally {
+      setRiskActionLoading(false);
     }
   }
 
@@ -233,6 +289,46 @@ export default function BasPage() {
               >
                 {submitting ? "Lodging..." : "Lodge BAS now"}
               </button>
+            )}
+            {preview.risk && (
+              <div style={riskPanelStyle}>
+                <h3 style={{ margin: "0 0 8px" }}>Readiness model</h3>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
+                  <span>Score</span>
+                  <strong>{preview.risk.score.toFixed(3)}</strong>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
+                  <span>Policy threshold</span>
+                  <strong>{preview.risk.policyThreshold.toFixed(2)}</strong>
+                </div>
+                <div style={{ marginTop: "12px", fontSize: "13px" }}>
+                  <div style={{ fontWeight: 600 }}>Top contributors</div>
+                  <ul style={{ margin: "4px 0 0 16px" }}>
+                    {preview.risk.contributions.slice(0, 3).map((item) => (
+                      <li key={item.feature}>
+                        <span style={{ fontWeight: 600 }}>{item.feature}</span>: {item.explanation ?? "Impacting readiness"}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                {!preview.risk.policyPassed && (
+                  <>
+                    <div style={{ marginTop: "12px", color: "#b00020", fontWeight: 600 }}>
+                      Model indicates elevated shortfall risk.
+                    </div>
+                    <button
+                      type="button"
+                      style={overrideButtonStyle}
+                      onClick={handleRiskOverride}
+                      disabled={riskActionLoading}
+                    >
+                      {riskActionLoading ? "Recording..." : "Log override decision"}
+                    </button>
+                    {riskActionError && <div style={errorTextStyle}>{riskActionError}</div>}
+                    {riskActionSuccess && <div style={successTextStyle}>{riskActionSuccess}</div>}
+                  </>
+                )}
+              </div>
             )}
           </section>
 
@@ -476,6 +572,25 @@ const errorTextStyle: React.CSSProperties = {
 const successTextStyle: React.CSSProperties = {
   fontSize: "14px",
   color: "#047857",
+};
+
+const riskPanelStyle: React.CSSProperties = {
+  border: "1px solid #dfe3eb",
+  borderRadius: "10px",
+  padding: "16px",
+  marginTop: "16px",
+  backgroundColor: "#f8fbff",
+};
+
+const overrideButtonStyle: React.CSSProperties = {
+  marginTop: "12px",
+  padding: "10px 14px",
+  borderRadius: "6px",
+  border: "none",
+  backgroundColor: "#0057d9",
+  color: "white",
+  cursor: "pointer",
+  fontWeight: 600,
 };
 
 const overviewCardStyle: React.CSSProperties = {

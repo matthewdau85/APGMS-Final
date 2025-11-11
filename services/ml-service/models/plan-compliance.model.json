@@ -1,0 +1,28 @@
+{
+  "id": "plan-compliance",
+  "version": "2025.02",
+  "type": "logistic_regression",
+  "threshold": 0.48,
+  "bias": -1.35,
+  "coefficients": {
+    "planDelinquencyDays": 0.09,
+    "installmentCoverage": -1.1,
+    "recentShortfalls": 0.45,
+    "cashCoverageRatio": -0.7,
+    "governanceScore": -0.5
+  },
+  "explanations": {
+    "planDelinquencyDays": "Late installments increase non-compliance probability.",
+    "installmentCoverage": "Higher repayment coverage reduces risk.",
+    "recentShortfalls": "Repeated shortfalls reduce regulator confidence.",
+    "cashCoverageRatio": "Healthy liquidity supports plan success.",
+    "governanceScore": "Governance scoring from policy controls provides resilience."
+  },
+  "featureStats": {
+    "planDelinquencyDays": { "mean": 3.5, "std": 4.2 },
+    "installmentCoverage": { "mean": 0.92, "std": 0.15 },
+    "recentShortfalls": { "mean": 1.1, "std": 1.0 },
+    "cashCoverageRatio": { "mean": 1.8, "std": 0.6 },
+    "governanceScore": { "mean": 0.64, "std": 0.2 }
+  }
+}

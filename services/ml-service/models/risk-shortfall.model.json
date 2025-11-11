@@ -1,0 +1,28 @@
+{
+  "id": "risk-shortfall",
+  "version": "2025.02",
+  "type": "logistic_regression",
+  "threshold": 0.62,
+  "bias": -2.15,
+  "coefficients": {
+    "paygwShortfall": 0.0035,
+    "gstShortfall": 0.002,
+    "outstandingAlerts": 0.45,
+    "daysToDue": -0.08,
+    "recentPlanRequests": 0.3
+  },
+  "explanations": {
+    "paygwShortfall": "PAYGW cash gap drives highest impact on readiness risk.",
+    "gstShortfall": "GST shortfall is weighted but less sensitive than PAYGW.",
+    "outstandingAlerts": "Open high-severity alerts add operational uncertainty.",
+    "daysToDue": "More days to BAS deadline reduces the immediate risk.",
+    "recentPlanRequests": "Frequent plan requests indicate structural funding pressure."
+  },
+  "featureStats": {
+    "paygwShortfall": { "mean": 12000, "std": 8500 },
+    "gstShortfall": { "mean": 8000, "std": 6200 },
+    "outstandingAlerts": { "mean": 1.4, "std": 1.2 },
+    "daysToDue": { "mean": 14, "std": 6 },
+    "recentPlanRequests": { "mean": 0.4, "std": 0.7 }
+  }
+}
