@@ -1,41 +1,34 @@
 # Ops Runbook
 
 ## Key Endpoints
-- /health : liveness. 200 = process is up.
-- /ready : readiness. 200 = serving traffic, 503 = not ready (draining or DB down).
-- /metrics : Prometheus scrape. Key metrics:
-  - apgms_security_events_total{event="anomaly.auth"}
-  - apgms_auth_failures_total{orgId="..."}
-  - apgms_cors_reject_total{origin="..."}
-  - readiness.ok / readiness.fail / readiness.draining events.
+- `/health` - liveness. Returns 200 when the process is up.
+- `/ready` - readiness. Returns 200 only when Postgres plus any configured Redis/NATS dependencies respond; returns 503 (with component detail) while draining or if a dependency is down.
+- `/metrics` - Prometheus scrape point. Exposes `apgms_http_requests_total`, `apgms_http_request_duration_seconds`, `apgms_db_query_duration_seconds`, `apgms_db_queries_total`, and `apgms_job_duration_seconds` (`services/api-gateway/src/observability/metrics.ts`).
+- `/bank-lines` - authenticated PAYGW/GST ingestion. Requires JWT + allowed role; GET lists caller-org lines, POST accepts ciphertext payloads.
+- `/admin/data` - authenticated stub for admin datasets. In-memory only; used for smoke validation of auth plumbing, not for real exports.
+- `/tax/health` - authenticated proxy that pings the configured tax engine URL with a short timeout for observability.
+
+## Auth & Routing Notes
+- `buildServer` now registers `/bank-lines`, `/admin/data`, and `/tax/*` inside a Fastify scope that attaches `authGuard`, so every domain route receives `request.user` populated before its own role/policy checks run (`services/api-gateway/src/app.ts`).
+- The admin/tax routers still invoke `authenticateRequest` for audit metrics; ensure `AUTH_JWKS`, `AUTH_AUDIENCE`, and `AUTH_ISSUER` are present in every deployment so those hooks succeed.
 
 ## Common Alerts
-- High apgms_auth_failures_total => possible credential stuffing
-- readiness.fail spike => DB connectivity issue, check Postgres
-- cors.reject spike => misconfigured frontend origin or abuse
+- Surge in `apgms_http_request_duration_seconds` or `apgms_http_requests_total{status="5xx"}` indicates upstream latency or crash loops; validate `/ready` and inspect Fastify logs with trace IDs.
+- Non-zero `apgms_db_query_duration_seconds` p95 above baseline usually means Postgres contention; check slow query logs and Prisma instrumentation.
+- If `/tax/health` returns 502, the upstream tax engine URL configured in `TAX_ENGINE_URL` is unreachable or returning non-2xx responses.
 
-## Secure Deletion Flow
-- DELETE /admin/delete/:orgId
-- Confirms principal.orgId === :orgId
-- Soft-deletes org (sets deletedAt), wipes users and bankLines, writes tombstone in orgTombstone.
-
-How to show auditors:
-1. Call /admin/export/:orgId before deletion to capture org snapshot.
-2. After deletion, confirm tombstone exists and org is marked deleted.
-3. Show audit log entries with action=admin.org.delete including timestamp, actor, orgId.
+## Data Handling Caveats
+- There is no automated subject deletion/export flow. For right-to-erasure or evidence requests, involve the compliance team and run manual SQL/audit procedures; document every step until the API gains durable routes.
+- `/admin/data` is intentionally ephemeral - do not rely on it for long-lived admin artifacts.
 
 ## Rolling Deploy / Graceful Shutdown
-- SIGTERM sets draining=true
-- /ready returns 503 {draining:true}
-- app.close() waits for inflight requests then exits
-- No new traffic should hit draining instances
+- `SIGTERM` sets `draining=true`, causing `/ready` to flip to 503 so the load balancer can drain the instance.
+- Fastify waits for inflight requests before closing; keep the pod alive until `/ready` reports `{ ok: false, draining: true }` for at least one scrape interval.
 
-## Incident Response
-- For anomaly.auth spikes: confirm source IPs and affected routes. If suspicious, block at ingress/WAF.
-- For cors.reject spikes: validate CORS_ALLOWED_ORIGINS env, update config if a legitimate frontend was added.
+## Regulator Access
+- Only the regulator auth/session bootstrap is wired today. Evidence catalogue, monitoring snapshots, and bank summary routes remain TODO; direct auditors to the compliance backlog for progress before promising those controls.
 
-## Regulator Portal Checks
-- The read-only regulator surfaces live at `/regulator/*`; health probe is `/regulator/health`.
-- Run `pnpm smoke:regulator` (requires API running locally plus `REGULATOR_ACCESS_CODE` if non-default) to exercise login, evidence catalogue, compliance report, monitoring snapshots, and bank summary.
-- Evidence payload hashes can be verified via UI (Regulator > Evidence Library > "Verify hash") or with the CLI using `node scripts/regulator-smoke.mjs` and third-party tooling.
-- If smoke fails, inspect audit log entries `regulator.login` and `regulator.monitoring.list` to confirm the access attempt was recorded.
+
+
+
+
