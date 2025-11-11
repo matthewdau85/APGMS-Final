@@ -1,4 +1,5 @@
 // services/api-gateway/src/utils/orgScope.ts
+import type { BankLine } from "@prisma/client";
 import { FastifyReply, FastifyRequest } from "fastify";
 
 // roles you consider allowed to create/update bank lines
@@ -11,13 +12,17 @@ export function assertOrgAccess(
   targetOrgId: string
 ): boolean {
   if (!request.user) {
-    reply.code(401).send({ error: "unauthenticated" });
+    reply.code(401).send({
+      error: { code: "unauthenticated", message: "Authentication required" }
+    });
     return false;
   }
 
   // org mismatch
   if (request.user.orgId !== targetOrgId) {
-    reply.code(403).send({ error: "forbidden_wrong_org" });
+    reply.code(403).send({
+      error: { code: "forbidden_wrong_org", message: "Organisation mismatch" }
+    });
     return false;
   }
 
@@ -29,7 +34,9 @@ export function assertRoleForBankLines(
   reply: FastifyReply
 ): boolean {
   if (!request.user) {
-    reply.code(401).send({ error: "unauthenticated" });
+    reply.code(401).send({
+      error: { code: "unauthenticated", message: "Authentication required" }
+    });
     return false;
   }
 
@@ -39,7 +46,9 @@ export function assertRoleForBankLines(
   );
 
   if (!ok) {
-    reply.code(403).send({ error: "forbidden_role" });
+    reply.code(403).send({
+      error: { code: "forbidden_role", message: "Insufficient role for bank lines" }
+    });
     return false;
   }
 
@@ -48,17 +57,20 @@ export function assertRoleForBankLines(
 
 // Redact sensitive fields before sending DB rows out.
 // Adjust field names to match your Prisma model.
-export function redactBankLine(row: any) {
+export function redactBankLine(row: BankLine | null | undefined) {
   if (!row) return row;
+
+  const amountValue = (row as any).amount;
+  const amount =
+    amountValue && typeof amountValue === "object" && typeof amountValue.toNumber === "function"
+      ? amountValue.toNumber()
+      : Number(amountValue);
+
   return {
     id: row.id,
     orgId: row.orgId,
-    // safe fields:
-    accountRef: row.accountRef,
-    amountCents: row.amountCents,
-    currency: row.currency,
+    amount,
+    date: row.date,
     createdAt: row.createdAt,
-    // hide or mask anything sensitive:
-    // e.g. bankAccountNumber, taxFileNumber, rawNarrative, etc
   };
 }

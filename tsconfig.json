@@ -12,6 +12,9 @@
                             "paths":  {
                                           "@apgms/shared/*":  [
                                                                   "shared/src/*"
+                                                              ],
+                                          "@apgms/shared":  [
+                                                                  "shared/src/index.ts"
                                                               ]
                                       },
                             "types":  [

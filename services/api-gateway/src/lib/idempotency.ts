@@ -1,5 +1,6 @@
 // services/api-gateway/src/lib/idempotency.ts
-import type { PrismaClient } from "@prisma/client";
+import { createHash } from "node:crypto";
+import { Prisma, type PrismaClient } from "@prisma/client";
 import { conflict } from "@apgms/shared";
 
 type Ctx = {
@@ -33,6 +34,11 @@ function cryptoSafe(): string {
   );
 }
 
+function hashPayload(payload: unknown): string {
+  const raw = typeof payload === "string" ? payload : JSON.stringify(payload ?? null);
+  return createHash("sha256").update(raw).digest("hex");
+}
+
 /**
  * Wrap a route handler with idempotency.
  * Prisma model uses: @@unique([orgId, key], name: "orgId_key")
@@ -46,19 +52,24 @@ export async function withIdempotency<T extends HandlerResult>(
   const key = getIdempotencyKeyFromHeaders(request as any);
 
   // 1) Guard: fail if key already seen for this org
-  const existing = await ctx.prisma.idempotencyKey.findUnique({
+  const existing = await ctx.prisma.idempotencyEntry.findUnique({
     where: { orgId_key: { orgId: ctx.orgId, key } },
-    select: { id: true, key: true, orgId: true, firstSeenAt: true },
+    select: { id: true },
   });
   if (existing) {
     throw conflict("idempotent_replay", "Request already processed");
   }
 
   // 2) Create the record
-  await ctx.prisma.idempotencyKey.create({
+  await ctx.prisma.idempotencyEntry.create({
     data: {
       key,
       orgId: ctx.orgId,
+      actorId: ctx.actorId ?? "system",
+      requestHash: hashPayload(ctx.requestPayload ?? null),
+      responseHash: hashPayload(null),
+      statusCode: 202,
+      responsePayload: Prisma.JsonNull,
       resource: ctx.resource ?? null,
       resourceId: null,
     },
@@ -69,11 +80,17 @@ export async function withIdempotency<T extends HandlerResult>(
 
   // 4) Best-effort update (resource/resourceId)
   try {
-    await ctx.prisma.idempotencyKey.update({
+    const responsePayload =
+      result.body === undefined ? Prisma.JsonNull : (result.body as Prisma.InputJsonValue | typeof Prisma.JsonNull);
+
+    await ctx.prisma.idempotencyEntry.update({
       where: { orgId_key: { orgId: ctx.orgId, key } },
       data: {
         resource: result.resource ?? ctx.resource ?? null,
         resourceId: result.resourceId ?? null,
+        statusCode: result.statusCode,
+        responsePayload,
+        responseHash: hashPayload(result.body ?? null),
       },
     });
   } catch {

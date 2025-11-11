@@ -6,7 +6,6 @@ import {
   jwtVerify,
   type JWTPayload,
   type JWK,
-  type KeyLike,
 } from "jose";
 
 const clockToleranceSeconds = Number(process.env.AUTH_CLOCK_TOLERANCE_S ?? "5");
@@ -22,7 +21,7 @@ export interface Principal {
 
 interface InternalKey {
   kid: string;
-  key: KeyLike | Uint8Array;
+  key: unknown;
   alg: string;
 }
 
@@ -120,7 +119,7 @@ export async function verifyRequest(
     verification = await jwtVerify(token, async (header) => {
       const { kid } = header;
       const key = await resolveKey(kid);
-      return key.key;
+      return key.key as any;
     }, {
       audience,
       issuer,
