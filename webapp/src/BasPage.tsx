@@ -271,7 +271,11 @@ export default function BasPage() {
           <section style={overviewCardStyle}>
             <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
               <span style={statusBadgeStyle(preview.overallStatus)}>
-                {preview.overallStatus === "READY" ? "READY" : "BLOCKED"}
+                {preview.overallStatus === "BLOCKED"
+                  ? "BLOCKED"
+                  : preview.overallStatus === "OVERRIDDEN"
+                    ? "OVERRIDDEN"
+                    : "READY"}
               </span>
               <div>
                 <div style={overviewTitleStyle}>BAS period {periodStart} to {periodEnd}</div>
@@ -280,7 +284,7 @@ export default function BasPage() {
                 </div>
               </div>
             </div>
-            {preview.overallStatus === "READY" && (
+            {(preview.overallStatus === "READY" || preview.overallStatus === "OVERRIDDEN") && (
               <button
                 type="button"
                 style={lodgeButtonStyle}
@@ -612,14 +616,38 @@ const metaTextStyle: React.CSSProperties = {
   color: "#6b7280",
 };
 
-const statusBadgeStyle = (status: string): React.CSSProperties => ({
-  padding: "6px 12px",
-  borderRadius: "20px",
-  fontSize: "13px",
-  fontWeight: 600,
-  backgroundColor: status === "READY" ? "rgba(16, 185, 129, 0.12)" : "rgba(239, 68, 68, 0.12)",
-  color: status === "READY" ? "#047857" : "#b91c1c",
-});
+const statusBadgeStyle = (status: string): React.CSSProperties => {
+  if (status === "READY") {
+    return {
+      padding: "6px 12px",
+      borderRadius: "20px",
+      fontSize: "13px",
+      fontWeight: 600,
+      backgroundColor: "rgba(16, 185, 129, 0.12)",
+      color: "#047857",
+    };
+  }
+
+  if (status === "OVERRIDDEN") {
+    return {
+      padding: "6px 12px",
+      borderRadius: "20px",
+      fontSize: "13px",
+      fontWeight: 600,
+      backgroundColor: "rgba(59, 130, 246, 0.12)",
+      color: "#1d4ed8",
+    };
+  }
+
+  return {
+    padding: "6px 12px",
+    borderRadius: "20px",
+    fontSize: "13px",
+    fontWeight: 600,
+    backgroundColor: "rgba(239, 68, 68, 0.12)",
+    color: "#b91c1c",
+  };
+};
 
 const lodgeButtonStyle: React.CSSProperties = {
   marginTop: "16px",
