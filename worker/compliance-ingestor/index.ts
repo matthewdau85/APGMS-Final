@@ -1,10 +1,12 @@
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdir, writeFile } from "node:fs/promises";
+import crypto from "node:crypto";
 
 import { prisma } from "@apgms/shared/db.js";
 import type { BusEnvelope } from "@apgms/shared/messaging/event-bus.js";
 import { NatsBus } from "@apgms/shared/messaging/nats-bus.js";
+import { Prisma } from "@prisma/client";
 
 const SYSTEM_ACTOR = "system:compliance-ingestor";
 const SUBJECT_PREFIX = process.env.NATS_SUBJECT_PREFIX?.trim() ?? "apgms";
@@ -90,18 +92,16 @@ async function processEnvelope(envelope: BusEnvelope<Record<string, unknown>>): 
       return { context, features, label, sampleId: sample.id };
     });
 
-    await prisma.auditLog.create({
-      data: {
-        orgId: envelope.orgId,
-        actorId: SYSTEM_ACTOR,
-        action: "compliance_event_ingested",
-        metadata: {
-          eventId: envelope.id,
-          eventType: envelope.eventType,
-          label: processed.label,
-          features: processed.features,
-          sampleId: processed.sampleId,
-        },
+    await recordAuditLog({
+      orgId: envelope.orgId,
+      actorId: SYSTEM_ACTOR,
+      action: "compliance_event_ingested",
+      metadata: {
+        eventId: envelope.id,
+        eventType: envelope.eventType,
+        label: processed.label,
+        features: processed.features,
+        sampleId: processed.sampleId,
       },
     });
 
@@ -330,6 +330,54 @@ async function materialiseDataset(): Promise<void> {
   const datasetPath = resolve(process.cwd(), "artifacts", "compliance", "training-samples.json");
   await mkdir(dirname(datasetPath), { recursive: true });
   await writeFile(datasetPath, JSON.stringify(samples, null, 2), { encoding: "utf8" });
+}
+
+type RecordAuditLogParams = {
+  orgId: string;
+  actorId: string;
+  action: string;
+  metadata?: Prisma.JsonValue | null;
+  timestamp?: Date;
+};
+
+async function recordAuditLog({
+  orgId,
+  actorId,
+  action,
+  metadata,
+  timestamp,
+}: RecordAuditLogParams): Promise<void> {
+  const previous = await prisma.auditLog.findFirst({
+    where: { orgId },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const createdAt = timestamp ?? new Date();
+  const metadataValue = metadata ?? null;
+  const prevHash = previous?.hash ?? null;
+
+  const hashPayload = JSON.stringify({
+    orgId,
+    actorId,
+    action,
+    metadata: metadataValue,
+    createdAt: createdAt.toISOString(),
+    prevHash,
+  });
+
+  const hash = crypto.createHash("sha256").update(hashPayload).digest("hex");
+
+  await prisma.auditLog.create({
+    data: {
+      orgId,
+      actorId,
+      action,
+      metadata: metadataValue ?? Prisma.JsonNull,
+      createdAt,
+      hash,
+      prevHash,
+    },
+  });
 }
 
 const modulePath = fileURLToPath(import.meta.url);
