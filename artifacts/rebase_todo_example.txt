@@ -1,0 +1,373 @@
+﻿
+reword 00201a0 Docs: Align auth notes and control status with implementation
+reword 0054db5 Ci(SECURITY.md): Enhance security scanning pipeline
+reword 0083040 Chore(domain): Add analytics telemetry pipeline
+reword 009cbea Chore(api): Run all *.spec.ts
+reword 01213b0 Feat(ops): Improve service operability and document logging/runbook
+reword 0121aeb Chore(api)(api): Lockfile + deps; test: add /ready probe spec
+reword 02fd87d Migrations(shared)(shared): Add BankLine idempotencyKey unique constrain
+reword 04fa2e1 Feat(api-gateway)(api-gateway): Harden bank line and user queries
+reword 06797dc Chore(auth): MFA (WebAuthn/TOTP) + end-to-end encryption envelopes
+reword 06beba9 Feat(api-gateway)(api-gateway): Add readiness and metrics endpoints
+reword 06d6550 Chore(db)(db): Finalize schema, db init, and client wiring after auth in
+reword 08a2e9f Refactor(webapp): Align manifest entry hash with final payload
+reword 08af0c4 Feat(payg)(payg): Update resolver for stage 3 tables
+reword 0a014f0 Chore(services): Hardening auth flows, remittance safety nets, and ML gu
+reword 0a7d1d1 Chore(services): Add compliance event ingestion and ML scaffolding
+reword 0a997b0 Refactor(scripts): Hash seed user password
+reword 0c96803 Feat(services): Add compliance event ingestion pipeline
+reword 0cb8f89 Chore(banking): Provider adapters + designated one-way account policy en
+reword 0cdbd7b Feat(webapp)(webapp): Add app shell layout
+reword 0d4fc20 Chore(packages): Use portable ledger test script
+reword 10afe8f Chore(auth): MFA (WebAuthn/TOTP) + end-to-end encryption envelopes
+reword 10de99f Refactor(apgms-ml): Fix threshold selection to use validation split
+reword 10e9fb7 Feat(ops): Add debug export tooling and tighten gateway/admin handling
+reword 11ce956 Chore(deps)(deps): Refresh pnpm lockfile after security hardening
+reword 12b9a46 Docs(runbooks): Add compliance governance runbooks and DSP checklist
+reword 13213fb Feat(webapp): Add CSP meta and CI-friendly accessibility checks
+reword 13ff606 Tests(payg)(payg): Repo-relative normalizer + resolver scaling checks +
+reword 1453d0f Docs(runbooks): Document patent governance alignment and security attest
+reword 1502288 Feat(compliance)(compliance): Add designated holding accounts and surfac
+reword 156dab5 Feat(services): Add connectors tax adapters
+reword 15ded03 Feat(common): Add analytics common utilities
+reword 15f5f71 Chore: Add environment template and secrets documentation
+reword 174f1eb Chore(audit)(audit): Capture working tree and diff snapshot
+reword 1939749 Chore(ops): Prometheus /metrics + OTEL traces + readiness (deps) + grace
+reword 19adfb0 Refactor(apgms-ml): Use sync handlers for scoring endpoints
+reword 19d6156 Feat(webapp)(webapp): Add shared formatting utilities
+reword 1a75b5f Chore(db)(db): Commit Prisma migrations
+reword 1ab41a7 Chore(infra)(infra): Initial hardening pass across gateway, webapp, and
+reword 1b83350 Feat(providers): Integrate partner banking APIs and BAS orchestration
+reword 1bc5839 Feat(services): Harden auth to rs256 and argon2
+reword 1bd4572 Chore(security)(security): Refresh pnpm lockfile after security hardenin
+reword 1d9c29c Chore(security+privacy): Introduce auth layer, data protection, and comp
+reword 1df5882 Chore(services): Fix workspace install and restore cross-platform builds
+reword 1e0a0b1 Chore(repo)(repo): Normalize line endings / cross-platform script behavi
+reword 1e49d36 Chore(dev)(dev): Local Postgres + migrations synced; seed OK
+reword 1ea0f5d Feat(db)(db): Add BankLine.idempotencyKey and unique (orgId, idempotency
+reword 1ea5d01 Chore(packages): Guard ledger lint script when eslint missing
+reword 1ed53c7 Feat(api-gateway)(api-gateway): Add helmet, strict CORS, and CSP headers
+reword 1ff2a15 Feat(webapp)(webapp): Add card and table UI primitives
+reword 2160212 Chore(ops)(ops): Add dependency monitoring and evidence collection workf
+reword 2168250 Feat(services): Add JWT auth middleware and update routes
+reword 2273985 Feat(webapp)(webapp): Add PAYGW variance flow manager
+reword 2510da6 Ci(github): Update CI and security workflows
+reword 252f010 Chore(repo)(repo): Update .gitignore to exclude local helper script
+reword 257a2be Chore(dev-db)(dev-db): Update seed script for local Postgres bootstrap
+reword 261e48f Chore(packages): Fix telemetry stack and add AU validation package
+reword 26f75ba Fix(github): Allow osv scan severity filtering
+reword 2760330 Chore(api)(api): Lockfile + deps; test: add /ready probe specchore(api):
+reword 27db173 Refactor(services): Correct worm provider import paths
+reword 287253f Chore(ops)(ops): Define alerting and align gateway behavior with runbook
+reword 28d94f3 Feat(services): Add integration connectors, remittance jobs, and audit t
+reword 29159f8 Chore(api-gateway): Extract server entrypoint and update ops runbook
+reword 295dbbb Chore(services): Add readiness, metrics, and graceful shutdown for API g
+reword 2b7dcc1 Feat(webapp)(webapp): Add mocked api layer and loading states
+reword 2b9115e Feat: Add CSP, compliance evidence, and dependency automation
+reword 2b94a94 Chore(apgms-ml): Add orchestration scripts for ML workflows
+reword 2bd3a23 Feat(services): Add risk event ingestion pipeline
+reword 2bd8f51 Chore(services): Implement reconciliation inference service
+reword 2be1def Docs(runbooks): Document security controls and operational runbooks
+reword 2c23cdf Refactor(shared): Fix recon contract barrel extension
+reword 2c44e9a Ci(github): Add Prisma drift detection job
+reword 2c59e81 Test(a11y+ux)(a11y+ux): Playwright+axe + Discrepancy Journal & Plan/Remi
+reword 2c9d9b9 Chore(services): Automate ML retraining and tighten retention controls
+reword 2d4708e Chore(api-gateway): Add org-scoped jwt auth guards
+reword 2e2b1d3 Feat(api-gateway)(api-gateway): Add bank line validation and idempotency
+reword 302a91a Chore(test)(test): Refresh pnpm lockfile and install Playwright browsers
+reword 3053c38 Chore(package.json): Line-ending normalization
+reword 3156f77 Chore(payg): Normalization and resolver tests; CSV artifact and CI workf
+reword 3172ce7 Refactor(webapp): Add status badge component
+reword 3305bef Chore(root)(root): Add prisma db scripts (migrate/deploy/gen) to workspa
+reword 34fc4bf Refactor(services): Handle JetStream stream already exists error
+reword 352c7a0 Docs(runbooks): Document security controls and status operations
+reword 35886ca Chore(services): Add CORS allowlist and helmet security headers
+reword 36163bf Chore(github): Guard merge markers and setup from repo root
+reword 3639a07 Chore(audit)(audit): Capture staged diff and last commit metadata
+reword 366864b Feat(webapp)(webapp): Extend tailwind theme for finance ui
+reword 36686f5 Feat(webapp)(webapp): Add AppShell layout and new dashboards
+reword 3723308 Feat(apgms-ml): Add GST-free model training and evaluation scripts
+reword 38866dc Feat(compliance)(compliance): Enable payment plan flow and evidence repo
+reword 38f9b86 Chore(security)(security): Ignore shared/prisma/.env in git
+reword 39142c1 Chore(compliance)(compliance): Add compliance checklist and wire it into
+reword 3aa5dfe Feat(webapp): Improve workflow alerts accessibility
+reword 3ac003c Ci: Document security procedures and enable dependabot
+reword 3b93dcb Chore(auth): Wire end-to-end login/session between webapp and api-gatewa
+reword 3c0df7a Feat(ci): Verify slsa provenance
+reword 3d2fe12 Chore(banking): Provider adapters + designated one-way account policy en
+reword 3daff55 Refactor(webapp): Extract app shell layout
+reword 3db79fd Feat(ops): Add smoke testing, dashboards, and observability hooks
+reword 3e667a2 Chore(ml): Add ML training pipeline with CI automation
+reword 3e6d094 Feat(services): Add high-risk approvals, ml governance, and key rotation
+reword 3e9654f Chore(regulator): Phase 7 ÔÇö Regulator Portal & Continuous Monitoring
+reword 3eadee5 Refactor(db)(db): Improve shared DB client/connection handling
+reword 3f272cb Chore(api-gateway)(api-gateway): Update deps/lockfile and align /ready p
+reword 3f66d54 Feat(api-gateway)(api-gateway): Consolidate admin data routes
+reword 401cd51 Feat(services): Harden org scoping on compliance events
+reword 403a426 Chore(services): Add ml governance service and risk workflows
+reword 40741d2 Chore(packages): Scaffold ml-core package and feature pipelines
+reword 4095cda Docs(compliance)(compliance): ASVS/DSP/TFN control map + DPIA + regulato
+reword 411aca3 Chore(shared): Add subpath exports and update gateway imports to @apgms/
+reword 46ae52f Refactor(services): Fix ML service model directory resolution
+reword 46ddc3b Docs: Outline admin prototype activation plan
+reword 473f7fa Feat(services): Add ML observability, feedback capture, and artifact che
+reword 47fd4cb Chore(infra)(infra): Initial hardening pass across gateway, webapp, and
+reword 487ba47 Fix(services): Include workspace packages in ml inference build
+reword 4917454 Chore(apps): Modernize webapp with tailwind and shadcn
+reword 4a244e3 Chore(services): Fix telemetry deps and align password verification
+reword 4a2af74 Chore(services): Initial import from apgms-birchal (apgms/)
+reword 4ac4ea6 Feat(api-gateway)(api-gateway): Add readiness, metrics, and graceful shu
+reword 4ae851c Ci(security)(security): SBOM + SCA fail-on-high + Gitleaks + Trivy + dri
+reword 4b3fcfc Docs: Expand security privacy and ops runbooks
+reword 4bb3c49 Chore(repo)(repo): Enforce LF endings; quiet CSV diffs; repo-relative PA
+reword 4f5a337 Chore(api): Discover specs by directory to avoid Windows glob issues
+reword 4fdd031 Chore(api-gateway): Discover specs by directory to avoid Windows glob is
+reword 5059faa Chore(db)(db): Check in BankLine idempotencyKey uniqueness migration
+reword 50944dc Feat(ops): Add smoke testing, dashboards, and observability hooks
+reword 51239b0 Chore(gitattributes): Normalize line endings via .gitattributes
+reword 51727cc Chore(platform): Enforce MFA for high-risk actions and add evidence back
+reword 52bd1e7 Feat(api-gateway)(api-gateway): Secure users and bank lines
+reword 534588d Chore(repo)(repo): Add Prisma migrate/deploy/generate scripts to workspa
+reword 5429b59 Fix(payg)(payg): Enforce monotone cumulative max and integer rounding; r
+reword 54d0fba Chore(api-gateway): Zod/Fastify schemas for all external routes and erro
+reword 578dd87 Chore(gitignore)(gitignore): Ignore local helper script
+reword 57cebec Chore(services): Restore admin data routes with jwt auth
+reword 581ec43 Chore(api-gateway): Wire PII providers and admin guard
+reword 584c904 Chore(security): Enforce JWT auth, org/role scoping, response redaction,
+reword 587933f Feat(webapp): Add prototype environment handling for admin responses
+reword 5a14ed6 Refactor(services): Fix step-up middleware user id handling
+reword 5cd858b Feat(webapp)(webapp): Add WCAG AA-compliant status badges and browser te
+reword 5d101d4 Feat(apgms-ml): Add BAS configuration training pipeline
+reword 5dd99fe Chore(services): Enforce CORS allowlist and add CSP protections
+reword 5f54244 Feat(services): Harden api gateway cors and csp
+reword 5fcc53b Chore(gitignore)(gitignore): Ignore shared/prisma/.env
+reword 5fcd26d Feat(webapp): Add security monitoring dashboard
+reword 61eb31d Chore(package.json): Run Prisma generate on install
+reword 6208716 Refactor(domain): Track remaining designated balances per BAS cycle
+reword 633dd64 Feat(history): Snapshot before full history rewrite
+reword 65a69f7 Refactor(packages): Fix anomaly score computation to use scaled features
+reword 669b866 Chore(services): Cover ML manifest verification
+reword 687d498 Refactor(services): Retry failed nats inference jobs
+reword 691eb48 Chore(packages): Fix npm install in workspace packages
+reword 6a76159 Refactor(bas): Reuse discrepancy evidence artifact
+reword 6b15482 Feat(webapp)(webapp): Add WCAG AA-compliant status badges and browser te
+reword 6b1e4fc Chore(services): Add ML service observability and governance workflows
+reword 6c5d677 Eat(compliance)(compliance): Enable payment plan flow and evidence repor
+reword 6d1b4e2 Feat(services): Add BAS guardrails and MFA-gated treasury flows
+reword 6de3375 Chore(services): Hash user credentials with Argon2
+reword 6e8aaed Chore(services): Add ML risk service integration across stack
+reword 6ef1ad5 Chore(auth): Wire end-to-end login/session between webapp and api-gatewa
+reword 6efa52f Chore(security): Issuer/audience/expiry enforcement + reply minimisation
+reword 6f66643 Chore(ops)(ops): Add nightly pipeline and chaos testing playbook
+reword 6fdc896 Feat(auth)(auth): Add auth module, route, and plugin in api-gateway
+reword 70a6946 Chore(ops)(ops): Capture staged diff and last commit metadata
+reword 70d8393 Feat(api-gateway)(api-gateway): Enforce zod validation and safe errors
+reword 71db586 Chore(sync)(sync): Finalize schema, db init, and client wiring after aut
+reword 71ffddc Chore(shared): Add argon2 password hashing and migration
+reword 72098a6 Chore(repo)(repo): Enable safety guards & baseline scripts
+reword 723348d Chore(scripts): Add repo audit workflow and script
+reword 7262b8a Chore(repo)(repo): One-time LF line ending normalisation
+reword 7343465 Chore(api-gateway): Add /ready probe and idempotent POST /bank-lines wit
+reword 74fcf16 Feat(apps): Add overview dashboard route
+reword 7581767 Chore(services): Add audit logging for admin actions
+reword 76df5f8 Payg(tools): Enforce monotone cumulative max + integer rounding; ratio t
+reword 776ba96 Chore: Document compliance directory index
+reword 7790322 Chore(services): Add compliance telemetry models and ingestion pipeline
+reword 7863f53 Feat(services): Enforce admin access and mask emails on security users e
+reword 78a3367 Feat(repo): Snapshot before full history rewrite
+reword 79757a0 Test(api)(api): Add /ready probe spec
+reword 7a06f20 Chore(compliance)(compliance): Add compliance checklist and wire it into
+reword 7b346a0 Chore(services): Add ml inference service
+reword 7b8978a Chore(services): Add ml-service feedback endpoints and governance contro
+reword 7c255dc Docs: Document governance training, audits, patents, and vendor controls
+reword 7c5f7e4 Fix(shared-imports)(shared-imports): Correct @apgms/shared/* import path
+reword 7c64e61 Chore(db)(db): Check in Prisma migration for deleted_at sync
+reword 7ceaea5 Chore(deps)(deps): Bump the dependencies group across 1 directory with 2
+reword 7db317c Refactor(ml): Ensure one-hot encoder outputs dense matrix for gradient b
+reword 7e10cbb Chore(services): Add compliance ingest pipeline and ml tooling
+reword 7e802c1 Chore(db)(db): Add new Prisma migration and record compliance snapshot
+reword 801d0b2 Feat(services): Add readiness, metrics, and graceful shutdown to API gat
+reword 80bd55c Chore(shared): Map discrepancy telemetry models to snake_case tables
+reword 81ac405 Chore(api): Zod/Fastify schemas for all external routes + error contract
+reword 830cd8b Chore(tools): Enforce LF endings; quiet CSV diffs; payg(resolver) repo-r
+reword 83ae59c Chore(services): Harden regulator login validation and restore metrics
+reword 852bf3d Feat(services): Add discrepancy event telemetry pipeline
+reword 85853cc Feat(api-gateway)(api-gateway): Secure bank line endpoints
+reword 85cf022 Feat(services): Enforce finance roles on BAS and designated account acti
+reword 86798fa Chore(ops)(ops): Capture working tree and diff snapshot
+reword 86cd6e6 Chore(ops)(ops): Define alerting and align gateway behavior with runbook
+reword 873008c Chore(services): Record diff vs origin main
+reword 8828bba Chore(platform): Centralize runtime config, tighten auth/metrics, and ad
+reword 8915d14 Chore(scripts): Tighten ci coverage gate
+reword 892df70 Refactor(worker): Fix ATO submission import and add worker claiming
+reword 893c676 Feat(apps): Add PAYGW flow manager page
+reword 8a98e53 Feat(services): Add authentication, validation, and idempotency to bank
+reword 8b975d8 Feat(apgms-ml): Add LightGBM training script for apportion model
+reword 8ba784d Refactor(services): Handle bcrypt hashes during login
+reword 8bd460f Chore(repo)(repo): Normalize line endings via .gitattributes
+reword 8d639cf Chore(regulator): Phase 7 ÔÇö Regulator Portal & Continuous Monitoring
+reword 8dadacd Feat(src): Add APGMS matcher training pipeline and evaluation tooling
+reword 8e3a645 Chore(api): Add /ready probe and idempotent POST /bank-lines with Zod va
+reword 8e62dbf Feat(webapp)(webapp): Add obligations routes and tests
+reword 8ee6dff Chore(services): Update ci workflows and scripts
+reword 9156afd Chore(coverage): Unit/integration for audit-chain, snapshots, idempotenc
+reword 918d114 Feat(webapp)(webapp): Add admin prototype router and feature flag
+reword 91a4447 Docs(runbooks): Document DSP readiness and governance workflows
+reword 9232bac Feat(api)(api): @fastify/helmet + strict CORS + CSP headers
+reword 92410b2 Feat(webapp)(webapp): Add layout shell and compliance routes
+reword 924767d Test(api-gateway)(api-gateway): Add /ready health probe spec
+reword 9332322 Feat(services): Bucket CORS rejection metrics to avoid unbounded labels
+reword 94580d9 Chore(db)(db): Add Prisma migrate/deploy/generate scripts to workspace r
+reword 9616bd3 Feat(coverage): Snapshot before commit rewrite
+reword 964a52d Chore(gitignore): Add .gitignore for venv, extracted data, caches, build
+reword 967b320 Refactor(webapp): Improve accessibility infrastructure
+reword 96e523c Feat(ml-core)(ml-core): Scaffold package and baseline analytics
+reword 97726d9 Docs: Document ASVS coverage and TFN SOP
+reword 97c1bcc Chore(services): Share jwt guard via auth package
+reword 97d386b Feat(apps): Add security command center route
+reword 9805a96 Chore(repo)(repo): Ignore shared/prisma/.env in git
+reword 984d64f Feat(api-gateway)(api-gateway): Add admin data routes plugin
+reword 9a86c6a Docs: Document compliance attestation execution plan
+reword 9aa6ceb Chore(packages): Scaffold model service workspace
+reword 9ce10ee Refactor(services): Fix error ratio labels and snapshot lag gauge
+reword 9d92fab Docs(README.md): Restore auth jwks env example
+reword 9e27f46 Docs: Add baseline compliance documentation tables
+reword 9e5f062 Chore(packages): Add model service data pipelines
+reword 9e656c6 Fix(webapp): Correct shared import path (@apgms/shared/src/*)
+reword 9e6bded Feat(webapp): Add obligations control room dashboard
+reword 9eac120 Chore(sec+ops)(sec+ops): Add PII key rotation tooling and incident respo
+reword 9f13ffa Chore(compliance+db)(compliance+db): Record compliance snapshot and add
+reword 9fc1e66 Chore(api-gateway): Add readiness and metrics instrumentation
+reword a0200e8 Chore(webapp): Introduce login flow and dashboard; harden api-gateway
+reword a025eb8 Feat(services): Secure regulator login with server-side org mapping
+reword a0b7894 Feat(apps): Add GST reconciliation analytics route
+reword a12d251 Feat(api-gateway)(api-gateway): Add readiness and metrics endpoints
+reword a1793fe Docs(runbooks): Add data governance runbook
+reword a261f43 Feat(apps): Add APGMS types and demo store data
+reword a284232 Chore(ops)(ops): Extract gateway server entrypoint and document operatio
+reword a35a0aa Feat(services): Refactor admin data routes with env token authorization
+reword a4eb821 Feat(webapp)(webapp): Add GST reconciliation heatmap and stepper
+reword a5789d0 Chore(security): Issuer/audience/expiry enforcement + reply minimisation
+reword a7f39b7 Chore(tools): Normalization + resolver tests + CSV artifact + CI workflo
+reword a90274c Chore(api): Use directory discovery to avoid Windows glob issues
+reword a955b47 Chore(services): Add connectors, ATO filing pipeline, and designated acc
+reword aa3b936 Chore(deploy)(deploy): Scaffold DB init/seed and tighten service startup
+reword aa8aa6b Chore(auth+security): Enforce JWT auth, org/role scoping, response redac
+reword aac6186 Feat(ops): Improve service operability and document logging/runbook
+reword ab0701b Feat(services): Add audit logging for admin data actions
+reword ab4fbaf Test(api)(api): Add /ready health probe spec
+reword aba172f Test(payg)(payg): Repo-relative normalizer; resolver scaling checks; CSV
+reword af06204 Chore(sec+ops)(sec+ops): Tighten CI/security pipeline and align gateway
+reword af21578 Chore(api-gateway): Add metrics and graceful shutdown
+reword af5f1f3 Chore(services): Add ML risk service and dashboards
+reword afa0d3f Feat(ops): Add debug export tooling and tighten gateway/admin handling
+reword aff6ebd Chore(security)(security): Add PII key rotation tooling and incident res
+reword b07cd70 Fix(payg)(payg): Robust CSV decoding + relaxed monthly scaling tolerance
+reword b1a9781 Feat(api)(api): Persist alerts/bas cycles and wire Phase 2 UI flows
+reword b282f82 Feat(api-gateway)(api-gateway): Add auth module, route, and plugin
+reword b2850c6 Feat(compliance)(compliance): Add designated holding accounts and surfac
+reword b5d8e9d Feat(services): Add schemas and sanitization for public API responses
+reword b67625c Feat(services): Mask pii for non-admins
+reword b759277 Feat(retention)(retention): Pluggable WORM + content-addressed URIs + at
+reword b7ab8ed Refactor(services): Ensure recon model sorter handles numeric versions
+reword b896595 Chore(api-gateway): Run all gateway *.spec.ts tests
+reword ba42ae4 Fix(tests): Add default export to prisma mock
+reword ba72fdc Refactor(domain): Guard ledger analytics logging failures
+reword bc1cd27 Chore(services): Align ops runbook metrics with code
+reword bd66cc4 Docs: Add UI acceptance checklist
+reword be0c031 Chore(repo)(repo): Normalize line endings / cross-platform script behavi
+reword be98bf2 Feat(apgms-ml): Add ML scoring fastapi service
+reword bfc0ea6 Chore(webapp): Add dashboard ui components
+reword c1f99d9 Chore(db)(db): Check in BankLine idempotencyKey uniqueness migration
+reword c2a764b Feat(apgms-ml): Add duplicate transaction training script
+reword c33374e Chore(platform): Introduce messaging bus, ledger module, tax utils, and
+reword c3c9a68 Chore(ops)(ops): Add observability and SLO docs
+reword c46a481 Chore(platform): Enforce MFA for high-risk actions and add evidence back
+reword c538818 Feat(webapp)(webapp): WCAG AA status-badge colors and styles; tests pass
+reword c56e74b Chore(inference): Expose model scoring over http and nats
+reword c6100ae Chore(services): One-time LF line ending normalisation
+reword c6829ed Chore(services): Secure connectors, enforce MFA, and harden BAS + ML ops
+reword c7d26f0 Feat(packages): Scaffold ml-core package with baseline pipelines
+reword c8cc736 Chore(webapp): Add ML risk service integration and surface dashboard ins
+reword c92b1b3 Chore(api): Add /ready probe and idempotent POST /bank-lines with Zod va
+reword c92e475 Chore(repo)(repo): Normalize line endings via .gitattributes
+reword c9a3b62 Feat(api-gateway)(api-gateway): Idempotency keys for POST/PATCH and dedu
+reword cbb4b27 Chore(services): Formalise transactional events and retention
+reword cd9b3af Chore(shared)(shared): Add subpath exports; update imports to @apgms/sha
+reword ce3837a Chore(shared): Add subpath exports and update gateway imports to @apgms/
+reword ce3864c Feat(shared): Feat(safety): idempotency keys for POST/PATCH + dedupe sto
+reword ce6198a Refactor(services): Add prototype env feature flag for admin requests
+reword ce8eb0f Chore(services): Implement integrations connectors and ATO workflows
+reword d24fb85 Chore(shared): Document ml recon service and contracts
+reword d255536 Chore(services): Implement secure connectors and ATO compliance workflow
+reword d278b8e Refactor(services): Fix Prisma client instrumentation attachment
+reword d38c292 Feat(ingest)(ingest): STP/POS adapters + blocking BAS verifier + discrep
+reword d45a98f Feat(db)(db): BankLine.idempotencyKey + unique(orgId,idempotencyKey)
+reword d50f598 Chore(deps)(deps): Add Renovate + update policy + lockfile maintenance
+reword d518159 Refactor(apgms-ml): Fix model artifact hashing to avoid stale metadata d
+reword d590f8f Chore(ops)(ops): Add nightly pipeline and chaos testing playbook
+reword d6200e9 Chore(services): Add compliance event ingestion and governance
+reword d626549 Chore(ledger)(ledger): Use cross-platform jest script
+reword d6533e1 Chore(auth+ui): Introduce login flow, dashboard UI, and gateway hardenin
+reword d799a9b Chore(webapp): Add Vitest smoke tests and currency formatter
+reword d8086ac Refactor(services): Restore Fastify typings and guard risk routes
+reword d827258 Chore(repo)(repo): Update .gitignore to exclude local helper script
+reword d8b0078 Docs: Add apgms gui design playbook
+reword d99cb79 Refactor(apgms_ml): Handle scalar metrics from classification report
+reword d9e6efd Chore(deploy)(deploy): Scaffold DB init/seed and tighten service startup
+reword d9fa8bf Feat(platform)(platform): Persist alerts/BAS cycles and wire Phase 2 UI
+reword da9ff23 Chore(platform): Centralize runtime config, tighten auth/metrics, and ad
+reword db94dbd Docs: Summarize auth guard coverage
+reword dd5135c Chore(platform): Introduce auth layer, data protection, and compliance u
+reword deea255 Fix(payg)(payg): Robust CSV decoding + relaxed monthly scaling tolerance
+reword def0692 Feat(packages): Add ml core package and baseline pipelines
+reword df26637 Feat(api-gateway)(api-gateway): Secure admin routes with jwt
+reword df8bf87 Docs: Document patent governance commitments and compliance evidence
+reword e05054a Chore(packages): Fix telemetry stack and add AU validation package
+reword e05433c Chore(chaos): Dependency outage drills + error budget SLO alerts
+reword e0b8bdb Chore(services): Ensure Prisma client generation and workspace coverage
+reword e1e4dbb Feat(services): Unify admin data routes and tests
+reword e37f2f3 Feat(webapp): Improve Home metrics semantics and accessibility
+reword e3faebe Chore(services): Add build tooling updates
+reword e54643a Chore(repo)(repo): Add .gitignore for venv, extracted data, caches, buil
+reword e6c4b86 Refactor(db)(db): Improve shared DB client/connection handling
+reword e7d499a Feat(webapp)(webapp): Add compliance monitoring route
+reword e803513 Chore(ops)(ops): Add observability and SLO docs
+reword e953153 Feat(webapp): Add compliance page with audit workflows
+reword eb1b690 Feat(apgms_ml): Add PAYGW variance LightGBM training pipeline
+reword ec10396 Refactor(services): Preserve feedback metadata on partial updates
+reword ed958de Chore(deps)(deps): Bump actions/setup-python from 5 to 6
+reword edd76fa Feat(webapp): Restrict CORS and apply CSP protections
+reword edf2853 Docs: Document current and planned security controls
+reword ee3a0af Feat(db)(db): Add BankLine.idempotencyKey and unique (orgId, idempotency
+reword f01d809 Fix(shared)(shared): Correct @apgms/shared/* import paths across gateway
+reword f07288e Docs: Clarify WORM evidence workflow
+reword f0752f3 Chore(api-gateway): Harden http security
+reword f0bb792 Refactor(ml-core): Guard positive label metrics
+reword f0fb96b Chore(ops): Prometheus /metrics + OTEL traces + readiness (deps) + grace
+reword f17625b Chore(api): Run all gateway *.spec.ts tests
+reword f24c778 Feat(services): Fix admin privacy routes
+reword f32133f Chore(webapp): Enhance dashboard metrics and bank lines experience
+reword f376a92 Chore(shared): Add pii key management and admin guard protections
+reword f3ead2f Chore(db)(db): Check in Prisma migration for deleted_at sync
+reword f3edc6a Chore(pnpm-lock.yaml): Refresh lockfile; install Playwright browsers
+reword f42cd41 Chore(prisma)(prisma): Add model feedback migration
+reword f47b4d3 Feat(api-gateway)(api-gateway): Add jwt admin verification
+reword f4cde16 Chore(scripts): Enforce coverage gate
+reword f53630b Chore(platform): Initial APGMS monorepo bootstrap
+reword f619720 Refactor(worker): Handle dedupeId when checking existing discrepancy eve
+reword f6dcadc Chore(repo)(repo): Enable safety guards & baseline scripts
+reword f9055c5 Feat(apgms-ml): Add synthetic APGMS ML scaffolding
+reword f90e1a7 Feat(api-gateway)(api-gateway): Add audit logging for admin operations
+reword f943476 Ci(status): Add security SOPs and weekly dependency updates
+reword f956362 Chore(services): Improve validation coverage and tooling reliability
+reword faed58b Chore(db)(db): Update seed script for local Postgres bootstrap
+reword faef9d6 Refactor(services): Fix fastify type import extension
+reword fb47f0b Chore(services): Add ML risk service integration
+reword fd16820 Feat(tooling)(tooling): Add PAYG scraper utilities and fixtures
+reword fd2c8f9 Feat(webapp): Align primary nav with compliance playbook
+reword fed62c3 Chore(platform): Introduce messaging bus, ledger module, tax utils, and
+reword ff1a71e Chore(ci)(ci): Tighten security pipeline and align gateway tests
+reword ff93e61 Feat(webapp)(webapp): Add status chip component
+reword ffd807e Docs: Document required GitHub Actions secrets
+reword ffe34d4 Chore(compliance+ops)(compliance+ops): Add dependency monitoring and evi

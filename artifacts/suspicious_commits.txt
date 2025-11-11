@@ -1,0 +1,1861 @@
+﻿
+0d4fc20 2025-11-11 10:51:06 +1000 — fix: use portable ledger test script
+  inferred=chore(deps) prefix=fix scope= domDir=packages files=1 +1/-1
+  paths: packages/ledger/package.json
+  flags: deps-looks-like-chore, subject-not-capitalized, fix-no-issue-ref, scope-mismatch(scope= vs dir=packages)
+
+08af0c4 2025-11-11 10:50:41 +1000 — feat(payg): update resolver for stage 3 tables
+  inferred=feat prefix=feat(payg) scope=payg domDir=tools files=1 +189/-30
+  paths: tools/ato_scraper/payg_resolver.py
+  flags: subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=payg vs dir=tools)
+
+fd16820 2025-11-11 10:27:41 +1000 — feat(tooling): add PAYG scraper utilities and fixtures
+  inferred=feat prefix=feat(tooling) scope=tooling domDir=tools files=7 +388/-0
+  paths: data/external/ato/payg/payg_tables_banded.csv;tools/__init__.py;tools/ato_scraper/__init__.py;tools/ato_scraper/convert_curve_to_bands.py;tools/check_spotcases.py;tools/fixtures/payg_spotchecks.csv
+  flags: subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=tooling vs dir=tools)
+
+669b866 2025-11-11 10:20:56 +1000 — test: cover ML manifest verification
+  inferred=feat+test prefix=test scope= domDir=services files=29 +2223/-4
+  paths: pnpm-lock.yaml;runbooks/ml-operations.md;services/api-gateway/src/app.ts;services/api-gateway/src/config.ts;services/api-gateway/src/lib/ml-client.ts;services/api-gateway/src/lib/ml-decisions.ts
+  flags: docs-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=services), possible-breaking-missing-marker
+
+d255536 2025-11-11 10:13:42 +1000 — Implement secure connectors and ATO compliance workflows
+  inferred=feat+test prefix= scope= domDir=services files=25 +2162/-37
+  paths: domain/policy/designated-accounts.ts;runbooks/resilience/manual-fallbacks.md;services/api-gateway/src/lib/audit.ts;services/api-gateway/src/security/providers.js;services/api-gateway/test/designated.policy.spec.ts;services/connectors/package.json
+  flags: docs-claimed-mismatch, test-claimed-mismatch, deps-looks-like-chore, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+0a7d1d1 2025-11-11 10:10:42 +1000 — feat: add compliance event ingestion and ML scaffolding
+  inferred=feat(db) prefix=feat scope= domDir=services files=17 +1350/-29
+  paths: artifacts/ml-core/.gitkeep;docs/dsp-osf/evidence-index.md;docs/ml/reports/.gitkeep;packages/ml-core/README.md;packages/ml-core/ml_core/__init__.py;packages/ml-core/ml_core/pipelines.py
+  flags: docs-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=services), possible-breaking-missing-marker
+
+7c255dc 2025-11-11 10:04:48 +1000 — Document governance training, audits, patents, and vendor controls
+  inferred=docs prefix= scope= domDir=docs files=5 +123/-0
+  paths: docs/compliance/team-training.md;docs/legal/vendor-governance-register.md;docs/patent/CHANGELOG.md;docs/patent/governance-resilience-ml.md;status/roadmap.md
+  flags: docs-claimed-mismatch
+
+9a86c6a 2025-11-11 10:04:37 +1000 — Document compliance attestation execution plan
+  inferred=docs prefix= scope= domDir=docs files=2 +120/-0
+  paths: docs/compliance/evidence/README.md;docs/compliance/security-attestation-plan.md
+  flags: docs-claimed-mismatch
+
+91a4447 2025-11-11 10:04:16 +1000 — Document DSP readiness and governance workflows
+  inferred=docs prefix= scope= domDir=runbooks files=4 +127/-1
+  paths: SECURITY.md;docs/compliance/dsp-readiness.md;runbooks/data-governance.md;runbooks/operations/compliance-oversight.md
+  flags: docs-claimed-mismatch
+
+97c1bcc 2025-11-11 09:40:52 +1000 — feat: share jwt guard via auth package
+  inferred=feat+test prefix=feat scope= domDir=services files=16 +521/-493
+  paths: docs/architecture/auth-consolidation.md;packages/auth/package.json;packages/auth/src/index.ts;packages/auth/tests/authenticateRequest.test.ts;packages/auth/tsconfig.json;pnpm-lock.yaml
+  flags: docs-claimed-mismatch, test-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=services), possible-breaking-missing-marker
+
+587933f 2025-11-11 09:40:40 +1000 — Add prototype environment handling for admin responses
+  inferred=feat+test prefix= scope= domDir=webapp files=12 +457/-99
+  paths: services/api-gateway/src/lib/prototype-env.js;services/api-gateway/src/lib/prototype-env.ts;services/api-gateway/src/routes/admin.data.ts;services/api-gateway/src/routes/auth.ts;tests/auth/prototype-flag.test.ts;webapp/src/App.tsx
+  flags: test-claimed-mismatch, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+ce6198a 2025-11-11 09:30:53 +1000 — Add prototype env feature flag for admin requests
+  inferred=refactor prefix= scope= domDir=services files=5 +40/-1
+  paths: services/api-gateway/src/lib/auth.js;services/api-gateway/src/lib/auth.ts;services/api-gateway/src/types/fastify.d.ts;services/api-gateway/tsconfig.json;shared/types/fastify.d.ts
+  flags: code-changes-look-like-refactor
+
+db94dbd 2025-11-11 09:30:27 +1000 — docs: summarize auth guard coverage
+  inferred=docs prefix=docs scope= domDir=docs files=1 +57/-0
+  paths: docs/auth-toggle-plan.md
+  flags: subject-not-capitalized, scope-mismatch(scope= vs dir=docs)
+
+918d114 2025-11-11 09:20:31 +1000 — feat(webapp): add admin prototype router and feature flag
+  inferred=feat prefix=feat(webapp) scope=webapp domDir=webapp files=9 +794/-1
+  paths: webapp/src/App.tsx;webapp/src/admin-prototype/AdminPrototypeGuard.tsx;webapp/src/admin-prototype/AdminPrototypeLayout.tsx;webapp/src/admin-prototype/index.ts;webapp/src/admin-prototype/pages/OnboardingFlowPage.tsx;webapp/src/admin-prototype/pages/OverviewPage.tsx
+  flags: subject-not-capitalized, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+46ddc3b 2025-11-11 09:07:03 +1000 — docs: outline admin prototype activation plan
+  inferred=docs prefix=docs scope= domDir=docs files=1 +85/-0
+  paths: docs/admin-prototype-activation-plan.md
+  flags: subject-not-capitalized, scope-mismatch(scope= vs dir=docs), possible-breaking-missing-marker
+
+7e10cbb 2025-11-11 09:04:48 +1000 — feat: add compliance ingest pipeline and ml tooling
+  inferred=feat(db) prefix=feat scope= domDir=services files=21 +1384/-139
+  paths: artifacts/datasets/.gitkeep;docs/ml/reports/.gitkeep;package.json;packages/ml-core/README.md;packages/ml-core/ml_core/__init__.py;packages/ml-core/ml_core/feature_builders.py
+  flags: docs-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=services), possible-breaking-missing-marker
+
+403a426 2025-11-11 09:04:32 +1000 — feat: add ml governance service and risk workflows
+  inferred=feat(db) prefix=feat scope= domDir=services files=28 +2220/-0
+  paths: .github/workflows/ml-governance.yml;pnpm-lock.yaml;runbooks/ml-operations.md;services/api-gateway/src/app.ts;services/api-gateway/src/clients/mlServiceClient.ts;services/api-gateway/src/config.ts
+  flags: docs-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=services), possible-breaking-missing-marker
+
+a955b47 2025-11-11 08:57:54 +1000 — Add connectors, ATO filing pipeline, and designated account models
+  inferred=feat+test prefix= scope= domDir=services files=21 +1426/-1
+  paths: db/migrations/20250210_add_designated_account_controls.sql;runbooks/resilience/manual-fallbacks.md;services/ato-client/package.json;services/ato-client/src/client.ts;services/ato-client/src/index.ts;services/ato-client/src/types.ts
+  flags: docs-claimed-mismatch, test-claimed-mismatch, deps-looks-like-chore, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+df8bf87 2025-11-11 08:50:05 +1000 — Document patent governance commitments and compliance evidence
+  inferred=docs prefix= scope= domDir=docs files=7 +132/-0
+  paths: docs/compliance/evidence/README.md;docs/compliance/evidence/architecture.md;docs/compliance/evidence/compliance-metrics.md;docs/compliance/evidence/sops.md;docs/patent/changelog.md;docs/patent/platform-patent-draft.md
+  flags: docs-claimed-mismatch
+
+12b9a46 2025-11-11 08:49:50 +1000 — Add compliance governance runbooks and DSP checklist
+  inferred=docs prefix= scope= domDir=runbooks files=4 +88/-1
+  paths: SECURITY.md;docs/compliance/dsp-readiness.md;runbooks/data-governance.md;runbooks/operations/compliance-oversight.md
+  flags: docs-claimed-mismatch
+
+0a014f0 2025-11-11 02:16:08 +1000 — Hardening auth flows, remittance safety nets, and ML guardrails
+  inferred=feat+test prefix= scope= domDir=services files=29 +1563/-11
+  paths: .github/workflows/ml-guardrails.yml;SECURITY.md;artifacts/models/bias-report.json;artifacts/models/security-scan.json;config/ml/controls.json;infra/observability/grafana/dashboards.json
+  flags: docs-claimed-mismatch, test-claimed-mismatch, deps-looks-like-chore, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+3e6d094 2025-11-11 02:13:13 +1000 — feat: add high-risk approvals, ml governance, and key rotation
+  inferred=feat(db) prefix=feat scope= domDir=services files=14 +1334/-28
+  paths: domain/ml/reports.ts;services/api-gateway/src/app.ts;services/api-gateway/src/lib/audit.ts;services/api-gateway/src/observability/metrics.ts;services/api-gateway/src/routes/alerts.ts;services/api-gateway/src/routes/bas.ts
+  flags: subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=services), possible-breaking-missing-marker
+
+28d94f3 2025-11-11 02:12:49 +1000 — feat: add integration connectors, remittance jobs, and audit tracking
+  inferred=feat+test prefix=feat scope= domDir=services files=19 +1431/-4
+  paths: db/migrations/20251101_integrations.sql;domain/policy/designated-accounts.ts;runbooks/integrations.md;services/api-gateway/src/lib/audit.ts;services/api-gateway/src/routes/bank-lines.ts;services/ato-client/src/client.ts
+  flags: docs-claimed-mismatch, test-claimed-mismatch, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=services), possible-breaking-missing-marker
+
+691eb48 2025-11-11 02:11:07 +1000 — Fix npm install in workspace packages
+  inferred=chore prefix= scope= domDir=packages files=5 +30/-37
+  paths: .npmrc;apps/phase1-demo/package.json;package.json;packages/ledger/package.json;pnpm-lock.yaml
+  flags: deps-looks-like-chore
+
+d6200e9 2025-11-11 02:10:46 +1000 — Add compliance event ingestion and governance
+  inferred=feat(db) prefix= scope= domDir=services files=14 +955/-40
+  paths: runbooks/data-governance.md;services/api-gateway/src/app.ts;services/api-gateway/src/config.ts;services/api-gateway/src/lib/events.ts;services/api-gateway/src/providers.ts;services/api-gateway/src/routes/bank-lines.ts
+  flags: docs-claimed-mismatch, deps-looks-like-chore, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+9d92fab 2025-11-11 02:10:08 +1000 — docs: restore auth jwks env example
+  inferred=docs prefix=docs scope= domDir=README.md files=1 +2/-0
+  paths: README.md
+  flags: subject-not-capitalized, scope-mismatch(scope= vs dir=README.md)
+
+d278b8e 2025-11-11 02:10:02 +1000 — Fix Prisma client instrumentation attachment
+  inferred=refactor prefix= scope= domDir=services files=3 +15/-11
+  paths: services/api-gateway/src/app.ts;services/api-gateway/src/db.ts;services/api-gateway/src/observability/prisma-metrics.ts
+  flags: code-changes-look-like-refactor
+
+10de99f 2025-11-11 02:09:50 +1000 — Fix threshold selection to use validation split
+  inferred=refactor prefix= scope= domDir=apgms-ml files=1 +2/-1
+  paths: apgms-ml/gstfree/train.py
+  flags: code-changes-look-like-refactor
+
+19adfb0 2025-11-11 02:09:43 +1000 — Use sync handlers for scoring endpoints
+  inferred=refactor prefix= scope= domDir=apgms-ml files=1 +5/-5
+  paths: apgms-ml/server/main.py
+  flags: code-changes-look-like-refactor
+
+d99cb79 2025-11-11 02:09:35 +1000 — Handle scalar metrics from classification report
+  inferred=refactor prefix= scope= domDir=apgms_ml files=1 +6/-1
+  paths: apgms_ml/paygw_var/train.py
+  flags: code-changes-look-like-refactor
+
+d518159 2025-11-11 02:09:28 +1000 — Fix model artifact hashing to avoid stale metadata digest
+  inferred=refactor prefix= scope= domDir=apgms-ml files=1 +1/-13
+  paths: apgms-ml/common/io.py
+  flags: code-changes-look-like-refactor
+
+2c23cdf 2025-11-11 02:09:22 +1000 — Fix recon contract barrel extension
+  inferred=refactor prefix= scope= domDir=shared files=1 +1/-1
+  paths: shared/src/index.ts
+  flags: code-changes-look-like-refactor
+
+b7ab8ed 2025-11-11 02:09:14 +1000 — Ensure recon model sorter handles numeric versions
+  inferred=refactor prefix= scope= domDir=services files=1 +5/-1
+  paths: services/recon/src/model.ts
+  flags: code-changes-look-like-refactor
+
+7db317c 2025-11-11 02:09:05 +1000 — Ensure one-hot encoder outputs dense matrix for gradient boosting
+  inferred=refactor prefix= scope= domDir=ml files=1 +1/-1
+  paths: ml/scripts/train_model.py
+  flags: code-changes-look-like-refactor
+
+ba72fdc 2025-11-11 02:08:57 +1000 — Guard ledger analytics logging failures
+  inferred=refactor prefix= scope= domDir=domain files=1 +29/-22
+  paths: domain/ledger/journal-service.ts
+  flags: code-changes-look-like-refactor
+
+5a14ed6 2025-11-11 02:08:51 +1000 — Fix step-up middleware user id handling
+  inferred=refactor prefix= scope= domDir=services files=1 +5/-3
+  paths: services/api-gateway/src/security/step-up.ts
+  flags: code-changes-look-like-refactor
+
+f42cd41 2025-11-11 02:08:34 +1000 — chore(prisma): add model feedback migration
+  inferred=chore(db) prefix=chore(prisma) scope=prisma domDir=shared files=1 +26/-0
+  paths: shared/prisma/migrations/20251104103000_model_feedback/migration.sql
+  flags: subject-not-capitalized, scope-mismatch(scope=prisma vs dir=shared)
+
+f619720 2025-11-11 02:08:27 +1000 — Handle dedupeId when checking existing discrepancy events
+  inferred=refactor prefix= scope= domDir=worker files=1 +19/-2
+  paths: worker/src/ingestion/risk-event-worker.ts
+  flags: code-changes-look-like-refactor
+
+f0bb792 2025-11-11 02:08:16 +1000 — fix(ml-core): guard positive label metrics
+  inferred=refactor prefix=fix(ml-core) scope=ml-core domDir=packages files=1 +47/-3
+  paths: packages/ml-core/src/ml_core/models/baseline.py
+  flags: code-changes-look-like-refactor, subject-not-capitalized, fix-no-issue-ref, scope-mismatch(scope=ml-core vs dir=packages)
+
+46ae52f 2025-11-11 02:08:06 +1000 — Fix ML service model directory resolution
+  inferred=refactor prefix= scope= domDir=services files=1 +1/-1
+  paths: services/ml-service/app/main.py
+  flags: code-changes-look-like-refactor
+
+80bd55c 2025-11-11 02:08:00 +1000 — Map discrepancy telemetry models to snake_case tables
+  inferred=chore(db) prefix= scope= domDir=shared files=1 +34/-31
+  paths: shared/prisma/schema.prisma
+  flags: possible-breaking-missing-marker
+
+ec10396 2025-11-11 02:07:53 +1000 — Preserve feedback metadata on partial updates
+  inferred=refactor prefix= scope= domDir=services files=1 +14/-6
+  paths: services/api-gateway/src/routes/ml-feedback.ts
+  flags: code-changes-look-like-refactor
+
+687d498 2025-11-11 02:07:47 +1000 — fix: retry failed nats inference jobs
+  inferred=refactor prefix=fix scope= domDir=services files=1 +4/-0
+  paths: services/inference/src/nats/worker.ts
+  flags: code-changes-look-like-refactor, subject-not-capitalized, fix-no-issue-ref, scope-mismatch(scope= vs dir=services)
+
+6208716 2025-11-11 02:07:40 +1000 — Track remaining designated balances per BAS cycle
+  inferred=refactor prefix= scope= domDir=domain files=1 +21/-12
+  paths: domain/bas/orchestrator.ts
+  flags: code-changes-look-like-refactor
+
+1ea5d01 2025-11-11 02:07:36 +1000 — chore: guard ledger lint script when eslint missing
+  inferred=chore(deps) prefix=chore scope= domDir=packages files=1 +1/-1
+  paths: packages/ledger/package.json
+  flags: subject-not-capitalized, scope-mismatch(scope= vs dir=packages)
+
+faef9d6 2025-11-11 02:07:32 +1000 — Fix fastify type import extension
+  inferred=refactor prefix= scope= domDir=services files=1 +1/-1
+  paths: services/api-gateway/src/types/fastify.d.ts
+  flags: code-changes-look-like-refactor
+
+34fc4bf 2025-11-11 02:07:23 +1000 — Handle JetStream stream already exists error
+  inferred=refactor prefix= scope= domDir=services files=1 +40/-8
+  paths: services/api-gateway/src/lib/compliance-events.ts
+  flags: code-changes-look-like-refactor
+
+487ba47 2025-11-11 02:07:16 +1000 — fix: include workspace packages in ml inference build
+  inferred=chore prefix=fix scope= domDir=services files=1 +3/-1
+  paths: services/ml-inference/Dockerfile
+  flags: subject-not-capitalized, fix-no-issue-ref, scope-mismatch(scope= vs dir=services)
+
+85cf022 2025-11-11 02:07:12 +1000 — Enforce finance roles on BAS and designated account actions
+  inferred=feat+test prefix= scope= domDir=services files=4 +150/-0
+  paths: services/api-gateway/src/routes/bas.ts;services/api-gateway/src/routes/designated-accounts.ts;services/api-gateway/test/bas.routes.spec.ts;services/api-gateway/test/designated-accounts.routes.spec.ts
+  flags: test-claimed-mismatch, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+d8086ac 2025-11-11 02:07:04 +1000 — Restore Fastify typings and guard risk routes
+  inferred=refactor prefix= scope= domDir=services files=2 +31/-2
+  paths: services/api-gateway/src/routes/risk.ts;services/api-gateway/src/types/fastify.d.ts
+  flags: code-changes-look-like-refactor
+
+65a69f7 2025-11-11 02:06:52 +1000 — Fix anomaly score computation to use scaled features
+  inferred=refactor prefix= scope= domDir=packages files=1 +1/-1
+  paths: packages/ml-core/src/ml_core/pipelines/baseline.py
+  flags: code-changes-look-like-refactor
+
+892df70 2025-11-11 02:06:47 +1000 — Fix ATO submission import and add worker claiming
+  inferred=refactor prefix= scope= domDir=worker files=2 +44/-4
+  paths: services/ato-client/src/stp.ts;worker/src/jobs/ato-filings.ts
+  flags: code-changes-look-like-refactor
+
+401cd51 2025-11-11 02:06:38 +1000 — harden org scoping on compliance events
+  inferred=feat prefix= scope= domDir=services files=6 +97/-4
+  paths: services/api-gateway/src/lib/auth.js;services/api-gateway/src/lib/auth.ts;services/api-gateway/src/routes/compliance.ts;services/api-gateway/src/routes/ledger.ts;services/api-gateway/src/routes/payments.ts;services/api-gateway/src/types/fastify.d.ts
+  flags: code-additions-look-like-feat, subject-not-capitalized, possible-breaking-missing-marker
+
+a1793fe 2025-11-11 02:01:25 +1000 — Add data governance runbook
+  inferred=docs prefix= scope= domDir=runbooks files=1 +80/-0
+  paths: runbooks/data-governance.md
+  flags: docs-claimed-mismatch
+
+1453d0f 2025-11-11 02:01:16 +1000 — Document patent governance alignment and security attestations
+  inferred=docs prefix= scope= domDir=runbooks files=5 +111/-5
+  paths: SECURITY.md;docs/dsp-osf/evidence-index.md;docs/ip/patent-draft.md;runbooks/ndb.md;runbooks/ops.md
+  flags: docs-claimed-mismatch
+
+c6829ed 2025-11-11 01:53:00 +1000 — Secure connectors, enforce MFA, and harden BAS + ML ops
+  inferred=feat+test prefix= scope= domDir=services files=43 +1992/-29
+  paths: .github/workflows/model-governance.yml;.gitignore;SECURITY.md;artifacts/ml/model-manifest.json;docs/ops/runbook.md;domain/policy/designated-accounts.ts
+  flags: docs-claimed-mismatch, test-claimed-mismatch, deps-looks-like-chore, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+af5f1f3 2025-11-11 01:48:53 +1000 — feat: add ML risk service and dashboards
+  inferred=feat(db) prefix=feat scope= domDir=services files=30 +2103/-26
+  paths: docker-compose.yml;pnpm-lock.yaml;services/api-gateway/src/app.ts;services/api-gateway/src/clients/ml-service.ts;services/api-gateway/src/config.ts;services/api-gateway/src/lib/risk-feedback.ts
+  flags: deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=services), possible-breaking-missing-marker
+
+7790322 2025-11-11 01:48:21 +1000 — Add compliance telemetry models and ingestion pipeline
+  inferred=feat(db) prefix= scope= domDir=services files=14 +1214/-2
+  paths: db/migrations/20250312_add_compliance_entities.sql;runbooks/data-governance.md;services/api-gateway/package.json;services/api-gateway/src/app.ts;services/api-gateway/src/config.ts;services/api-gateway/src/plugins/natsPublisher.ts
+  flags: docs-claimed-mismatch, deps-looks-like-chore, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+ce8eb0f 2025-11-11 01:46:31 +1000 — Implement integrations connectors and ATO workflows
+  inferred=feat(db) prefix= scope= domDir=services files=22 +1232/-4
+  paths: domain/policy/designated-accounts.ts;runbooks/integrations.md;services/api-gateway/src/app.ts;services/api-gateway/src/routes/designated-accounts.ts;services/ato-client/package.json;services/ato-client/src/bas.ts
+  flags: docs-claimed-mismatch, deps-looks-like-chore, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+c7d26f0 2025-11-11 01:41:54 +1000 — feat: scaffold ml-core package with baseline pipelines
+  inferred=feat+test prefix=feat scope= domDir=packages files=19 +1198/-0
+  paths: artifacts/notebooks/README.md;docs/ml/datasets.md;docs/ml/model-standards.md;packages/ml-core/README.md;packages/ml-core/pyproject.toml;packages/ml-core/src/ml_core/__init__.py
+  flags: docs-claimed-mismatch, test-claimed-mismatch, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=packages)
+
+fb47f0b 2025-11-10 21:52:57 +1000 — Add ML risk service integration
+  inferred=feat+test prefix= scope= domDir=services files=29 +2895/-26
+  paths: artifacts/models/fraud_model.json;artifacts/models/shortfall_model.json;pnpm-lock.yaml;services/api-gateway/src/app.ts;services/api-gateway/src/clients/ml-service.ts;services/api-gateway/src/config.ts
+  flags: test-claimed-mismatch, deps-looks-like-chore, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+0c96803 2025-11-10 21:41:55 +1000 — Add compliance event ingestion pipeline
+  inferred=feat(db) prefix= scope= domDir=services files=11 +1099/-3
+  paths: db/migrations/20251106090000_add_compliance_tables.sql;runbooks/data-governance.md;services/api-gateway/src/config.ts;services/api-gateway/src/lib/compliance-events.ts;services/api-gateway/src/routes/admin.data.ts;services/api-gateway/src/routes/bank-lines.ts
+  flags: docs-claimed-mismatch, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+7b8978a 2025-11-10 21:38:16 +1000 — Add ml-service feedback endpoints and governance controls
+  inferred=feat(db) prefix= scope= domDir=services files=21 +731/-1
+  paths: .github/workflows/ml-governance.yml;artifacts/model/bias-report.json;artifacts/model/manifest.json;artifacts/model/model.bin;artifacts/model/reproducibility-report.json;infra/observability/grafana/dashboards.json
+  flags: docs-claimed-mismatch, deps-looks-like-chore, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+def0692 2025-11-10 21:36:09 +1000 — feat: add ml core package and baseline pipelines
+  inferred=feat prefix=feat scope= domDir=packages files=10 +654/-0
+  paths: artifacts/notebooks/baseline_runs.json;docs/ml/README.md;packages/ml-core/README.md;packages/ml-core/pyproject.toml;packages/ml-core/src/features/__init__.py;packages/ml-core/src/features/pipelines.py
+  flags: docs-claimed-mismatch, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=packages)
+
+2bd3a23 2025-11-10 21:27:08 +1000 — feat: add risk event ingestion pipeline
+  inferred=feat(db) prefix=feat scope= domDir=services files=12 +887/-19
+  paths: db/migrations/20251205_add_risk_events.sql;runbooks/data-governance.md;services/api-gateway/src/app.ts;services/api-gateway/src/config.ts;services/api-gateway/src/lib/risk-events.ts;services/api-gateway/src/routes/admin.data.ts
+  flags: docs-claimed-mismatch, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=services), possible-breaking-missing-marker
+
+6e8aaed 2025-11-10 21:26:43 +1000 — Add ML risk service integration across stack
+  inferred=feat+test prefix= scope= domDir=services files=31 +2815/-51
+  paths: pnpm-lock.yaml;services/api-gateway/src/app.ts;services/api-gateway/src/clients/ml-service.ts;services/api-gateway/src/config.ts;services/api-gateway/src/routes/bank-lines.ts;services/api-gateway/src/routes/risk.ts
+  flags: test-claimed-mismatch, deps-looks-like-chore, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+6b1e4fc 2025-11-10 21:26:29 +1000 — Add ML service observability and governance workflows
+  inferred=feat(db) prefix= scope= domDir=services files=17 +765/-0
+  paths: .github/workflows/ml-governance.yml;pnpm-lock.yaml;runbooks/ml-operations.md;services/ml-service/artifacts/model.onnx;services/ml-service/checksums/model.onnx.sha256;services/ml-service/model/manifest.json
+  flags: docs-claimed-mismatch, deps-looks-like-chore, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+96e523c 2025-11-10 20:24:41 +1000 — feat(ml-core): scaffold package and baseline analytics
+  inferred=feat prefix=feat(ml-core) scope=ml-core domDir=packages files=15 +695/-0
+  paths: artifacts/notebooks/.gitkeep;docs/ml/README.md;packages/ml-core/README.md;packages/ml-core/pyproject.toml;packages/ml-core/src/ml_core/__init__.py;packages/ml-core/src/ml_core/artifacts.py
+  flags: docs-claimed-mismatch, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=ml-core vs dir=packages)
+
+c8cc736 2025-11-10 20:08:23 +1000 — Add ML risk service integration and surface dashboard insights
+  inferred=feat+test prefix= scope= domDir=webapp files=31 +1094/-28
+  paths: artifacts/models/fraud_model.json;artifacts/models/shortfall_model.json;docker-compose.yml;package.json;services/api-gateway/src/app.ts;services/api-gateway/src/clients/mlServiceClient.ts
+  flags: test-claimed-mismatch, deps-looks-like-chore, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+852bf3d 2025-11-10 20:07:00 +1000 — Add discrepancy event telemetry pipeline
+  inferred=feat(db) prefix= scope= domDir=services files=12 +1094/-8
+  paths: db/migrations/20251105090000_discrepancy_event_tracking.sql;runbooks/training-data.md;services/api-gateway/src/app.ts;services/api-gateway/src/config.ts;services/api-gateway/src/lib/event-publisher.ts;services/api-gateway/src/routes/compliance.ts
+  flags: docs-claimed-mismatch, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+473f7fa 2025-11-10 20:02:30 +1000 — Add ML observability, feedback capture, and artifact checks
+  inferred=feat+test prefix= scope= domDir=services files=11 +942/-1
+  paths: .github/workflows/model-artifact-checks.yml;infra/observability/grafana/dashboards.json;infra/observability/prometheus/prometheus.yml;infra/observability/prometheus/rules/ml-service.rules.yml;runbooks/ml-operations.md;services/api-gateway/src/app.ts
+  flags: docs-claimed-mismatch, test-claimed-mismatch, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+40741d2 2025-11-10 20:01:04 +1000 — feat: scaffold ml-core package and feature pipelines
+  inferred=feat prefix=feat scope= domDir=packages files=15 +641/-0
+  paths: artifacts/notebooks/gradient_boosting_baseline.ipynb;artifacts/notebooks/isolation_forest_baseline.ipynb;docs/ml/README.md;packages/ml-core/README.md;packages/ml-core/pyproject.toml;packages/ml-core/src/ml_core/__init__.py
+  flags: docs-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=packages)
+
+9aa6ceb 2025-11-10 19:34:08 +1000 — feat: scaffold model service workspace
+  inferred=feat+test prefix=feat scope= domDir=packages files=9 +1337/-6
+  paths: packages/model-service/.eslintrc.cjs;packages/model-service/README.md;packages/model-service/package.json;packages/model-service/src/index.ts;packages/model-service/src/pipeline.ts;packages/model-service/tests/modelService.test.ts
+  flags: docs-claimed-mismatch, test-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=packages)
+
+c56e74b 2025-11-10 19:33:50 +1000 — feat(inference): expose model scoring over http and nats
+  inferred=feat+test prefix=feat(inference) scope=inference domDir=services files=22 +804/-1
+  paths: README.md;docs/architecture/README.md;docs/architecture/inference-service.md;pnpm-lock.yaml;services/inference/package.json;services/inference/src/app.ts
+  flags: docs-claimed-mismatch, test-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=inference vs dir=services)
+
+cbb4b27 2025-11-10 19:21:55 +1000 — feat: formalise transactional events and retention
+  inferred=feat+test prefix=feat scope= domDir=services files=22 +1278/-4
+  paths: docs/architecture/README.md;docs/architecture/data/README.md;infra/event-bus/README.md;services/audit/events/README.md;services/audit/events/catalog.js;services/audit/events/catalog.ts
+  flags: docs-claimed-mismatch, test-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=services), possible-breaking-missing-marker
+
+7b346a0 2025-11-10 19:21:34 +1000 — feat: add ml inference service
+  inferred=feat prefix=feat scope= domDir=services files=17 +887/-0
+  paths: infra/deployments/ml-inference/docker-compose.yml;infra/deployments/ml-inference/k8s-deployment.yaml;infra/event-bus/subjects.md;pnpm-lock.yaml;runbooks/ml_inference.md;services/ml-inference/Dockerfile
+  flags: docs-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=services)
+
+9e5f062 2025-11-10 19:21:15 +1000 — feat: add model service data pipelines
+  inferred=feat prefix=feat scope= domDir=packages files=10 +1767/-0
+  paths: packages/model-service/README.md;packages/model-service/artifacts/dataset-manifest.json;packages/model-service/artifacts/payroll_feature_schema.json;packages/model-service/data/export-payroll-data.ts;packages/model-service/data/inspect-prisma-schema.ts;packages/model-service/package.json
+  flags: docs-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=packages)
+
+2c9d9b9 2025-11-10 19:17:56 +1000 — Automate ML retraining and tighten retention controls
+  inferred=feat+test prefix= scope= domDir=services files=12 +576/-11
+  paths: .github/workflows/ml_retrain.yml;docs/ml/policies.md;package.json;scripts/ml-retrain.mjs;services/api-gateway/src/routes/admin.data.js;services/api-gateway/src/schemas/admin.data.js
+  flags: docs-claimed-mismatch, test-claimed-mismatch, deps-looks-like-chore, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+ed958de 2025-11-10 09:11:17 +0000 — chore(deps): bump actions/setup-python from 5 to 6
+  inferred=ci prefix=chore(deps) scope=deps domDir=github files=1 +1/-1
+  paths: .github/workflows/python-tests.yml
+  flags: subject-not-capitalized, scope-mismatch(scope=deps vs dir=github)
+
+7ceaea5 2025-11-10 09:07:07 +0000 — chore(deps): bump the dependencies group across 1 directory with 20 updates
+  inferred=chore(deps) prefix=chore(deps) scope=deps domDir=pnpm-lock.yaml files=6 +1725/-1474
+  paths: apps/phase1-demo/package.json;package.json;packages/ledger/package.json;pnpm-lock.yaml;services/api-gateway/package.json;webapp/package.json
+  flags: subject>72, subject-not-capitalized, scope-mismatch(scope=deps vs dir=pnpm-lock.yaml), possible-breaking-missing-marker
+
+6d1b4e2 2025-11-10 18:54:24 +1000 — Add BAS guardrails and MFA-gated treasury flows
+  inferred=feat+test prefix= scope= domDir=services files=7 +741/-13
+  paths: docs/ip/guardrails.md;domain/policy/designated-accounts.ts;services/api-gateway/src/app.ts;services/api-gateway/src/routes/bas.ts;services/api-gateway/src/routes/designated-accounts.ts;services/api-gateway/test/bas.routes.spec.ts
+  flags: docs-claimed-mismatch, test-claimed-mismatch, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+156dab5 2025-11-10 18:52:40 +1000 — feat: add connectors tax adapters
+  inferred=feat+test prefix=feat scope= domDir=services files=12 +924/-5
+  paths: domain/policy/designated-accounts.ts;services/connectors/src/adapters/payroll.ts;services/connectors/src/adapters/pos.ts;services/connectors/src/designated.ts;services/connectors/src/index.ts;services/connectors/src/tax-engine.ts
+  flags: test-claimed-mismatch, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=services), possible-breaking-missing-marker
+
+1b83350 2025-11-10 18:52:31 +1000 — feat: integrate partner banking APIs and BAS orchestration
+  inferred=feat+test prefix=feat scope= domDir=providers files=9 +852/-3
+  paths: domain/bas/orchestrator.ts;domain/policy/designated-accounts.ts;providers/banking/base.ts;providers/banking/index.ts;providers/banking/partner-api.ts;providers/banking/types.ts
+  flags: test-claimed-mismatch, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=providers), possible-breaking-missing-marker
+
+7262b8a 2025-11-10 14:19:58 +1000 — chore(repo): one-time LF line ending normalisation
+  inferred=refactor prefix=chore(repo) scope=repo domDir=services files=22 +1159/-2915
+  paths: pnpm-lock.yaml;services/api-gateway/package.json;services/api-gateway/src/app.ts;services/api-gateway/src/config.ts;services/api-gateway/src/index.ts;services/api-gateway/src/lib/encryption.ts
+  flags: subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=repo vs dir=services), possible-breaking-missing-marker
+
+e54643a 2025-11-10 14:19:58 +1000 — chore(repo): add .gitignore for venv, extracted data, caches, builds
+  inferred=chore prefix=chore(repo) scope=repo domDir=gitignore files=1 +18/-19
+  paths: .gitignore
+  flags: subject-not-capitalized, scope-mismatch(scope=repo vs dir=gitignore)
+
+4bb3c49 2025-11-10 14:14:36 +1000 — chore(repo): enforce LF endings; quiet CSV diffs; repo-relative PAYG resolver paths
+  inferred=refactor prefix=chore(repo) scope=repo domDir=tools files=2 +43/-69
+  paths: .gitattributes;tools/ato_scraper/payg_resolver.py
+  flags: subject>72, subject-not-capitalized, scope-mismatch(scope=repo vs dir=tools)
+
+5429b59 2025-11-10 14:08:35 +1000 — fix(payg): enforce monotone cumulative max and integer rounding; ratio tests use relative tolerance
+  inferred=feat+test prefix=fix(payg) scope=payg domDir=tools files=3 +22/-14
+  paths: data/external/ato/payg/payg_tables_normalized.csv;tests/test_payg_resolver.py;tools/ato_scraper/normalize_payg_from_csvs.py
+  flags: test-claimed-mismatch, subject>72, subject-not-capitalized, fix-no-issue-ref, scope-mismatch(scope=payg vs dir=tools)
+
+deea255 2025-11-10 14:03:27 +1000 — fix(payg): robust CSV decoding + relaxed monthly scaling tolerance
+  inferred=feat+test prefix=fix(payg) scope=payg domDir=tools files=3 +28/-16
+  paths: data/external/ato/payg/payg_tables_normalized.csv;tests/test_payg_resolver.py;tools/ato_scraper/normalize_payg_from_csvs.py
+  flags: test-claimed-mismatch, subject-not-capitalized, fix-no-issue-ref, scope-mismatch(scope=payg vs dir=tools)
+
+aba172f 2025-11-10 13:59:13 +1000 — test(payg): repo-relative normalizer; resolver scaling checks; CSV artifact
+  inferred=feat+test prefix=test(payg) scope=payg domDir=tests files=4 +91/-270
+  paths: pytest.ini;tests/test_payg_resolver.py;tests/test_payg_tables.py;tools/ato_scraper/normalize_payg_from_csvs.py
+  flags: subject>72, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=payg vs dir=tests)
+
+3156f77 2025-11-10 08:49:57 +1000 — feat(payg): normalization and resolver tests; CSV artifact and CI workflow
+  inferred=feat+test prefix=feat(payg) scope=payg domDir=tools files=10 +429/-0
+  paths: .github/workflows/python-tests.yml;data/external/ato/payg/payg_tables_normalized.csv;pytest.ini;requirements.txt;tests/test_payg_resolver.py;tests/test_payg_tables.py
+  flags: test-claimed-mismatch, deps-looks-like-chore, subject>72, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=payg vs dir=tools)
+
+f0fb96b 2025-11-01 03:02:03 +1000 — feat(ops): Prometheus /metrics + OTEL traces + readiness (deps) + graceful shutdown
+  inferred=feat prefix=feat(ops) scope=ops domDir=services files=8 +538/-135
+  paths: services/api-gateway/package.json;services/api-gateway/src/app.ts;services/api-gateway/src/config.ts;services/api-gateway/src/observability/metrics.ts;services/api-gateway/src/observability/prisma-metrics.ts;services/api-gateway/src/observability/tracing.ts
+  flags: deps-looks-like-chore, subject>72, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=ops vs dir=services), possible-breaking-missing-marker
+
+3d2fe12 2025-11-01 02:07:43 +1000 — feat(banking): provider adapters + designated one-way account policy engine
+  inferred=feat+test prefix=feat(banking) scope=banking domDir=providers files=18 +1040/-1
+  paths: README.md;docs/compliance/designated-accounts.md;domain/policy/designated-accounts.ts;providers/banking/anz.ts;providers/banking/base.ts;providers/banking/index.ts
+  flags: docs-claimed-mismatch, test-claimed-mismatch, deps-looks-like-chore, subject>72, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=banking vs dir=providers), possible-breaking-missing-marker
+
+c9a3b62 2025-11-01 00:32:15 +1000 — feat(api-gateway): idempotency keys for POST/PATCH and dedupe storage
+  inferred=feat+test prefix=feat(api-gateway) scope=api-gateway domDir=shared files=9 +708/-309
+  paths: README.md;services/api-gateway/src/app.ts;services/api-gateway/src/lib/idempotency.ts;services/api-gateway/test/privacy.spec.ts;shared/prisma/migrations/20251020183646_add_bankline_idempotency/migration.sql;shared/prisma/migrations/20251104100000_idempotency_keys/migration.sql
+  flags: docs-claimed-mismatch, test-claimed-mismatch, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=api-gateway vs dir=shared), possible-breaking-missing-marker
+
+54d0fba 2025-10-31 23:23:16 +1000 — feat(api-gateway): Zod/Fastify schemas for all external routes and error contract
+  inferred=refactor prefix=feat(api-gateway) scope=api-gateway domDir=shared files=8 +307/-295
+  paths: services/api-gateway/src/app.ts;services/api-gateway/src/lib/validation.ts;services/api-gateway/src/routes/auth.ts;shared/package.json;shared/src/errors.ts;shared/src/index.ts
+  flags: deps-looks-like-chore, code-changes-look-like-refactor, subject>72, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=api-gateway vs dir=shared), possible-breaking-missing-marker
+
+10afe8f 2025-10-31 22:31:49 +1000 — feat(auth): MFA (WebAuthn/TOTP) + end-to-end encryption envelopes
+  inferred=feat+test prefix=feat(auth) scope=auth domDir=services files=23 +1691/-124
+  paths: .env.example;README.md;pnpm-lock.yaml;services/api-gateway/package.json;services/api-gateway/src/app.ts;services/api-gateway/src/config.ts
+  flags: docs-claimed-mismatch, test-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=auth vs dir=services), possible-breaking-missing-marker
+
+6efa52f 2025-10-31 10:40:12 +1000 — feat(security): issuer/audience/expiry enforcement + reply minimisation + log redaction
+  inferred=feat+test prefix=feat(security) scope=security domDir=shared files=18 +526/-37
+  paths: scripts/verify-no-conflicts.mjs;services/api-gateway/src/auth.ts;services/api-gateway/src/routes/auth.ts;services/api-gateway/src/routes/regulator-auth.ts;services/api-gateway/src/routes/tax.js;services/api-gateway/src/routes/tax.ts
+  flags: test-claimed-mismatch, deps-looks-like-chore, subject>72, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=security vs dir=shared), possible-breaking-missing-marker
+
+1ed53c7 2025-10-31 09:19:07 +1000 — feat(api-gateway): add helmet, strict CORS, and CSP headers
+  inferred=feat+test prefix=feat(api-gateway) scope=api-gateway domDir=services files=3 +105/-12
+  paths: services/api-gateway/src/app.ts;services/api-gateway/test/security.headers.spec.ts;webapp/index.html
+  flags: test-claimed-mismatch, subject-not-capitalized, scope-mismatch(scope=api-gateway vs dir=services), possible-breaking-missing-marker
+
+f6dcadc 2025-10-31 09:08:54 +1000 — chore(repo): enable safety guards & baseline scripts
+  inferred=feat+test prefix=chore(repo) scope=repo domDir=package.json files=6 +90/-14
+  paths: .nvmrc;.tool-versions;README.md;package.json;scripts/verify-no-conflicts.mjs;services/api-gateway/test/run.ts
+  flags: docs-claimed-mismatch, test-claimed-mismatch, subject-not-capitalized, scope-mismatch(scope=repo vs dir=package.json), possible-breaking-missing-marker
+
+3e9654f 2025-10-31 08:32:47 +1000 — feat(regulator): Phase 7 ÔÇö Regulator Portal & Continuous Monitoring
+  inferred=feat(db) prefix=feat(regulator) scope=regulator domDir=webapp files=31 +3675/-365
+  paths: .env.example;.github/workflows/nightly.yml;docs/compliance/checklist.md;docs/ops/regulator-portal.md;docs/ops/runbook.md;package.json
+  flags: docs-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=regulator vs dir=webapp), possible-breaking-missing-marker
+
+51727cc 2025-10-31 03:11:28 +1000 — feat(platform): enforce MFA for high-risk actions and add evidence backup
+  inferred=feat(db) prefix=feat(platform) scope=platform domDir=services files=21 +1051/-73
+  paths: .github/workflows/backup.yml;db/{init.sql => init.sql.skip};docs/ops/dashboards.md;docs/ops/promql.md;docs/ops/runbook.md;package.json
+  flags: docs-claimed-mismatch, deps-looks-like-chore, subject>72, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=platform vs dir=services), possible-breaking-missing-marker
+
+38866dc 2025-10-30 03:48:52 +1000 — feat(compliance): enable payment plan flow and evidence reporting
+  inferred=feat(db) prefix=feat(compliance) scope=compliance domDir=webapp files=7 +616/-53
+  paths: db/init.sql;services/api-gateway/src/app.ts;shared/prisma/migrations/20251102120000_phase4_payment_plan/migration.sql;shared/prisma/schema.prisma;webapp/src/BasPage.tsx;webapp/src/CompliancePage.tsx
+  flags: subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=compliance vs dir=webapp), possible-breaking-missing-marker
+
+b2850c6 2025-10-30 02:56:36 +1000 — feat(compliance): add designated holding accounts and surface balances in API/UI
+  inferred=feat(db) prefix=feat(compliance) scope=compliance domDir=webapp files=8 +739/-35
+  paths: db/init.sql;services/api-gateway/src/app.ts;shared/prisma/migrations/20251102103000_phase3_designated_accounts/migration.sql;shared/prisma/schema.prisma;webapp/src/BasPage.tsx;webapp/src/CompliancePage.tsx
+  flags: subject>72, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=compliance vs dir=webapp), possible-breaking-missing-marker
+
+d9fa8bf 2025-10-30 01:59:08 +1000 — feat(platform): persist alerts/BAS cycles and wire Phase 2 UI flows
+  inferred=feat(db) prefix=feat(platform) scope=platform domDir=webapp files=9 +752/-111
+  paths: db/init.sql;services/api-gateway/src/app.ts;shared/prisma/migrations/20251102090000_phase2_alerts_bascycle/migration.sql;shared/prisma/schema.prisma;webapp/src/AlertsPage.tsx;webapp/src/BasPage.tsx
+  flags: subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=platform vs dir=webapp), possible-breaking-missing-marker
+
+78a3367 2025-10-30 00:37:07 +1000 — chore(repo): snapshot before full history rewrite
+  inferred=feat prefix=chore(repo) scope=repo domDir=webapp files=1 +425/-234
+  paths: webapp/src/DashboardPage.tsx
+  flags: code-additions-look-like-feat, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=repo vs dir=webapp)
+
+06d6550 2025-10-30 00:32:37 +1000 — chore(db): finalize schema, db init, and client wiring after auth integration
+  inferred=feat(db) prefix=chore(db) scope=db domDir=webapp files=7 +628/-79
+  paths: db/init.sql;pnpm-lock.yaml;services/api-gateway/src/app.ts;shared/prisma/schema.prisma;webapp/package.json;webapp/src/App.tsx
+  flags: subject>72, subject-not-capitalized, scope-mismatch(scope=db vs dir=webapp), possible-breaking-missing-marker
+
+6ef1ad5 2025-10-28 18:51:39 +1000 — feat(auth): wire end-to-end login/session between webapp and api-gateway
+  inferred=feat prefix=feat(auth) scope=auth domDir=services files=15 +648/-553
+  paths: db/init.sql;docker-compose.yml;pnpm-lock.yaml;services/api-gateway/package.json;services/api-gateway/src/app.ts;services/api-gateway/src/auth.ts
+  flags: deps-looks-like-chore, subject-not-capitalized, scope-mismatch(scope=auth vs dir=services), possible-breaking-missing-marker
+
+a0200e8 2025-10-28 05:23:11 +1000 — feat(webapp): introduce login flow and dashboard; harden api-gateway
+  inferred=feat prefix=feat(webapp) scope=webapp domDir=webapp files=23 +1308/-1132
+  paths: docker-compose.yml;pnpm-lock.yaml;services/api-gateway/package.json;services/api-gateway/src/app.ts;services/api-gateway/src/auth.ts;services/api-gateway/src/config.ts
+  flags: deps-looks-like-chore, subject-not-capitalized, possible-breaking-missing-marker
+
+d9e6efd 2025-10-28 01:04:20 +1000 — chore(deploy): scaffold DB init/seed and tighten service startup/runtime
+  inferred=feat(db) prefix=chore(deploy) scope=deploy domDir=services files=14 +23722/-452
+  paths: Export-FolderTree.ps1;db/init.sql;docker-compose.yml;folder-structure.txt;services/api-gateway/Dockerfile;services/api-gateway/db_schema.sql
+  flags: subject-not-capitalized, scope-mismatch(scope=deploy vs dir=services), possible-breaking-missing-marker
+
+b282f82 2025-10-26 23:57:28 +1000 — feat(api-gateway): add auth module, route, and plugin
+  inferred=feat(db) prefix=feat(api-gateway) scope=api-gateway domDir=webapp files=18 +1877/-120
+  paths: 20251101_add_payroll.sql;db/payroll.sql;services/api-gateway/src/app.ts;services/api-gateway/src/index.ts;services/api-gateway/src/lib/masking.ts;services/api-gateway/src/security/providers.ts
+  flags: subject-not-capitalized, scope-mismatch(scope=api-gateway vs dir=webapp), possible-breaking-missing-marker
+
+47fd4cb 2025-10-26 22:50:03 +1000 — chore(infra): initial hardening pass across gateway, webapp, and compose
+  inferred=feat+test prefix=chore(infra) scope=infra domDir=services files=43 +3529/-347
+  paths: Export-CodeDumpPdf.ps1;apps/webapp/Dockerfile;docker-compose.yml;services/api-gateway/Dockerfile;services/api-gateway/package.json;services/api-gateway/src/app.ts
+  flags: test-claimed-mismatch, subject-not-capitalized, scope-mismatch(scope=infra vs dir=services), possible-breaking-missing-marker
+
+29159f8 2025-10-26 01:24:25 +1000 — refactor(api-gateway): extract server entrypoint and update ops runbook
+  inferred=feat+test prefix=refactor(api-gateway) scope=api-gateway domDir=services files=11 +1780/-278
+  paths: .github/workflows/ci.yml;README.md;package.json;pnpm-lock.yaml;runbooks/ops.md;services/api-gateway/package.json
+  flags: docs-claimed-mismatch, test-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, scope-mismatch(scope=api-gateway vs dir=services), possible-breaking-missing-marker
+
+584c904 2025-10-25 22:46:20 +1000 — feat(security): enforce JWT auth, org/role scoping, response redaction, and secure headers
+  inferred=feat prefix=feat(security) scope=security domDir=services files=5 +657/-103
+  paths: pnpm-lock.yaml;services/api-gateway/src/app.ts;services/api-gateway/src/plugins/auth.ts;services/api-gateway/src/routes/bank-lines.ts;services/api-gateway/src/utils/orgScope.ts
+  flags: deps-looks-like-chore, subject>72, subject-not-capitalized, scope-mismatch(scope=security vs dir=services), possible-breaking-missing-marker
+
+fed62c3 2025-10-25 18:49:10 +1000 — feat(platform): introduce messaging bus, ledger module, tax utils, and operational framework
+  inferred=feat+test prefix=feat(platform) scope=platform domDir=shared files=38 +4243/-121
+  paths: .env.example;apps/phase1-demo/package.json;apps/phase1-demo/src/index.ts;apps/phase1-demo/src/types/uuid.d.ts;apps/phase1-demo/tsconfig.json;docker-compose.nats.yml
+  flags: docs-claimed-mismatch, test-claimed-mismatch, deps-looks-like-chore, subject>72, subject-not-capitalized, scope-mismatch(scope=platform vs dir=shared), possible-breaking-missing-marker
+
+7e802c1 2025-10-24 06:29:43 +1000 — chore(db): add new Prisma migration and record compliance snapshot
+  inferred=chore(db) prefix=chore(db) scope=db domDir=shared files=2 +220/-0
+  paths: artifacts/compliance/local-20250223.md;shared/prisma/migrations/20251023202136_/migration.sql
+  flags: docs-claimed-mismatch, subject-not-capitalized, scope-mismatch(scope=db vs dir=shared), possible-breaking-missing-marker
+
+3eadee5 2025-10-24 05:42:45 +1000 — refactor(db): improve shared DB client/connection handling
+  inferred=refactor prefix=refactor(db) scope=db domDir=shared files=1 +4/-1
+  paths: shared/src/db.ts
+  flags: subject-not-capitalized, scope-mismatch(scope=db vs dir=shared)
+
+d590f8f 2025-10-24 05:17:35 +1000 — chore(ops): add nightly pipeline and chaos testing playbook
+  inferred=ci prefix=chore(ops) scope=ops domDir=docs files=3 +90/-2
+  paths: .github/workflows/nightly.yml;docs/ops/chaos.md;docs/ops/runbook.md
+  flags: docs-claimed-mismatch, subject-not-capitalized, scope-mismatch(scope=ops vs dir=docs)
+
+aff6ebd 2025-10-24 04:28:38 +1000 — chore(security): add PII key rotation tooling and incident response template
+  inferred=chore prefix=chore(security) scope=security domDir=docs files=7 +102/-5
+  paths: README.md;docs/ops/runbook.md;docs/security/ASVS-mapping.md;docs/security/TFN-SOP.md;package.json;scripts/rotate-pii-keys.mjs
+  flags: docs-claimed-mismatch, subject>72, subject-not-capitalized, scope-mismatch(scope=security vs dir=docs)
+
+2160212 2025-10-24 03:58:10 +1000 — chore(ops): add dependency monitoring and evidence collection workflow
+  inferred=ci prefix=chore(ops) scope=ops domDir=docs files=7 +124/-10
+  paths: .github/dependabot.yml;README.md;docs/compliance/checklist.md;docs/ops/runbook.md;package.json;scripts/collect-evidence.mjs
+  flags: docs-claimed-mismatch, subject-not-capitalized, scope-mismatch(scope=ops vs dir=docs)
+
+39142c1 2025-10-24 03:43:47 +1000 — chore(compliance): add compliance checklist and wire it into workspace
+  inferred=chore prefix=chore(compliance) scope=compliance domDir=package.json files=2 +15/-1
+  paths: docs/compliance/checklist.md;package.json
+  flags: docs-claimed-mismatch, subject-not-capitalized, scope-mismatch(scope=compliance vs dir=package.json)
+
+3db79fd 2025-10-24 03:38:44 +1000 — chore(ops): add smoke testing, dashboards, and observability hooks
+  inferred=feat prefix=chore(ops) scope=ops domDir=docs files=8 +105/-12
+  paths: .github/workflows/ci.yml;README.md;docs/accessibility/smoke.md;docs/ops/dashboards.md;docs/ops/runbook.md;k6/smoke.js
+  flags: docs-claimed-mismatch, code-additions-look-like-feat, subject-not-capitalized, scope-mismatch(scope=ops vs dir=docs), possible-breaking-missing-marker
+
+8828bba 2025-10-24 03:18:49 +1000 — refactor(platform): centralize runtime config, tighten auth/metrics, and add typed boundaries
+  inferred=feat+test prefix=refactor(platform) scope=platform domDir=services files=26 +727/-231
+  paths: .env.example;.github/workflows/ci.yml;docs/privacy/dpia.md;docs/security/ASVS-mapping.md;package.json;services/api-gateway/package.json
+  flags: docs-claimed-mismatch, test-claimed-mismatch, deps-looks-like-chore, subject>72, subject-not-capitalized, scope-mismatch(scope=platform vs dir=services), possible-breaking-missing-marker
+
+ff1a71e 2025-10-24 00:43:47 +1000 — chore(ci): tighten security pipeline and align gateway tests
+  inferred=feat+test prefix=chore(ci) scope=ci domDir=services files=13 +315/-230
+  paths: .github/workflows/ci.yml;.github/workflows/security.yml;docs/privacy/dpia.md;docs/security/ASVS-mapping.md;pnpm-lock.yaml;services/api-gateway/package.json
+  flags: docs-claimed-mismatch, test-claimed-mismatch, subject-not-capitalized, scope-mismatch(scope=ci vs dir=services), possible-breaking-missing-marker
+
+afa0d3f 2025-10-23 20:33:24 +1000 — chore(ops): add debug export tooling and tighten gateway/admin handling
+  inferred=feat prefix=chore(ops) scope=ops domDir=services files=5 +142/-77
+  paths: pnpm-workspace.yaml;services/api-gateway/debug-export.mts;services/api-gateway/src/app.ts;services/api-gateway/src/lib/auth.ts;services/api-gateway/src/routes/admin.data.ts
+  flags: code-additions-look-like-feat, subject-not-capitalized, scope-mismatch(scope=ops vs dir=services), possible-breaking-missing-marker
+
+86cd6e6 2025-10-23 07:10:31 +1000 — chore(ops): define alerting and align gateway behavior with runbook
+  inferred=refactor prefix=chore(ops) scope=ops domDir=docs files=3 +19/-1
+  paths: docs/ops/alerts.md;docs/ops/runbook.md;services/api-gateway/src/app.ts
+  flags: docs-claimed-mismatch, subject-not-capitalized, scope-mismatch(scope=ops vs dir=docs)
+
+c3c9a68 2025-10-23 06:59:41 +1000 — chore(ops): add observability and SLO docs
+  inferred=docs prefix=chore(ops) scope=ops domDir=docs files=4 +96/-15
+  paths: docs/ops/logging.md;docs/ops/promql.md;docs/ops/runbook.md;docs/ops/slo.md
+  flags: docs-claimed-mismatch, subject-not-capitalized, scope-mismatch(scope=ops vs dir=docs)
+
+01213b0 2025-10-23 05:08:57 +1000 — chore(ops): improve service operability and document logging/runbook
+  inferred=feat prefix=chore(ops) scope=ops domDir=docs files=3 +122/-12
+  paths: docs/ops/logging.md;docs/ops/runbook.md;services/api-gateway/src/index.ts
+  flags: docs-claimed-mismatch, code-additions-look-like-feat, subject-not-capitalized, scope-mismatch(scope=ops vs dir=docs), possible-breaking-missing-marker
+
+11ce956 2025-10-23 04:42:28 +1000 — chore(deps): refresh pnpm lockfile after security hardening
+  inferred=chore(deps) prefix=chore(deps) scope=deps domDir=pnpm-lock.yaml files=1 +55/-0
+  paths: pnpm-lock.yaml
+  flags: subject-not-capitalized, scope-mismatch(scope=deps vs dir=pnpm-lock.yaml)
+
+dd5135c 2025-10-23 04:36:38 +1000 — feat(platform): introduce auth layer, data protection, and compliance updates
+  inferred=feat+test prefix=feat(platform) scope=platform domDir=services files=25 +1958/-494
+  paths: .env.example;.github/copilot-instructions.md;.github/workflows/ci.yml;.github/workflows/security.yml;docs/privacy/dpia.md;docs/security/ASVS-mapping.md
+  flags: docs-claimed-mismatch, test-claimed-mismatch, deps-looks-like-chore, subject>72, subject-not-capitalized, scope-mismatch(scope=platform vs dir=services), possible-breaking-missing-marker
+
+70a6946 2025-10-22 09:20:59 +1000 — chore(ops): capture staged diff and last commit metadata
+  inferred=chore prefix=chore(ops) scope=ops domDir=artifacts files=2 +0/-0
+  paths: artifacts/diff-staged.patch;artifacts/last-commit.txt
+  flags: subject-not-capitalized, scope-mismatch(scope=ops vs dir=artifacts)
+
+86798fa 2025-10-22 09:15:36 +1000 — chore(ops): capture working tree and diff snapshot
+  inferred=chore prefix=chore(ops) scope=ops domDir=artifacts files=2 +1/-0
+  paths: artifacts/diff-working-tree.patch;artifacts/git-status.txt
+  flags: subject-not-capitalized, scope-mismatch(scope=ops vs dir=artifacts)
+
+4fdd031 2025-10-21 20:46:20 +1000 — test(api-gateway): discover specs by directory to avoid Windows glob issues
+  inferred=chore(deps) prefix=test(api-gateway) scope=api-gateway domDir=services files=1 +1/-1
+  paths: services/api-gateway/package.json
+  flags: deps-looks-like-chore, subject>72, subject-not-capitalized, scope-mismatch(scope=api-gateway vs dir=services)
+
+9805a96 2025-10-21 20:31:23 +1000 — chore(repo): ignore shared/prisma/.env in git
+  inferred=chore prefix=chore(repo) scope=repo domDir=gitignore files=1 +2/-0
+  paths: .gitignore
+  flags: subject-not-capitalized, scope-mismatch(scope=repo vs dir=gitignore)
+
+be0c031 2025-10-21 20:30:47 +1000 — chore(repo): normalize line endings / cross-platform script behavior
+  inferred=chore(deps) prefix=chore(repo) scope=repo domDir=package.json files=1 +5/-5
+  paths: package.json
+  flags: subject-not-capitalized, scope-mismatch(scope=repo vs dir=package.json)
+
+b896595 2025-10-21 20:10:52 +1000 — test(api-gateway): run all gateway *.spec.ts tests
+  inferred=chore(deps) prefix=test(api-gateway) scope=api-gateway domDir=services files=1 +2/-2
+  paths: services/api-gateway/package.json
+  flags: deps-looks-like-chore, subject-not-capitalized, scope-mismatch(scope=api-gateway vs dir=services)
+
+d827258 2025-10-21 20:08:44 +1000 — chore(repo): update .gitignore to exclude local helper script
+  inferred=chore prefix=chore(repo) scope=repo domDir=gitignore files=1 +2/-0
+  paths: .gitignore
+  flags: subject-not-capitalized, scope-mismatch(scope=repo vs dir=gitignore)
+
+3f272cb 2025-10-21 20:02:49 +1000 — chore(api-gateway): update deps/lockfile and align /ready probe tests
+  inferred=chore(deps) prefix=chore(api-gateway) scope=api-gateway domDir=services files=2 +4/-0
+  paths: pnpm-lock.yaml;services/api-gateway/package.json
+  flags: subject-not-capitalized, scope-mismatch(scope=api-gateway vs dir=services)
+
+534588d 2025-10-21 19:59:10 +1000 — chore(repo): add Prisma migrate/deploy/generate scripts to workspace root
+  inferred=chore(deps) prefix=chore(repo) scope=repo domDir=package.json files=1 +27/-1
+  paths: package.json
+  flags: subject>72, subject-not-capitalized, scope-mismatch(scope=repo vs dir=package.json)
+
+8bd460f 2025-10-21 19:52:07 +1000 — chore(repo): normalize line endings via .gitattributes
+  inferred=chore prefix=chore(repo) scope=repo domDir=gitattributes files=1 +1/-0
+  paths: .gitattributes
+  flags: subject-not-capitalized, scope-mismatch(scope=repo vs dir=gitattributes)
+
+5059faa 2025-10-21 19:44:34 +1000 — chore(db): check in BankLine idempotencyKey uniqueness migration
+  inferred=chore(db) prefix=chore(db) scope=db domDir=shared files=2 +15/-11
+  paths: shared/prisma/migrations/20251021094315_bankline_idempotency/migration.sql;shared/prisma/schema.prisma
+  flags: subject-not-capitalized, scope-mismatch(scope=db vs dir=shared)
+
+924767d 2025-10-21 19:02:54 +1000 — test(api-gateway): add /ready health probe spec
+  inferred=feat+test prefix=test(api-gateway) scope=api-gateway domDir=services files=1 +15/-0
+  paths: services/api-gateway/test/ready.spec.ts
+  flags: subject-not-capitalized, scope-mismatch(scope=api-gateway vs dir=services)
+
+7343465 2025-10-21 18:23:51 +1000 — feat(api-gateway): add /ready probe and idempotent POST /bank-lines with Zod validation
+  inferred=feat prefix=feat(api-gateway) scope=api-gateway domDir=shared files=6 +118/-55
+  paths: .gitignore;services/api-gateway/src/app.ts;shared/package.json;shared/src/db.ts;webapp/package.json;webapp/vite.config.ts
+  flags: deps-looks-like-chore, subject>72, subject-not-capitalized, scope-mismatch(scope=api-gateway vs dir=shared), possible-breaking-missing-marker
+
+5cd858b 2025-10-21 18:02:03 +1000 — feat(webapp): add WCAG AA-compliant status badges and browser test config
+  inferred=feat prefix=feat(webapp) scope=webapp domDir=webapp files=4 +255/-0
+  paths: scripts/run-webapp-tests.ps1;webapp/playwright.config.ts;webapp/src/styles/global.css;webapp/src/styles/tokens.css
+  flags: subject>72, subject-not-capitalized
+
+ee3a0af 2025-10-21 04:41:38 +1000 — feat(db): add BankLine.idempotencyKey and unique (orgId, idempotencyKey)
+  inferred=chore(db) prefix=feat(db) scope=db domDir=shared files=2 +25/-8
+  paths: shared/prisma/migrations/20251020183646_add_bankline_idempotency/migration.sql;shared/prisma/schema.prisma
+  flags: subject-not-capitalized, scope-mismatch(scope=db vs dir=shared)
+
+f3ead2f 2025-10-21 04:23:00 +1000 — chore(db): check in Prisma migration for deleted_at sync
+  inferred=chore(db) prefix=chore(db) scope=db domDir=shared files=1 +15/-0
+  paths: shared/prisma/migrations/20251020170901_sync_deleted_at/migration.sql
+  flags: subject-not-capitalized, scope-mismatch(scope=db vs dir=shared)
+
+faed58b 2025-10-21 04:19:52 +1000 — chore(db): update seed script for local Postgres bootstrap
+  inferred=refactor prefix=chore(db) scope=db domDir=scripts files=1 +3/-2
+  paths: scripts/seed.ts
+  flags: subject-not-capitalized, scope-mismatch(scope=db vs dir=scripts)
+
+411aca3 2025-10-21 02:21:46 +1000 — refactor(shared): add subpath exports and update gateway imports to @apgms/shared/*
+  inferred=refactor prefix=refactor(shared) scope=shared domDir=services files=7 +30/-23
+  paths: services/api-gateway/src/app.ts;services/api-gateway/src/index.ts;services/api-gateway/src/lib/pii.ts;services/api-gateway/src/routes/admin.data.ts;services/api-gateway/src/routes/tax.ts;services/api-gateway/src/schemas/admin.data.ts
+  flags: deps-looks-like-chore, subject>72, subject-not-capitalized, scope-mismatch(scope=shared vs dir=services), possible-breaking-missing-marker
+
+f01d809 2025-10-21 02:05:25 +1000 — fix(shared): correct @apgms/shared/* import paths across gateway, webapp, and tests
+  inferred=feat+test prefix=fix(shared) scope=shared domDir=webapp files=25 +28/-25
+  paths: playwright.config.ts;pnpm-workspace.yaml;services/api-gateway/src/app.ts;services/api-gateway/src/lib/pii.ts;services/api-gateway/src/routes/admin.data.ts;services/api-gateway/src/routes/tax.ts
+  flags: test-claimed-mismatch, subject>72, subject-not-capitalized, fix-no-issue-ref, scope-mismatch(scope=shared vs dir=webapp), possible-breaking-missing-marker
+
+9616bd3 2025-11-10 16:37:15 +1000 — wip: snapshot before commit rewrite
+  inferred=feat prefix=wip scope= domDir=coverage files=32 +2370/-0
+  paths: .env;commits_to_reword.tsv;commits_with_changes.txt;coverage/clover.xml;coverage/coverage-final.json;coverage/lcov-report/base.css
+  flags: code-additions-look-like-feat, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=coverage), possible-breaking-missing-marker
+
+c6100ae 2025-11-10 14:19:58 +1000 — chore: one-time LF line ending normalisation
+  inferred=refactor prefix=chore scope= domDir=services files=22 +1159/-2915
+  paths: pnpm-lock.yaml;services/api-gateway/package.json;services/api-gateway/src/app.ts;services/api-gateway/src/config.ts;services/api-gateway/src/index.ts;services/api-gateway/src/lib/encryption.ts
+  flags: subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=services), possible-breaking-missing-marker
+
+964a52d 2025-11-10 14:19:58 +1000 — chore: add .gitignore for venv, extracted data, caches, builds
+  inferred=chore prefix=chore scope= domDir=gitignore files=1 +18/-19
+  paths: .gitignore
+  flags: subject-not-capitalized, scope-mismatch(scope= vs dir=gitignore)
+
+830cd8b 2025-11-10 14:14:36 +1000 — chore: enforce LF endings; quiet CSV diffs; payg(resolver) repo-relative CSV and scaling
+  inferred=refactor prefix=chore scope= domDir=tools files=2 +43/-69
+  paths: .gitattributes;tools/ato_scraper/payg_resolver.py
+  flags: subject>72, subject-not-capitalized, scope-mismatch(scope= vs dir=tools)
+
+76df5f8 2025-11-10 14:08:35 +1000 — payg: enforce monotone cumulative max + integer rounding; ratio tests use relative tol
+  inferred=feat+test prefix=payg scope= domDir=tools files=3 +22/-14
+  paths: data/external/ato/payg/payg_tables_normalized.csv;tests/test_payg_resolver.py;tools/ato_scraper/normalize_payg_from_csvs.py
+  flags: test-claimed-mismatch, subject>72, subject-not-capitalized, scope-mismatch(scope= vs dir=tools)
+
+b07cd70 2025-11-10 14:03:27 +1000 — fix(payg): robust CSV decoding + relaxed monthly scaling tolerance
+  inferred=feat+test prefix=fix(payg) scope=payg domDir=tools files=3 +28/-16
+  paths: data/external/ato/payg/payg_tables_normalized.csv;tests/test_payg_resolver.py;tools/ato_scraper/normalize_payg_from_csvs.py
+  flags: test-claimed-mismatch, subject-not-capitalized, fix-no-issue-ref, scope-mismatch(scope=payg vs dir=tools)
+
+13ff606 2025-11-10 13:59:13 +1000 — tests(payg): repo-relative normalizer + resolver scaling checks + CSV artifact
+  inferred=feat+test prefix=tests(payg) scope=payg domDir=tests files=4 +91/-270
+  paths: pytest.ini;tests/test_payg_resolver.py;tests/test_payg_tables.py;tools/ato_scraper/normalize_payg_from_csvs.py
+  flags: subject>72, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=payg vs dir=tests)
+
+a7f39b7 2025-11-10 08:49:57 +1000 — PAYG: normalization + resolver tests + CSV artifact + CI workflow
+  inferred=feat+test prefix=PAYG scope= domDir=tools files=10 +429/-0
+  paths: .github/workflows/python-tests.yml;data/external/ato/payg/payg_tables_normalized.csv;pytest.ini;requirements.txt;tests/test_payg_resolver.py;tests/test_payg_tables.py
+  flags: test-claimed-mismatch, deps-looks-like-chore, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=tools)
+
+8915d14 2025-11-09 11:49:28 +1000 — chore: tighten ci coverage gate
+  inferred=ci prefix=chore scope= domDir=scripts files=2 +93/-15
+  paths: .github/workflows/ci.yml;scripts/check-coverage.mjs
+  flags: subject-not-capitalized, scope-mismatch(scope= vs dir=scripts)
+
+f4cde16 2025-11-09 11:39:11 +1000 — chore: enforce coverage gate
+  inferred=chore prefix=chore scope= domDir=scripts files=2 +80/-24
+  paths: package.json;scripts/check-coverage.mjs
+  flags: subject-not-capitalized, scope-mismatch(scope= vs dir=scripts)
+
+0083040 2025-11-09 07:54:25 +1000 — feat: add analytics telemetry pipeline
+  inferred=feat+test prefix=feat scope= domDir=domain files=16 +790/-23
+  paths: apps/phase1-demo/src/index.ts;docs/data/analytics-schema.md;domain/ledger/analytics-events.ts;domain/ledger/index.ts;domain/ledger/journal-service.ts;domain/policy/designated-accounts.ts
+  flags: docs-claimed-mismatch, test-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=domain), possible-breaking-missing-marker
+
+3e667a2 2025-11-09 07:54:15 +1000 — feat: add ML training pipeline with CI automation
+  inferred=feat prefix=feat scope= domDir=ml files=14 +655/-0
+  paths: .github/workflows/ml-train.yml;infra/mlflow/README.md;infra/mlflow/values.example.yaml;ml/.gitignore;ml/README.md;ml/__init__.py
+  flags: docs-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=ml)
+
+2bd8f51 2025-11-09 07:54:07 +1000 — Implement reconciliation inference service
+  inferred=feat prefix= scope= domDir=services files=16 +924/-3
+  paths: artifacts/models/reconciliation/model-v1.json;runbooks/ops.md;services/recon/package.json;services/recon/src/config.ts;services/recon/src/features.ts;services/recon/src/grpc.ts
+  flags: docs-claimed-mismatch, deps-looks-like-chore, code-additions-look-like-feat, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+d24fb85 2025-11-09 07:49:23 +1000 — docs: document ml recon service and contracts
+  inferred=feat prefix=docs scope= domDir=shared files=5 +229/-2
+  paths: docs/architecture/ADR-002-ml-reconciliation-service.md;docs/architecture/README.md;shared/package.json;shared/src/index.ts;shared/src/recon/contracts.ts
+  flags: deps-looks-like-chore, code-additions-look-like-feat, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=shared), possible-breaking-missing-marker
+
+2b94a94 2025-11-09 07:39:45 +1000 — Add orchestration scripts for ML workflows
+  inferred=chore prefix= scope= domDir=apgms-ml files=3 +373/-0
+  paths: apgms-ml/scripts/Promote-Model.ps1;apgms-ml/scripts/Shadow-Smoke.ps1;apgms-ml/scripts/Train-All.ps1
+  flags: needs-body(>=150 LOC)
+
+f9055c5 2025-11-09 07:38:22 +1000 — Add synthetic APGMS ML scaffolding
+  inferred=feat prefix= scope= domDir=apgms-ml files=33 +1102/-0
+  paths: apgms-ml/README.md;apgms-ml/apportion/README.md;apgms-ml/apportion/__init__.py;apgms-ml/apportion/eval.py;apgms-ml/apportion/train.py;apgms-ml/bas_conf/README.md
+  flags: docs-claimed-mismatch, code-additions-look-like-feat, needs-body(>=150 LOC)
+
+eb1b690 2025-11-09 07:37:30 +1000 — Add PAYGW variance LightGBM training pipeline
+  inferred=feat prefix= scope= domDir=apgms_ml files=3 +275/-0
+  paths: apgms_ml/__init__.py;apgms_ml/paygw_var/__init__.py;apgms_ml/paygw_var/train.py
+  flags: code-additions-look-like-feat, needs-body(>=150 LOC)
+
+c2a764b 2025-11-09 07:37:22 +1000 — Add duplicate transaction training script
+  inferred=feat prefix= scope= domDir=apgms-ml files=3 +364/-0
+  paths: apgms-ml/__init__.py;apgms-ml/dups/__init__.py;apgms-ml/dups/train.py
+  flags: code-additions-look-like-feat, needs-body(>=150 LOC)
+
+be98bf2 2025-11-09 07:37:15 +1000 — feat: add ML scoring fastapi service
+  inferred=feat prefix=feat scope= domDir=apgms-ml files=3 +383/-0
+  paths: README.md;apgms-ml/server/__init__.py;apgms-ml/server/main.py
+  flags: docs-claimed-mismatch, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=apgms-ml)
+
+15ded03 2025-11-09 07:37:02 +1000 — Add analytics common utilities
+  inferred=feat prefix= scope= domDir=common files=5 +534/-0
+  paths: common/__init__.py;common/explain.py;common/io.py;common/metrics.py;common/thresholds.py
+  flags: code-additions-look-like-feat, needs-body(>=150 LOC)
+
+8b975d8 2025-11-09 07:36:51 +1000 — Add LightGBM training script for apportion model
+  inferred=feat prefix= scope= domDir=apgms-ml files=1 +252/-0
+  paths: apgms-ml/apportion/train.py
+  flags: code-additions-look-like-feat, needs-body(>=150 LOC)
+
+3723308 2025-11-09 07:36:26 +1000 — Add GST-free model training and evaluation scripts
+  inferred=feat prefix= scope= domDir=apgms-ml files=2 +422/-0
+  paths: apgms-ml/gstfree/eval.py;apgms-ml/gstfree/train.py
+  flags: code-additions-look-like-feat, needs-body(>=150 LOC)
+
+5d101d4 2025-11-09 07:36:12 +1000 — feat: add BAS configuration training pipeline
+  inferred=feat prefix=feat scope= domDir=apgms-ml files=1 +318/-0
+  paths: apgms-ml/bas_conf/train.py
+  flags: subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=apgms-ml)
+
+e05054a 2025-11-09 07:10:28 +1000 — Fix telemetry stack and add AU validation package
+  inferred=feat prefix= scope= domDir=packages files=13 +910/-29
+  paths: packages/ledger/package.json;packages/shared-au/package.json;packages/shared-au/src/abn.ts;packages/shared-au/src/index.ts;packages/shared-au/src/tfn.ts;packages/shared-au/tsconfig.json
+  flags: deps-looks-like-chore, code-additions-look-like-feat, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+261e48f 2025-11-09 07:10:13 +1000 — Fix telemetry stack and add AU validation package
+  inferred=feat prefix= scope= domDir=packages files=13 +910/-29
+  paths: packages/ledger/package.json;packages/shared-au/package.json;packages/shared-au/src/abn.ts;packages/shared-au/src/index.ts;packages/shared-au/src/tfn.ts;packages/shared-au/tsconfig.json
+  flags: deps-looks-like-chore, code-additions-look-like-feat, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+e0b8bdb 2025-11-09 05:55:35 +1000 — Ensure Prisma client generation and workspace coverage
+  inferred=feat prefix= scope= domDir=services files=11 +920/-35
+  paths: .github/workflows/ci.yml;README.md;package.json;packages/ledger/package.json;pnpm-lock.yaml;pnpm-workspace.yaml
+  flags: docs-claimed-mismatch, deps-looks-like-chore, code-additions-look-like-feat, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+a025eb8 2025-11-09 05:55:16 +1000 — Secure regulator login with server-side org mapping
+  inferred=feat+test prefix= scope= domDir=services files=8 +223/-47
+  paths: scripts/regulator-smoke.mjs;services/api-gateway/src/config.ts;services/api-gateway/src/routes/regulator-auth.ts;services/api-gateway/test/config.spec.ts;services/api-gateway/test/regulator.auth.spec.ts;services/api-gateway/test/run.ts
+  flags: test-claimed-mismatch, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+7863f53 2025-11-09 05:55:03 +1000 — Enforce admin access and mask emails on security users endpoint
+  inferred=feat+test prefix= scope= domDir=services files=2 +184/-14
+  paths: services/api-gateway/src/app.ts;services/api-gateway/test/security.users.spec.ts
+  flags: test-claimed-mismatch, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+bc1cd27 2025-11-09 00:19:40 +1000 — Align ops runbook metrics with code
+  inferred=chore prefix= scope= domDir=services files=3 +725/-13
+  paths: pnpm-lock.yaml;runbooks/ops.md;services/api-gateway/package.json
+  flags: docs-claimed-mismatch, deps-looks-like-chore, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+d626549 2025-11-09 00:18:40 +1000 — chore(ledger): use cross-platform jest script
+  inferred=chore prefix=chore(ledger) scope=ledger domDir=packages files=2 +12/-1
+  paths: packages/ledger/README.md;packages/ledger/package.json
+  flags: docs-claimed-mismatch, subject-not-capitalized, scope-mismatch(scope=ledger vs dir=packages)
+
+00201a0 2025-11-09 00:18:01 +1000 — docs: align auth notes and control status with implementation
+  inferred=docs prefix=docs scope= domDir=docs files=4 +10/-7
+  paths: README.md;docs/compliance/dsp-operational-framework.md;docs/privacy/dpia.md;docs/security/ASVS-mapping.md
+  flags: subject-not-capitalized, scope-mismatch(scope= vs dir=docs)
+
+ba42ae4 2025-11-08 15:11:09 +1000 — fix: add default export to prisma mock
+  inferred=feat+test prefix=fix scope= domDir=tests files=1 +2/-0
+  paths: tests/mocks/prisma-client.ts
+  flags: test-claimed-mismatch, subject-not-capitalized, fix-no-issue-ref, scope-mismatch(scope= vs dir=tests)
+
+9156afd 2025-11-08 14:53:52 +1000 — test(coverage): unit/integration for audit-chain, snapshots, idempotency; enforce >=85%
+  inferred=feat+test prefix=test(coverage) scope=coverage domDir=services files=11 +1618/-6
+  paths: jest.config.js;package.json;pnpm-lock.yaml;services/api-gateway/__tests__/audit-chain.test.ts;services/api-gateway/__tests__/idempotency.integration.test.ts;services/api-gateway/__tests__/metrics-job.integration.test.ts
+  flags: deps-looks-like-chore, subject>72, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=coverage vs dir=services), possible-breaking-missing-marker
+
+9332322 2025-11-08 14:51:19 +1000 — Bucket CORS rejection metrics to avoid unbounded labels
+  inferred=feat prefix= scope= domDir=services files=3 +65/-4
+  paths: services/api-gateway/src/observability/metrics.ts;services/api-gateway/src/plugins/metrics.js;services/api-gateway/src/plugins/metrics.ts
+  flags: code-additions-look-like-feat, possible-breaking-missing-marker
+
+6a76159 2025-11-08 14:51:12 +1000 — fix(bas): reuse discrepancy evidence artifact
+  inferred=refactor prefix=fix(bas) scope=bas domDir=domain files=1 +57/-10
+  paths: domain/bas/verifier.ts
+  flags: code-changes-look-like-refactor, subject-not-capitalized, fix-no-issue-ref, scope-mismatch(scope=bas vs dir=domain)
+
+08a2e9f 2025-11-08 14:51:06 +1000 — fix: align manifest entry hash with final payload
+  inferred=refactor prefix=fix scope= domDir=webapp files=1 +20/-22
+  paths: webapp/src/portal/PlanRemissionPack.ts
+  flags: code-changes-look-like-refactor, subject-not-capitalized, fix-no-issue-ref, scope-mismatch(scope= vs dir=webapp)
+
+9ce10ee 2025-11-08 14:50:57 +1000 — Fix error ratio labels and snapshot lag gauge
+  inferred=refactor prefix= scope= domDir=services files=2 +19/-8
+  paths: services/api-gateway/src/app.ts;services/api-gateway/src/observability/metrics.ts
+  flags: code-changes-look-like-refactor
+
+26f75ba 2025-11-08 14:50:31 +1000 — fix: allow osv scan severity filtering
+  inferred=ci prefix=fix scope= domDir=github files=1 +1/-1
+  paths: .github/workflows/security.yml
+  flags: subject-not-capitalized, fix-no-issue-ref, scope-mismatch(scope= vs dir=github)
+
+8ba784d 2025-11-08 14:50:27 +1000 — Handle bcrypt hashes during login
+  inferred=refactor prefix= scope= domDir=services files=1 +35/-2
+  paths: services/api-gateway/src/auth.ts
+  flags: code-changes-look-like-refactor
+
+f07288e 2025-11-08 14:50:22 +1000 — docs: clarify WORM evidence workflow
+  inferred=docs prefix=docs scope= domDir=docs files=1 +12/-9
+  paths: docs/compliance/retention-worm-sop.md
+  flags: subject-not-capitalized, scope-mismatch(scope= vs dir=docs)
+
+27db173 2025-11-08 14:50:16 +1000 — fix: correct worm provider import paths
+  inferred=refactor prefix=fix scope= domDir=services files=2 +2/-2
+  paths: services/api-gateway/src/app.ts;services/api-gateway/src/providers.ts
+  flags: code-changes-look-like-refactor, subject-not-capitalized, fix-no-issue-ref, scope-mismatch(scope= vs dir=services)
+
+b759277 2025-11-08 14:40:27 +1000 — feat(retention): pluggable WORM + content-addressed URIs + attestation endpoint
+  inferred=feat prefix=feat(retention) scope=retention domDir=providers files=13 +622/-37
+  paths: docs/compliance/retention.md;domain/policy/designated-accounts.ts;providers/worm/gcs.ts;providers/worm/index.ts;providers/worm/internal.ts;providers/worm/s3.ts
+  flags: docs-claimed-mismatch, subject>72, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=retention vs dir=providers), possible-breaking-missing-marker
+
+2c59e81 2025-11-08 14:39:24 +1000 — test(a11y+ux): Playwright+axe + Discrepancy Journal & Plan/Remission Pack generator
+  inferred=feat+test prefix=test(a11y+ux) scope=a11y+ux domDir=webapp files=5 +1574/-2
+  paths: docs/runbook-remission.md;webapp/src/RegulatorEvidencePage.tsx;webapp/src/portal/DiscrepancyJournal.tsx;webapp/src/portal/PlanRemissionPack.ts;webapp/tests/regulator-a11y.spec.ts
+  flags: docs-claimed-mismatch, subject>72, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=a11y+ux vs dir=webapp)
+
+d38c292 2025-11-08 14:38:57 +1000 — feat(ingest): STP/POS adapters + blocking BAS verifier + discrepancy report
+  inferred=feat(db) prefix=feat(ingest) scope=ingest domDir=providers files=16 +2198/-27
+  paths: docs/compliance/bas-verifier.md;domain/bas/verifier.ts;providers/pos/base.ts;providers/pos/index.ts;providers/pos/mock.ts;providers/pos/types.ts
+  flags: docs-claimed-mismatch, subject>72, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=ingest vs dir=providers), possible-breaking-missing-marker
+
+4095cda 2025-11-08 14:38:09 +1000 — docs(compliance): ASVS/DSP/TFN control map + DPIA + regulator SOPs complete
+  inferred=docs prefix=docs(compliance) scope=compliance domDir=docs files=9 +310/-6
+  paths: docs/compliance/checklist.md;docs/compliance/control-maps.md;docs/compliance/dpia-summary.md;docs/compliance/dsp-operational-framework.md;docs/compliance/regulator-sop.md;docs/compliance/retention-worm-sop.md
+  flags: subject>72, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=compliance vs dir=docs)
+
+e05433c 2025-11-08 14:38:03 +1000 — test(chaos): dependency outage drills + error budget SLO alerts
+  inferred=feat prefix=test(chaos) scope=chaos domDir=services files=8 +395/-15
+  paths: .github/workflows/nightly.yml;docs/ops/alerts.md;package.json;scripts/chaos-drill.mjs;services/api-gateway/src/app.ts;services/api-gateway/src/lib/chaos.ts
+  flags: docs-claimed-mismatch, deps-looks-like-chore, code-additions-look-like-feat, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=chaos vs dir=services), possible-breaking-missing-marker
+
+d50f598 2025-11-08 14:33:08 +1000 — chore(deps): add Renovate + update policy + lockfile maintenance
+  inferred=ci prefix=chore(deps) scope=deps domDir=renovate.json files=2 +102/-0
+  paths: .github/workflows/lockfile.yml;renovate.json
+  flags: subject-not-capitalized, scope-mismatch(scope=deps vs dir=renovate.json)
+
+4ae851c 2025-11-08 14:32:11 +1000 — ci(security): SBOM + SCA fail-on-high + Gitleaks + Trivy + drift guards
+  inferred=ci prefix=ci(security) scope=security domDir=github files=2 +33/-6
+  paths: .github/workflows/ci.yml;.github/workflows/security.yml
+  flags: subject-not-capitalized, scope-mismatch(scope=security vs dir=github)
+
+8dadacd 2025-11-08 14:28:28 +1000 — Add APGMS matcher training pipeline and evaluation tooling
+  inferred=feat prefix= scope= domDir=src files=17 +921/-0
+  paths: Deterministic-Train-And-Verify.ps1;Promote-And-Smoke.ps1;Test-NL.ps1;data/apgms_holdout.tsv;data/apgms_train.tsv;data/apgms_val.tsv
+  flags: code-additions-look-like-feat, needs-body(>=150 LOC)
+
+4a244e3 2025-11-08 13:52:45 +1000 — Fix telemetry deps and align password verification
+  inferred=feat prefix= scope= domDir=services files=5 +815/-19
+  paths: pnpm-lock.yaml;scripts/check-coverage.mjs;services/api-gateway/package.json;services/api-gateway/src/auth.ts;services/api-gateway/src/plugins/auth.ts
+  flags: deps-looks-like-chore, code-additions-look-like-feat, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+f956362 2025-11-08 13:52:19 +1000 — Improve validation coverage and tooling reliability
+  inferred=feat+test prefix= scope= domDir=services files=24 +1022/-40
+  paths: apps/phase1-demo/package.json;domain/policy/designated-accounts.ts;package.json;packages/ledger/eslint.config.js;packages/ledger/package.json;pnpm-lock.yaml
+  flags: test-claimed-mismatch, deps-looks-like-chore, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+e37f2f3 2025-11-08 13:04:51 +1000 — Improve Home metrics semantics and accessibility
+  inferred=feat+test prefix= scope= domDir=webapp files=3 +70/-11
+  paths: webapp/src/pages/Home.css;webapp/src/pages/Home.tsx;webapp/tests/axe.spec.ts
+  flags: test-claimed-mismatch
+
+61eb31d 2025-11-08 12:59:58 +1000 — Run Prisma generate on install
+  inferred=chore(deps) prefix= scope= domDir=package.json files=1 +1/-0
+  paths: package.json
+  flags: deps-looks-like-chore
+
+1df5882 2025-11-08 12:51:35 +1000 — Fix workspace install and restore cross-platform builds
+  inferred=feat+test prefix= scope= domDir=services files=11 +786/-48
+  paths: packages/ledger/package.json;pnpm-lock.yaml;services/api-gateway/package.json;services/api-gateway/src/app.ts;services/api-gateway/src/db.ts;services/api-gateway/src/observability/prisma-metrics.ts
+  flags: test-claimed-mismatch, deps-looks-like-chore, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+1bc5839 2025-11-08 12:28:38 +1000 — harden auth to rs256 and argon2
+  inferred=feat+test prefix= scope= domDir=services files=9 +120/-30
+  paths: README.md;db/init.sql.skip;docker-compose.yml;services/api-gateway/src/auth.ts;services/api-gateway/src/config.ts;services/api-gateway/src/plugins/auth.ts
+  flags: docs-claimed-mismatch, test-claimed-mismatch, subject-not-capitalized, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+3aa5dfe 2025-11-08 11:50:14 +1000 — Improve workflow alerts accessibility
+  inferred=feat+test prefix= scope= domDir=webapp files=3 +113/-13
+  paths: webapp/src/pages/Home.css;webapp/src/pages/Home.tsx;webapp/tests/axe.spec.ts
+  flags: test-claimed-mismatch
+
+83ae59c 2025-11-08 07:55:50 +1000 — Harden regulator login validation and restore metrics
+  inferred=feat+test prefix= scope= domDir=services files=17 +948/-27
+  paths: packages/ledger/package.json;packages/shared-au/abn.d.ts;packages/shared-au/abn.js;packages/shared-au/package.json;packages/shared-au/tfn.d.ts;packages/shared-au/tfn.js
+  flags: test-claimed-mismatch, deps-looks-like-chore, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+1939749 2025-11-01 03:02:03 +1000 — feat(ops): Prometheus /metrics + OTEL traces + readiness (deps) + graceful shutdown
+  inferred=feat prefix=feat(ops) scope=ops domDir=services files=8 +538/-135
+  paths: services/api-gateway/package.json;services/api-gateway/src/app.ts;services/api-gateway/src/config.ts;services/api-gateway/src/observability/metrics.ts;services/api-gateway/src/observability/prisma-metrics.ts;services/api-gateway/src/observability/tracing.ts
+  flags: deps-looks-like-chore, subject>72, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=ops vs dir=services), possible-breaking-missing-marker
+
+0cb8f89 2025-11-01 02:07:43 +1000 — feat(banking): provider adapters + designated one-way account policy engine
+  inferred=feat+test prefix=feat(banking) scope=banking domDir=providers files=18 +1040/-1
+  paths: README.md;docs/compliance/designated-accounts.md;domain/policy/designated-accounts.ts;providers/banking/anz.ts;providers/banking/base.ts;providers/banking/index.ts
+  flags: docs-claimed-mismatch, test-claimed-mismatch, deps-looks-like-chore, subject>72, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=banking vs dir=providers), possible-breaking-missing-marker
+
+ce3864c 2025-11-01 00:32:15 +1000 —  feat(safety): idempotency keys for POST/PATCH + dedupe storage
+  inferred=feat+test prefix= scope= domDir=shared files=9 +708/-309
+  paths: README.md;services/api-gateway/src/app.ts;services/api-gateway/src/lib/idempotency.ts;services/api-gateway/test/privacy.spec.ts;shared/prisma/migrations/20251020183646_add_bankline_idempotency/migration.sql;shared/prisma/migrations/20251104100000_idempotency_keys/migration.sql
+  flags: docs-claimed-mismatch, test-claimed-mismatch, subject-not-capitalized, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+81ac405 2025-10-31 23:23:16 +1000 — feat(api): Zod/Fastify schemas for all external routes + error contract
+  inferred=refactor prefix=feat(api) scope=api domDir=shared files=8 +307/-295
+  paths: services/api-gateway/src/app.ts;services/api-gateway/src/lib/validation.ts;services/api-gateway/src/routes/auth.ts;shared/package.json;shared/src/errors.ts;shared/src/index.ts
+  flags: deps-looks-like-chore, code-changes-look-like-refactor, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=api vs dir=shared), possible-breaking-missing-marker
+
+06797dc 2025-10-31 22:31:49 +1000 — feat(auth): MFA (WebAuthn/TOTP) + end-to-end encryption envelopes
+  inferred=feat+test prefix=feat(auth) scope=auth domDir=services files=23 +1691/-124
+  paths: .env.example;README.md;pnpm-lock.yaml;services/api-gateway/package.json;services/api-gateway/src/app.ts;services/api-gateway/src/config.ts
+  flags: docs-claimed-mismatch, test-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=auth vs dir=services), possible-breaking-missing-marker
+
+a5789d0 2025-10-31 10:40:12 +1000 — feat(security): issuer/audience/expiry enforcement + reply minimisation + log redaction
+  inferred=feat+test prefix=feat(security) scope=security domDir=shared files=18 +526/-37
+  paths: scripts/verify-no-conflicts.mjs;services/api-gateway/src/auth.ts;services/api-gateway/src/routes/auth.ts;services/api-gateway/src/routes/regulator-auth.ts;services/api-gateway/src/routes/tax.js;services/api-gateway/src/routes/tax.ts
+  flags: test-claimed-mismatch, deps-looks-like-chore, subject>72, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=security vs dir=shared), possible-breaking-missing-marker
+
+9232bac 2025-10-31 09:19:07 +1000 — feat(api): @fastify/helmet + strict CORS + CSP headers
+  inferred=feat+test prefix=feat(api) scope=api domDir=services files=3 +105/-12
+  paths: services/api-gateway/src/app.ts;services/api-gateway/test/security.headers.spec.ts;webapp/index.html
+  flags: test-claimed-mismatch, subject-not-capitalized, scope-mismatch(scope=api vs dir=services), possible-breaking-missing-marker
+
+72098a6 2025-10-31 09:08:54 +1000 — chore(repo): enable safety guards & baseline scripts
+  inferred=feat+test prefix=chore(repo) scope=repo domDir=package.json files=6 +90/-14
+  paths: .nvmrc;.tool-versions;README.md;package.json;scripts/verify-no-conflicts.mjs;services/api-gateway/test/run.ts
+  flags: docs-claimed-mismatch, test-claimed-mismatch, subject-not-capitalized, scope-mismatch(scope=repo vs dir=package.json), possible-breaking-missing-marker
+
+8d639cf 2025-10-31 08:32:47 +1000 — feat(regulator): Phase 7 ÔÇö Regulator Portal & Continuous Monitoring
+  inferred=feat(db) prefix=feat(regulator) scope=regulator domDir=webapp files=31 +3675/-365
+  paths: .env.example;.github/workflows/nightly.yml;docs/compliance/checklist.md;docs/ops/regulator-portal.md;docs/ops/runbook.md;package.json
+  flags: docs-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=regulator vs dir=webapp), possible-breaking-missing-marker
+
+c46a481 2025-10-31 03:11:28 +1000 — feat(platform): enforce MFA for high-risk actions and add evidence backup
+  inferred=feat(db) prefix=feat(platform) scope=platform domDir=services files=21 +1051/-73
+  paths: .github/workflows/backup.yml;db/{init.sql => init.sql.skip};docs/ops/dashboards.md;docs/ops/promql.md;docs/ops/runbook.md;package.json
+  flags: docs-claimed-mismatch, deps-looks-like-chore, subject>72, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=platform vs dir=services), possible-breaking-missing-marker
+
+6c5d677 2025-10-30 03:48:52 +1000 — eat(compliance): enable payment plan flow and evidence reporting
+  inferred=feat(db) prefix=eat(compliance) scope=compliance domDir=webapp files=7 +616/-53
+  paths: db/init.sql;services/api-gateway/src/app.ts;shared/prisma/migrations/20251102120000_phase4_payment_plan/migration.sql;shared/prisma/schema.prisma;webapp/src/BasPage.tsx;webapp/src/CompliancePage.tsx
+  flags: subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=compliance vs dir=webapp), possible-breaking-missing-marker
+
+1502288 2025-10-30 02:56:36 +1000 — feat(compliance): add designated holding accounts and surface balances in API/UI
+  inferred=feat(db) prefix=feat(compliance) scope=compliance domDir=webapp files=8 +739/-35
+  paths: db/init.sql;services/api-gateway/src/app.ts;shared/prisma/migrations/20251102103000_phase3_designated_accounts/migration.sql;shared/prisma/schema.prisma;webapp/src/BasPage.tsx;webapp/src/CompliancePage.tsx
+  flags: subject>72, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=compliance vs dir=webapp), possible-breaking-missing-marker
+
+b1a9781 2025-10-30 01:59:08 +1000 — feat(api): persist alerts/bas cycles and wire Phase 2 UI flows
+  inferred=feat(db) prefix=feat(api) scope=api domDir=webapp files=9 +752/-111
+  paths: db/init.sql;services/api-gateway/src/app.ts;shared/prisma/migrations/20251102090000_phase2_alerts_bascycle/migration.sql;shared/prisma/schema.prisma;webapp/src/AlertsPage.tsx;webapp/src/BasPage.tsx
+  flags: subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=api vs dir=webapp), possible-breaking-missing-marker
+
+633dd64 2025-10-30 00:37:07 +1000 — chore(history): snapshot before full history rewrite
+  inferred=feat prefix=chore(history) scope=history domDir=webapp files=1 +425/-234
+  paths: webapp/src/DashboardPage.tsx
+  flags: code-additions-look-like-feat, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=history vs dir=webapp)
+
+71db586 2025-10-30 00:32:37 +1000 — chore(sync): finalize schema, db init, and client wiring after auth integration
+  inferred=feat(db) prefix=chore(sync) scope=sync domDir=webapp files=7 +628/-79
+  paths: db/init.sql;pnpm-lock.yaml;services/api-gateway/src/app.ts;shared/prisma/schema.prisma;webapp/package.json;webapp/src/App.tsx
+  flags: subject>72, subject-not-capitalized, scope-mismatch(scope=sync vs dir=webapp), possible-breaking-missing-marker
+
+3b93dcb 2025-10-28 18:51:39 +1000 — feat(auth): wire end-to-end login/session between webapp and api-gateway
+  inferred=feat prefix=feat(auth) scope=auth domDir=services files=15 +648/-553
+  paths: db/init.sql;docker-compose.yml;pnpm-lock.yaml;services/api-gateway/package.json;services/api-gateway/src/app.ts;services/api-gateway/src/auth.ts
+  flags: deps-looks-like-chore, subject-not-capitalized, scope-mismatch(scope=auth vs dir=services), possible-breaking-missing-marker
+
+d6533e1 2025-10-28 05:23:11 +1000 — feat(auth+ui): introduce login flow, dashboard UI, and gateway hardening
+  inferred=feat prefix=feat(auth+ui) scope=auth+ui domDir=webapp files=23 +1308/-1132
+  paths: docker-compose.yml;pnpm-lock.yaml;services/api-gateway/package.json;services/api-gateway/src/app.ts;services/api-gateway/src/auth.ts;services/api-gateway/src/config.ts
+  flags: deps-looks-like-chore, subject-not-capitalized, scope-mismatch(scope=auth+ui vs dir=webapp), possible-breaking-missing-marker
+
+aa3b936 2025-10-28 01:04:20 +1000 — chore(deploy): scaffold DB init/seed and tighten service startup/runtime
+  inferred=feat(db) prefix=chore(deploy) scope=deploy domDir=services files=14 +23722/-452
+  paths: Export-FolderTree.ps1;db/init.sql;docker-compose.yml;folder-structure.txt;services/api-gateway/Dockerfile;services/api-gateway/db_schema.sql
+  flags: subject-not-capitalized, scope-mismatch(scope=deploy vs dir=services), possible-breaking-missing-marker
+
+6fdc896 2025-10-26 23:57:28 +1000 — feat(auth): add auth module, route, and plugin in api-gateway
+  inferred=feat(db) prefix=feat(auth) scope=auth domDir=webapp files=18 +1877/-120
+  paths: 20251101_add_payroll.sql;db/payroll.sql;services/api-gateway/src/app.ts;services/api-gateway/src/index.ts;services/api-gateway/src/lib/masking.ts;services/api-gateway/src/security/providers.ts
+  flags: subject-not-capitalized, scope-mismatch(scope=auth vs dir=webapp), possible-breaking-missing-marker
+
+1ab41a7 2025-10-26 22:50:03 +1000 — chore(infra): initial hardening pass across gateway, webapp, and compose
+  inferred=feat+test prefix=chore(infra) scope=infra domDir=services files=43 +3529/-347
+  paths: Export-CodeDumpPdf.ps1;apps/webapp/Dockerfile;docker-compose.yml;services/api-gateway/Dockerfile;services/api-gateway/package.json;services/api-gateway/src/app.ts
+  flags: test-claimed-mismatch, subject-not-capitalized, scope-mismatch(scope=infra vs dir=services), possible-breaking-missing-marker
+
+a284232 2025-10-26 01:24:25 +1000 — chore(ops): extract gateway server entrypoint and document operational runbook
+  inferred=feat+test prefix=chore(ops) scope=ops domDir=services files=11 +1780/-278
+  paths: .github/workflows/ci.yml;README.md;package.json;pnpm-lock.yaml;runbooks/ops.md;services/api-gateway/package.json
+  flags: docs-claimed-mismatch, test-claimed-mismatch, subject>72, subject-not-capitalized, scope-mismatch(scope=ops vs dir=services), possible-breaking-missing-marker
+
+aa8aa6b 2025-10-25 22:46:20 +1000 — feat(auth+security): enforce JWT auth, org/role scoping, response redaction, and secure headers
+  inferred=feat prefix=feat(auth+security) scope=auth+security domDir=services files=5 +657/-103
+  paths: pnpm-lock.yaml;services/api-gateway/src/app.ts;services/api-gateway/src/plugins/auth.ts;services/api-gateway/src/routes/bank-lines.ts;services/api-gateway/src/utils/orgScope.ts
+  flags: deps-looks-like-chore, subject>72, subject-not-capitalized, scope-mismatch(scope=auth+security vs dir=services), possible-breaking-missing-marker
+
+c33374e 2025-10-25 18:49:10 +1000 — feat(platform): introduce messaging bus, ledger module, tax utils, and operational framework
+  inferred=feat+test prefix=feat(platform) scope=platform domDir=shared files=38 +4243/-121
+  paths: .env.example;apps/phase1-demo/package.json;apps/phase1-demo/src/index.ts;apps/phase1-demo/src/types/uuid.d.ts;apps/phase1-demo/tsconfig.json;docker-compose.nats.yml
+  flags: docs-claimed-mismatch, test-claimed-mismatch, deps-looks-like-chore, subject>72, subject-not-capitalized, scope-mismatch(scope=platform vs dir=shared), possible-breaking-missing-marker
+
+9f13ffa 2025-10-24 06:29:43 +1000 — chore(compliance+db): record compliance snapshot and add new Prisma migration
+  inferred=chore(db) prefix=chore(compliance+db) scope=compliance+db domDir=shared files=2 +220/-0
+  paths: artifacts/compliance/local-20250223.md;shared/prisma/migrations/20251023202136_/migration.sql
+  flags: docs-claimed-mismatch, subject>72, subject-not-capitalized, scope-mismatch(scope=compliance+db vs dir=shared), possible-breaking-missing-marker
+
+e6c4b86 2025-10-24 05:42:45 +1000 — refactor(db): improve shared DB client/connection handling
+  inferred=refactor prefix=refactor(db) scope=db domDir=shared files=1 +4/-1
+  paths: shared/src/db.ts
+  flags: subject-not-capitalized, scope-mismatch(scope=db vs dir=shared)
+
+6f66643 2025-10-24 05:17:35 +1000 — chore(ops): add nightly pipeline and chaos testing playbook
+  inferred=ci prefix=chore(ops) scope=ops domDir=docs files=3 +90/-2
+  paths: .github/workflows/nightly.yml;docs/ops/chaos.md;docs/ops/runbook.md
+  flags: docs-claimed-mismatch, subject-not-capitalized, scope-mismatch(scope=ops vs dir=docs)
+
+9eac120 2025-10-24 04:28:38 +1000 — chore(sec+ops): add PII key rotation tooling and incident response template
+  inferred=chore prefix=chore(sec+ops) scope=sec+ops domDir=docs files=7 +102/-5
+  paths: README.md;docs/ops/runbook.md;docs/security/ASVS-mapping.md;docs/security/TFN-SOP.md;package.json;scripts/rotate-pii-keys.mjs
+  flags: docs-claimed-mismatch, subject>72, subject-not-capitalized, scope-mismatch(scope=sec+ops vs dir=docs)
+
+ffe34d4 2025-10-24 03:58:10 +1000 — chore(compliance+ops): add dependency monitoring and evidence collection workflow
+  inferred=ci prefix=chore(compliance+ops) scope=compliance+ops domDir=docs files=7 +124/-10
+  paths: .github/dependabot.yml;README.md;docs/compliance/checklist.md;docs/ops/runbook.md;package.json;scripts/collect-evidence.mjs
+  flags: docs-claimed-mismatch, subject>72, subject-not-capitalized, scope-mismatch(scope=compliance+ops vs dir=docs)
+
+7a06f20 2025-10-24 03:43:47 +1000 — chore(compliance): add compliance checklist and wire it into workspace
+  inferred=chore prefix=chore(compliance) scope=compliance domDir=package.json files=2 +15/-1
+  paths: docs/compliance/checklist.md;package.json
+  flags: docs-claimed-mismatch, subject-not-capitalized, scope-mismatch(scope=compliance vs dir=package.json)
+
+50944dc 2025-10-24 03:38:44 +1000 — chore(ops): add smoke testing, dashboards, and observability hooks
+  inferred=feat prefix=chore(ops) scope=ops domDir=docs files=8 +105/-12
+  paths: .github/workflows/ci.yml;README.md;docs/accessibility/smoke.md;docs/ops/dashboards.md;docs/ops/runbook.md;k6/smoke.js
+  flags: docs-claimed-mismatch, code-additions-look-like-feat, subject-not-capitalized, scope-mismatch(scope=ops vs dir=docs), possible-breaking-missing-marker
+
+da9ff23 2025-10-24 03:18:49 +1000 — refactor(platform): centralize runtime config, tighten auth/metrics, and add typed boundaries
+  inferred=feat+test prefix=refactor(platform) scope=platform domDir=services files=26 +727/-231
+  paths: .env.example;.github/workflows/ci.yml;docs/privacy/dpia.md;docs/security/ASVS-mapping.md;package.json;services/api-gateway/package.json
+  flags: docs-claimed-mismatch, test-claimed-mismatch, deps-looks-like-chore, subject>72, subject-not-capitalized, scope-mismatch(scope=platform vs dir=services), possible-breaking-missing-marker
+
+af06204 2025-10-24 00:43:47 +1000 — chore(sec+ops): tighten CI/security pipeline and align gateway + tests
+  inferred=feat+test prefix=chore(sec+ops) scope=sec+ops domDir=services files=13 +315/-230
+  paths: .github/workflows/ci.yml;.github/workflows/security.yml;docs/privacy/dpia.md;docs/security/ASVS-mapping.md;pnpm-lock.yaml;services/api-gateway/package.json
+  flags: docs-claimed-mismatch, test-claimed-mismatch, subject-not-capitalized, scope-mismatch(scope=sec+ops vs dir=services), possible-breaking-missing-marker
+
+10e9fb7 2025-10-23 20:33:24 +1000 — chore(ops): add debug export tooling and tighten gateway/admin handling
+  inferred=feat prefix=chore(ops) scope=ops domDir=services files=5 +142/-77
+  paths: pnpm-workspace.yaml;services/api-gateway/debug-export.mts;services/api-gateway/src/app.ts;services/api-gateway/src/lib/auth.ts;services/api-gateway/src/routes/admin.data.ts
+  flags: code-additions-look-like-feat, subject-not-capitalized, scope-mismatch(scope=ops vs dir=services), possible-breaking-missing-marker
+
+287253f 2025-10-23 07:10:31 +1000 — chore(ops): define alerting and align gateway behavior with runbook
+  inferred=refactor prefix=chore(ops) scope=ops domDir=docs files=3 +19/-1
+  paths: docs/ops/alerts.md;docs/ops/runbook.md;services/api-gateway/src/app.ts
+  flags: docs-claimed-mismatch, subject-not-capitalized, scope-mismatch(scope=ops vs dir=docs)
+
+e803513 2025-10-23 06:59:41 +1000 — chore(ops): add observability and SLO docs
+  inferred=docs prefix=chore(ops) scope=ops domDir=docs files=4 +96/-15
+  paths: docs/ops/logging.md;docs/ops/promql.md;docs/ops/runbook.md;docs/ops/slo.md
+  flags: docs-claimed-mismatch, subject-not-capitalized, scope-mismatch(scope=ops vs dir=docs)
+
+aac6186 2025-10-23 05:08:57 +1000 — chore(ops): improve service operability and document logging/runbook
+  inferred=feat prefix=chore(ops) scope=ops domDir=docs files=3 +122/-12
+  paths: docs/ops/logging.md;docs/ops/runbook.md;services/api-gateway/src/index.ts
+  flags: docs-claimed-mismatch, code-additions-look-like-feat, subject-not-capitalized, scope-mismatch(scope=ops vs dir=docs), possible-breaking-missing-marker
+
+1bd4572 2025-10-23 04:42:28 +1000 — chore(security): refresh pnpm lockfile after security hardening
+  inferred=chore(deps) prefix=chore(security) scope=security domDir=pnpm-lock.yaml files=1 +55/-0
+  paths: pnpm-lock.yaml
+  flags: subject-not-capitalized, scope-mismatch(scope=security vs dir=pnpm-lock.yaml)
+
+1d9c29c 2025-10-23 04:36:38 +1000 — feat(security+privacy): introduce auth layer, data protection, and compliance updates
+  inferred=feat+test prefix=feat(security+privacy) scope=security+privacy domDir=services files=25 +1958/-494
+  paths: .env.example;.github/copilot-instructions.md;.github/workflows/ci.yml;.github/workflows/security.yml;docs/privacy/dpia.md;docs/security/ASVS-mapping.md
+  flags: docs-claimed-mismatch, test-claimed-mismatch, deps-looks-like-chore, subject>72, subject-not-capitalized, scope-mismatch(scope=security+privacy vs dir=services), possible-breaking-missing-marker
+
+3639a07 2025-10-22 09:20:59 +1000 — chore(audit): capture staged diff and last commit metadata
+  inferred=chore prefix=chore(audit) scope=audit domDir=artifacts files=2 +0/-0
+  paths: artifacts/diff-staged.patch;artifacts/last-commit.txt
+  flags: subject-not-capitalized, scope-mismatch(scope=audit vs dir=artifacts)
+
+174f1eb 2025-10-22 09:15:36 +1000 — chore(audit): capture working tree and diff snapshot
+  inferred=chore prefix=chore(audit) scope=audit domDir=artifacts files=2 +1/-0
+  paths: artifacts/diff-working-tree.patch;artifacts/git-status.txt
+  flags: subject-not-capitalized, scope-mismatch(scope=audit vs dir=artifacts)
+
+4f5a337 2025-10-21 20:46:20 +1000 — test(api): discover specs by directory to avoid Windows glob issues
+  inferred=chore(deps) prefix=test(api) scope=api domDir=services files=1 +1/-1
+  paths: services/api-gateway/package.json
+  flags: deps-looks-like-chore, subject-not-capitalized, scope-mismatch(scope=api vs dir=services)
+
+38f9b86 2025-10-21 20:31:23 +1000 — chore(security): ignore shared/prisma/.env in git
+  inferred=chore prefix=chore(security) scope=security domDir=gitignore files=1 +2/-0
+  paths: .gitignore
+  flags: subject-not-capitalized, scope-mismatch(scope=security vs dir=gitignore)
+
+1e0a0b1 2025-10-21 20:30:47 +1000 — chore(repo): normalize line endings / cross-platform script behavior
+  inferred=chore(deps) prefix=chore(repo) scope=repo domDir=package.json files=1 +5/-5
+  paths: package.json
+  flags: subject-not-capitalized, scope-mismatch(scope=repo vs dir=package.json)
+
+f17625b 2025-10-21 20:10:52 +1000 — test(api): run all gateway *.spec.ts tests
+  inferred=chore(deps) prefix=test(api) scope=api domDir=services files=1 +2/-2
+  paths: services/api-gateway/package.json
+  flags: deps-looks-like-chore, subject-not-capitalized, scope-mismatch(scope=api vs dir=services)
+
+252f010 2025-10-21 20:08:44 +1000 — chore(repo): update .gitignore to exclude local helper script
+  inferred=chore prefix=chore(repo) scope=repo domDir=gitignore files=1 +2/-0
+  paths: .gitignore
+  flags: subject-not-capitalized, scope-mismatch(scope=repo vs dir=gitignore)
+
+2760330 2025-10-21 20:02:49 +1000 — chore(api): lockfile + deps; test: add /ready probe specchore(api): update deps/lockfile and align gateway tests for /ready probe
+  inferred=chore(deps) prefix=chore(api) scope=api domDir=services files=2 +4/-0
+  paths: pnpm-lock.yaml;services/api-gateway/package.json
+  flags: subject>72, subject-not-capitalized, scope-mismatch(scope=api vs dir=services)
+
+94580d9 2025-10-21 19:59:10 +1000 — chore(db): add Prisma migrate/deploy/generate scripts to workspace root
+  inferred=chore(deps) prefix=chore(db) scope=db domDir=package.json files=1 +27/-1
+  paths: package.json
+  flags: subject-not-capitalized, scope-mismatch(scope=db vs dir=package.json)
+
+c92e475 2025-10-21 19:52:07 +1000 — chore(repo): normalize line endings via .gitattributes
+  inferred=chore prefix=chore(repo) scope=repo domDir=gitattributes files=1 +1/-0
+  paths: .gitattributes
+  flags: subject-not-capitalized, scope-mismatch(scope=repo vs dir=gitattributes)
+
+c1f99d9 2025-10-21 19:44:34 +1000 — chore(db): check in BankLine idempotencyKey uniqueness migration
+  inferred=chore(db) prefix=chore(db) scope=db domDir=shared files=2 +15/-11
+  paths: shared/prisma/migrations/20251021094315_bankline_idempotency/migration.sql;shared/prisma/schema.prisma
+  flags: subject-not-capitalized, scope-mismatch(scope=db vs dir=shared)
+
+ab4fbaf 2025-10-21 19:02:54 +1000 — test(api): add /ready health probe spec
+  inferred=feat+test prefix=test(api) scope=api domDir=services files=1 +15/-0
+  paths: services/api-gateway/test/ready.spec.ts
+  flags: subject-not-capitalized, scope-mismatch(scope=api vs dir=services)
+
+c92b1b3 2025-10-21 18:23:51 +1000 — feat(api): add /ready probe and idempotent POST /bank-lines with Zod validation
+  inferred=feat prefix=feat(api) scope=api domDir=shared files=6 +118/-55
+  paths: .gitignore;services/api-gateway/src/app.ts;shared/package.json;shared/src/db.ts;webapp/package.json;webapp/vite.config.ts
+  flags: deps-looks-like-chore, subject>72, subject-not-capitalized, scope-mismatch(scope=api vs dir=shared), possible-breaking-missing-marker
+
+6b15482 2025-10-21 18:02:03 +1000 — feat(webapp): add WCAG AA-compliant status badges and browser test config
+  inferred=feat prefix=feat(webapp) scope=webapp domDir=webapp files=4 +255/-0
+  paths: scripts/run-webapp-tests.ps1;webapp/playwright.config.ts;webapp/src/styles/global.css;webapp/src/styles/tokens.css
+  flags: subject>72, subject-not-capitalized
+
+1ea0f5d 2025-10-21 04:41:38 +1000 — feat(db): add BankLine.idempotencyKey and unique (orgId, idempotencyKey)
+  inferred=chore(db) prefix=feat(db) scope=db domDir=shared files=2 +25/-8
+  paths: shared/prisma/migrations/20251020183646_add_bankline_idempotency/migration.sql;shared/prisma/schema.prisma
+  flags: subject-not-capitalized, scope-mismatch(scope=db vs dir=shared)
+
+7c64e61 2025-10-21 04:23:00 +1000 — chore(db): check in Prisma migration for deleted_at sync
+  inferred=chore(db) prefix=chore(db) scope=db domDir=shared files=1 +15/-0
+  paths: shared/prisma/migrations/20251020170901_sync_deleted_at/migration.sql
+  flags: subject-not-capitalized, scope-mismatch(scope=db vs dir=shared)
+
+257a2be 2025-10-21 04:19:52 +1000 — chore(dev-db): update seed script for local Postgres bootstrap
+  inferred=refactor prefix=chore(dev-db) scope=dev-db domDir=scripts files=1 +3/-2
+  paths: scripts/seed.ts
+  flags: subject-not-capitalized, scope-mismatch(scope=dev-db vs dir=scripts)
+
+ce3837a 2025-10-21 02:21:46 +1000 — refactor(shared): add subpath exports and update gateway imports to @apgms/shared/*
+  inferred=refactor prefix=refactor(shared) scope=shared domDir=services files=7 +30/-23
+  paths: services/api-gateway/src/app.ts;services/api-gateway/src/index.ts;services/api-gateway/src/lib/pii.ts;services/api-gateway/src/routes/admin.data.ts;services/api-gateway/src/routes/tax.ts;services/api-gateway/src/schemas/admin.data.ts
+  flags: deps-looks-like-chore, subject>72, subject-not-capitalized, scope-mismatch(scope=shared vs dir=services), possible-breaking-missing-marker
+
+7c5f7e4 2025-10-21 02:05:25 +1000 — fix(shared-imports): correct @apgms/shared/* import paths across gateway, webapp, and tests
+  inferred=feat+test prefix=fix(shared-imports) scope=shared-imports domDir=webapp files=25 +28/-25
+  paths: playwright.config.ts;pnpm-workspace.yaml;services/api-gateway/src/app.ts;services/api-gateway/src/lib/pii.ts;services/api-gateway/src/routes/admin.data.ts;services/api-gateway/src/routes/tax.ts
+  flags: test-claimed-mismatch, subject>72, subject-not-capitalized, fix-no-issue-ref, scope-mismatch(scope=shared-imports vs dir=webapp), possible-breaking-missing-marker
+
+302a91a 2025-10-21 01:55:32 +1000 — chore(test): refresh pnpm lockfile and install Playwright browsers for e2e
+  inferred=chore(deps) prefix=chore(test) scope=test domDir=pnpm-lock.yaml files=1 +1112/-1
+  paths: pnpm-lock.yaml
+  flags: subject>72, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=test vs dir=pnpm-lock.yaml)
+
+f53630b 2025-10-20 23:05:25 +1000 — feat(platform): initial APGMS monorepo bootstrap
+  inferred=feat+test prefix=feat(platform) scope=platform domDir=services files=162 +5467/-0
+  paths: .dockerignore;.editorconfig;.env.example;.gitattributes;.github/workflows/.gitkeep;.github/workflows/ci.yml
+  flags: docs-claimed-mismatch, test-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, scope-mismatch(scope=platform vs dir=services), possible-breaking-missing-marker
+
+984d64f 2025-10-22 17:01:22 +1000 — feat(api-gateway): add admin data routes plugin
+  inferred=feat+test prefix=feat(api-gateway) scope=api-gateway domDir=services files=4 +414/-728
+  paths: services/api-gateway/src/routes/admin.data.ts;services/api-gateway/src/schemas/admin.data.ts;services/api-gateway/test/admin.data.delete.spec.ts;services/api-gateway/test/admin.data.export.spec.ts
+  flags: test-claimed-mismatch, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=api-gateway vs dir=services), possible-breaking-missing-marker
+
+8a98e53 2025-10-22 17:00:58 +1000 — Add authentication, validation, and idempotency to bank lines
+  inferred=feat+test prefix= scope= domDir=services files=4 +456/-18
+  paths: services/api-gateway/src/app.ts;services/api-gateway/src/lib/pii.ts;services/api-gateway/src/schemas/bank-lines.ts;services/api-gateway/test/privacy.spec.ts
+  flags: test-claimed-mismatch, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+5dd99fe 2025-10-22 17:00:48 +1000 — Enforce CORS allowlist and add CSP protections
+  inferred=feat prefix= scope= domDir=services files=4 +93/-1
+  paths: services/api-gateway/package.json;services/api-gateway/pnpm-lock.yaml;services/api-gateway/src/app.ts;webapp/index.html
+  flags: deps-looks-like-chore, code-additions-look-like-feat, possible-breaking-missing-marker
+
+2510da6 2025-10-22 10:35:59 +1000 — Update CI and security workflows
+  inferred=ci prefix= scope= domDir=github files=2 +188/-23
+  paths: .github/workflows/ci.yml;.github/workflows/security.yml
+  flags: needs-body(>=150 LOC)
+
+801d0b2 2025-10-22 10:33:00 +1000 — Add readiness, metrics, and graceful shutdown to API gateway
+  inferred=feat+test prefix= scope= domDir=services files=3 +137/-7
+  paths: services/api-gateway/src/app.ts;services/api-gateway/src/index.ts;services/api-gateway/test/privacy.spec.ts
+  flags: test-claimed-mismatch, possible-breaking-missing-marker
+
+edf2853 2025-10-22 10:32:34 +1000 — Document current and planned security controls
+  inferred=docs prefix= scope= domDir=docs files=3 +67/-3
+  paths: docs/security/ASVS-mapping.md;docs/security/TFN-SOP.md;status/README.md
+  flags: docs-claimed-mismatch
+
+f24c778 2025-10-22 10:31:49 +1000 — Fix admin privacy routes
+  inferred=feat+test prefix= scope= domDir=services files=4 +557/-703
+  paths: services/api-gateway/src/routes/admin.data.ts;services/api-gateway/src/schemas/admin.data.ts;services/api-gateway/test/admin.data.delete.spec.ts;services/api-gateway/test/admin.data.export.spec.ts
+  flags: test-claimed-mismatch, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+52bd1e7 2025-10-22 10:31:38 +1000 — feat(api-gateway): secure users and bank lines
+  inferred=feat+test prefix=feat(api-gateway) scope=api-gateway domDir=services files=4 +575/-23
+  paths: services/api-gateway/src/app.ts;services/api-gateway/src/lib/pii.ts;services/api-gateway/src/schemas/bank-lines.ts;services/api-gateway/test/privacy.spec.ts
+  flags: test-claimed-mismatch, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=api-gateway vs dir=services), possible-breaking-missing-marker
+
+35886ca 2025-10-22 10:31:08 +1000 — Add CORS allowlist and helmet security headers
+  inferred=feat prefix= scope= domDir=services files=3 +78/-2
+  paths: services/api-gateway/package.json;services/api-gateway/src/app.ts;webapp/index.html
+  flags: deps-looks-like-chore, code-additions-look-like-feat, possible-breaking-missing-marker
+
+2c44e9a 2025-10-22 10:30:44 +1000 — Add Prisma drift detection job
+  inferred=ci prefix= scope= domDir=github files=3 +251/-45
+  paths: .github/workflows/ci.yml;.github/workflows/security.yml;ci.yml
+  flags: needs-body(>=150 LOC)
+
+06beba9 2025-10-22 10:30:17 +1000 — feat(api-gateway): add readiness and metrics endpoints
+  inferred=feat+test prefix=feat(api-gateway) scope=api-gateway domDir=services files=3 +123/-7
+  paths: services/api-gateway/src/app.ts;services/api-gateway/src/index.ts;services/api-gateway/test/privacy.spec.ts
+  flags: test-claimed-mismatch, subject-not-capitalized, scope-mismatch(scope=api-gateway vs dir=services), possible-breaking-missing-marker
+
+a12d251 2025-10-22 10:29:28 +1000 — feat(api-gateway): add readiness and metrics endpoints
+  inferred=feat+test prefix=feat(api-gateway) scope=api-gateway domDir=services files=3 +123/-7
+  paths: services/api-gateway/src/app.ts;services/api-gateway/src/index.ts;services/api-gateway/test/privacy.spec.ts
+  flags: test-claimed-mismatch, subject-not-capitalized, scope-mismatch(scope=api-gateway vs dir=services), possible-breaking-missing-marker
+
+9e27f46 2025-10-22 10:29:02 +1000 — Add baseline compliance documentation tables
+  inferred=docs prefix= scope= domDir=docs files=3 +34/-3
+  paths: docs/security/ASVS-mapping.md;docs/security/TFN-SOP.md;status/README.md
+  flags: docs-claimed-mismatch
+
+4ac4ea6 2025-10-22 10:28:11 +1000 — feat(api-gateway): add readiness, metrics, and graceful shutdown
+  inferred=feat prefix=feat(api-gateway) scope=api-gateway domDir=services files=2 +153/-5
+  paths: services/api-gateway/src/app.ts;services/api-gateway/src/index.ts
+  flags: subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=api-gateway vs dir=services), possible-breaking-missing-marker
+
+2e2b1d3 2025-10-22 10:27:59 +1000 — feat(api-gateway): add bank line validation and idempotency
+  inferred=feat+test prefix=feat(api-gateway) scope=api-gateway domDir=services files=3 +202/-20
+  paths: services/api-gateway/src/app.ts;services/api-gateway/src/schemas/bank-lines.ts;services/api-gateway/test/privacy.spec.ts
+  flags: test-claimed-mismatch, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=api-gateway vs dir=services), possible-breaking-missing-marker
+
+edd76fa 2025-10-22 10:27:07 +1000 — Restrict CORS and apply CSP protections
+  inferred=feat prefix= scope= domDir=webapp files=2 +77/-1
+  paths: services/api-gateway/src/app.ts;webapp/index.html
+  flags: code-additions-look-like-feat, possible-breaking-missing-marker
+
+f943476 2025-10-22 10:26:29 +1000 — Add security SOPs and weekly dependency updates
+  inferred=ci prefix= scope= domDir=status files=5 +70/-3
+  paths: .github/dependabot.yml;docs/security/ASVS-mapping.md;docs/security/TFN-SOP.md;status/README.md;status/incidents/.gitkeep
+  flags: docs-claimed-mismatch
+
+ffd807e 2025-10-22 10:26:18 +1000 — Document required GitHub Actions secrets
+  inferred=docs prefix= scope= domDir=docs files=1 +16/-0
+  paths: docs/ops/runbook.md
+  flags: docs-claimed-mismatch
+
+a35a0aa 2025-10-22 10:25:55 +1000 — Refactor admin data routes with env token authorization
+  inferred=feat+test prefix= scope= domDir=services files=4 +187/-257
+  paths: services/api-gateway/src/routes/admin.data.ts;services/api-gateway/src/schemas/admin.data.ts;services/api-gateway/test/admin.data.delete.spec.ts;services/api-gateway/test/admin.data.export.spec.ts
+  flags: test-claimed-mismatch, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+85853cc 2025-10-22 10:25:29 +1000 — feat(api-gateway): secure bank line endpoints
+  inferred=feat+test prefix=feat(api-gateway) scope=api-gateway domDir=services files=4 +391/-42
+  paths: services/api-gateway/src/app.ts;services/api-gateway/src/plugins/helmet.ts;services/api-gateway/src/schemas/bank-lines.ts;services/api-gateway/test/privacy.spec.ts
+  flags: test-claimed-mismatch, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=api-gateway vs dir=services), possible-breaking-missing-marker
+
+8ee6dff 2025-10-22 10:25:06 +1000 — chore: update ci workflows and scripts
+  inferred=ci prefix=chore scope= domDir=services files=3 +50/-28
+  paths: .github/workflows/ci.yml;package.json;services/api-gateway/package.json
+  flags: subject-not-capitalized, scope-mismatch(scope= vs dir=services), possible-breaking-missing-marker
+
+295dbbb 2025-10-22 10:24:19 +1000 — Add readiness, metrics, and graceful shutdown for API gateway
+  inferred=feat prefix= scope= domDir=services files=7 +313/-1
+  paths: pnpm-lock.yaml;services/api-gateway/package.json;services/api-gateway/src/app.ts;services/api-gateway/src/index.ts;services/api-gateway/src/vendor/prom-client/index.d.ts;services/api-gateway/src/vendor/prom-client/index.js
+  flags: deps-looks-like-chore, code-additions-look-like-feat, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+13213fb 2025-10-22 10:23:54 +1000 — Add CSP meta and CI-friendly accessibility checks
+  inferred=feat+test prefix= scope= domDir=webapp files=3 +19/-0
+  paths: playwright.config.ts;webapp/index.html;webapp/tests/home-accessibility.spec.ts
+  flags: test-claimed-mismatch
+
+3ac003c 2025-10-22 10:23:16 +1000 — Document security procedures and enable dependabot
+  inferred=ci prefix= scope= domDir=docs files=4 +116/-3
+  paths: .github/dependabot.yml;docs/security/ASVS-mapping.md;docs/security/TFN-SOP.md;status/README.md
+  flags: docs-claimed-mismatch
+
+36163bf 2025-10-22 10:23:04 +1000 — ci: guard merge markers and setup from repo root
+  inferred=ci prefix=ci scope= domDir=github files=4 +1159/-33
+  paths: .github/workflows/ci.yml;.github/workflows/e2e.yml;.github/workflows/security.yml;pnpm-lock.yaml
+  flags: deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=github)
+
+e3faebe 2025-10-22 10:22:25 +1000 — chore: add build tooling updates
+  inferred=ci prefix=chore scope= domDir=services files=4 +12/-5
+  paths: .github/workflows/ci.yml;package.json;services/api-gateway/package.json;services/api-gateway/tsconfig.json
+  flags: subject-not-capitalized, scope-mismatch(scope= vs dir=services)
+
+57cebec 2025-10-22 10:22:16 +1000 — fix: restore admin data routes with jwt auth
+  inferred=feat+test prefix=fix scope= domDir=services files=5 +333/-201
+  paths: services/api-gateway/package.json;services/api-gateway/src/routes/admin.data.ts;services/api-gateway/src/schemas/admin.data.ts;services/api-gateway/test/admin.data.delete.spec.ts;services/api-gateway/test/admin.data.export.spec.ts
+  flags: test-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), fix-no-issue-ref, scope-mismatch(scope= vs dir=services), possible-breaking-missing-marker
+
+71ffddc 2025-10-22 10:21:57 +1000 — feat: add argon2 password hashing and migration
+  inferred=feat+test prefix=feat scope= domDir=shared files=18 +455/-181
+  paths: packages/argon2/index.d.ts;packages/argon2/index.js;packages/argon2/package.json;pnpm-lock.yaml;pnpm-workspace.yaml;scripts/seed.ts
+  flags: test-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=shared), possible-breaking-missing-marker
+
+9fc1e66 2025-10-22 10:21:35 +1000 — feat(api-gateway): add readiness and metrics instrumentation
+  inferred=feat+test prefix=feat(api-gateway) scope=api-gateway domDir=services files=10 +508/-5
+  paths: services/api-gateway/package.json;services/api-gateway/src/app.ts;services/api-gateway/src/index.ts;services/api-gateway/src/metrics.ts;services/api-gateway/src/shutdown.ts;services/api-gateway/src/vendor/prom-client.ts
+  flags: test-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=api-gateway vs dir=services), possible-breaking-missing-marker
+
+2b9115e 2025-10-22 10:20:36 +1000 — Add CSP, compliance evidence, and dependency automation
+  inferred=feat prefix= scope= domDir=docs files=9 +122/-22
+  paths: .github/dependabot.yml;docs/minimum-evidence/ASVS-mapping.md;docs/minimum-evidence/DPIA.md;docs/minimum-evidence/accessibility/report.md;docs/security/TFN-SOP.md;status/README.md
+  flags: docs-claimed-mismatch, code-additions-look-like-feat
+
+d8b0078 2025-10-22 10:20:25 +1000 — docs: add apgms gui design playbook
+  inferred=docs prefix=docs scope= domDir=docs files=1 +64/-0
+  paths: docs/architecture/apgms-gui-design.md
+  flags: subject-not-capitalized, scope-mismatch(scope= vs dir=docs)
+
+92410b2 2025-10-22 10:20:07 +1000 — feat(webapp): add layout shell and compliance routes
+  inferred=feat prefix=feat(webapp) scope=webapp domDir=webapp files=8 +276/-5
+  paths: webapp/src/components/layout/AppShell.tsx;webapp/src/components/layout/appshell.css;webapp/src/main.tsx;webapp/src/pages/Compliance.tsx;webapp/src/pages/GST.tsx;webapp/src/pages/Obligations.tsx
+  flags: subject-not-capitalized, needs-body(>=150 LOC)
+
+fd2c8f9 2025-10-22 10:19:50 +1000 — Align primary nav with compliance playbook
+  inferred=feat prefix= scope= domDir=webapp files=2 +120/-17
+  paths: webapp/src/App.css;webapp/src/App.tsx
+  flags: code-additions-look-like-feat
+
+1ff2a15 2025-10-22 10:19:31 +1000 — feat(webapp): add card and table UI primitives
+  inferred=feat prefix=feat(webapp) scope=webapp domDir=webapp files=4 +261/-0
+  paths: webapp/src/components/ui/Card.tsx;webapp/src/components/ui/Table.tsx;webapp/src/components/ui/card.css;webapp/src/components/ui/table.css
+  flags: subject-not-capitalized, needs-body(>=150 LOC)
+
+3172ce7 2025-10-22 10:19:15 +1000 — feat(webapp): add status badge component
+  inferred=refactor prefix=feat(webapp) scope=webapp domDir=webapp files=2 +40/-5
+  paths: webapp/src/components/ui/StatusBadge.tsx;webapp/src/pages/BankLines.tsx
+  flags: code-changes-look-like-refactor, subject-not-capitalized
+
+9e6bded 2025-10-22 10:18:55 +1000 — Add obligations control room dashboard
+  inferred=feat prefix= scope= domDir=webapp files=3 +271/-0
+  paths: webapp/src/App.tsx;webapp/src/pages/Obligations.css;webapp/src/pages/Obligations.tsx
+  flags: code-additions-look-like-feat, needs-body(>=150 LOC)
+
+2273985 2025-10-22 10:18:39 +1000 — feat(webapp): add PAYGW variance flow manager
+  inferred=feat prefix=feat(webapp) scope=webapp domDir=webapp files=5 +927/-0
+  paths: webapp/src/App.tsx;webapp/src/components/Drawer.tsx;webapp/src/components/drawer.css;webapp/src/pages/PAYGW.css;webapp/src/pages/PAYGW.tsx
+  flags: subject-not-capitalized, needs-body(>=150 LOC)
+
+a4eb821 2025-10-22 10:18:21 +1000 — feat(webapp): add GST reconciliation heatmap and stepper
+  inferred=feat prefix=feat(webapp) scope=webapp domDir=webapp files=2 +500/-0
+  paths: webapp/src/pages/GST.css;webapp/src/pages/GST.tsx
+  flags: subject-not-capitalized, needs-body(>=150 LOC)
+
+e953153 2025-10-22 10:17:58 +1000 — Add compliance page with audit workflows
+  inferred=feat prefix= scope= domDir=webapp files=4 +694/-0
+  paths: webapp/src/App.tsx;webapp/src/components/AuditTrail.tsx;webapp/src/pages/Compliance.tsx;webapp/src/styles/compliance.css
+  flags: code-additions-look-like-feat, needs-body(>=150 LOC)
+
+5fcd26d 2025-10-22 10:17:31 +1000 — Add security monitoring dashboard
+  inferred=feat prefix= scope= domDir=webapp files=3 +524/-0
+  paths: webapp/src/App.tsx;webapp/src/pages/Security.css;webapp/src/pages/Security.tsx
+  flags: code-additions-look-like-feat, needs-body(>=150 LOC)
+
+2b7dcc1 2025-10-22 10:17:17 +1000 — feat(webapp): add mocked api layer and loading states
+  inferred=feat prefix=feat(webapp) scope=webapp domDir=webapp files=6 +1034/-141
+  paths: webapp/src/lib/api.ts;webapp/src/lib/types.ts;webapp/src/pages/BankLines.css;webapp/src/pages/BankLines.tsx;webapp/src/pages/Home.css;webapp/src/pages/Home.tsx
+  flags: subject-not-capitalized, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+967b320 2025-10-22 10:17:02 +1000 — Improve accessibility infrastructure
+  inferred=refactor prefix= scope= domDir=webapp files=4 +42/-15
+  paths: webapp/src/App.css;webapp/src/App.tsx;webapp/src/pages/BankLines.css;webapp/src/pages/BankLines.tsx
+  flags: code-changes-look-like-refactor
+
+8e62dbf 2025-10-22 10:16:14 +1000 — feat(webapp): add obligations routes and tests
+  inferred=feat+test prefix=feat(webapp) scope=webapp domDir=webapp files=11 +513/-15
+  paths: webapp/src/App.tsx;webapp/src/pages/Compliance.tsx;webapp/src/pages/Gst.tsx;webapp/src/pages/Home.tsx;webapp/src/pages/ObligationDetail.css;webapp/src/pages/Paygw.tsx
+  flags: test-claimed-mismatch, subject-not-capitalized, needs-body(>=150 LOC)
+
+3daff55 2025-10-22 10:16:03 +1000 — refactor: extract app shell layout
+  inferred=refactor prefix=refactor scope= domDir=webapp files=4 +181/-138
+  paths: webapp/src/App.css;webapp/src/App.tsx;webapp/src/components/AppShell/AppShell.tsx;webapp/src/components/AppShell/appshell.css
+  flags: subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=webapp)
+
+4917454 2025-10-22 10:15:47 +1000 — feat: modernize webapp with tailwind and shadcn
+  inferred=feat+test prefix=feat scope= domDir=apps files=40 +947/-882
+  paths: apps/webapp/components.json;{webapp => apps/webapp}/index.html;apps/webapp/package.json;{webapp => apps/webapp}/playwright.config.ts;apps/webapp/postcss.config.cjs;{webapp => apps/webapp}/public/accessibility.html
+  flags: test-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=apps)
+
+366864b 2025-10-22 10:15:32 +1000 — feat(webapp): extend tailwind theme for finance ui
+  inferred=feat prefix=feat(webapp) scope=webapp domDir=apps files=2 +101/-0
+  paths: apps/webapp/tailwind.config.js;apps/webapp/tailwind.config.ts
+  flags: subject-not-capitalized, scope-mismatch(scope=webapp vs dir=apps)
+
+bfc0ea6 2025-10-22 10:15:07 +1000 — feat(webapp): add dashboard ui components
+  inferred=feat prefix=feat(webapp) scope=webapp domDir=apps files=12 +753/-1
+  paths: apps/webapp/src/components/ui/DataTable.tsx;apps/webapp/src/components/ui/GaugeRing.tsx;apps/webapp/src/components/ui/HeatCard.tsx;apps/webapp/src/components/ui/IntegrationTile.tsx;apps/webapp/src/components/ui/KpiGroup.tsx;apps/webapp/src/components/ui/MiniTrend.tsx
+  flags: deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=webapp vs dir=apps)
+
+0cdbd7b 2025-10-22 10:14:28 +1000 — feat(webapp): add app shell layout
+  inferred=feat prefix=feat(webapp) scope=webapp domDir=apps files=4 +319/-0
+  paths: apps/webapp/src/components/AppShell.tsx;apps/webapp/src/components/ui/button.tsx;apps/webapp/src/components/ui/tabs.tsx;apps/webapp/src/lib/utils.ts
+  flags: subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=webapp vs dir=apps)
+
+a261f43 2025-10-22 10:13:52 +1000 — Add APGMS types and demo store data
+  inferred=feat prefix= scope= domDir=apps files=2 +217/-0
+  paths: apps/webapp/src/store/demo.ts;apps/webapp/src/types/apgms.ts
+  flags: code-additions-look-like-feat, needs-body(>=150 LOC)
+
+74fcf16 2025-10-22 10:13:46 +1000 — Add overview dashboard route
+  inferred=feat prefix= scope= domDir=apps files=4 +395/-0
+  paths: apps/webapp/src/components/AppShell.module.css;apps/webapp/src/components/AppShell.tsx;apps/webapp/src/pages/index.module.css;apps/webapp/src/pages/index.tsx
+  flags: code-additions-look-like-feat, needs-body(>=150 LOC)
+
+893c676 2025-10-22 10:13:20 +1000 — feat: add PAYGW flow manager page
+  inferred=feat prefix=feat scope= domDir=apps files=2 +633/-0
+  paths: apps/webapp/src/pages/paygw.css;apps/webapp/src/pages/paygw.tsx
+  flags: subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=apps)
+
+a0b7894 2025-10-22 10:13:10 +1000 — Add GST reconciliation analytics route
+  inferred=feat prefix= scope= domDir=apps files=1 +473/-0
+  paths: apps/webapp/src/pages/gst.tsx
+  flags: code-additions-look-like-feat, needs-body(>=150 LOC)
+
+e7d499a 2025-10-22 10:12:56 +1000 — feat(webapp): add compliance monitoring route
+  inferred=feat prefix=feat(webapp) scope=webapp domDir=webapp files=4 +349/-0
+  paths: apps/webapp/src/pages/compliance.tsx;webapp/src/App.tsx;webapp/src/pages/Compliance.css;webapp/src/pages/Compliance.tsx
+  flags: subject-not-capitalized, needs-body(>=150 LOC)
+
+97d386b 2025-10-22 10:12:26 +1000 — Add security command center route
+  inferred=feat prefix= scope= domDir=apps files=1 +458/-0
+  paths: apps/webapp/src/pages/security.tsx
+  flags: code-additions-look-like-feat, needs-body(>=150 LOC)
+
+ff93e61 2025-10-22 10:12:16 +1000 — feat(webapp): add status chip component
+  inferred=feat prefix=feat(webapp) scope=webapp domDir=webapp files=5 +124/-37
+  paths: webapp/src/components/StatusChip.tsx;webapp/src/lib/cva.ts;webapp/src/lib/utils.ts;webapp/src/pages/BankLines.css;webapp/src/pages/BankLines.tsx
+  flags: subject-not-capitalized, needs-body(>=150 LOC)
+
+19d6156 2025-10-22 10:10:54 +1000 — feat(webapp): add shared formatting utilities
+  inferred=feat prefix=feat(webapp) scope=webapp domDir=webapp files=4 +93/-30
+  paths: webapp/src/lib/format.ts;webapp/src/pages/BankLines.tsx;webapp/src/pages/Home.tsx;webapp/src/styles/global.css
+  flags: subject-not-capitalized
+
+36686f5 2025-10-22 10:10:44 +1000 — feat(webapp): add AppShell layout and new dashboards
+  inferred=feat prefix=feat(webapp) scope=webapp domDir=webapp files=15 +800/-489
+  paths: webapp/src/App.css;webapp/src/App.tsx;webapp/src/components/AppShell.tsx;webapp/src/pages/BankLines.css;webapp/src/pages/BankLines.tsx;webapp/src/pages/Compliance.tsx
+  flags: subject-not-capitalized, needs-body(>=150 LOC)
+
+d799a9b 2025-10-22 10:10:29 +1000 — Add Vitest smoke tests and currency formatter
+  inferred=feat+test prefix= scope= domDir=webapp files=8 +106/-3
+  paths: webapp/package.json;webapp/src/pages/__tests__/BankLines.test.tsx;webapp/src/pages/__tests__/Home.test.tsx;webapp/src/test/setup.ts;webapp/src/utils/format.test.ts;webapp/src/utils/format.ts
+  flags: test-claimed-mismatch, deps-looks-like-chore
+
+bd66cc4 2025-10-22 10:10:20 +1000 — Add UI acceptance checklist
+  inferred=docs prefix= scope= domDir=docs files=1 +10/-0
+  paths: docs/ui-acceptance.md
+  flags: docs-claimed-mismatch
+
+f32133f 2025-10-22 10:10:05 +1000 — Enhance dashboard metrics and bank lines experience
+  inferred=feat prefix= scope= domDir=webapp files=17 +636/-51
+  paths: tsconfig.json;webapp/package.json;webapp/src/components/DeadlineCapsule.css;webapp/src/components/DeadlineCapsule.tsx;webapp/src/components/IconButton.css;webapp/src/components/IconButton.tsx
+  flags: deps-looks-like-chore, code-additions-look-like-feat, needs-body(>=150 LOC)
+
+723348d 2025-10-22 10:09:53 +1000 — chore: add repo audit workflow and script
+  inferred=ci prefix=chore scope= domDir=scripts files=2 +295/-0
+  paths: .github/workflows/repo-audit.yml;scripts/repo-audit.mjs
+  flags: subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=scripts)
+
+e1e4dbb 2025-10-22 10:09:43 +1000 — Unify admin data routes and tests
+  inferred=feat+test prefix= scope= domDir=services files=5 +209/-222
+  paths: services/api-gateway/src/routes/admin.data.ts;services/api-gateway/src/schemas/admin.data.ts;services/api-gateway/test/admin.data.delete.spec.ts;services/api-gateway/test/admin.data.export.spec.ts;services/api-gateway/test/all.test.js
+  flags: test-claimed-mismatch, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+2168250 2025-10-22 10:09:30 +1000 — Add JWT auth middleware and update routes
+  inferred=feat+test prefix= scope= domDir=services files=6 +765/-181
+  paths: services/api-gateway/src/app.ts;services/api-gateway/src/auth.ts;services/api-gateway/test/authenticated.routes.spec.ts;services/api-gateway/test/helpers/prisma-stub.ts;services/api-gateway/test/privacy.spec.ts;services/api-gateway/test/ready.spec.ts
+  flags: test-claimed-mismatch, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+0a997b0 2025-10-22 10:09:17 +1000 — Hash seed user password
+  inferred=refactor prefix= scope= domDir=scripts files=2 +15/-3
+  paths: README.md;scripts/seed.ts
+  flags: docs-claimed-mismatch, code-changes-look-like-refactor
+
+0054db5 2025-10-22 10:09:05 +1000 — Enhance security scanning pipeline
+  inferred=ci prefix= scope= domDir=SECURITY.md files=2 +226/-6
+  paths: .github/workflows/security.yml;SECURITY.md
+  flags: docs-claimed-mismatch, needs-body(>=150 LOC)
+
+af21578 2025-10-22 10:08:39 +1000 — feat(api-gateway): add metrics and graceful shutdown
+  inferred=feat+test prefix=feat(api-gateway) scope=api-gateway domDir=services files=9 +467/-13
+  paths: runbooks/api-gateway-observability.md;services/api-gateway/package.json;services/api-gateway/src/app.ts;services/api-gateway/src/index.ts;services/api-gateway/src/lib/metrics.ts;services/api-gateway/src/lib/queue.ts
+  flags: docs-claimed-mismatch, test-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=api-gateway vs dir=services), possible-breaking-missing-marker
+
+5f54244 2025-10-22 10:08:30 +1000 — feat: harden api gateway cors and csp
+  inferred=feat+test prefix=feat scope= domDir=services files=4 +204/-5
+  paths: services/api-gateway/src/app.ts;services/api-gateway/src/plugins/security-headers.ts;services/api-gateway/test/security.spec.ts;webapp/index.html
+  flags: test-claimed-mismatch, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=services), possible-breaking-missing-marker
+
+2be1def 2025-10-22 10:08:09 +1000 — Document security controls and operational runbooks
+  inferred=docs prefix= scope= domDir=runbooks files=5 +227/-3
+  paths: docs/privacy/dpia.md;docs/security/ASVS-mapping.md;runbooks/incident-response.md;runbooks/oncall-rotation.md;status/README.md
+  flags: docs-claimed-mismatch, needs-body(>=150 LOC)
+
+b5d8e9d 2025-10-22 10:07:58 +1000 — Add schemas and sanitization for public API responses
+  inferred=feat+test prefix= scope= domDir=services files=3 +274/-6
+  paths: services/api-gateway/src/app.ts;services/api-gateway/src/schemas/public.data.ts;services/api-gateway/test/public.routes.spec.ts
+  flags: test-claimed-mismatch, needs-body(>=150 LOC), possible-breaking-missing-marker
+
+f47b4d3 2025-10-22 10:07:48 +1000 — feat(api-gateway): add jwt admin verification
+  inferred=feat+test prefix=feat(api-gateway) scope=api-gateway domDir=services files=8 +651/-242
+  paths: services/api-gateway/src/app.ts;services/api-gateway/src/auth/jwt.ts;services/api-gateway/src/auth/require-admin.ts;services/api-gateway/src/config.ts;services/api-gateway/src/routes/admin.data.ts;services/api-gateway/src/schemas/admin.data.ts
+  flags: test-claimed-mismatch, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=api-gateway vs dir=services), possible-breaking-missing-marker
+
+352c7a0 2025-10-22 10:07:36 +1000 — Document security controls and status operations
+  inferred=docs prefix= scope= domDir=runbooks files=7 +135/-5
+  paths: README.md;SECURITY.md;docs/security/ASVS.md;docs/security/TFN-SOP.md;runbooks/ndb.md;runbooks/status-page.md
+  flags: docs-claimed-mismatch
+
+f376a92 2025-10-22 10:07:23 +1000 — feat: add pii key management and admin guard protections
+  inferred=feat+test prefix=feat scope= domDir=shared files=9 +440/-45
+  paths: docs/security/pii-key-management.md;services/api-gateway/src/app.ts;services/api-gateway/src/lib/pii.ts;services/api-gateway/test/pii.spec.ts;shared/package.json;shared/src/index.ts
+  flags: docs-claimed-mismatch, test-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=shared), possible-breaking-missing-marker
+
+ab0701b 2025-10-22 10:07:14 +1000 — feat: add audit logging for admin data actions
+  inferred=feat+test prefix=feat scope= domDir=services files=8 +426/-643
+  paths: runbooks/audit-log.md;services/api-gateway/src/routes/admin.data.ts;services/api-gateway/src/schemas/admin.data.ts;services/api-gateway/test/admin.data.delete.spec.ts;services/api-gateway/test/admin.data.export.spec.ts;services/api-gateway/test/admin.data.spec.ts
+  flags: docs-claimed-mismatch, test-claimed-mismatch, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=services), possible-breaking-missing-marker
+
+3f66d54 2025-10-22 10:07:02 +1000 — feat(api-gateway): consolidate admin data routes
+  inferred=feat+test prefix=feat(api-gateway) scope=api-gateway domDir=services files=4 +202/-263
+  paths: services/api-gateway/src/routes/admin.data.ts;services/api-gateway/src/schemas/admin.data.ts;services/api-gateway/test/admin.data.delete.spec.ts;services/api-gateway/test/admin.data.export.spec.ts
+  flags: test-claimed-mismatch, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=api-gateway vs dir=services), possible-breaking-missing-marker
+
+df26637 2025-10-22 10:06:53 +1000 — feat(api-gateway): secure admin routes with jwt
+  inferred=feat+test prefix=feat(api-gateway) scope=api-gateway domDir=services files=6 +428/-30
+  paths: docs/privacy.md;services/api-gateway/README.md;services/api-gateway/src/app.ts;services/api-gateway/src/lib/admin-auth.ts;services/api-gateway/test/admin-auth.spec.ts;services/api-gateway/test/privacy.spec.ts
+  flags: docs-claimed-mismatch, test-claimed-mismatch, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=api-gateway vs dir=services), possible-breaking-missing-marker
+
+04fa2e1 2025-10-22 10:06:39 +1000 — feat(api-gateway): harden bank line and user queries
+  inferred=feat+test prefix=feat(api-gateway) scope=api-gateway domDir=services files=3 +339/-14
+  paths: services/api-gateway/src/app.ts;services/api-gateway/test/privacy.spec.ts;services/api-gateway/test/public.api.spec.ts
+  flags: test-claimed-mismatch, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=api-gateway vs dir=services), possible-breaking-missing-marker
+
+f90e1a7 2025-10-22 10:06:31 +1000 — feat(api-gateway): add audit logging for admin operations
+  inferred=feat+test prefix=feat(api-gateway) scope=api-gateway domDir=services files=4 +210/-7
+  paths: services/api-gateway/src/app.ts;services/api-gateway/src/lib/audit.ts;services/api-gateway/test/privacy.spec.ts;shared/prisma/schema.prisma
+  flags: test-claimed-mismatch, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=api-gateway vs dir=services), possible-breaking-missing-marker
+
+581ec43 2025-10-22 10:06:18 +1000 — feat(api-gateway): wire PII providers and admin guard
+  inferred=feat+test prefix=feat(api-gateway) scope=api-gateway domDir=services files=9 +518/-16
+  paths: runbooks/pii-rotation.md;services/api-gateway/package.json;services/api-gateway/src/app.ts;services/api-gateway/src/lib/admin-auth.ts;services/api-gateway/src/lib/pii-bootstrap.ts;services/api-gateway/src/lib/pii.ts
+  flags: docs-claimed-mismatch, test-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=api-gateway vs dir=services), possible-breaking-missing-marker
+
+4b3fcfc 2025-10-22 10:06:07 +1000 — docs: expand security privacy and ops runbooks
+  inferred=docs prefix=docs scope= domDir=docs files=3 +148/-3
+  paths: docs/ops/runbook.md;docs/privacy/dpia.md;docs/security/ASVS-mapping.md
+  flags: subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=docs)
+
+2d4708e 2025-10-22 10:05:16 +1000 — feat(api-gateway): add org-scoped jwt auth guards
+  inferred=feat+test prefix=feat(api-gateway) scope=api-gateway domDir=services files=6 +394/-141
+  paths: services/api-gateway/package.json;services/api-gateway/src/app.ts;services/api-gateway/src/plugins/auth.ts;services/api-gateway/src/schemas/admin.data.ts;services/api-gateway/test/auth.spec.ts;services/api-gateway/test/test-utils.ts
+  flags: test-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=api-gateway vs dir=services), possible-breaking-missing-marker
+
+b67625c 2025-10-22 10:05:08 +1000 — feat: mask pii for non-admins
+  inferred=feat+test prefix=feat scope= domDir=services files=3 +153/-9
+  paths: services/api-gateway/src/app.ts;services/api-gateway/test/masking.spec.ts;shared/src/masking.ts
+  flags: test-claimed-mismatch, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=services), possible-breaking-missing-marker
+
+6de3375 2025-10-22 10:04:54 +1000 — Hash user credentials with Argon2
+  inferred=feat+test prefix= scope= domDir=services files=10 +95/-26
+  paths: package.json;scripts/seed.ts;services/api-gateway/package.json;services/api-gateway/src/routes/admin.data.ts;services/api-gateway/src/services/users/create.ts;services/api-gateway/test/admin.data.delete.spec.ts
+  flags: test-claimed-mismatch, deps-looks-like-chore, possible-breaking-missing-marker
+
+70d8393 2025-10-22 10:04:44 +1000 — feat(api-gateway): enforce zod validation and safe errors
+  inferred=feat+test prefix=feat(api-gateway) scope=api-gateway domDir=services files=6 +492/-211
+  paths: services/api-gateway/src/app.ts;services/api-gateway/src/routes/admin.data.ts;services/api-gateway/src/routes/tax.ts;services/api-gateway/src/schemas/admin.data.ts;services/api-gateway/src/schemas/common.ts;services/api-gateway/test/validation.spec.ts
+  flags: test-claimed-mismatch, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=api-gateway vs dir=services), possible-breaking-missing-marker
+
+f0752f3 2025-10-22 10:04:33 +1000 — feat(api-gateway): harden http security
+  inferred=feat+test prefix=feat(api-gateway) scope=api-gateway domDir=services files=7 +225/-2
+  paths: services/api-gateway/package.json;services/api-gateway/src/app.ts;services/api-gateway/test/headers.spec.ts;services/fastify-helmet/index.d.ts;services/fastify-helmet/index.js;services/fastify-helmet/package.json
+  flags: test-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=api-gateway vs dir=services), possible-breaking-missing-marker
+
+97726d9 2025-10-22 10:04:25 +1000 — Document ASVS coverage and TFN SOP
+  inferred=docs prefix= scope= domDir=docs files=2 +41/-2
+  paths: docs/security/ASVS-mapping.md;docs/security/TFN-SOP.md
+  flags: docs-claimed-mismatch
+
+7581767 2025-10-22 10:04:05 +1000 — feat: add audit logging for admin actions
+  inferred=feat prefix=feat scope= domDir=services files=9 +125/-24
+  paths: docs/runbooks/security.md;infra/audit/README.md;services/api-gateway/package.json;services/api-gateway/src/app.ts;services/api-gateway/src/lib/pii.ts;services/api-gateway/src/routes/admin.data.ts
+  flags: docs-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, scope-mismatch(scope= vs dir=services), possible-breaking-missing-marker
+
+15f5f71 2025-10-22 10:03:52 +1000 — Add environment template and secrets documentation
+  inferred=chore prefix= scope= domDir=docs files=2 +36/-6
+  paths: .env.example;docs/security/SECRETS.md
+  flags: docs-claimed-mismatch
+
+873008c 2025-10-22 10:02:52 +1000 — docs: record diff vs origin main
+  inferred=feat+test prefix=docs scope= domDir=services files=63 +3999/-512
+  paths: .env.example;.github/workflows/ci.yml;artifacts/github-diff-attempt.md;artifacts/github-diff-summary.txt;artifacts/quality-score.md;artifacts/reliability-score.md
+  flags: test-claimed-mismatch, deps-looks-like-chore, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=services), possible-breaking-missing-marker
+
+776ba96 2025-10-22 10:02:32 +1000 — Document compliance directory index
+  inferred=chore prefix= scope= domDir=docs files=23 +1156/-24
+  paths: artifacts/a11y/2024-10-28/README.md;artifacts/compliance/2024-11 - Compliance Scorecard.pdf;artifacts/compliance/README.md;artifacts/compliance/maturity/.gitkeep;artifacts/kms/rotation.md;docs/accessibility-statement.md
+  flags: docs-claimed-mismatch, needs-body(>=150 LOC)
+
+3c0df7a 2025-10-22 10:02:05 +1000 — chore(ci): verify slsa provenance
+  inferred=feat prefix=chore(ci) scope=ci domDir=github files=9 +541/-28
+  paths: .github/dependabot.yml;.github/workflows/ci.yml;.github/workflows/release.yml;.github/workflows/security.yml;CODEOWNERS;SECURITY.md
+  flags: docs-claimed-mismatch, code-additions-look-like-feat, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=ci vs dir=github)
+
+a90274c 2025-10-21 20:46:20 +1000 — test(api): use directory discovery to avoid Windows glob issues
+  inferred=chore(deps) prefix=test(api) scope=api domDir=services files=1 +1/-1
+  paths: services/api-gateway/package.json
+  flags: deps-looks-like-chore, subject-not-capitalized, scope-mismatch(scope=api vs dir=services)
+
+5fcc53b 2025-10-21 20:31:23 +1000 — chore(gitignore): ignore shared/prisma/.env
+  inferred=chore prefix=chore(gitignore) scope=gitignore domDir=gitignore files=1 +2/-0
+  paths: .gitignore
+  flags: subject-not-capitalized
+
+3053c38 2025-10-21 20:30:47 +1000 — chore: line-ending normalization
+  inferred=chore(deps) prefix=chore scope= domDir=package.json files=1 +5/-5
+  paths: package.json
+  flags: subject-not-capitalized, scope-mismatch(scope= vs dir=package.json)
+
+009cbea 2025-10-21 20:10:52 +1000 — test(api): run all *.spec.ts
+  inferred=chore(deps) prefix=test(api) scope=api domDir=services files=1 +2/-2
+  paths: services/api-gateway/package.json
+  flags: deps-looks-like-chore, subject-not-capitalized, scope-mismatch(scope=api vs dir=services)
+
+578dd87 2025-10-21 20:08:44 +1000 — chore(gitignore): ignore local helper script
+  inferred=chore prefix=chore(gitignore) scope=gitignore domDir=gitignore files=1 +2/-0
+  paths: .gitignore
+  flags: subject-not-capitalized
+
+0121aeb 2025-10-21 20:02:49 +1000 — chore(api): lockfile + deps; test: add /ready probe spec
+  inferred=chore(deps) prefix=chore(api) scope=api domDir=services files=2 +4/-0
+  paths: pnpm-lock.yaml;services/api-gateway/package.json
+  flags: subject-not-capitalized, scope-mismatch(scope=api vs dir=services)
+
+3305bef 2025-10-21 19:59:10 +1000 — chore(root): add prisma db scripts (migrate/deploy/gen) to workspace
+  inferred=chore(deps) prefix=chore(root) scope=root domDir=package.json files=1 +27/-1
+  paths: package.json
+  flags: subject-not-capitalized, scope-mismatch(scope=root vs dir=package.json)
+
+51239b0 2025-10-21 19:52:07 +1000 — chore: normalize line endings via .gitattributes
+  inferred=chore prefix=chore scope= domDir=gitattributes files=1 +1/-0
+  paths: .gitattributes
+  flags: subject-not-capitalized, scope-mismatch(scope= vs dir=gitattributes)
+
+02fd87d 2025-10-21 19:44:34 +1000 — migrations(shared): add BankLine idempotencyKey unique constraint
+  inferred=chore(db) prefix=migrations(shared) scope=shared domDir=shared files=2 +15/-11
+  paths: shared/prisma/migrations/20251021094315_bankline_idempotency/migration.sql;shared/prisma/schema.prisma
+  flags: subject-not-capitalized
+
+79757a0 2025-10-21 19:02:54 +1000 — test(api): add /ready probe spec
+  inferred=feat+test prefix=test(api) scope=api domDir=services files=1 +15/-0
+  paths: services/api-gateway/test/ready.spec.ts
+  flags: subject-not-capitalized, scope-mismatch(scope=api vs dir=services)
+
+8e3a645 2025-10-21 18:23:51 +1000 — feat(api): add /ready probe and idempotent POST /bank-lines with Zod validation
+  inferred=feat prefix=feat(api) scope=api domDir=shared files=6 +118/-55
+  paths: .gitignore;services/api-gateway/src/app.ts;shared/package.json;shared/src/db.ts;webapp/package.json;webapp/vite.config.ts
+  flags: deps-looks-like-chore, subject>72, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=api vs dir=shared), possible-breaking-missing-marker
+
+c538818 2025-10-21 18:02:03 +1000 — feat(webapp): WCAG AA status-badge colors and styles; tests pass
+  inferred=feat prefix=feat(webapp) scope=webapp domDir=webapp files=4 +255/-0
+  paths: scripts/run-webapp-tests.ps1;webapp/playwright.config.ts;webapp/src/styles/global.css;webapp/src/styles/tokens.css
+  flags: subject-not-capitalized, needs-body(>=150 LOC)
+
+d45a98f 2025-10-21 04:41:38 +1000 — feat(db): BankLine.idempotencyKey + unique(orgId,idempotencyKey)
+  inferred=chore(db) prefix=feat(db) scope=db domDir=shared files=2 +25/-8
+  paths: shared/prisma/migrations/20251020183646_add_bankline_idempotency/migration.sql;shared/prisma/schema.prisma
+  flags: subject-not-capitalized, scope-mismatch(scope=db vs dir=shared)
+
+1a75b5f 2025-10-21 04:23:00 +1000 — chore(db): commit Prisma migrations
+  inferred=chore(db) prefix=chore(db) scope=db domDir=shared files=1 +15/-0
+  paths: shared/prisma/migrations/20251020170901_sync_deleted_at/migration.sql
+  flags: subject-not-capitalized, scope-mismatch(scope=db vs dir=shared)
+
+1e49d36 2025-10-21 04:19:52 +1000 — chore(dev): local Postgres + migrations synced; seed OK
+  inferred=refactor prefix=chore(dev) scope=dev domDir=scripts files=1 +3/-2
+  paths: scripts/seed.ts
+  flags: subject-not-capitalized, scope-mismatch(scope=dev vs dir=scripts)
+
+cd9b3af 2025-10-21 02:21:46 +1000 — chore(shared): add subpath exports; update imports to @apgms/shared/*
+  inferred=refactor prefix=chore(shared) scope=shared domDir=services files=7 +30/-23
+  paths: services/api-gateway/src/app.ts;services/api-gateway/src/index.ts;services/api-gateway/src/lib/pii.ts;services/api-gateway/src/routes/admin.data.ts;services/api-gateway/src/routes/tax.ts;services/api-gateway/src/schemas/admin.data.ts
+  flags: subject-not-capitalized, scope-mismatch(scope=shared vs dir=services), possible-breaking-missing-marker
+
+9e656c6 2025-10-21 02:05:25 +1000 — fix: correct shared import path (@apgms/shared/src/*)
+  inferred=feat+test prefix=fix scope= domDir=webapp files=25 +28/-25
+  paths: playwright.config.ts;pnpm-workspace.yaml;services/api-gateway/src/app.ts;services/api-gateway/src/lib/pii.ts;services/api-gateway/src/routes/admin.data.ts;services/api-gateway/src/routes/tax.ts
+  flags: test-claimed-mismatch, subject-not-capitalized, fix-no-issue-ref, scope-mismatch(scope= vs dir=webapp), possible-breaking-missing-marker
+
+f3edc6a 2025-10-21 01:55:32 +1000 — chore: refresh lockfile; install Playwright browsers
+  inferred=chore(deps) prefix=chore scope= domDir=pnpm-lock.yaml files=1 +1112/-1
+  paths: pnpm-lock.yaml
+  flags: subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope= vs dir=pnpm-lock.yaml)
+
+4a2af74 2025-10-20 23:05:25 +1000 — Initial import from apgms-birchal (apgms/)
+  inferred=feat+test prefix= scope= domDir=services files=162 +5467/-0
+  paths: .dockerignore;.editorconfig;.env.example;.gitattributes;.github/workflows/.gitkeep;.github/workflows/ci.yml
+  flags: docs-claimed-mismatch, test-claimed-mismatch, deps-looks-like-chore, needs-body(>=150 LOC), possible-breaking-missing-marker
+

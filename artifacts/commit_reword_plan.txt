@@ -1,0 +1,1117 @@
+﻿
+00201a0 - Docs: Align auth notes and control status with implementation
+    flags: subject-not-capitalized;scope-mismatch(scope= vs dir=docs)
+    was : docs: align auth notes and control status with implementation
+0054db5 - Ci(SECURITY.md): Enhance security scanning pipeline
+    flags: docs-claimed-mismatch;needs-body(>=150 LOC)
+    was : Enhance security scanning pipeline
+0083040 - Chore(domain): Add analytics telemetry pipeline
+    flags: docs-claimed-mismatch;test-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=domain);possible-breaking-missing-marker
+    was : feat: add analytics telemetry pipeline
+009cbea - Chore(api): Run all *.spec.ts
+    flags: deps-looks-like-chore;subject-not-capitalized;scope-mismatch(scope=api vs dir=services)
+    was : test(api): run all *.spec.ts
+01213b0 - Feat(ops): Improve service operability and document logging/runbook
+    flags: docs-claimed-mismatch;code-additions-look-like-feat;subject-not-capitalized;scope-mismatch(scope=ops vs dir=docs);possible-breaking-missing-marker
+    was : chore(ops): improve service operability and document logging/runbook
+0121aeb - Chore(api)(api): Lockfile + deps; test: add /ready probe spec
+    flags: subject-not-capitalized;scope-mismatch(scope=api vs dir=services)
+    was : chore(api): lockfile + deps; test: add /ready probe spec
+02fd87d - Migrations(shared)(shared): Add BankLine idempotencyKey unique constrain
+    flags: subject-not-capitalized
+    was : migrations(shared): add BankLine idempotencyKey unique constraint
+04fa2e1 - Feat(api-gateway)(api-gateway): Harden bank line and user queries
+    flags: test-claimed-mismatch;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=api-gateway vs dir=services);possible-breaking-missing-marker
+    was : feat(api-gateway): harden bank line and user queries
+06797dc - Chore(auth): MFA (WebAuthn/TOTP) + end-to-end encryption envelopes
+    flags: docs-claimed-mismatch;test-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=auth vs dir=services);possible-breaking-missing-marker
+    was : feat(auth): MFA (WebAuthn/TOTP) + end-to-end encryption envelopes
+06beba9 - Feat(api-gateway)(api-gateway): Add readiness and metrics endpoints
+    flags: test-claimed-mismatch;subject-not-capitalized;scope-mismatch(scope=api-gateway vs dir=services);possible-breaking-missing-marker
+    was : feat(api-gateway): add readiness and metrics endpoints
+06d6550 - Chore(db)(db): Finalize schema, db init, and client wiring after auth in
+    flags: subject>72;subject-not-capitalized;scope-mismatch(scope=db vs dir=webapp);possible-breaking-missing-marker
+    was : chore(db): finalize schema, db init, and client wiring after auth integration
+08a2e9f - Refactor(webapp): Align manifest entry hash with final payload
+    flags: code-changes-look-like-refactor;subject-not-capitalized;fix-no-issue-ref;scope-mismatch(scope= vs dir=webapp)
+    was : fix: align manifest entry hash with final payload
+08af0c4 - Feat(payg)(payg): Update resolver for stage 3 tables
+    flags: subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=payg vs dir=tools)
+    was : feat(payg): update resolver for stage 3 tables
+0a014f0 - Chore(services): Hardening auth flows, remittance safety nets, and ML gu
+    flags: docs-claimed-mismatch;test-claimed-mismatch;deps-looks-like-chore;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Hardening auth flows, remittance safety nets, and ML guardrails
+0a7d1d1 - Chore(services): Add compliance event ingestion and ML scaffolding
+    flags: docs-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=services);possible-breaking-missing-marker
+    was : feat: add compliance event ingestion and ML scaffolding
+0a997b0 - Refactor(scripts): Hash seed user password
+    flags: docs-claimed-mismatch;code-changes-look-like-refactor
+    was : Hash seed user password
+0c96803 - Feat(services): Add compliance event ingestion pipeline
+    flags: docs-claimed-mismatch;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Add compliance event ingestion pipeline
+0cb8f89 - Chore(banking): Provider adapters + designated one-way account policy en
+    flags: docs-claimed-mismatch;test-claimed-mismatch;deps-looks-like-chore;subject>72;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=banking vs dir=providers);possible-breaking-missing-marker
+    was : feat(banking): provider adapters + designated one-way account policy engine
+0cdbd7b - Feat(webapp)(webapp): Add app shell layout
+    flags: subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=webapp vs dir=apps)
+    was : feat(webapp): add app shell layout
+0d4fc20 - Chore(packages): Use portable ledger test script
+    flags: deps-looks-like-chore;subject-not-capitalized;fix-no-issue-ref;scope-mismatch(scope= vs dir=packages)
+    was : fix: use portable ledger test script
+10afe8f - Chore(auth): MFA (WebAuthn/TOTP) + end-to-end encryption envelopes
+    flags: docs-claimed-mismatch;test-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=auth vs dir=services);possible-breaking-missing-marker
+    was : feat(auth): MFA (WebAuthn/TOTP) + end-to-end encryption envelopes
+10de99f - Refactor(apgms-ml): Fix threshold selection to use validation split
+    flags: code-changes-look-like-refactor
+    was : Fix threshold selection to use validation split
+10e9fb7 - Feat(ops): Add debug export tooling and tighten gateway/admin handling
+    flags: code-additions-look-like-feat;subject-not-capitalized;scope-mismatch(scope=ops vs dir=services);possible-breaking-missing-marker
+    was : chore(ops): add debug export tooling and tighten gateway/admin handling
+11ce956 - Chore(deps)(deps): Refresh pnpm lockfile after security hardening
+    flags: subject-not-capitalized;scope-mismatch(scope=deps vs dir=pnpm-lock.yaml)
+    was : chore(deps): refresh pnpm lockfile after security hardening
+12b9a46 - Docs(runbooks): Add compliance governance runbooks and DSP checklist
+    flags: docs-claimed-mismatch
+    was : Add compliance governance runbooks and DSP checklist
+13213fb - Feat(webapp): Add CSP meta and CI-friendly accessibility checks
+    flags: test-claimed-mismatch
+    was : Add CSP meta and CI-friendly accessibility checks
+13ff606 - Tests(payg)(payg): Repo-relative normalizer + resolver scaling checks +
+    flags: subject>72;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=payg vs dir=tests)
+    was : tests(payg): repo-relative normalizer + resolver scaling checks + CSV artifact
+1453d0f - Docs(runbooks): Document patent governance alignment and security attest
+    flags: docs-claimed-mismatch
+    was : Document patent governance alignment and security attestations
+1502288 - Feat(compliance)(compliance): Add designated holding accounts and surfac
+    flags: subject>72;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=compliance vs dir=webapp);possible-breaking-missing-marker
+    was : feat(compliance): add designated holding accounts and surface balances in API/UI
+156dab5 - Feat(services): Add connectors tax adapters
+    flags: test-claimed-mismatch;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=services);possible-breaking-missing-marker
+    was : feat: add connectors tax adapters
+15ded03 - Feat(common): Add analytics common utilities
+    flags: code-additions-look-like-feat;needs-body(>=150 LOC)
+    was : Add analytics common utilities
+15f5f71 - Chore: Add environment template and secrets documentation
+    flags: docs-claimed-mismatch
+    was : Add environment template and secrets documentation
+174f1eb - Chore(audit)(audit): Capture working tree and diff snapshot
+    flags: subject-not-capitalized;scope-mismatch(scope=audit vs dir=artifacts)
+    was : chore(audit): capture working tree and diff snapshot
+1939749 - Chore(ops): Prometheus /metrics + OTEL traces + readiness (deps) + grace
+    flags: deps-looks-like-chore;subject>72;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=ops vs dir=services);possible-breaking-missing-marker
+    was : feat(ops): Prometheus /metrics + OTEL traces + readiness (deps) + graceful shutdown
+19adfb0 - Refactor(apgms-ml): Use sync handlers for scoring endpoints
+    flags: code-changes-look-like-refactor
+    was : Use sync handlers for scoring endpoints
+19d6156 - Feat(webapp)(webapp): Add shared formatting utilities
+    flags: subject-not-capitalized
+    was : feat(webapp): add shared formatting utilities
+1a75b5f - Chore(db)(db): Commit Prisma migrations
+    flags: subject-not-capitalized;scope-mismatch(scope=db vs dir=shared)
+    was : chore(db): commit Prisma migrations
+1ab41a7 - Chore(infra)(infra): Initial hardening pass across gateway, webapp, and
+    flags: test-claimed-mismatch;subject-not-capitalized;scope-mismatch(scope=infra vs dir=services);possible-breaking-missing-marker
+    was : chore(infra): initial hardening pass across gateway, webapp, and compose
+1b83350 - Feat(providers): Integrate partner banking APIs and BAS orchestration
+    flags: test-claimed-mismatch;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=providers);possible-breaking-missing-marker
+    was : feat: integrate partner banking APIs and BAS orchestration
+1bc5839 - Feat(services): Harden auth to rs256 and argon2
+    flags: docs-claimed-mismatch;test-claimed-mismatch;subject-not-capitalized;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : harden auth to rs256 and argon2
+1bd4572 - Chore(security)(security): Refresh pnpm lockfile after security hardenin
+    flags: subject-not-capitalized;scope-mismatch(scope=security vs dir=pnpm-lock.yaml)
+    was : chore(security): refresh pnpm lockfile after security hardening
+1d9c29c - Chore(security+privacy): Introduce auth layer, data protection, and comp
+    flags: docs-claimed-mismatch;test-claimed-mismatch;deps-looks-like-chore;subject>72;subject-not-capitalized;scope-mismatch(scope=security+privacy vs dir=services);possible-breaking-missing-marker
+    was : feat(security+privacy): introduce auth layer, data protection, and compliance updates
+1df5882 - Chore(services): Fix workspace install and restore cross-platform builds
+    flags: test-claimed-mismatch;deps-looks-like-chore;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Fix workspace install and restore cross-platform builds
+1e0a0b1 - Chore(repo)(repo): Normalize line endings / cross-platform script behavi
+    flags: subject-not-capitalized;scope-mismatch(scope=repo vs dir=package.json)
+    was : chore(repo): normalize line endings / cross-platform script behavior
+1e49d36 - Chore(dev)(dev): Local Postgres + migrations synced; seed OK
+    flags: subject-not-capitalized;scope-mismatch(scope=dev vs dir=scripts)
+    was : chore(dev): local Postgres + migrations synced; seed OK
+1ea0f5d - Feat(db)(db): Add BankLine.idempotencyKey and unique (orgId, idempotency
+    flags: subject-not-capitalized;scope-mismatch(scope=db vs dir=shared)
+    was : feat(db): add BankLine.idempotencyKey and unique (orgId, idempotencyKey)
+1ea5d01 - Chore(packages): Guard ledger lint script when eslint missing
+    flags: subject-not-capitalized;scope-mismatch(scope= vs dir=packages)
+    was : chore: guard ledger lint script when eslint missing
+1ed53c7 - Feat(api-gateway)(api-gateway): Add helmet, strict CORS, and CSP headers
+    flags: test-claimed-mismatch;subject-not-capitalized;scope-mismatch(scope=api-gateway vs dir=services);possible-breaking-missing-marker
+    was : feat(api-gateway): add helmet, strict CORS, and CSP headers
+1ff2a15 - Feat(webapp)(webapp): Add card and table UI primitives
+    flags: subject-not-capitalized;needs-body(>=150 LOC)
+    was : feat(webapp): add card and table UI primitives
+2160212 - Chore(ops)(ops): Add dependency monitoring and evidence collection workf
+    flags: docs-claimed-mismatch;subject-not-capitalized;scope-mismatch(scope=ops vs dir=docs)
+    was : chore(ops): add dependency monitoring and evidence collection workflow
+2168250 - Feat(services): Add JWT auth middleware and update routes
+    flags: test-claimed-mismatch;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Add JWT auth middleware and update routes
+2273985 - Feat(webapp)(webapp): Add PAYGW variance flow manager
+    flags: subject-not-capitalized;needs-body(>=150 LOC)
+    was : feat(webapp): add PAYGW variance flow manager
+2510da6 - Ci(github): Update CI and security workflows
+    flags: needs-body(>=150 LOC)
+    was : Update CI and security workflows
+252f010 - Chore(repo)(repo): Update .gitignore to exclude local helper script
+    flags: subject-not-capitalized;scope-mismatch(scope=repo vs dir=gitignore)
+    was : chore(repo): update .gitignore to exclude local helper script
+257a2be - Chore(dev-db)(dev-db): Update seed script for local Postgres bootstrap
+    flags: subject-not-capitalized;scope-mismatch(scope=dev-db vs dir=scripts)
+    was : chore(dev-db): update seed script for local Postgres bootstrap
+261e48f - Chore(packages): Fix telemetry stack and add AU validation package
+    flags: deps-looks-like-chore;code-additions-look-like-feat;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Fix telemetry stack and add AU validation package
+26f75ba - Fix(github): Allow osv scan severity filtering
+    flags: subject-not-capitalized;fix-no-issue-ref;scope-mismatch(scope= vs dir=github)
+    was : fix: allow osv scan severity filtering
+2760330 - Chore(api)(api): Lockfile + deps; test: add /ready probe specchore(api):
+    flags: subject>72;subject-not-capitalized;scope-mismatch(scope=api vs dir=services)
+    was : chore(api): lockfile + deps; test: add /ready probe specchore(api): update deps/lockfile and align gateway tests for /ready probe
+27db173 - Refactor(services): Correct worm provider import paths
+    flags: code-changes-look-like-refactor;subject-not-capitalized;fix-no-issue-ref;scope-mismatch(scope= vs dir=services)
+    was : fix: correct worm provider import paths
+287253f - Chore(ops)(ops): Define alerting and align gateway behavior with runbook
+    flags: docs-claimed-mismatch;subject-not-capitalized;scope-mismatch(scope=ops vs dir=docs)
+    was : chore(ops): define alerting and align gateway behavior with runbook
+28d94f3 - Feat(services): Add integration connectors, remittance jobs, and audit t
+    flags: docs-claimed-mismatch;test-claimed-mismatch;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=services);possible-breaking-missing-marker
+    was : feat: add integration connectors, remittance jobs, and audit tracking
+29159f8 - Chore(api-gateway): Extract server entrypoint and update ops runbook
+    flags: docs-claimed-mismatch;test-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;scope-mismatch(scope=api-gateway vs dir=services);possible-breaking-missing-marker
+    was : refactor(api-gateway): extract server entrypoint and update ops runbook
+295dbbb - Chore(services): Add readiness, metrics, and graceful shutdown for API g
+    flags: deps-looks-like-chore;code-additions-look-like-feat;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Add readiness, metrics, and graceful shutdown for API gateway
+2b7dcc1 - Feat(webapp)(webapp): Add mocked api layer and loading states
+    flags: subject-not-capitalized;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : feat(webapp): add mocked api layer and loading states
+2b9115e - Feat: Add CSP, compliance evidence, and dependency automation
+    flags: docs-claimed-mismatch;code-additions-look-like-feat
+    was : Add CSP, compliance evidence, and dependency automation
+2b94a94 - Chore(apgms-ml): Add orchestration scripts for ML workflows
+    flags: needs-body(>=150 LOC)
+    was : Add orchestration scripts for ML workflows
+2bd3a23 - Feat(services): Add risk event ingestion pipeline
+    flags: docs-claimed-mismatch;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=services);possible-breaking-missing-marker
+    was : feat: add risk event ingestion pipeline
+2bd8f51 - Chore(services): Implement reconciliation inference service
+    flags: docs-claimed-mismatch;deps-looks-like-chore;code-additions-look-like-feat;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Implement reconciliation inference service
+2be1def - Docs(runbooks): Document security controls and operational runbooks
+    flags: docs-claimed-mismatch;needs-body(>=150 LOC)
+    was : Document security controls and operational runbooks
+2c23cdf - Refactor(shared): Fix recon contract barrel extension
+    flags: code-changes-look-like-refactor
+    was : Fix recon contract barrel extension
+2c44e9a - Ci(github): Add Prisma drift detection job
+    flags: needs-body(>=150 LOC)
+    was : Add Prisma drift detection job
+2c59e81 - Test(a11y+ux)(a11y+ux): Playwright+axe + Discrepancy Journal & Plan/Remi
+    flags: docs-claimed-mismatch;subject>72;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=a11y+ux vs dir=webapp)
+    was : test(a11y+ux): Playwright+axe + Discrepancy Journal & Plan/Remission Pack generator
+2c9d9b9 - Chore(services): Automate ML retraining and tighten retention controls
+    flags: docs-claimed-mismatch;test-claimed-mismatch;deps-looks-like-chore;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Automate ML retraining and tighten retention controls
+2d4708e - Chore(api-gateway): Add org-scoped jwt auth guards
+    flags: test-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=api-gateway vs dir=services);possible-breaking-missing-marker
+    was : feat(api-gateway): add org-scoped jwt auth guards
+2e2b1d3 - Feat(api-gateway)(api-gateway): Add bank line validation and idempotency
+    flags: test-claimed-mismatch;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=api-gateway vs dir=services);possible-breaking-missing-marker
+    was : feat(api-gateway): add bank line validation and idempotency
+302a91a - Chore(test)(test): Refresh pnpm lockfile and install Playwright browsers
+    flags: subject>72;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=test vs dir=pnpm-lock.yaml)
+    was : chore(test): refresh pnpm lockfile and install Playwright browsers for e2e
+3053c38 - Chore(package.json): Line-ending normalization
+    flags: subject-not-capitalized;scope-mismatch(scope= vs dir=package.json)
+    was : chore: line-ending normalization
+3156f77 - Chore(payg): Normalization and resolver tests; CSV artifact and CI workf
+    flags: test-claimed-mismatch;deps-looks-like-chore;subject>72;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=payg vs dir=tools)
+    was : feat(payg): normalization and resolver tests; CSV artifact and CI workflow
+3172ce7 - Refactor(webapp): Add status badge component
+    flags: code-changes-look-like-refactor;subject-not-capitalized
+    was : feat(webapp): add status badge component
+3305bef - Chore(root)(root): Add prisma db scripts (migrate/deploy/gen) to workspa
+    flags: subject-not-capitalized;scope-mismatch(scope=root vs dir=package.json)
+    was : chore(root): add prisma db scripts (migrate/deploy/gen) to workspace
+34fc4bf - Refactor(services): Handle JetStream stream already exists error
+    flags: code-changes-look-like-refactor
+    was : Handle JetStream stream already exists error
+352c7a0 - Docs(runbooks): Document security controls and status operations
+    flags: docs-claimed-mismatch
+    was : Document security controls and status operations
+35886ca - Chore(services): Add CORS allowlist and helmet security headers
+    flags: deps-looks-like-chore;code-additions-look-like-feat;possible-breaking-missing-marker
+    was : Add CORS allowlist and helmet security headers
+36163bf - Chore(github): Guard merge markers and setup from repo root
+    flags: deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=github)
+    was : ci: guard merge markers and setup from repo root
+3639a07 - Chore(audit)(audit): Capture staged diff and last commit metadata
+    flags: subject-not-capitalized;scope-mismatch(scope=audit vs dir=artifacts)
+    was : chore(audit): capture staged diff and last commit metadata
+366864b - Feat(webapp)(webapp): Extend tailwind theme for finance ui
+    flags: subject-not-capitalized;scope-mismatch(scope=webapp vs dir=apps)
+    was : feat(webapp): extend tailwind theme for finance ui
+36686f5 - Feat(webapp)(webapp): Add AppShell layout and new dashboards
+    flags: subject-not-capitalized;needs-body(>=150 LOC)
+    was : feat(webapp): add AppShell layout and new dashboards
+3723308 - Feat(apgms-ml): Add GST-free model training and evaluation scripts
+    flags: code-additions-look-like-feat;needs-body(>=150 LOC)
+    was : Add GST-free model training and evaluation scripts
+38866dc - Feat(compliance)(compliance): Enable payment plan flow and evidence repo
+    flags: subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=compliance vs dir=webapp);possible-breaking-missing-marker
+    was : feat(compliance): enable payment plan flow and evidence reporting
+38f9b86 - Chore(security)(security): Ignore shared/prisma/.env in git
+    flags: subject-not-capitalized;scope-mismatch(scope=security vs dir=gitignore)
+    was : chore(security): ignore shared/prisma/.env in git
+39142c1 - Chore(compliance)(compliance): Add compliance checklist and wire it into
+    flags: docs-claimed-mismatch;subject-not-capitalized;scope-mismatch(scope=compliance vs dir=package.json)
+    was : chore(compliance): add compliance checklist and wire it into workspace
+3aa5dfe - Feat(webapp): Improve workflow alerts accessibility
+    flags: test-claimed-mismatch
+    was : Improve workflow alerts accessibility
+3ac003c - Ci: Document security procedures and enable dependabot
+    flags: docs-claimed-mismatch
+    was : Document security procedures and enable dependabot
+3b93dcb - Chore(auth): Wire end-to-end login/session between webapp and api-gatewa
+    flags: deps-looks-like-chore;subject-not-capitalized;scope-mismatch(scope=auth vs dir=services);possible-breaking-missing-marker
+    was : feat(auth): wire end-to-end login/session between webapp and api-gateway
+3c0df7a - Feat(ci): Verify slsa provenance
+    flags: docs-claimed-mismatch;code-additions-look-like-feat;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=ci vs dir=github)
+    was : chore(ci): verify slsa provenance
+3d2fe12 - Chore(banking): Provider adapters + designated one-way account policy en
+    flags: docs-claimed-mismatch;test-claimed-mismatch;deps-looks-like-chore;subject>72;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=banking vs dir=providers);possible-breaking-missing-marker
+    was : feat(banking): provider adapters + designated one-way account policy engine
+3daff55 - Refactor(webapp): Extract app shell layout
+    flags: subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=webapp)
+    was : refactor: extract app shell layout
+3db79fd - Feat(ops): Add smoke testing, dashboards, and observability hooks
+    flags: docs-claimed-mismatch;code-additions-look-like-feat;subject-not-capitalized;scope-mismatch(scope=ops vs dir=docs);possible-breaking-missing-marker
+    was : chore(ops): add smoke testing, dashboards, and observability hooks
+3e667a2 - Chore(ml): Add ML training pipeline with CI automation
+    flags: docs-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=ml)
+    was : feat: add ML training pipeline with CI automation
+3e6d094 - Feat(services): Add high-risk approvals, ml governance, and key rotation
+    flags: subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=services);possible-breaking-missing-marker
+    was : feat: add high-risk approvals, ml governance, and key rotation
+3e9654f - Chore(regulator): Phase 7 ÔÇö Regulator Portal & Continuous Monitoring
+    flags: docs-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=regulator vs dir=webapp);possible-breaking-missing-marker
+    was : feat(regulator): Phase 7 ÔÇö Regulator Portal & Continuous Monitoring
+3eadee5 - Refactor(db)(db): Improve shared DB client/connection handling
+    flags: subject-not-capitalized;scope-mismatch(scope=db vs dir=shared)
+    was : refactor(db): improve shared DB client/connection handling
+3f272cb - Chore(api-gateway)(api-gateway): Update deps/lockfile and align /ready p
+    flags: subject-not-capitalized;scope-mismatch(scope=api-gateway vs dir=services)
+    was : chore(api-gateway): update deps/lockfile and align /ready probe tests
+3f66d54 - Feat(api-gateway)(api-gateway): Consolidate admin data routes
+    flags: test-claimed-mismatch;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=api-gateway vs dir=services);possible-breaking-missing-marker
+    was : feat(api-gateway): consolidate admin data routes
+401cd51 - Feat(services): Harden org scoping on compliance events
+    flags: code-additions-look-like-feat;subject-not-capitalized;possible-breaking-missing-marker
+    was : harden org scoping on compliance events
+403a426 - Chore(services): Add ml governance service and risk workflows
+    flags: docs-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=services);possible-breaking-missing-marker
+    was : feat: add ml governance service and risk workflows
+40741d2 - Chore(packages): Scaffold ml-core package and feature pipelines
+    flags: docs-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=packages)
+    was : feat: scaffold ml-core package and feature pipelines
+4095cda - Docs(compliance)(compliance): ASVS/DSP/TFN control map + DPIA + regulato
+    flags: subject>72;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=compliance vs dir=docs)
+    was : docs(compliance): ASVS/DSP/TFN control map + DPIA + regulator SOPs complete
+411aca3 - Chore(shared): Add subpath exports and update gateway imports to @apgms/
+    flags: deps-looks-like-chore;subject>72;subject-not-capitalized;scope-mismatch(scope=shared vs dir=services);possible-breaking-missing-marker
+    was : refactor(shared): add subpath exports and update gateway imports to @apgms/shared/*
+46ae52f - Refactor(services): Fix ML service model directory resolution
+    flags: code-changes-look-like-refactor
+    was : Fix ML service model directory resolution
+46ddc3b - Docs: Outline admin prototype activation plan
+    flags: subject-not-capitalized;scope-mismatch(scope= vs dir=docs);possible-breaking-missing-marker
+    was : docs: outline admin prototype activation plan
+473f7fa - Feat(services): Add ML observability, feedback capture, and artifact che
+    flags: docs-claimed-mismatch;test-claimed-mismatch;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Add ML observability, feedback capture, and artifact checks
+47fd4cb - Chore(infra)(infra): Initial hardening pass across gateway, webapp, and
+    flags: test-claimed-mismatch;subject-not-capitalized;scope-mismatch(scope=infra vs dir=services);possible-breaking-missing-marker
+    was : chore(infra): initial hardening pass across gateway, webapp, and compose
+487ba47 - Fix(services): Include workspace packages in ml inference build
+    flags: subject-not-capitalized;fix-no-issue-ref;scope-mismatch(scope= vs dir=services)
+    was : fix: include workspace packages in ml inference build
+4917454 - Chore(apps): Modernize webapp with tailwind and shadcn
+    flags: test-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=apps)
+    was : feat: modernize webapp with tailwind and shadcn
+4a244e3 - Chore(services): Fix telemetry deps and align password verification
+    flags: deps-looks-like-chore;code-additions-look-like-feat;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Fix telemetry deps and align password verification
+4a2af74 - Chore(services): Initial import from apgms-birchal (apgms/)
+    flags: docs-claimed-mismatch;test-claimed-mismatch;deps-looks-like-chore;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Initial import from apgms-birchal (apgms/)
+4ac4ea6 - Feat(api-gateway)(api-gateway): Add readiness, metrics, and graceful shu
+    flags: subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=api-gateway vs dir=services);possible-breaking-missing-marker
+    was : feat(api-gateway): add readiness, metrics, and graceful shutdown
+4ae851c - Ci(security)(security): SBOM + SCA fail-on-high + Gitleaks + Trivy + dri
+    flags: subject-not-capitalized;scope-mismatch(scope=security vs dir=github)
+    was : ci(security): SBOM + SCA fail-on-high + Gitleaks + Trivy + drift guards
+4b3fcfc - Docs: Expand security privacy and ops runbooks
+    flags: subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=docs)
+    was : docs: expand security privacy and ops runbooks
+4bb3c49 - Chore(repo)(repo): Enforce LF endings; quiet CSV diffs; repo-relative PA
+    flags: subject>72;subject-not-capitalized;scope-mismatch(scope=repo vs dir=tools)
+    was : chore(repo): enforce LF endings; quiet CSV diffs; repo-relative PAYG resolver paths
+4f5a337 - Chore(api): Discover specs by directory to avoid Windows glob issues
+    flags: deps-looks-like-chore;subject-not-capitalized;scope-mismatch(scope=api vs dir=services)
+    was : test(api): discover specs by directory to avoid Windows glob issues
+4fdd031 - Chore(api-gateway): Discover specs by directory to avoid Windows glob is
+    flags: deps-looks-like-chore;subject>72;subject-not-capitalized;scope-mismatch(scope=api-gateway vs dir=services)
+    was : test(api-gateway): discover specs by directory to avoid Windows glob issues
+5059faa - Chore(db)(db): Check in BankLine idempotencyKey uniqueness migration
+    flags: subject-not-capitalized;scope-mismatch(scope=db vs dir=shared)
+    was : chore(db): check in BankLine idempotencyKey uniqueness migration
+50944dc - Feat(ops): Add smoke testing, dashboards, and observability hooks
+    flags: docs-claimed-mismatch;code-additions-look-like-feat;subject-not-capitalized;scope-mismatch(scope=ops vs dir=docs);possible-breaking-missing-marker
+    was : chore(ops): add smoke testing, dashboards, and observability hooks
+51239b0 - Chore(gitattributes): Normalize line endings via .gitattributes
+    flags: subject-not-capitalized;scope-mismatch(scope= vs dir=gitattributes)
+    was : chore: normalize line endings via .gitattributes
+51727cc - Chore(platform): Enforce MFA for high-risk actions and add evidence back
+    flags: docs-claimed-mismatch;deps-looks-like-chore;subject>72;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=platform vs dir=services);possible-breaking-missing-marker
+    was : feat(platform): enforce MFA for high-risk actions and add evidence backup
+52bd1e7 - Feat(api-gateway)(api-gateway): Secure users and bank lines
+    flags: test-claimed-mismatch;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=api-gateway vs dir=services);possible-breaking-missing-marker
+    was : feat(api-gateway): secure users and bank lines
+534588d - Chore(repo)(repo): Add Prisma migrate/deploy/generate scripts to workspa
+    flags: subject>72;subject-not-capitalized;scope-mismatch(scope=repo vs dir=package.json)
+    was : chore(repo): add Prisma migrate/deploy/generate scripts to workspace root
+5429b59 - Fix(payg)(payg): Enforce monotone cumulative max and integer rounding; r
+    flags: test-claimed-mismatch;subject>72;subject-not-capitalized;fix-no-issue-ref;scope-mismatch(scope=payg vs dir=tools)
+    was : fix(payg): enforce monotone cumulative max and integer rounding; ratio tests use relative tolerance
+54d0fba - Chore(api-gateway): Zod/Fastify schemas for all external routes and erro
+    flags: deps-looks-like-chore;code-changes-look-like-refactor;subject>72;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=api-gateway vs dir=shared);possible-breaking-missing-marker
+    was : feat(api-gateway): Zod/Fastify schemas for all external routes and error contract
+578dd87 - Chore(gitignore)(gitignore): Ignore local helper script
+    flags: subject-not-capitalized
+    was : chore(gitignore): ignore local helper script
+57cebec - Chore(services): Restore admin data routes with jwt auth
+    flags: test-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);fix-no-issue-ref;scope-mismatch(scope= vs dir=services);possible-breaking-missing-marker
+    was : fix: restore admin data routes with jwt auth
+581ec43 - Chore(api-gateway): Wire PII providers and admin guard
+    flags: docs-claimed-mismatch;test-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=api-gateway vs dir=services);possible-breaking-missing-marker
+    was : feat(api-gateway): wire PII providers and admin guard
+584c904 - Chore(security): Enforce JWT auth, org/role scoping, response redaction,
+    flags: deps-looks-like-chore;subject>72;subject-not-capitalized;scope-mismatch(scope=security vs dir=services);possible-breaking-missing-marker
+    was : feat(security): enforce JWT auth, org/role scoping, response redaction, and secure headers
+587933f - Feat(webapp): Add prototype environment handling for admin responses
+    flags: test-claimed-mismatch;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Add prototype environment handling for admin responses
+5a14ed6 - Refactor(services): Fix step-up middleware user id handling
+    flags: code-changes-look-like-refactor
+    was : Fix step-up middleware user id handling
+5cd858b - Feat(webapp)(webapp): Add WCAG AA-compliant status badges and browser te
+    flags: subject>72;subject-not-capitalized
+    was : feat(webapp): add WCAG AA-compliant status badges and browser test config
+5d101d4 - Feat(apgms-ml): Add BAS configuration training pipeline
+    flags: subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=apgms-ml)
+    was : feat: add BAS configuration training pipeline
+5dd99fe - Chore(services): Enforce CORS allowlist and add CSP protections
+    flags: deps-looks-like-chore;code-additions-look-like-feat;possible-breaking-missing-marker
+    was : Enforce CORS allowlist and add CSP protections
+5f54244 - Feat(services): Harden api gateway cors and csp
+    flags: test-claimed-mismatch;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=services);possible-breaking-missing-marker
+    was : feat: harden api gateway cors and csp
+5fcc53b - Chore(gitignore)(gitignore): Ignore shared/prisma/.env
+    flags: subject-not-capitalized
+    was : chore(gitignore): ignore shared/prisma/.env
+5fcd26d - Feat(webapp): Add security monitoring dashboard
+    flags: code-additions-look-like-feat;needs-body(>=150 LOC)
+    was : Add security monitoring dashboard
+61eb31d - Chore(package.json): Run Prisma generate on install
+    flags: deps-looks-like-chore
+    was : Run Prisma generate on install
+6208716 - Refactor(domain): Track remaining designated balances per BAS cycle
+    flags: code-changes-look-like-refactor
+    was : Track remaining designated balances per BAS cycle
+633dd64 - Feat(history): Snapshot before full history rewrite
+    flags: code-additions-look-like-feat;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=history vs dir=webapp)
+    was : chore(history): snapshot before full history rewrite
+65a69f7 - Refactor(packages): Fix anomaly score computation to use scaled features
+    flags: code-changes-look-like-refactor
+    was : Fix anomaly score computation to use scaled features
+669b866 - Chore(services): Cover ML manifest verification
+    flags: docs-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=services);possible-breaking-missing-marker
+    was : test: cover ML manifest verification
+687d498 - Refactor(services): Retry failed nats inference jobs
+    flags: code-changes-look-like-refactor;subject-not-capitalized;fix-no-issue-ref;scope-mismatch(scope= vs dir=services)
+    was : fix: retry failed nats inference jobs
+691eb48 - Chore(packages): Fix npm install in workspace packages
+    flags: deps-looks-like-chore
+    was : Fix npm install in workspace packages
+6a76159 - Refactor(bas): Reuse discrepancy evidence artifact
+    flags: code-changes-look-like-refactor;subject-not-capitalized;fix-no-issue-ref;scope-mismatch(scope=bas vs dir=domain)
+    was : fix(bas): reuse discrepancy evidence artifact
+6b15482 - Feat(webapp)(webapp): Add WCAG AA-compliant status badges and browser te
+    flags: subject>72;subject-not-capitalized
+    was : feat(webapp): add WCAG AA-compliant status badges and browser test config
+6b1e4fc - Chore(services): Add ML service observability and governance workflows
+    flags: docs-claimed-mismatch;deps-looks-like-chore;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Add ML service observability and governance workflows
+6c5d677 - Eat(compliance)(compliance): Enable payment plan flow and evidence repor
+    flags: subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=compliance vs dir=webapp);possible-breaking-missing-marker
+    was : eat(compliance): enable payment plan flow and evidence reporting
+6d1b4e2 - Feat(services): Add BAS guardrails and MFA-gated treasury flows
+    flags: docs-claimed-mismatch;test-claimed-mismatch;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Add BAS guardrails and MFA-gated treasury flows
+6de3375 - Chore(services): Hash user credentials with Argon2
+    flags: test-claimed-mismatch;deps-looks-like-chore;possible-breaking-missing-marker
+    was : Hash user credentials with Argon2
+6e8aaed - Chore(services): Add ML risk service integration across stack
+    flags: test-claimed-mismatch;deps-looks-like-chore;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Add ML risk service integration across stack
+6ef1ad5 - Chore(auth): Wire end-to-end login/session between webapp and api-gatewa
+    flags: deps-looks-like-chore;subject-not-capitalized;scope-mismatch(scope=auth vs dir=services);possible-breaking-missing-marker
+    was : feat(auth): wire end-to-end login/session between webapp and api-gateway
+6efa52f - Chore(security): Issuer/audience/expiry enforcement + reply minimisation
+    flags: test-claimed-mismatch;deps-looks-like-chore;subject>72;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=security vs dir=shared);possible-breaking-missing-marker
+    was : feat(security): issuer/audience/expiry enforcement + reply minimisation + log redaction
+6f66643 - Chore(ops)(ops): Add nightly pipeline and chaos testing playbook
+    flags: docs-claimed-mismatch;subject-not-capitalized;scope-mismatch(scope=ops vs dir=docs)
+    was : chore(ops): add nightly pipeline and chaos testing playbook
+6fdc896 - Feat(auth)(auth): Add auth module, route, and plugin in api-gateway
+    flags: subject-not-capitalized;scope-mismatch(scope=auth vs dir=webapp);possible-breaking-missing-marker
+    was : feat(auth): add auth module, route, and plugin in api-gateway
+70a6946 - Chore(ops)(ops): Capture staged diff and last commit metadata
+    flags: subject-not-capitalized;scope-mismatch(scope=ops vs dir=artifacts)
+    was : chore(ops): capture staged diff and last commit metadata
+70d8393 - Feat(api-gateway)(api-gateway): Enforce zod validation and safe errors
+    flags: test-claimed-mismatch;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=api-gateway vs dir=services);possible-breaking-missing-marker
+    was : feat(api-gateway): enforce zod validation and safe errors
+71db586 - Chore(sync)(sync): Finalize schema, db init, and client wiring after aut
+    flags: subject>72;subject-not-capitalized;scope-mismatch(scope=sync vs dir=webapp);possible-breaking-missing-marker
+    was : chore(sync): finalize schema, db init, and client wiring after auth integration
+71ffddc - Chore(shared): Add argon2 password hashing and migration
+    flags: test-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=shared);possible-breaking-missing-marker
+    was : feat: add argon2 password hashing and migration
+72098a6 - Chore(repo)(repo): Enable safety guards & baseline scripts
+    flags: docs-claimed-mismatch;test-claimed-mismatch;subject-not-capitalized;scope-mismatch(scope=repo vs dir=package.json);possible-breaking-missing-marker
+    was : chore(repo): enable safety guards & baseline scripts
+723348d - Chore(scripts): Add repo audit workflow and script
+    flags: subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=scripts)
+    was : chore: add repo audit workflow and script
+7262b8a - Chore(repo)(repo): One-time LF line ending normalisation
+    flags: subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=repo vs dir=services);possible-breaking-missing-marker
+    was : chore(repo): one-time LF line ending normalisation
+7343465 - Chore(api-gateway): Add /ready probe and idempotent POST /bank-lines wit
+    flags: deps-looks-like-chore;subject>72;subject-not-capitalized;scope-mismatch(scope=api-gateway vs dir=shared);possible-breaking-missing-marker
+    was : feat(api-gateway): add /ready probe and idempotent POST /bank-lines with Zod validation
+74fcf16 - Feat(apps): Add overview dashboard route
+    flags: code-additions-look-like-feat;needs-body(>=150 LOC)
+    was : Add overview dashboard route
+7581767 - Chore(services): Add audit logging for admin actions
+    flags: docs-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;scope-mismatch(scope= vs dir=services);possible-breaking-missing-marker
+    was : feat: add audit logging for admin actions
+76df5f8 - Payg(tools): Enforce monotone cumulative max + integer rounding; ratio t
+    flags: test-claimed-mismatch;subject>72;subject-not-capitalized;scope-mismatch(scope= vs dir=tools)
+    was : payg: enforce monotone cumulative max + integer rounding; ratio tests use relative tol
+776ba96 - Chore: Document compliance directory index
+    flags: docs-claimed-mismatch;needs-body(>=150 LOC)
+    was : Document compliance directory index
+7790322 - Chore(services): Add compliance telemetry models and ingestion pipeline
+    flags: docs-claimed-mismatch;deps-looks-like-chore;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Add compliance telemetry models and ingestion pipeline
+7863f53 - Feat(services): Enforce admin access and mask emails on security users e
+    flags: test-claimed-mismatch;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Enforce admin access and mask emails on security users endpoint
+78a3367 - Feat(repo): Snapshot before full history rewrite
+    flags: code-additions-look-like-feat;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=repo vs dir=webapp)
+    was : chore(repo): snapshot before full history rewrite
+79757a0 - Test(api)(api): Add /ready probe spec
+    flags: subject-not-capitalized;scope-mismatch(scope=api vs dir=services)
+    was : test(api): add /ready probe spec
+7a06f20 - Chore(compliance)(compliance): Add compliance checklist and wire it into
+    flags: docs-claimed-mismatch;subject-not-capitalized;scope-mismatch(scope=compliance vs dir=package.json)
+    was : chore(compliance): add compliance checklist and wire it into workspace
+7b346a0 - Chore(services): Add ml inference service
+    flags: docs-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=services)
+    was : feat: add ml inference service
+7b8978a - Chore(services): Add ml-service feedback endpoints and governance contro
+    flags: docs-claimed-mismatch;deps-looks-like-chore;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Add ml-service feedback endpoints and governance controls
+7c255dc - Docs: Document governance training, audits, patents, and vendor controls
+    flags: docs-claimed-mismatch
+    was : Document governance training, audits, patents, and vendor controls
+7c5f7e4 - Fix(shared-imports)(shared-imports): Correct @apgms/shared/* import path
+    flags: test-claimed-mismatch;subject>72;subject-not-capitalized;fix-no-issue-ref;scope-mismatch(scope=shared-imports vs dir=webapp);possible-breaking-missing-marker
+    was : fix(shared-imports): correct @apgms/shared/* import paths across gateway, webapp, and tests
+7c64e61 - Chore(db)(db): Check in Prisma migration for deleted_at sync
+    flags: subject-not-capitalized;scope-mismatch(scope=db vs dir=shared)
+    was : chore(db): check in Prisma migration for deleted_at sync
+7ceaea5 - Chore(deps)(deps): Bump the dependencies group across 1 directory with 2
+    flags: subject>72;subject-not-capitalized;scope-mismatch(scope=deps vs dir=pnpm-lock.yaml);possible-breaking-missing-marker
+    was : chore(deps): bump the dependencies group across 1 directory with 20 updates
+7db317c - Refactor(ml): Ensure one-hot encoder outputs dense matrix for gradient b
+    flags: code-changes-look-like-refactor
+    was : Ensure one-hot encoder outputs dense matrix for gradient boosting
+7e10cbb - Chore(services): Add compliance ingest pipeline and ml tooling
+    flags: docs-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=services);possible-breaking-missing-marker
+    was : feat: add compliance ingest pipeline and ml tooling
+7e802c1 - Chore(db)(db): Add new Prisma migration and record compliance snapshot
+    flags: docs-claimed-mismatch;subject-not-capitalized;scope-mismatch(scope=db vs dir=shared);possible-breaking-missing-marker
+    was : chore(db): add new Prisma migration and record compliance snapshot
+801d0b2 - Feat(services): Add readiness, metrics, and graceful shutdown to API gat
+    flags: test-claimed-mismatch;possible-breaking-missing-marker
+    was : Add readiness, metrics, and graceful shutdown to API gateway
+80bd55c - Chore(shared): Map discrepancy telemetry models to snake_case tables
+    flags: possible-breaking-missing-marker
+    was : Map discrepancy telemetry models to snake_case tables
+81ac405 - Chore(api): Zod/Fastify schemas for all external routes + error contract
+    flags: deps-looks-like-chore;code-changes-look-like-refactor;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=api vs dir=shared);possible-breaking-missing-marker
+    was : feat(api): Zod/Fastify schemas for all external routes + error contract
+830cd8b - Chore(tools): Enforce LF endings; quiet CSV diffs; payg(resolver) repo-r
+    flags: subject>72;subject-not-capitalized;scope-mismatch(scope= vs dir=tools)
+    was : chore: enforce LF endings; quiet CSV diffs; payg(resolver) repo-relative CSV and scaling
+83ae59c - Chore(services): Harden regulator login validation and restore metrics
+    flags: test-claimed-mismatch;deps-looks-like-chore;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Harden regulator login validation and restore metrics
+852bf3d - Feat(services): Add discrepancy event telemetry pipeline
+    flags: docs-claimed-mismatch;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Add discrepancy event telemetry pipeline
+85853cc - Feat(api-gateway)(api-gateway): Secure bank line endpoints
+    flags: test-claimed-mismatch;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=api-gateway vs dir=services);possible-breaking-missing-marker
+    was : feat(api-gateway): secure bank line endpoints
+85cf022 - Feat(services): Enforce finance roles on BAS and designated account acti
+    flags: test-claimed-mismatch;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Enforce finance roles on BAS and designated account actions
+86798fa - Chore(ops)(ops): Capture working tree and diff snapshot
+    flags: subject-not-capitalized;scope-mismatch(scope=ops vs dir=artifacts)
+    was : chore(ops): capture working tree and diff snapshot
+86cd6e6 - Chore(ops)(ops): Define alerting and align gateway behavior with runbook
+    flags: docs-claimed-mismatch;subject-not-capitalized;scope-mismatch(scope=ops vs dir=docs)
+    was : chore(ops): define alerting and align gateway behavior with runbook
+873008c - Chore(services): Record diff vs origin main
+    flags: test-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=services);possible-breaking-missing-marker
+    was : docs: record diff vs origin main
+8828bba - Chore(platform): Centralize runtime config, tighten auth/metrics, and ad
+    flags: docs-claimed-mismatch;test-claimed-mismatch;deps-looks-like-chore;subject>72;subject-not-capitalized;scope-mismatch(scope=platform vs dir=services);possible-breaking-missing-marker
+    was : refactor(platform): centralize runtime config, tighten auth/metrics, and add typed boundaries
+8915d14 - Chore(scripts): Tighten ci coverage gate
+    flags: subject-not-capitalized;scope-mismatch(scope= vs dir=scripts)
+    was : chore: tighten ci coverage gate
+892df70 - Refactor(worker): Fix ATO submission import and add worker claiming
+    flags: code-changes-look-like-refactor
+    was : Fix ATO submission import and add worker claiming
+893c676 - Feat(apps): Add PAYGW flow manager page
+    flags: subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=apps)
+    was : feat: add PAYGW flow manager page
+8a98e53 - Feat(services): Add authentication, validation, and idempotency to bank
+    flags: test-claimed-mismatch;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Add authentication, validation, and idempotency to bank lines
+8b975d8 - Feat(apgms-ml): Add LightGBM training script for apportion model
+    flags: code-additions-look-like-feat;needs-body(>=150 LOC)
+    was : Add LightGBM training script for apportion model
+8ba784d - Refactor(services): Handle bcrypt hashes during login
+    flags: code-changes-look-like-refactor
+    was : Handle bcrypt hashes during login
+8bd460f - Chore(repo)(repo): Normalize line endings via .gitattributes
+    flags: subject-not-capitalized;scope-mismatch(scope=repo vs dir=gitattributes)
+    was : chore(repo): normalize line endings via .gitattributes
+8d639cf - Chore(regulator): Phase 7 ÔÇö Regulator Portal & Continuous Monitoring
+    flags: docs-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=regulator vs dir=webapp);possible-breaking-missing-marker
+    was : feat(regulator): Phase 7 ÔÇö Regulator Portal & Continuous Monitoring
+8dadacd - Feat(src): Add APGMS matcher training pipeline and evaluation tooling
+    flags: code-additions-look-like-feat;needs-body(>=150 LOC)
+    was : Add APGMS matcher training pipeline and evaluation tooling
+8e3a645 - Chore(api): Add /ready probe and idempotent POST /bank-lines with Zod va
+    flags: deps-looks-like-chore;subject>72;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=api vs dir=shared);possible-breaking-missing-marker
+    was : feat(api): add /ready probe and idempotent POST /bank-lines with Zod validation
+8e62dbf - Feat(webapp)(webapp): Add obligations routes and tests
+    flags: test-claimed-mismatch;subject-not-capitalized;needs-body(>=150 LOC)
+    was : feat(webapp): add obligations routes and tests
+8ee6dff - Chore(services): Update ci workflows and scripts
+    flags: subject-not-capitalized;scope-mismatch(scope= vs dir=services);possible-breaking-missing-marker
+    was : chore: update ci workflows and scripts
+9156afd - Chore(coverage): Unit/integration for audit-chain, snapshots, idempotenc
+    flags: deps-looks-like-chore;subject>72;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=coverage vs dir=services);possible-breaking-missing-marker
+    was : test(coverage): unit/integration for audit-chain, snapshots, idempotency; enforce >=85%
+918d114 - Feat(webapp)(webapp): Add admin prototype router and feature flag
+    flags: subject-not-capitalized;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : feat(webapp): add admin prototype router and feature flag
+91a4447 - Docs(runbooks): Document DSP readiness and governance workflows
+    flags: docs-claimed-mismatch
+    was : Document DSP readiness and governance workflows
+9232bac - Feat(api)(api): @fastify/helmet + strict CORS + CSP headers
+    flags: test-claimed-mismatch;subject-not-capitalized;scope-mismatch(scope=api vs dir=services);possible-breaking-missing-marker
+    was : feat(api): @fastify/helmet + strict CORS + CSP headers
+92410b2 - Feat(webapp)(webapp): Add layout shell and compliance routes
+    flags: subject-not-capitalized;needs-body(>=150 LOC)
+    was : feat(webapp): add layout shell and compliance routes
+924767d - Test(api-gateway)(api-gateway): Add /ready health probe spec
+    flags: subject-not-capitalized;scope-mismatch(scope=api-gateway vs dir=services)
+    was : test(api-gateway): add /ready health probe spec
+9332322 - Feat(services): Bucket CORS rejection metrics to avoid unbounded labels
+    flags: code-additions-look-like-feat;possible-breaking-missing-marker
+    was : Bucket CORS rejection metrics to avoid unbounded labels
+94580d9 - Chore(db)(db): Add Prisma migrate/deploy/generate scripts to workspace r
+    flags: subject-not-capitalized;scope-mismatch(scope=db vs dir=package.json)
+    was : chore(db): add Prisma migrate/deploy/generate scripts to workspace root
+9616bd3 - Feat(coverage): Snapshot before commit rewrite
+    flags: code-additions-look-like-feat;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=coverage);possible-breaking-missing-marker
+    was : wip: snapshot before commit rewrite
+964a52d - Chore(gitignore): Add .gitignore for venv, extracted data, caches, build
+    flags: subject-not-capitalized;scope-mismatch(scope= vs dir=gitignore)
+    was : chore: add .gitignore for venv, extracted data, caches, builds
+967b320 - Refactor(webapp): Improve accessibility infrastructure
+    flags: code-changes-look-like-refactor
+    was : Improve accessibility infrastructure
+96e523c - Feat(ml-core)(ml-core): Scaffold package and baseline analytics
+    flags: docs-claimed-mismatch;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=ml-core vs dir=packages)
+    was : feat(ml-core): scaffold package and baseline analytics
+97726d9 - Docs: Document ASVS coverage and TFN SOP
+    flags: docs-claimed-mismatch
+    was : Document ASVS coverage and TFN SOP
+97c1bcc - Chore(services): Share jwt guard via auth package
+    flags: docs-claimed-mismatch;test-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=services);possible-breaking-missing-marker
+    was : feat: share jwt guard via auth package
+97d386b - Feat(apps): Add security command center route
+    flags: code-additions-look-like-feat;needs-body(>=150 LOC)
+    was : Add security command center route
+9805a96 - Chore(repo)(repo): Ignore shared/prisma/.env in git
+    flags: subject-not-capitalized;scope-mismatch(scope=repo vs dir=gitignore)
+    was : chore(repo): ignore shared/prisma/.env in git
+984d64f - Feat(api-gateway)(api-gateway): Add admin data routes plugin
+    flags: test-claimed-mismatch;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=api-gateway vs dir=services);possible-breaking-missing-marker
+    was : feat(api-gateway): add admin data routes plugin
+9a86c6a - Docs: Document compliance attestation execution plan
+    flags: docs-claimed-mismatch
+    was : Document compliance attestation execution plan
+9aa6ceb - Chore(packages): Scaffold model service workspace
+    flags: docs-claimed-mismatch;test-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=packages)
+    was : feat: scaffold model service workspace
+9ce10ee - Refactor(services): Fix error ratio labels and snapshot lag gauge
+    flags: code-changes-look-like-refactor
+    was : Fix error ratio labels and snapshot lag gauge
+9d92fab - Docs(README.md): Restore auth jwks env example
+    flags: subject-not-capitalized;scope-mismatch(scope= vs dir=README.md)
+    was : docs: restore auth jwks env example
+9e27f46 - Docs: Add baseline compliance documentation tables
+    flags: docs-claimed-mismatch
+    was : Add baseline compliance documentation tables
+9e5f062 - Chore(packages): Add model service data pipelines
+    flags: docs-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=packages)
+    was : feat: add model service data pipelines
+9e656c6 - Fix(webapp): Correct shared import path (@apgms/shared/src/*)
+    flags: test-claimed-mismatch;subject-not-capitalized;fix-no-issue-ref;scope-mismatch(scope= vs dir=webapp);possible-breaking-missing-marker
+    was : fix: correct shared import path (@apgms/shared/src/*)
+9e6bded - Feat(webapp): Add obligations control room dashboard
+    flags: code-additions-look-like-feat;needs-body(>=150 LOC)
+    was : Add obligations control room dashboard
+9eac120 - Chore(sec+ops)(sec+ops): Add PII key rotation tooling and incident respo
+    flags: docs-claimed-mismatch;subject>72;subject-not-capitalized;scope-mismatch(scope=sec+ops vs dir=docs)
+    was : chore(sec+ops): add PII key rotation tooling and incident response template
+9f13ffa - Chore(compliance+db)(compliance+db): Record compliance snapshot and add
+    flags: docs-claimed-mismatch;subject>72;subject-not-capitalized;scope-mismatch(scope=compliance+db vs dir=shared);possible-breaking-missing-marker
+    was : chore(compliance+db): record compliance snapshot and add new Prisma migration
+9fc1e66 - Chore(api-gateway): Add readiness and metrics instrumentation
+    flags: test-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=api-gateway vs dir=services);possible-breaking-missing-marker
+    was : feat(api-gateway): add readiness and metrics instrumentation
+a0200e8 - Chore(webapp): Introduce login flow and dashboard; harden api-gateway
+    flags: deps-looks-like-chore;subject-not-capitalized;possible-breaking-missing-marker
+    was : feat(webapp): introduce login flow and dashboard; harden api-gateway
+a025eb8 - Feat(services): Secure regulator login with server-side org mapping
+    flags: test-claimed-mismatch;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Secure regulator login with server-side org mapping
+a0b7894 - Feat(apps): Add GST reconciliation analytics route
+    flags: code-additions-look-like-feat;needs-body(>=150 LOC)
+    was : Add GST reconciliation analytics route
+a12d251 - Feat(api-gateway)(api-gateway): Add readiness and metrics endpoints
+    flags: test-claimed-mismatch;subject-not-capitalized;scope-mismatch(scope=api-gateway vs dir=services);possible-breaking-missing-marker
+    was : feat(api-gateway): add readiness and metrics endpoints
+a1793fe - Docs(runbooks): Add data governance runbook
+    flags: docs-claimed-mismatch
+    was : Add data governance runbook
+a261f43 - Feat(apps): Add APGMS types and demo store data
+    flags: code-additions-look-like-feat;needs-body(>=150 LOC)
+    was : Add APGMS types and demo store data
+a284232 - Chore(ops)(ops): Extract gateway server entrypoint and document operatio
+    flags: docs-claimed-mismatch;test-claimed-mismatch;subject>72;subject-not-capitalized;scope-mismatch(scope=ops vs dir=services);possible-breaking-missing-marker
+    was : chore(ops): extract gateway server entrypoint and document operational runbook
+a35a0aa - Feat(services): Refactor admin data routes with env token authorization
+    flags: test-claimed-mismatch;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Refactor admin data routes with env token authorization
+a4eb821 - Feat(webapp)(webapp): Add GST reconciliation heatmap and stepper
+    flags: subject-not-capitalized;needs-body(>=150 LOC)
+    was : feat(webapp): add GST reconciliation heatmap and stepper
+a5789d0 - Chore(security): Issuer/audience/expiry enforcement + reply minimisation
+    flags: test-claimed-mismatch;deps-looks-like-chore;subject>72;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=security vs dir=shared);possible-breaking-missing-marker
+    was : feat(security): issuer/audience/expiry enforcement + reply minimisation + log redaction
+a7f39b7 - Chore(tools): Normalization + resolver tests + CSV artifact + CI workflo
+    flags: test-claimed-mismatch;deps-looks-like-chore;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=tools)
+    was : PAYG: normalization + resolver tests + CSV artifact + CI workflow
+a90274c - Chore(api): Use directory discovery to avoid Windows glob issues
+    flags: deps-looks-like-chore;subject-not-capitalized;scope-mismatch(scope=api vs dir=services)
+    was : test(api): use directory discovery to avoid Windows glob issues
+a955b47 - Chore(services): Add connectors, ATO filing pipeline, and designated acc
+    flags: docs-claimed-mismatch;test-claimed-mismatch;deps-looks-like-chore;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Add connectors, ATO filing pipeline, and designated account models
+aa3b936 - Chore(deploy)(deploy): Scaffold DB init/seed and tighten service startup
+    flags: subject-not-capitalized;scope-mismatch(scope=deploy vs dir=services);possible-breaking-missing-marker
+    was : chore(deploy): scaffold DB init/seed and tighten service startup/runtime
+aa8aa6b - Chore(auth+security): Enforce JWT auth, org/role scoping, response redac
+    flags: deps-looks-like-chore;subject>72;subject-not-capitalized;scope-mismatch(scope=auth+security vs dir=services);possible-breaking-missing-marker
+    was : feat(auth+security): enforce JWT auth, org/role scoping, response redaction, and secure headers
+aac6186 - Feat(ops): Improve service operability and document logging/runbook
+    flags: docs-claimed-mismatch;code-additions-look-like-feat;subject-not-capitalized;scope-mismatch(scope=ops vs dir=docs);possible-breaking-missing-marker
+    was : chore(ops): improve service operability and document logging/runbook
+ab0701b - Feat(services): Add audit logging for admin data actions
+    flags: docs-claimed-mismatch;test-claimed-mismatch;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=services);possible-breaking-missing-marker
+    was : feat: add audit logging for admin data actions
+ab4fbaf - Test(api)(api): Add /ready health probe spec
+    flags: subject-not-capitalized;scope-mismatch(scope=api vs dir=services)
+    was : test(api): add /ready health probe spec
+aba172f - Test(payg)(payg): Repo-relative normalizer; resolver scaling checks; CSV
+    flags: subject>72;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=payg vs dir=tests)
+    was : test(payg): repo-relative normalizer; resolver scaling checks; CSV artifact
+af06204 - Chore(sec+ops)(sec+ops): Tighten CI/security pipeline and align gateway
+    flags: docs-claimed-mismatch;test-claimed-mismatch;subject-not-capitalized;scope-mismatch(scope=sec+ops vs dir=services);possible-breaking-missing-marker
+    was : chore(sec+ops): tighten CI/security pipeline and align gateway + tests
+af21578 - Chore(api-gateway): Add metrics and graceful shutdown
+    flags: docs-claimed-mismatch;test-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=api-gateway vs dir=services);possible-breaking-missing-marker
+    was : feat(api-gateway): add metrics and graceful shutdown
+af5f1f3 - Chore(services): Add ML risk service and dashboards
+    flags: deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=services);possible-breaking-missing-marker
+    was : feat: add ML risk service and dashboards
+afa0d3f - Feat(ops): Add debug export tooling and tighten gateway/admin handling
+    flags: code-additions-look-like-feat;subject-not-capitalized;scope-mismatch(scope=ops vs dir=services);possible-breaking-missing-marker
+    was : chore(ops): add debug export tooling and tighten gateway/admin handling
+aff6ebd - Chore(security)(security): Add PII key rotation tooling and incident res
+    flags: docs-claimed-mismatch;subject>72;subject-not-capitalized;scope-mismatch(scope=security vs dir=docs)
+    was : chore(security): add PII key rotation tooling and incident response template
+b07cd70 - Fix(payg)(payg): Robust CSV decoding + relaxed monthly scaling tolerance
+    flags: test-claimed-mismatch;subject-not-capitalized;fix-no-issue-ref;scope-mismatch(scope=payg vs dir=tools)
+    was : fix(payg): robust CSV decoding + relaxed monthly scaling tolerance
+b1a9781 - Feat(api)(api): Persist alerts/bas cycles and wire Phase 2 UI flows
+    flags: subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=api vs dir=webapp);possible-breaking-missing-marker
+    was : feat(api): persist alerts/bas cycles and wire Phase 2 UI flows
+b282f82 - Feat(api-gateway)(api-gateway): Add auth module, route, and plugin
+    flags: subject-not-capitalized;scope-mismatch(scope=api-gateway vs dir=webapp);possible-breaking-missing-marker
+    was : feat(api-gateway): add auth module, route, and plugin
+b2850c6 - Feat(compliance)(compliance): Add designated holding accounts and surfac
+    flags: subject>72;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=compliance vs dir=webapp);possible-breaking-missing-marker
+    was : feat(compliance): add designated holding accounts and surface balances in API/UI
+b5d8e9d - Feat(services): Add schemas and sanitization for public API responses
+    flags: test-claimed-mismatch;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Add schemas and sanitization for public API responses
+b67625c - Feat(services): Mask pii for non-admins
+    flags: test-claimed-mismatch;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=services);possible-breaking-missing-marker
+    was : feat: mask pii for non-admins
+b759277 - Feat(retention)(retention): Pluggable WORM + content-addressed URIs + at
+    flags: docs-claimed-mismatch;subject>72;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=retention vs dir=providers);possible-breaking-missing-marker
+    was : feat(retention): pluggable WORM + content-addressed URIs + attestation endpoint
+b7ab8ed - Refactor(services): Ensure recon model sorter handles numeric versions
+    flags: code-changes-look-like-refactor
+    was : Ensure recon model sorter handles numeric versions
+b896595 - Chore(api-gateway): Run all gateway *.spec.ts tests
+    flags: deps-looks-like-chore;subject-not-capitalized;scope-mismatch(scope=api-gateway vs dir=services)
+    was : test(api-gateway): run all gateway *.spec.ts tests
+ba42ae4 - Fix(tests): Add default export to prisma mock
+    flags: test-claimed-mismatch;subject-not-capitalized;fix-no-issue-ref;scope-mismatch(scope= vs dir=tests)
+    was : fix: add default export to prisma mock
+ba72fdc - Refactor(domain): Guard ledger analytics logging failures
+    flags: code-changes-look-like-refactor
+    was : Guard ledger analytics logging failures
+bc1cd27 - Chore(services): Align ops runbook metrics with code
+    flags: docs-claimed-mismatch;deps-looks-like-chore;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Align ops runbook metrics with code
+bd66cc4 - Docs: Add UI acceptance checklist
+    flags: docs-claimed-mismatch
+    was : Add UI acceptance checklist
+be0c031 - Chore(repo)(repo): Normalize line endings / cross-platform script behavi
+    flags: subject-not-capitalized;scope-mismatch(scope=repo vs dir=package.json)
+    was : chore(repo): normalize line endings / cross-platform script behavior
+be98bf2 - Feat(apgms-ml): Add ML scoring fastapi service
+    flags: docs-claimed-mismatch;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=apgms-ml)
+    was : feat: add ML scoring fastapi service
+bfc0ea6 - Chore(webapp): Add dashboard ui components
+    flags: deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=webapp vs dir=apps)
+    was : feat(webapp): add dashboard ui components
+c1f99d9 - Chore(db)(db): Check in BankLine idempotencyKey uniqueness migration
+    flags: subject-not-capitalized;scope-mismatch(scope=db vs dir=shared)
+    was : chore(db): check in BankLine idempotencyKey uniqueness migration
+c2a764b - Feat(apgms-ml): Add duplicate transaction training script
+    flags: code-additions-look-like-feat;needs-body(>=150 LOC)
+    was : Add duplicate transaction training script
+c33374e - Chore(platform): Introduce messaging bus, ledger module, tax utils, and
+    flags: docs-claimed-mismatch;test-claimed-mismatch;deps-looks-like-chore;subject>72;subject-not-capitalized;scope-mismatch(scope=platform vs dir=shared);possible-breaking-missing-marker
+    was : feat(platform): introduce messaging bus, ledger module, tax utils, and operational framework
+c3c9a68 - Chore(ops)(ops): Add observability and SLO docs
+    flags: docs-claimed-mismatch;subject-not-capitalized;scope-mismatch(scope=ops vs dir=docs)
+    was : chore(ops): add observability and SLO docs
+c46a481 - Chore(platform): Enforce MFA for high-risk actions and add evidence back
+    flags: docs-claimed-mismatch;deps-looks-like-chore;subject>72;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=platform vs dir=services);possible-breaking-missing-marker
+    was : feat(platform): enforce MFA for high-risk actions and add evidence backup
+c538818 - Feat(webapp)(webapp): WCAG AA status-badge colors and styles; tests pass
+    flags: subject-not-capitalized;needs-body(>=150 LOC)
+    was : feat(webapp): WCAG AA status-badge colors and styles; tests pass
+c56e74b - Chore(inference): Expose model scoring over http and nats
+    flags: docs-claimed-mismatch;test-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=inference vs dir=services)
+    was : feat(inference): expose model scoring over http and nats
+c6100ae - Chore(services): One-time LF line ending normalisation
+    flags: subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=services);possible-breaking-missing-marker
+    was : chore: one-time LF line ending normalisation
+c6829ed - Chore(services): Secure connectors, enforce MFA, and harden BAS + ML ops
+    flags: docs-claimed-mismatch;test-claimed-mismatch;deps-looks-like-chore;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Secure connectors, enforce MFA, and harden BAS + ML ops
+c7d26f0 - Feat(packages): Scaffold ml-core package with baseline pipelines
+    flags: docs-claimed-mismatch;test-claimed-mismatch;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=packages)
+    was : feat: scaffold ml-core package with baseline pipelines
+c8cc736 - Chore(webapp): Add ML risk service integration and surface dashboard ins
+    flags: test-claimed-mismatch;deps-looks-like-chore;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Add ML risk service integration and surface dashboard insights
+c92b1b3 - Chore(api): Add /ready probe and idempotent POST /bank-lines with Zod va
+    flags: deps-looks-like-chore;subject>72;subject-not-capitalized;scope-mismatch(scope=api vs dir=shared);possible-breaking-missing-marker
+    was : feat(api): add /ready probe and idempotent POST /bank-lines with Zod validation
+c92e475 - Chore(repo)(repo): Normalize line endings via .gitattributes
+    flags: subject-not-capitalized;scope-mismatch(scope=repo vs dir=gitattributes)
+    was : chore(repo): normalize line endings via .gitattributes
+c9a3b62 - Feat(api-gateway)(api-gateway): Idempotency keys for POST/PATCH and dedu
+    flags: docs-claimed-mismatch;test-claimed-mismatch;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=api-gateway vs dir=shared);possible-breaking-missing-marker
+    was : feat(api-gateway): idempotency keys for POST/PATCH and dedupe storage
+cbb4b27 - Chore(services): Formalise transactional events and retention
+    flags: docs-claimed-mismatch;test-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=services);possible-breaking-missing-marker
+    was : feat: formalise transactional events and retention
+cd9b3af - Chore(shared)(shared): Add subpath exports; update imports to @apgms/sha
+    flags: subject-not-capitalized;scope-mismatch(scope=shared vs dir=services);possible-breaking-missing-marker
+    was : chore(shared): add subpath exports; update imports to @apgms/shared/*
+ce3837a - Chore(shared): Add subpath exports and update gateway imports to @apgms/
+    flags: deps-looks-like-chore;subject>72;subject-not-capitalized;scope-mismatch(scope=shared vs dir=services);possible-breaking-missing-marker
+    was : refactor(shared): add subpath exports and update gateway imports to @apgms/shared/*
+ce3864c - Feat(shared): Feat(safety): idempotency keys for POST/PATCH + dedupe sto
+    flags: docs-claimed-mismatch;test-claimed-mismatch;subject-not-capitalized;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was :  feat(safety): idempotency keys for POST/PATCH + dedupe storage
+ce6198a - Refactor(services): Add prototype env feature flag for admin requests
+    flags: code-changes-look-like-refactor
+    was : Add prototype env feature flag for admin requests
+ce8eb0f - Chore(services): Implement integrations connectors and ATO workflows
+    flags: docs-claimed-mismatch;deps-looks-like-chore;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Implement integrations connectors and ATO workflows
+d24fb85 - Chore(shared): Document ml recon service and contracts
+    flags: deps-looks-like-chore;code-additions-look-like-feat;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=shared);possible-breaking-missing-marker
+    was : docs: document ml recon service and contracts
+d255536 - Chore(services): Implement secure connectors and ATO compliance workflow
+    flags: docs-claimed-mismatch;test-claimed-mismatch;deps-looks-like-chore;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Implement secure connectors and ATO compliance workflows
+d278b8e - Refactor(services): Fix Prisma client instrumentation attachment
+    flags: code-changes-look-like-refactor
+    was : Fix Prisma client instrumentation attachment
+d38c292 - Feat(ingest)(ingest): STP/POS adapters + blocking BAS verifier + discrep
+    flags: docs-claimed-mismatch;subject>72;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=ingest vs dir=providers);possible-breaking-missing-marker
+    was : feat(ingest): STP/POS adapters + blocking BAS verifier + discrepancy report
+d45a98f - Feat(db)(db): BankLine.idempotencyKey + unique(orgId,idempotencyKey)
+    flags: subject-not-capitalized;scope-mismatch(scope=db vs dir=shared)
+    was : feat(db): BankLine.idempotencyKey + unique(orgId,idempotencyKey)
+d50f598 - Chore(deps)(deps): Add Renovate + update policy + lockfile maintenance
+    flags: subject-not-capitalized;scope-mismatch(scope=deps vs dir=renovate.json)
+    was : chore(deps): add Renovate + update policy + lockfile maintenance
+d518159 - Refactor(apgms-ml): Fix model artifact hashing to avoid stale metadata d
+    flags: code-changes-look-like-refactor
+    was : Fix model artifact hashing to avoid stale metadata digest
+d590f8f - Chore(ops)(ops): Add nightly pipeline and chaos testing playbook
+    flags: docs-claimed-mismatch;subject-not-capitalized;scope-mismatch(scope=ops vs dir=docs)
+    was : chore(ops): add nightly pipeline and chaos testing playbook
+d6200e9 - Chore(services): Add compliance event ingestion and governance
+    flags: docs-claimed-mismatch;deps-looks-like-chore;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Add compliance event ingestion and governance
+d626549 - Chore(ledger)(ledger): Use cross-platform jest script
+    flags: docs-claimed-mismatch;subject-not-capitalized;scope-mismatch(scope=ledger vs dir=packages)
+    was : chore(ledger): use cross-platform jest script
+d6533e1 - Chore(auth+ui): Introduce login flow, dashboard UI, and gateway hardenin
+    flags: deps-looks-like-chore;subject-not-capitalized;scope-mismatch(scope=auth+ui vs dir=webapp);possible-breaking-missing-marker
+    was : feat(auth+ui): introduce login flow, dashboard UI, and gateway hardening
+d799a9b - Chore(webapp): Add Vitest smoke tests and currency formatter
+    flags: test-claimed-mismatch;deps-looks-like-chore
+    was : Add Vitest smoke tests and currency formatter
+d8086ac - Refactor(services): Restore Fastify typings and guard risk routes
+    flags: code-changes-look-like-refactor
+    was : Restore Fastify typings and guard risk routes
+d827258 - Chore(repo)(repo): Update .gitignore to exclude local helper script
+    flags: subject-not-capitalized;scope-mismatch(scope=repo vs dir=gitignore)
+    was : chore(repo): update .gitignore to exclude local helper script
+d8b0078 - Docs: Add apgms gui design playbook
+    flags: subject-not-capitalized;scope-mismatch(scope= vs dir=docs)
+    was : docs: add apgms gui design playbook
+d99cb79 - Refactor(apgms_ml): Handle scalar metrics from classification report
+    flags: code-changes-look-like-refactor
+    was : Handle scalar metrics from classification report
+d9e6efd - Chore(deploy)(deploy): Scaffold DB init/seed and tighten service startup
+    flags: subject-not-capitalized;scope-mismatch(scope=deploy vs dir=services);possible-breaking-missing-marker
+    was : chore(deploy): scaffold DB init/seed and tighten service startup/runtime
+d9fa8bf - Feat(platform)(platform): Persist alerts/BAS cycles and wire Phase 2 UI
+    flags: subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=platform vs dir=webapp);possible-breaking-missing-marker
+    was : feat(platform): persist alerts/BAS cycles and wire Phase 2 UI flows
+da9ff23 - Chore(platform): Centralize runtime config, tighten auth/metrics, and ad
+    flags: docs-claimed-mismatch;test-claimed-mismatch;deps-looks-like-chore;subject>72;subject-not-capitalized;scope-mismatch(scope=platform vs dir=services);possible-breaking-missing-marker
+    was : refactor(platform): centralize runtime config, tighten auth/metrics, and add typed boundaries
+db94dbd - Docs: Summarize auth guard coverage
+    flags: subject-not-capitalized;scope-mismatch(scope= vs dir=docs)
+    was : docs: summarize auth guard coverage
+dd5135c - Chore(platform): Introduce auth layer, data protection, and compliance u
+    flags: docs-claimed-mismatch;test-claimed-mismatch;deps-looks-like-chore;subject>72;subject-not-capitalized;scope-mismatch(scope=platform vs dir=services);possible-breaking-missing-marker
+    was : feat(platform): introduce auth layer, data protection, and compliance updates
+deea255 - Fix(payg)(payg): Robust CSV decoding + relaxed monthly scaling tolerance
+    flags: test-claimed-mismatch;subject-not-capitalized;fix-no-issue-ref;scope-mismatch(scope=payg vs dir=tools)
+    was : fix(payg): robust CSV decoding + relaxed monthly scaling tolerance
+def0692 - Feat(packages): Add ml core package and baseline pipelines
+    flags: docs-claimed-mismatch;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=packages)
+    was : feat: add ml core package and baseline pipelines
+df26637 - Feat(api-gateway)(api-gateway): Secure admin routes with jwt
+    flags: docs-claimed-mismatch;test-claimed-mismatch;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=api-gateway vs dir=services);possible-breaking-missing-marker
+    was : feat(api-gateway): secure admin routes with jwt
+df8bf87 - Docs: Document patent governance commitments and compliance evidence
+    flags: docs-claimed-mismatch
+    was : Document patent governance commitments and compliance evidence
+e05054a - Chore(packages): Fix telemetry stack and add AU validation package
+    flags: deps-looks-like-chore;code-additions-look-like-feat;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Fix telemetry stack and add AU validation package
+e05433c - Chore(chaos): Dependency outage drills + error budget SLO alerts
+    flags: docs-claimed-mismatch;deps-looks-like-chore;code-additions-look-like-feat;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=chaos vs dir=services);possible-breaking-missing-marker
+    was : test(chaos): dependency outage drills + error budget SLO alerts
+e0b8bdb - Chore(services): Ensure Prisma client generation and workspace coverage
+    flags: docs-claimed-mismatch;deps-looks-like-chore;code-additions-look-like-feat;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Ensure Prisma client generation and workspace coverage
+e1e4dbb - Feat(services): Unify admin data routes and tests
+    flags: test-claimed-mismatch;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Unify admin data routes and tests
+e37f2f3 - Feat(webapp): Improve Home metrics semantics and accessibility
+    flags: test-claimed-mismatch
+    was : Improve Home metrics semantics and accessibility
+e3faebe - Chore(services): Add build tooling updates
+    flags: subject-not-capitalized;scope-mismatch(scope= vs dir=services)
+    was : chore: add build tooling updates
+e54643a - Chore(repo)(repo): Add .gitignore for venv, extracted data, caches, buil
+    flags: subject-not-capitalized;scope-mismatch(scope=repo vs dir=gitignore)
+    was : chore(repo): add .gitignore for venv, extracted data, caches, builds
+e6c4b86 - Refactor(db)(db): Improve shared DB client/connection handling
+    flags: subject-not-capitalized;scope-mismatch(scope=db vs dir=shared)
+    was : refactor(db): improve shared DB client/connection handling
+e7d499a - Feat(webapp)(webapp): Add compliance monitoring route
+    flags: subject-not-capitalized;needs-body(>=150 LOC)
+    was : feat(webapp): add compliance monitoring route
+e803513 - Chore(ops)(ops): Add observability and SLO docs
+    flags: docs-claimed-mismatch;subject-not-capitalized;scope-mismatch(scope=ops vs dir=docs)
+    was : chore(ops): add observability and SLO docs
+e953153 - Feat(webapp): Add compliance page with audit workflows
+    flags: code-additions-look-like-feat;needs-body(>=150 LOC)
+    was : Add compliance page with audit workflows
+eb1b690 - Feat(apgms_ml): Add PAYGW variance LightGBM training pipeline
+    flags: code-additions-look-like-feat;needs-body(>=150 LOC)
+    was : Add PAYGW variance LightGBM training pipeline
+ec10396 - Refactor(services): Preserve feedback metadata on partial updates
+    flags: code-changes-look-like-refactor
+    was : Preserve feedback metadata on partial updates
+ed958de - Chore(deps)(deps): Bump actions/setup-python from 5 to 6
+    flags: subject-not-capitalized;scope-mismatch(scope=deps vs dir=github)
+    was : chore(deps): bump actions/setup-python from 5 to 6
+edd76fa - Feat(webapp): Restrict CORS and apply CSP protections
+    flags: code-additions-look-like-feat;possible-breaking-missing-marker
+    was : Restrict CORS and apply CSP protections
+edf2853 - Docs: Document current and planned security controls
+    flags: docs-claimed-mismatch
+    was : Document current and planned security controls
+ee3a0af - Feat(db)(db): Add BankLine.idempotencyKey and unique (orgId, idempotency
+    flags: subject-not-capitalized;scope-mismatch(scope=db vs dir=shared)
+    was : feat(db): add BankLine.idempotencyKey and unique (orgId, idempotencyKey)
+f01d809 - Fix(shared)(shared): Correct @apgms/shared/* import paths across gateway
+    flags: test-claimed-mismatch;subject>72;subject-not-capitalized;fix-no-issue-ref;scope-mismatch(scope=shared vs dir=webapp);possible-breaking-missing-marker
+    was : fix(shared): correct @apgms/shared/* import paths across gateway, webapp, and tests
+f07288e - Docs: Clarify WORM evidence workflow
+    flags: subject-not-capitalized;scope-mismatch(scope= vs dir=docs)
+    was : docs: clarify WORM evidence workflow
+f0752f3 - Chore(api-gateway): Harden http security
+    flags: test-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=api-gateway vs dir=services);possible-breaking-missing-marker
+    was : feat(api-gateway): harden http security
+f0bb792 - Refactor(ml-core): Guard positive label metrics
+    flags: code-changes-look-like-refactor;subject-not-capitalized;fix-no-issue-ref;scope-mismatch(scope=ml-core vs dir=packages)
+    was : fix(ml-core): guard positive label metrics
+f0fb96b - Chore(ops): Prometheus /metrics + OTEL traces + readiness (deps) + grace
+    flags: deps-looks-like-chore;subject>72;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=ops vs dir=services);possible-breaking-missing-marker
+    was : feat(ops): Prometheus /metrics + OTEL traces + readiness (deps) + graceful shutdown
+f17625b - Chore(api): Run all gateway *.spec.ts tests
+    flags: deps-looks-like-chore;subject-not-capitalized;scope-mismatch(scope=api vs dir=services)
+    was : test(api): run all gateway *.spec.ts tests
+f24c778 - Feat(services): Fix admin privacy routes
+    flags: test-claimed-mismatch;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Fix admin privacy routes
+f32133f - Chore(webapp): Enhance dashboard metrics and bank lines experience
+    flags: deps-looks-like-chore;code-additions-look-like-feat;needs-body(>=150 LOC)
+    was : Enhance dashboard metrics and bank lines experience
+f376a92 - Chore(shared): Add pii key management and admin guard protections
+    flags: docs-claimed-mismatch;test-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=shared);possible-breaking-missing-marker
+    was : feat: add pii key management and admin guard protections
+f3ead2f - Chore(db)(db): Check in Prisma migration for deleted_at sync
+    flags: subject-not-capitalized;scope-mismatch(scope=db vs dir=shared)
+    was : chore(db): check in Prisma migration for deleted_at sync
+f3edc6a - Chore(pnpm-lock.yaml): Refresh lockfile; install Playwright browsers
+    flags: subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=pnpm-lock.yaml)
+    was : chore: refresh lockfile; install Playwright browsers
+f42cd41 - Chore(prisma)(prisma): Add model feedback migration
+    flags: subject-not-capitalized;scope-mismatch(scope=prisma vs dir=shared)
+    was : chore(prisma): add model feedback migration
+f47b4d3 - Feat(api-gateway)(api-gateway): Add jwt admin verification
+    flags: test-claimed-mismatch;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=api-gateway vs dir=services);possible-breaking-missing-marker
+    was : feat(api-gateway): add jwt admin verification
+f4cde16 - Chore(scripts): Enforce coverage gate
+    flags: subject-not-capitalized;scope-mismatch(scope= vs dir=scripts)
+    was : chore: enforce coverage gate
+f53630b - Chore(platform): Initial APGMS monorepo bootstrap
+    flags: docs-claimed-mismatch;test-claimed-mismatch;deps-looks-like-chore;subject-not-capitalized;scope-mismatch(scope=platform vs dir=services);possible-breaking-missing-marker
+    was : feat(platform): initial APGMS monorepo bootstrap
+f619720 - Refactor(worker): Handle dedupeId when checking existing discrepancy eve
+    flags: code-changes-look-like-refactor
+    was : Handle dedupeId when checking existing discrepancy events
+f6dcadc - Chore(repo)(repo): Enable safety guards & baseline scripts
+    flags: docs-claimed-mismatch;test-claimed-mismatch;subject-not-capitalized;scope-mismatch(scope=repo vs dir=package.json);possible-breaking-missing-marker
+    was : chore(repo): enable safety guards & baseline scripts
+f9055c5 - Feat(apgms-ml): Add synthetic APGMS ML scaffolding
+    flags: docs-claimed-mismatch;code-additions-look-like-feat;needs-body(>=150 LOC)
+    was : Add synthetic APGMS ML scaffolding
+f90e1a7 - Feat(api-gateway)(api-gateway): Add audit logging for admin operations
+    flags: test-claimed-mismatch;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=api-gateway vs dir=services);possible-breaking-missing-marker
+    was : feat(api-gateway): add audit logging for admin operations
+f943476 - Ci(status): Add security SOPs and weekly dependency updates
+    flags: docs-claimed-mismatch
+    was : Add security SOPs and weekly dependency updates
+f956362 - Chore(services): Improve validation coverage and tooling reliability
+    flags: test-claimed-mismatch;deps-looks-like-chore;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Improve validation coverage and tooling reliability
+faed58b - Chore(db)(db): Update seed script for local Postgres bootstrap
+    flags: subject-not-capitalized;scope-mismatch(scope=db vs dir=scripts)
+    was : chore(db): update seed script for local Postgres bootstrap
+faef9d6 - Refactor(services): Fix fastify type import extension
+    flags: code-changes-look-like-refactor
+    was : Fix fastify type import extension
+fb47f0b - Chore(services): Add ML risk service integration
+    flags: test-claimed-mismatch;deps-looks-like-chore;needs-body(>=150 LOC);possible-breaking-missing-marker
+    was : Add ML risk service integration
+fd16820 - Feat(tooling)(tooling): Add PAYG scraper utilities and fixtures
+    flags: subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=tooling vs dir=tools)
+    was : feat(tooling): add PAYG scraper utilities and fixtures
+fd2c8f9 - Feat(webapp): Align primary nav with compliance playbook
+    flags: code-additions-look-like-feat
+    was : Align primary nav with compliance playbook
+fed62c3 - Chore(platform): Introduce messaging bus, ledger module, tax utils, and
+    flags: docs-claimed-mismatch;test-claimed-mismatch;deps-looks-like-chore;subject>72;subject-not-capitalized;scope-mismatch(scope=platform vs dir=shared);possible-breaking-missing-marker
+    was : feat(platform): introduce messaging bus, ledger module, tax utils, and operational framework
+ff1a71e - Chore(ci)(ci): Tighten security pipeline and align gateway tests
+    flags: docs-claimed-mismatch;test-claimed-mismatch;subject-not-capitalized;scope-mismatch(scope=ci vs dir=services);possible-breaking-missing-marker
+    was : chore(ci): tighten security pipeline and align gateway tests
+ff93e61 - Feat(webapp)(webapp): Add status chip component
+    flags: subject-not-capitalized;needs-body(>=150 LOC)
+    was : feat(webapp): add status chip component
+ffd807e - Docs: Document required GitHub Actions secrets
+    flags: docs-claimed-mismatch
+    was : Document required GitHub Actions secrets
+ffe34d4 - Chore(compliance+ops)(compliance+ops): Add dependency monitoring and evi
+    flags: docs-claimed-mismatch;subject>72;subject-not-capitalized;scope-mismatch(scope=compliance+ops vs dir=docs)
+    was : chore(compliance+ops): add dependency monitoring and evidence collection workflow
