@@ -16,6 +16,11 @@
 - **Evidence Library**: GET `/regulator/evidence` (list) + `/regulator/evidence/:id` (detail). UI can re-hash payload client-side to prove tamper-evidence.
 - **Monitoring**: Lists recent snapshots (`/regulator/monitoring/snapshots`) and renders raw payload JSON for export.
 
+## Connectors automation
+- Use `/connectors/capture/payroll` or `/connectors/capture/pos` to inject PAYGW/GST captures for an org while authenticated as an admin; include `{ orgId, amount }` in the body.
+- Connectors responses include the transfer metadata plus the reconciliation artifact (`artifactId`, `sha256`, `summary`) that the regulator evidence endpoints surface.
+- These endpoints exercise the designated-account policy, generate alerts if policy violations occur, and feed the regulator portal so `compliance/report` reflects the most recent totals.
+
 ## Health & Monitoring
 - `/regulator/health` is a dedicated probe target (mirrors `/health` but tagged for regulator metrics).
 - Metrics captured through default Prometheus handler with `route="/regulator/..."` labels; add Grafana panel filtered by that prefix to watch regulator usage separately.
