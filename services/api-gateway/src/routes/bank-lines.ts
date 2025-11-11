@@ -1,7 +1,7 @@
 ﻿import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { prisma } from "../db.js";
-import { assertOrgAccess, redactBankLine } from "../utils/orgScope.js";
+import { assertOrgAccess, assertRoleForBankLines, redactBankLine } from "../utils/orgScope.js";
 
 // Accept the fields Prisma requires for a BankLine create
 const createBankLineSchema = z.object({
@@ -24,7 +24,12 @@ export const registerBankLinesRoutes: FastifyPluginAsync = async (app) => {
   app.post("/bank-lines", async (req, reply) => {
     // Authorize org access for the caller's org
     const user = (req as any).user!;
-    assertOrgAccess(req, reply, user.orgId);
+    if (!assertOrgAccess(req, reply, user.orgId)) {
+      return;
+    }
+    if (!assertRoleForBankLines(req, reply)) {
+      return;
+    }
 
     const parsed = createBankLineSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -65,7 +70,12 @@ export const registerBankLinesRoutes: FastifyPluginAsync = async (app) => {
   // List for current org
   app.get("/bank-lines", async (req, reply) => {
     const user = (req as any).user!;
-    assertOrgAccess(req, reply, user.orgId);
+    if (!assertOrgAccess(req, reply, user.orgId)) {
+      return;
+    }
+    if (!assertRoleForBankLines(req, reply)) {
+      return;
+    }
 
     const rows = await prisma.bankLine.findMany({
       where: { orgId: user.orgId },

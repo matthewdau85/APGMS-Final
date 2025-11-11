@@ -53,6 +53,8 @@ const bankLinesRoute = async (fastify) => {
         // authz
         if (!assertOrgAccess(request, reply, orgId))
             return;
+        if (!assertRoleForBankLines(request, reply))
+            return;
         const rows = await prisma.bankLine.findMany({
             where: { orgId },
             orderBy: { createdAt: "desc" }

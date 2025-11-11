@@ -10,11 +10,11 @@
 - Legacy admin flows now require matching org scopes and audit trails (services/api-gateway/src/routes/admin.data.ts:81).
 
 ## V3: Session Management
-- Request nonce / idempotency keys enforced for POST /bank-lines and guarded replay handling (services/api-gateway/src/app.ts:333).
+- Request nonce / idempotency keys enforced for POST /bank-lines via the Prisma upsert keyed on `(orgId, idempotencyKey)` (services/api-gateway/src/routes/bank-lines.ts:24-67).
 - Authorization failures tracked via anomaly counters and metrics for downstream alerting (services/api-gateway/src/app.ts:101).
 
 ## V4: Access Control
-- Org-scoped queries and sanitized responses ensure least privilege for /users and /bank-lines (services/api-gateway/src/app.ts:247).
+- Org-scoped queries and finance-role RBAC guard /bank-lines, while responses stay redacted to org context (services/api-gateway/src/routes/bank-lines.ts:24-85, services/api-gateway/src/utils/orgScope.ts:6-45).
 - Admin exports/deletes validate principal and record play-by-play audit entries (services/api-gateway/src/app.ts:413).
 
 ## V6: Cryptography

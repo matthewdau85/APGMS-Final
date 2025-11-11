@@ -1,5 +1,5 @@
 // roles you consider allowed to create/update bank lines
-const ALLOWED_ROLES_FOR_BANKLINES = ["owner", "admin", "accountant"];
+const ALLOWED_ROLES_FOR_BANKLINES = ["admin", "finance", "analyst"];
 export function assertOrgAccess(request, reply, targetOrgId) {
     if (!request.user) {
         reply.code(401).send({ error: "unauthenticated" });

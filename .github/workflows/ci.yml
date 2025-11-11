@@ -28,6 +28,10 @@ jobs:
       - name: Build packages
         run: pnpm -r build
 
+      # 1b. Static analysis across workspaces keeps lint baselines green.
+      - name: Lint
+        run: pnpm -r lint
+
       # 2. 🔒 Quality 3.1: enforce type safety in CI
       #    This is the "no merge with type errors" gate.
       - name: Typecheck

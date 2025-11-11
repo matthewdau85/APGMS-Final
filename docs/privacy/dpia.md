@@ -6,12 +6,12 @@
 
 ## Data Inventory & Flow
 - User credentials stored with Argon2id hashing and peppering (shared/src/security/password.ts:1).
-- Bank lines encrypted at rest via envelope keys managed by the runtime KMS provider; only decrypted when a privileged admin exports data (services/api-gateway/src/app.ts:333).
+- Bank lines encrypted at rest via envelope keys managed by the runtime KMS provider; only decrypted when a privileged admin exports data (services/api-gateway/src/routes/bank-lines.ts:47-65).
 - Audit logs capture actor, action, and timestamps in append-only records (shared/prisma/schema.prisma:47).
 
 ## Risk Assessment
-- **Unauthorised access**: Mitigated by RS256 JWT authentication, per-route RBAC, anomaly detection and Prometheus counters for failed auth; admin data erasure/export routes reuse the same JWT verifier so legacy bearer tokens are no longer accepted (services/api-gateway/src/app.ts:73, services/api-gateway/src/routes/admin.data.ts:67).
-- **Data leakage**: Responses redact emails, hash identifiers, and avoid sharing raw payee descriptions unless explicitly exported with admin scope (services/api-gateway/src/app.ts:247).
+- **Unauthorised access**: Mitigated by RS256 JWT authentication, finance-role RBAC on bank-line APIs, anomaly detection and Prometheus counters for failed auth; admin data erasure/export routes reuse the same JWT verifier so legacy bearer tokens are no longer accepted (services/api-gateway/src/routes/bank-lines.ts:24-85, services/api-gateway/src/utils/orgScope.ts:6-45, services/api-gateway/src/routes/admin.data.ts:67).
+- **Data leakage**: Responses redact emails, hash identifiers, and avoid sharing raw payee descriptions unless explicitly exported with admin scope (services/api-gateway/src/routes/bank-lines.ts:24-85).
 - **Key compromise**: Encryption keys and salts are loaded via environment-driven KMS providers with rotation support (services/api-gateway/src/security/providers.ts:12).
 
 ## Controls & Monitoring

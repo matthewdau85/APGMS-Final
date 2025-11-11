@@ -1,9 +1,10 @@
 // services/api-gateway/src/utils/orgScope.ts
 import { FastifyReply, FastifyRequest } from "fastify";
 
-// roles you consider allowed to create/update bank lines
-const ALLOWED_ROLES_FOR_BANKLINES = ["owner", "admin", "accountant"] as const;
-type AllowedRole = (typeof ALLOWED_ROLES_FOR_BANKLINES)[number];
+import type { Role } from "../lib/auth.js";
+
+// Roles permitted to view or mutate /bank-lines resources.
+const ALLOWED_ROLES_FOR_BANKLINES: ReadonlyArray<Role> = ["admin", "finance", "analyst"];
 
 export function assertOrgAccess(
   request: FastifyRequest,
@@ -33,10 +34,8 @@ export function assertRoleForBankLines(
     return false;
   }
 
-  const userRole = request.user.role;
-  const ok = ALLOWED_ROLES_FOR_BANKLINES.includes(
-    userRole as AllowedRole
-  );
+  const userRole = request.user.role as Role | undefined;
+  const ok = !!userRole && ALLOWED_ROLES_FOR_BANKLINES.includes(userRole);
 
   if (!ok) {
     reply.code(403).send({ error: "forbidden_role" });
