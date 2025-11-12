@@ -16,6 +16,7 @@ const args = ["exec", "prisma", "generate", "--schema", "prisma/schema.prisma"];
 const child = spawn(command, args, {
   stdio: "inherit",
   env,
+  shell: true,
 });
 
 child.on("exit", (code) => {
