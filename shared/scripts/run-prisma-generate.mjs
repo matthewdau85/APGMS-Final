@@ -13,10 +13,14 @@ if (!env.SHADOW_DATABASE_URL) {
 const command = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const args = ["exec", "prisma", "generate", "--schema", "prisma/schema.prisma"];
 
-const child = spawn(command, args, {
+const runner =
+  process.platform === "win32"
+    ? ["cmd.exe", "/d", "/s", "/c", command, ...args]
+    : [command, ...args];
+
+const child = spawn(runner[0], runner.slice(1), {
   stdio: "inherit",
   env,
-  shell: true,
 });
 
 child.on("exit", (code) => {
