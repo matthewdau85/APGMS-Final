@@ -31,6 +31,9 @@ RUN pnpm exec prisma generate --schema shared/prisma/schema.prisma
 WORKDIR /app
 RUN pnpm --filter @apgms/shared build
 RUN pnpm --filter @apgms/domain-policy build
+# ensure connectors sees the freshly compiled domain policy
+RUN mkdir -p node_modules/@apgms/domain-policy && rm -rf node_modules/@apgms/domain-policy/dist
+RUN cp -R packages/domain-policy/dist node_modules/@apgms/domain-policy/dist
 RUN pnpm --filter @apgms/connectors build
 
 # 6. Build JUST the api-gateway package (this runs `tsc`, outputs dist/)
@@ -43,6 +46,7 @@ RUN pnpm --filter @apgms/api-gateway build
 ########################
 FROM node:20-alpine AS runtime
 ENV NODE_ENV=production
+
 
 RUN apk add --no-cache netcat-openbsd
 

@@ -255,6 +255,41 @@ test("mock banking provider credit exercises the shared policy surface", async (
   assert.equal(state.alerts.length, 0);
 });
 
+test("banking provider enforces per-adapter write cap", async () => {
+  const { prisma, state } = createInMemoryPrisma();
+
+  state.designatedAccounts.push({
+    id: "acct-paygw",
+    orgId: "org-1",
+    type: "PAYGW",
+    balance: new Prisma.Decimal(0),
+    updatedAt: new Date(),
+  });
+
+  const provider = createBankingProvider("mock");
+
+  const context = {
+    prisma,
+    orgId: "org-1",
+    actorId: "system",
+    auditLogger: async (entry: any) => {
+      await prisma.auditLog.create({ data: entry });
+    },
+  };
+
+  await assert.rejects(
+    () =>
+      provider.creditDesignatedAccount(context, {
+        accountId: "acct-paygw",
+        amount: provider.capabilities.maxWriteCents + 1,
+        source: "PAYROLL_CAPTURE",
+      }),
+    (error: unknown) => error instanceof AppError && error.code === "banking_write_cap_exceeded",
+  );
+
+  assert.equal(state.designatedTransfers.length, 0);
+});
+
 test("createBankingProvider defaults to mock for unknown adapters", () => {
   const provider = createBankingProvider("new-provider");
   assert.equal(provider.id, "mock");
