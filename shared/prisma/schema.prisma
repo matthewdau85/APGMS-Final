@@ -514,6 +514,12 @@ model MonitoringSnapshot {
   orgId     String
   type      String
   payload   Json
+  computeVersion     String   @default("v1")
+  populationNote     String?
+  consecutivePeriods Int?
+  isMuted            Boolean  @default(false)
+  mutedReason        String?
+  spikes             Json?
   createdAt DateTime @default(now())
 
   @@index([orgId, createdAt])
