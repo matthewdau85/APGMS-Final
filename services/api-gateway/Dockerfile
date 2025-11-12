@@ -27,7 +27,13 @@ COPY . .
 #    This uses shared/prisma/schema.prisma
 RUN pnpm exec prisma generate --schema shared/prisma/schema.prisma
 
-# 5. Build JUST the api-gateway package (this runs `tsc`, outputs dist/)
+# 5. Build shared libraries and connectors so TypeScript path imports resolve
+WORKDIR /app
+RUN pnpm --filter @apgms/shared build
+RUN pnpm --filter @apgms/domain-policy build
+RUN pnpm --filter @apgms/connectors build
+
+# 6. Build JUST the api-gateway package (this runs `tsc`, outputs dist/)
 WORKDIR /app/services/api-gateway
 RUN pnpm --filter @apgms/api-gateway build
 

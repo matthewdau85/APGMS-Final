@@ -46,7 +46,7 @@ services:
       - redis
       - tax-engine
     restart: unless-stopped
-    environment:
+    environment: &gateway_env
       # --- DB URLs ---
       DATABASE_URL: "postgresql://postgres:postgres@db:5432/apgms?schema=public"
       SHADOW_DATABASE_URL: "postgresql://postgres:postgres@db:5432/apgms?schema=public"
@@ -83,6 +83,22 @@ services:
       TAX_ENGINE_URL: "http://tax-engine:8000"
     ports:
       - "3000:3000"
+    networks:
+      - apgmsnet
+
+  worker:
+    build:
+      context: .
+      dockerfile: ./services/api-gateway/Dockerfile
+    image: apgms-final-worker:latest
+    container_name: apgms-worker
+    depends_on:
+      - db
+      - redis
+      - tax-engine
+    restart: on-failure
+    environment: *gateway_env
+    command: pnpm --filter worker exec tsx src/index.ts
     networks:
       - apgmsnet
 
