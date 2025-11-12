@@ -9,6 +9,9 @@
     "dev": "tsx watch src/index.ts"
   },
   "dependencies": {
+    "@apgms/domain-policy": "workspace:*",
+    "@apgms/shared": "workspace:*",
+    "@apgms/connectors": "workspace:*",
     "@fastify/helmet": "^13.0.2",
     "@fastify/rate-limit": "^10.3.0",
     "@opentelemetry/api": "^1.9.0",

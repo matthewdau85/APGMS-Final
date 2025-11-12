@@ -1,4 +1,5 @@
-import { Prisma, type PrismaClient } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
+import { Decimal } from "@prisma/client/runtime/library.js";
 import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
@@ -86,7 +87,7 @@ export function createBankLinesPlugin(deps: BankLineRoutesDeps): FastifyPluginAs
         data: {
           orgId: data.orgId,
           idempotencyKey: data.idempotencyKey,
-          amount: new Prisma.Decimal(data.amount),
+          amount: new Decimal(data.amount),
           date: data.date,
           payeeCiphertext: data.payeeCiphertext,
           payeeKid: data.payeeKid,

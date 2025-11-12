@@ -1,24 +1,33 @@
 // services/api-gateway/src/auth.ts
 import { FastifyReply, FastifyRequest } from "fastify";
-import jwt, { JwtPayload } from "jsonwebtoken";
-import { SignJWT, importJWK, type KeyLike, type JWK } from "jose";
+import jwt, { JwtPayload, type Secret } from "jsonwebtoken";
+import { SignJWT, importJWK, type JWK } from "jose";
 
 import { verifyPassword } from "@apgms/shared";
 import { verifyRequest, AuthError as JwtAuthError, type Principal } from "./lib/auth.js";
 
 import { prisma } from "./db.js";
 
-const AUD = process.env.AUTH_AUDIENCE!;
-const ISS = process.env.AUTH_ISSUER!;
-const SECRET = process.env.AUTH_DEV_SECRET;
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`${name} is required`);
+  }
+  return value;
+}
+
+const AUD = requireEnv("AUTH_AUDIENCE");
+const ISS = requireEnv("AUTH_ISSUER");
+const SECRET: Secret | undefined = process.env.AUTH_DEV_SECRET;
+const regulatorAudience = process.env.REGULATOR_JWT_AUDIENCE?.trim();
 const REGULATOR_AUD =
-  process.env.REGULATOR_JWT_AUDIENCE?.trim().length
-    ? process.env.REGULATOR_JWT_AUDIENCE!.trim()
+  regulatorAudience && regulatorAudience.length
+    ? regulatorAudience
     : "urn:apgms:regulator";
 
 type SigningKey = {
   kid: string;
-  key: KeyLike;
+  key: Parameters<typeof SignJWT.prototype.sign>[0];
   alg: string;
 };
 
@@ -46,11 +55,23 @@ async function loadSigningKey(): Promise<SigningKey | null> {
     return null;
   }
   const key = await importJWK(jwk, jwk.alg);
-  signingKeyCache = { kid: jwk.kid, key, alg: jwk.alg };
+  const kid = jwk.kid;
+  const alg = jwk.alg;
+  if (!kid || !alg) {
+    throw new Error("JWT header missing kid or alg");
+  }
+  signingKeyCache = { kid, key, alg };
   return signingKeyCache;
 }
 
-export type TokenClaims = JwtPayload & Record<string, unknown>;
+export type TokenClaims = JwtPayload & {
+  orgId?: string;
+  org?: string;
+  roles?: string[];
+  role?: string;
+  regulator?: boolean;
+  sessionId?: string;
+};
 
 export interface SignTokenOptions {
   audience?: string;
@@ -122,16 +143,19 @@ export async function signToken(
     return token;
   }
 
-  if (!SECRET) {
+  const secret = SECRET;
+  if (!secret) {
     throw new Error("AUTH_DEV_SECRET is required when no JWKS signing key is configured");
   }
-
-  return jwt.sign(payload, SECRET, {
+  const signingSecret: Secret = secret;
+  const signOptions: jwt.SignOptions = {
     algorithm: "HS256",
     audience,
     issuer,
-    expiresIn,
-  });
+    expiresIn: expiresIn as jwt.SignOptions["expiresIn"],
+  };
+
+  return jwt.sign(payload, signingSecret, signOptions);
 }
 
 type GuardValidateFn = (

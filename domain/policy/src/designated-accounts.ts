@@ -9,14 +9,14 @@ import {
   type DesignatedTransferSource,
 } from "@apgms/shared/ledger";
 
-type AuditLogger = (entry: {
+export type AuditLogger = (entry: {
   orgId: string;
   actorId: string;
   action: string;
   metadata: Record<string, unknown>;
 }) => Promise<void>;
 
-type PolicyContext = {
+export type PolicyContext = {
   prisma: PrismaClient;
   auditLogger?: AuditLogger;
 };

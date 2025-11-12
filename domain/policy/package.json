@@ -1,0 +1,21 @@
+{
+  "name": "@apgms/domain-policy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/designated-accounts.js",
+  "types": "./dist/designated-accounts.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/designated-accounts.d.ts",
+      "default": "./dist/designated-accounts.js"
+    }
+  },
+  "dependencies": {
+    "@apgms/shared": "workspace:*",
+    "@prisma/client": "^6.17.1"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
+}

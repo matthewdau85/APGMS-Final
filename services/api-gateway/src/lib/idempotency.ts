@@ -1,6 +1,7 @@
 // services/api-gateway/src/lib/idempotency.ts
+import { Prisma } from "@prisma/client";
 import { createHash } from "node:crypto";
-import { Prisma, type PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { conflict } from "@apgms/shared";
 
 type Ctx = {

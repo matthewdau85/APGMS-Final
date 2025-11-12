@@ -20,6 +20,7 @@ export interface Principal {
   token: string;
   mfaEnabled: boolean;
   regulator?: boolean;
+  sessionId?: string;
 }
 
 interface InternalKey {
@@ -131,7 +132,7 @@ export async function verifyRequest(
     let verification;
     try {
       verification = await jwtVerify(token, async (header) => {
-        const { kid: headerKid } = header;
+        const headerKid = header.kid;
         const key = await resolveKey(headerKid);
         kid = headerKid;
         return key.key as any;
@@ -167,7 +168,7 @@ export async function verifyRequest(
         id: principal.id,
         org: principal.orgId,
         roles: principal.roles,
-        kid: protectedHeader.kid,
+        kid,
       },
     },
     "verified principal",
@@ -182,10 +183,23 @@ function buildPrincipalFromPayload(
   token: string,
 ): Principal {
   const sub = payload.sub;
-  const orgId = typeof payload.org === "string" ? payload.org : undefined;
-  const roles = normaliseRoles(payload.roles);
+  const orgId =
+    typeof payload.orgId === "string"
+      ? payload.orgId
+      : typeof payload.org === "string"
+      ? payload.org
+      : undefined;
+  const normalizedRoles =
+    typeof payload.roles !== "undefined"
+      ? payload.roles
+      : typeof payload.role === "string"
+      ? [payload.role]
+      : undefined;
+  const roles = normaliseRoles(normalizedRoles);
   const mfaEnabled = payload.mfaEnabled === true;
   const regulator = payload.regulator === true;
+  const sessionId =
+    typeof payload.sessionId === "string" ? payload.sessionId : undefined;
 
   if (!sub || !orgId) {
     throw new AuthError("Token missing required claims");
@@ -201,6 +215,7 @@ function buildPrincipalFromPayload(
     token,
     mfaEnabled,
     regulator,
+    sessionId,
   };
 }
 

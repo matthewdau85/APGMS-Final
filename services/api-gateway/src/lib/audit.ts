@@ -46,7 +46,7 @@ export async function recordAuditLog({
         orgId,
         actorId,
         action,
-        metadata: metadataValue ?? Prisma.JsonNull,
+    metadata: metadataValue ?? Prisma.JsonNull,
         createdAt,
         hash,
         prevHash,

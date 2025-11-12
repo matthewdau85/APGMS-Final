@@ -5,7 +5,9 @@ import { parseWithSchema } from "../lib/validation.js";
 import { assertOrgAccess, assertRoleForBankLines } from "../utils/orgScope.js";
 import { prisma } from "../db.js";
 import { recordAuditLog } from "../lib/audit.js";
-import { capturePayroll, capturePos } from "../../../connectors/src/index.js";
+import { capturePayroll, capturePos } from "@apgms/connectors";
+import type { AuditLogger } from "@apgms/domain-policy";
+import type { JsonValue } from "@prisma/client/runtime/library.js";
 
 const CaptureBodySchema = z.object({
   orgId: z.string().min(1),
@@ -27,12 +29,16 @@ const defaultConnectorDeps: ConnectorRoutesDeps = {
 function captureContext(request: FastifyRequest) {
   return {
     prisma,
-    auditLogger: async (entry) => {
-      await recordAuditLog({
+    auditLogger: async (entry: Parameters<AuditLogger>[0]) => {
+      const metadata =
+        entry.metadata == null
+          ? null
+          : (JSON.parse(JSON.stringify(entry.metadata)) as JsonValue);
+      return recordAuditLog({
         orgId: entry.orgId,
         actorId: entry.actorId,
         action: entry.action,
-        metadata: entry.metadata ?? null,
+        metadata,
         throwOnError: true,
       });
     },
@@ -59,7 +65,7 @@ async function processCapture(
   const context = captureContext(request as FastifyRequest);
 
   const captureFn = type === "payroll" ? deps.capturePayroll : deps.capturePos;
-  const result = await captureFn(context, { ...payload, actorId }, deps);
+  const result = await captureFn(context, { ...payload, actorId });
 
   reply.send(result);
 }

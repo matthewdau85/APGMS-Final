@@ -11,10 +11,13 @@
                             "baseUrl":  ".",
                             "paths":  {
                                           "@apgms/shared/*":  [
-                                                                  "shared/src/*"
+                                                                  "shared/dist/*"
                                                               ],
                                           "@apgms/shared":  [
-                                                                  "shared/src/index.ts"
+                                                                  "shared/dist/index"
+                                                              ],
+                                          "@apgms/domain-policy": [
+                                                                  "domain/policy/dist/designated-accounts"
                                                               ]
                                       },
                             "types":  [

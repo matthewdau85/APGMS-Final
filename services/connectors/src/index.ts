@@ -5,17 +5,13 @@ import {
   generateDesignatedAccountReconciliationArtifact,
   type ApplyDesignatedTransferInput,
   type ApplyDesignatedTransferResult,
+  type AuditLogger,
   type DesignatedReconciliationSummary,
-} from "../../domain/policy/designated-accounts.js";
+} from "@apgms/domain-policy";
 
 export type ConnectorContext = {
   prisma: PrismaClient;
-  auditLogger?: (entry: {
-    orgId: string;
-    actorId: string;
-    action: string;
-    metadata?: Record<string, unknown> | null;
-  }) => Promise<void> | void;
+  auditLogger?: AuditLogger;
 };
 
 export type CaptureInput = {

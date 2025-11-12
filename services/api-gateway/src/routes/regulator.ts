@@ -1,5 +1,5 @@
-import type { FastifyInstance, FastifyRequest } from "fastify";
-import { Prisma } from "@prisma/client";
+import type { Decimal, JsonValue } from "@prisma/client/runtime/library.js";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { prisma } from "../db.js";
 import { recordAuditLog } from "../lib/audit.js";
@@ -32,11 +32,14 @@ async function logRegulatorAction(
     orgId: ensureOrgId(request),
     actorId: actorIdFrom(request),
     action,
-    metadata: metadata ?? null,
+    metadata:
+      metadata == null
+        ? null
+        : (JSON.parse(JSON.stringify(metadata)) as JsonValue),
   });
 }
 
-function toNumber(value: Prisma.Decimal | null | undefined): number {
+function toNumber(value: Decimal | null | undefined): number {
   if (!value) return 0;
   return Number(value);
 }
