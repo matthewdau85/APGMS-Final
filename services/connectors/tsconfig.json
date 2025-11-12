@@ -10,6 +10,12 @@
     "baseUrl": ".",
     "composite": false,
     "allowJs": true,
+    "paths": {
+      "@apgms/shared": ["../../shared/dist/index"],
+      "@apgms/shared/*": ["../../shared/dist/*"],
+      "@apgms/domain-policy": ["../../packages/domain-policy/dist/index"],
+      "@apgms/domain-policy/*": ["../../packages/domain-policy/dist/*"]
+    }
   },
   "include": ["src"]
 }
