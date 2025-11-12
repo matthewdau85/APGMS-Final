@@ -133,6 +133,7 @@ export default function RegulatorMonitoringPage() {
 
 function SnapshotDetail({ snapshot }: { snapshot: Snapshot }) {
   const payload = snapshot.payload;
+  const concentration = payload.detectorConcentration ?? null;
   return (
     <div style={detailContentStyle}>
       <header style={detailHeaderStyle}>
@@ -199,6 +200,11 @@ function SnapshotDetail({ snapshot }: { snapshot: Snapshot }) {
             </div>
           )}
         </div>
+
+        <div style={cardStyle}>
+          <h3 style={cardTitleStyle}>Detector concentration</h3>
+          <DetectorConcentrationCard concentration={concentration} />
+        </div>
       </div>
 
       <div style={payloadWrapperStyle}>
@@ -210,6 +216,109 @@ function SnapshotDetail({ snapshot }: { snapshot: Snapshot }) {
         </div>
         <pre style={payloadPreStyle}>{JSON.stringify(payload, null, 2)}</pre>
       </div>
+    </div>
+  );
+}
+
+type DetectorConcentration = NonNullable<Snapshot["payload"]["detectorConcentration"]>;
+
+function DetectorConcentrationCard({
+  concentration,
+}: {
+  concentration: Snapshot["payload"]["detectorConcentration"] | null;
+}) {
+  if (!concentration || concentration.totalFlagged === 0) {
+    return <div style={emptyStateStyle}>No flagged detector activity in this snapshot.</div>;
+  }
+
+  const headlineVendor = concentration.vendorShare[0] ?? null;
+  const headlineApprover = concentration.approverShare[0] ?? null;
+
+  return (
+    <div style={cardBodyStyle}>
+      <p style={concentrationCopyStyle}>
+        {`Detectors highlighted ${concentration.totalFlagged} rows for analyst review. The breakdown below helps ensure approval boundaries stay healthy and vendors aren't dominating remediation cycles.`}
+      </p>
+      <div style={concentrationChipRowStyle}>
+        {headlineVendor ? (
+          <ConcentrationChip
+            label="Primary vendor exposure"
+            entry={headlineVendor}
+            total={concentration.totalFlagged}
+          />
+        ) : null}
+        {headlineApprover ? (
+          <ConcentrationChip
+            label="Primary approver exposure"
+            entry={headlineApprover}
+            total={concentration.totalFlagged}
+          />
+        ) : null}
+      </div>
+      <div style={concentrationTableGridStyle}>
+        <ConcentrationTable title="Vendors" rows={concentration.vendorShare} />
+        <ConcentrationTable title="Approvers" rows={concentration.approverShare} />
+      </div>
+    </div>
+  );
+}
+
+function ConcentrationChip({
+  label,
+  entry,
+  total,
+}: {
+  label: string;
+  entry: DetectorConcentration["vendorShare"][number];
+  total: number;
+}) {
+  const percentage = formatPercentage(entry.percentage);
+  return (
+    <div style={concentrationChipStyle}>
+      <span style={chipLabelStyle}>{label}</span>
+      <strong style={chipValueStyle}>{entry.name}</strong>
+      <span style={chipMetaStyle}>
+        {entry.count} of {total} flagged rows · {percentage}
+      </span>
+    </div>
+  );
+}
+
+function ConcentrationTable({
+  title,
+  rows,
+}: {
+  title: string;
+  rows: DetectorConcentration["vendorShare"];
+}) {
+  if (rows.length === 0) {
+    return (
+      <div style={concentrationTableStyle}>
+        <div style={concentrationTableTitleStyle}>{title}</div>
+        <div style={emptyStateStyle}>No recurring exposure detected.</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={concentrationTableStyle}>
+      <div style={concentrationTableTitleStyle}>{title}</div>
+      <table style={concentrationTableElementStyle}>
+        <thead>
+          <tr>
+            <th style={concentrationHeaderCellStyle}>Name</th>
+            <th style={concentrationHeaderCellStyle}>Share</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.name}>
+              <td style={concentrationCellStyle}>{row.name}</td>
+              <td style={concentrationCellStyle}>{formatPercentage(row.percentage)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -284,6 +393,10 @@ function formatCurrency(amount: number): string {
     currency: "AUD",
     maximumFractionDigits: 2,
   }).format(amount);
+}
+
+function formatPercentage(value: number): string {
+  return `${value.toFixed(1)}%`;
 }
 
 const panelStyle: React.CSSProperties = {
@@ -404,6 +517,84 @@ const detailGridStyle: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
   gap: "20px",
+};
+
+const concentrationCopyStyle: React.CSSProperties = {
+  fontSize: "13px",
+  color: "#475569",
+  lineHeight: 1.5,
+  margin: 0,
+};
+
+const concentrationChipRowStyle: React.CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "12px",
+};
+
+const concentrationChipStyle: React.CSSProperties = {
+  background: "rgba(15, 118, 110, 0.12)",
+  borderRadius: "12px",
+  padding: "12px 16px",
+  color: "#0f766e",
+  display: "grid",
+  gap: "4px",
+  minWidth: "180px",
+};
+
+const chipLabelStyle: React.CSSProperties = {
+  fontSize: "11px",
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+};
+
+const chipValueStyle: React.CSSProperties = {
+  fontSize: "16px",
+  fontWeight: 600,
+};
+
+const chipMetaStyle: React.CSSProperties = {
+  fontSize: "12px",
+  color: "#0f766e",
+};
+
+const concentrationTableGridStyle: React.CSSProperties = {
+  display: "grid",
+  gap: "16px",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+};
+
+const concentrationTableStyle: React.CSSProperties = {
+  border: "1px solid #e2e8f0",
+  borderRadius: "10px",
+  padding: "12px",
+  display: "grid",
+  gap: "12px",
+};
+
+const concentrationTableTitleStyle: React.CSSProperties = {
+  fontSize: "13px",
+  fontWeight: 600,
+  color: "#0f172a",
+};
+
+const concentrationTableElementStyle: React.CSSProperties = {
+  width: "100%",
+  borderCollapse: "collapse",
+};
+
+const concentrationHeaderCellStyle: React.CSSProperties = {
+  textAlign: "left",
+  fontSize: "12px",
+  color: "#475569",
+  paddingBottom: "8px",
+  borderBottom: "1px solid #e2e8f0",
+};
+
+const concentrationCellStyle: React.CSSProperties = {
+  fontSize: "13px",
+  color: "#0f172a",
+  padding: "6px 0",
 };
 
 const cardStyle: React.CSSProperties = {

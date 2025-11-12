@@ -343,6 +343,7 @@ model Org {
   paymentPlanRequests PaymentPlanRequest[]
   regulatorSessions RegulatorSession[]
   monitoringSnapshots MonitoringSnapshot[]
+  metrics   Metric[]
 
   // payroll backrefs
   employees  Employee[]
@@ -506,6 +507,19 @@ model RegulatorSession {
 
   @@index([orgId, createdAt])
   @@index([orgId, expiresAt])
+}
+
+model Metric {
+  id         String   @id @default(cuid())
+  org        Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId      String
+  key        String
+  scope      String?
+  data       Json
+  recordedAt DateTime @default(now())
+
+  @@index([orgId, key, recordedAt])
+  @@index([orgId, scope, key])
 }
 
 model MonitoringSnapshot {
