@@ -21,3 +21,4 @@ export * from "./security/secret-manager.js";
 export * from "./messaging/event-bus.js";
 export * from "./messaging/in-memory-bus.js";
 export * from "./messaging/nats-bus.js";
+export * from "./pii/index.js";
