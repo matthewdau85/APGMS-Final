@@ -565,6 +565,19 @@ export async function fetchRegulatorMonitoringSnapshots(token: string, limit = 5
           }>;
         };
         paymentPlansOpen: number;
+        detectorConcentration: null | {
+          totalFlagged: number;
+          vendorShare: Array<{
+            name: string;
+            count: number;
+            percentage: number;
+          }>;
+          approverShare: Array<{
+            name: string;
+            count: number;
+            percentage: number;
+          }>;
+        };
         designatedTotals: {
           paygw: number;
           gst: number;
