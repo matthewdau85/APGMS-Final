@@ -13,6 +13,8 @@ The controls added in Phase 4.5 cover three pillars:
   from whitelisted capture sources: `PAYROLL_CAPTURE`, `GST_CAPTURE`, or
   `BAS_ESCROW`. Any debit attempt is rejected, logged, and automatically produces
   a HIGH severity `DESIGNATED_WITHDRAWAL_ATTEMPT` alert for regulator review.
+  Alerts carry the pre-defined message `Designated accounts are deposit-only; debits are prohibited`,
+  matching the policy violation so regulators can immediately understand why the transfer failed.
 
 - **Nightly reconciliation artefact**  
   A worker job emits a `designated-reconciliation` evidence artefact, including
@@ -37,4 +39,3 @@ The controls added in Phase 4.5 cover three pillars:
 3. Monitor for `DESIGNATED_WITHDRAWAL_ATTEMPT` alerts on the regulator portal.
    Each alert includes metadata describing the blocked request, satisfying the
    “no withdrawals from designated accounts” patent control.
-
