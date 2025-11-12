@@ -1,5 +1,6 @@
 packages:
   - services/*
+  - domain/*
   - webapp
   - shared
   - apps/*

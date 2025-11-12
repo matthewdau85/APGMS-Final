@@ -1,5 +1,6 @@
-﻿import crypto from "node:crypto";
-import type { Prisma, MfaCredential } from "@prisma/client";
+import crypto from "node:crypto";
+import type { InputJsonValue } from "@prisma/client/runtime/library.js";
+import type { MfaCredential } from "@prisma/client";
 
 import { prisma } from "../db.js";
 import { sealObject, unsealObject, type EncryptionEnvelope } from "./encryption.js";
@@ -31,8 +32,8 @@ function envelopeFromRecord(record: MfaCredential): EncryptionEnvelope {
   return record.data as unknown as EncryptionEnvelope;
 }
 
-function toJson(envelope: EncryptionEnvelope): Prisma.InputJsonValue {
-  return envelope as unknown as Prisma.InputJsonValue;
+function toJson(envelope: EncryptionEnvelope): InputJsonValue {
+  return envelope as unknown as InputJsonValue;
 }
 
 export async function getTotpCredential(userId: string): Promise<{
@@ -226,4 +227,3 @@ export async function hasTotp(userId: string): Promise<boolean> {
   });
   return count > 0;
 }
-

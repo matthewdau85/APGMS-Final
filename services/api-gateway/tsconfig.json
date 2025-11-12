@@ -16,8 +16,9 @@
     "sourceMap": true,
     "baseUrl": "./src",
     "paths": {
-      "@apgms/shared": ["../../../shared/dist/index.d.ts"],
-      "@apgms/shared/*": ["../../../shared/dist/*"]
+      "@apgms/shared": ["../../../shared/dist/index"],
+      "@apgms/shared/*": ["../../../shared/dist/*"],
+      "@apgms/domain-policy": ["../../domain/policy/dist/designated-accounts"]
     }
   },
   "include": ["src"]

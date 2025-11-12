@@ -194,12 +194,12 @@ export function createAuditLogger(prisma: any): AuditLogger {
 
 function coerceMetadata(
   metadata: AuditEvent["metadata"] | undefined
-): Prisma.JsonValue | null {
+    ): Prisma.JsonValue | null {
   if (metadata == null) {
     return null;
   }
-  const jsonSafe = JSON.parse(JSON.stringify(metadata));
-  return jsonSafe as Prisma.JsonValue;
+      const jsonSafe = JSON.parse(JSON.stringify(metadata));
+      return jsonSafe as Prisma.JsonValue;
 }
 
 async function readJsonSecret<T>(
@@ -229,6 +229,3 @@ function parseJson<T>(value: string, name: string): T {
     throw new Error(`${name} must contain valid JSON`);
   }
 }
-
-
-

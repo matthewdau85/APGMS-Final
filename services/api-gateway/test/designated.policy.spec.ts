@@ -6,7 +6,7 @@ import { Prisma } from "@prisma/client";
 import {
   applyDesignatedAccountTransfer,
   generateDesignatedAccountReconciliationArtifact,
-} from "../../../domain/policy/designated-accounts.js";
+} from "@apgms/domain-policy";
 import { createBankingProvider } from "../../../providers/banking/index.js";
 
 type DesignatedAccountState = {
