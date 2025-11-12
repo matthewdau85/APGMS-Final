@@ -7,5 +7,9 @@
                     "build":  "echo build worker",
                     "test":  "echo test worker",
                     "typecheck":  "echo no typecheck for worker"
-                }
+                },
+    "dependencies": {
+        "@apgms/feature-flags": "workspace:*",
+        "@prisma/client": "^6.17.1"
+    }
 }

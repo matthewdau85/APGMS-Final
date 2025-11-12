@@ -45,6 +45,12 @@ enum AlertStatus {
   CLOSED
 }
 
+enum DetectorMuteScope {
+  TENANT
+  STREAM
+  PERIOD
+}
+
 // =========================
 // Payroll domain
 // =========================
@@ -392,6 +398,24 @@ model Alert {
 
   @@index([orgId, createdAt])
   @@index([orgId, resolvedAt])
+}
+
+model DetectorMute {
+  id         String            @id @default(cuid())
+  org        Org               @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId      String
+  scope      DetectorMuteScope
+  streamId   String?
+  period     String?
+  reason     String?
+  expiresAt  DateTime?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  createdBy  String
+  updatedBy  String?
+
+  @@index([orgId, scope, streamId, period], map: "DetectorMute_org_scope_target_idx")
+  @@index([orgId, expiresAt], map: "DetectorMute_org_expires_idx")
 }
 
 model BasCycle {

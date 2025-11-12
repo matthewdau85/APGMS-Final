@@ -15,6 +15,18 @@
                                                               ],
                                           "@apgms/shared":  [
                                                                   "shared/src/index.ts"
+                                                              ],
+                                          "@apgms/feature-flags": [
+                                                                  "packages/feature-flags/src/index.ts"
+                                                              ],
+                                          "@apgms/feature-flags/*": [
+                                                                  "packages/feature-flags/src/*"
+                                                              ],
+                                          "@apgms/events": [
+                                                                  "services/events/src/index.ts"
+                                                              ],
+                                          "@apgms/events/*": [
+                                                                  "services/events/src/*"
                                                               ]
                                       },
                             "types":  [

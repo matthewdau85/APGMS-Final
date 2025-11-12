@@ -17,7 +17,11 @@
     "baseUrl": "./src",
     "paths": {
       "@apgms/shared": ["../../../shared/dist/index.d.ts"],
-      "@apgms/shared/*": ["../../../shared/dist/*"]
+      "@apgms/shared/*": ["../../../shared/dist/*"],
+      "@apgms/feature-flags": ["../../packages/feature-flags/src/index.ts"],
+      "@apgms/feature-flags/*": ["../../packages/feature-flags/src/*"],
+      "@apgms/events": ["../events/src/index.ts"],
+      "@apgms/events/*": ["../events/src/*"]
     }
   },
   "include": ["src"]
