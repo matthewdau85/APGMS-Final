@@ -210,7 +210,11 @@ export async function fetchBenfordRawSamples(
   }
 
   const baseUrl = options.ledgerBaseUrl ?? process.env.LEDGER_API_URL ?? "http://ledger:3000";
-  const url = new URL(`/detectors/benford/raw/${encodeURIComponent(reference)}`, baseUrl);
+  const baseUrlWithTrailingSlash = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+  const url = new URL(
+    `detectors/benford/raw/${encodeURIComponent(reference)}`,
+    baseUrlWithTrailingSlash,
+  );
   if (options.limit !== undefined && Number.isFinite(options.limit)) {
     url.searchParams.set("limit", String(options.limit));
   }
