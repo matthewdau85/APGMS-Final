@@ -519,3 +519,18 @@ model MonitoringSnapshot {
   @@index([orgId, createdAt])
   @@index([orgId, type, createdAt])
 }
+
+model OneWayAccount {
+  id            String   @id @default(cuid())
+  orgId         String
+  org           Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  taxType       String
+  balance       Decimal  @db.Decimal(24, 8) @default("0")
+  lastDepositAt DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([orgId, taxType])
+  @@index([taxType])
+  @@index([orgId])
+}
