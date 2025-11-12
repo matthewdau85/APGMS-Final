@@ -97,6 +97,40 @@ test("prefers period mute over stream", () => {
   assert.equal(evaluation.source?.id, "period-mute");
 });
 
+test("falls back to non-expired mute when higher priority mute expired", () => {
+  const now = new Date("2025-02-01T00:00:00Z");
+  const records: DetectorMuteRecord[] = [
+    {
+      id: "expired-period",
+      orgId: "tenant-1",
+      scope: "PERIOD",
+      streamId: "stream-a",
+      period: "2025-01",
+      expiresAt: new Date("2025-01-15T00:00:00Z"),
+    },
+    {
+      id: "active-stream",
+      orgId: "tenant-1",
+      scope: "STREAM",
+      streamId: "stream-a",
+    },
+  ];
+
+  const evaluation = evaluateMute(
+    records,
+    {
+      tenantId: "tenant-1",
+      streamId: "stream-a",
+      period: "2025-02",
+    },
+    now,
+  );
+
+  assert.equal(evaluation.muted, true);
+  assert.equal(evaluation.reason, "STREAM_MUTED");
+  assert.equal(evaluation.source?.id, "active-stream");
+});
+
 test("marks expired mute as not muted", () => {
   const now = new Date("2025-02-01T00:00:00Z");
   const records: DetectorMuteRecord[] = [
