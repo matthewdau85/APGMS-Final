@@ -3,6 +3,11 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "../db.js";
 import { recordAuditLog } from "../lib/audit.js";
+import {
+  fetchBenfordSamplesForSnapshot,
+  isBenfordSnapshot,
+  mapBenfordSnapshot,
+} from "../lib/benford/index.js";
 
 type RegulatorRequest = FastifyRequest & {
   user?: { orgId?: string; sub?: string };
@@ -172,15 +177,66 @@ export async function registerRegulatorRoutes(app: FastifyInstance) {
 
     await logRegulatorAction(request, "regulator.monitoring.snapshots", { limit });
 
-    return {
-      snapshots: snapshots.map((snapshot) => ({
+    const mapped = snapshots.map((snapshot) => {
+      const benford = mapBenfordSnapshot(snapshot);
+      if (benford) {
+        return benford.api;
+      }
+      return {
         id: snapshot.id,
         type: snapshot.type,
         createdAt: snapshot.createdAt.toISOString(),
         payload: snapshot.payload,
-      })),
+      };
+    });
+
+    return {
+      snapshots: mapped,
     };
   });
+
+  app.get(
+    "/regulator/monitoring/snapshots/:snapshotId/raw-samples",
+    async (request: RegulatorRequest, reply) => {
+      const orgId = ensureOrgId(request);
+      const { snapshotId } = request.params as { snapshotId: string };
+
+      const snapshot = await prisma.monitoringSnapshot.findUnique({
+        where: { id: snapshotId },
+      });
+
+      if (!snapshot || snapshot.orgId !== orgId) {
+        reply.code(404).send({ error: "snapshot_not_found" });
+        return;
+      }
+
+      if (!isBenfordSnapshot(snapshot)) {
+        reply.code(400).send({ error: "raw_samples_not_supported" });
+        return;
+      }
+
+      const limitParam = Number((request.query as { limit?: string | number }).limit ?? NaN);
+      const limit = Number.isFinite(limitParam) && limitParam > 0 ? Math.trunc(limitParam) : undefined;
+
+      try {
+        const samples = await fetchBenfordSamplesForSnapshot(snapshot, {
+          ledgerBaseUrl: process.env.LEDGER_API_URL,
+          authToken: request.headers.authorization,
+          limit,
+        });
+
+        await logRegulatorAction(request, "regulator.monitoring.snapshot.raw", {
+          snapshotId,
+          samples: samples.length,
+        });
+
+        return { samples };
+      } catch (error) {
+        request.log.error({ err: error, snapshotId }, "ledger_raw_samples_failed");
+        reply.code(502).send({ error: "ledger_fetch_failed" });
+      }
+    },
+  );
 
   app.get("/regulator/evidence", async (request: RegulatorRequest) => {
     const orgId = ensureOrgId(request);

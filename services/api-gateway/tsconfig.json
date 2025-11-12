@@ -17,7 +17,9 @@
     "baseUrl": "./src",
     "paths": {
       "@apgms/shared": ["../../../shared/dist/index.d.ts"],
-      "@apgms/shared/*": ["../../../shared/dist/*"]
+      "@apgms/shared/*": ["../../../shared/dist/*"],
+      "@apgms/detector-number-patterns": ["../detectors/number-patterns/src/index.ts"],
+      "@apgms/detector-number-patterns/*": ["../detectors/number-patterns/src/*"]
     }
   },
   "include": ["src"]
