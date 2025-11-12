@@ -18,7 +18,7 @@
     "paths": {
       "@apgms/shared": ["../../../shared/dist/index"],
       "@apgms/shared/*": ["../../../shared/dist/*"],
-      "@apgms/domain-policy": ["../../domain/policy/dist/designated-accounts"]
+      "@apgms/domain-policy": ["../../packages/domain-policy/dist/index"]
     }
   },
   "include": ["src"]

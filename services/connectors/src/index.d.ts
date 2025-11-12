@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
-import { applyDesignatedAccountTransfer, generateDesignatedAccountReconciliationArtifact, type ApplyDesignatedTransferResult, type DesignatedReconciliationSummary } from "../../domain/policy/designated-accounts.js";
+import { applyDesignatedAccountTransfer, generateDesignatedAccountReconciliationArtifact, type ApplyDesignatedTransferResult, type DesignatedReconciliationSummary } from "@apgms/domain-policy";
 export type ConnectorContext = {
     prisma: PrismaClient;
     auditLogger?: (entry: {

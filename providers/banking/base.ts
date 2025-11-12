@@ -3,7 +3,7 @@ import { AppError } from "@apgms/shared";
 import {
   applyDesignatedAccountTransfer,
   type ApplyDesignatedTransferResult,
-} from "../../domain/policy/designated-accounts.js";
+} from "@apgms/domain-policy";
 import type {
   BankingProvider,
   BankingProviderCapabilities,

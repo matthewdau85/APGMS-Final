@@ -3,7 +3,7 @@ import type { PrismaClient } from "@prisma/client";
 import type {
   ApplyDesignatedTransferResult,
   ApplyDesignatedTransferInput,
-} from "../../domain/policy/designated-accounts.js";
+} from "@apgms/domain-policy";
 
 export type BankingProviderId = "nab" | "anz" | "mock";
 

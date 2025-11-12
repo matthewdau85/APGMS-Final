@@ -1,4 +1,4 @@
-import { applyDesignatedAccountTransfer, generateDesignatedAccountReconciliationArtifact, } from "../../domain/policy/designated-accounts.js";
+import { applyDesignatedAccountTransfer, generateDesignatedAccountReconciliationArtifact, } from "@apgms/domain-policy";
 const defaultDependencies = {
     applyTransfer: applyDesignatedAccountTransfer,
     generateArtifact: generateDesignatedAccountReconciliationArtifact,
