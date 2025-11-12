@@ -18,6 +18,7 @@
     "@opentelemetry/semantic-conventions": "^1.23.0",
     "@prisma/client": "^6.17.1",
     "@simplewebauthn/server": "^13.2.2",
+    "@apgms/audit-logger": "workspace:*",
     "bcryptjs": "^3.0.3",
     "fastify-plugin": "^5.1.0",
     "jose": "^6.1.0",

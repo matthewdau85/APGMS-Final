@@ -10,3 +10,4 @@ export * from "./security/secret-manager";
 export * from "./messaging/event-bus";
 export * from "./messaging/in-memory-bus";
 export * from "./messaging/nats-bus";
+export * from "./pii/index.js";
