@@ -565,6 +565,20 @@ model IntegrationObligation {
   @@index([eventId])
 }
 
+model BasLodgment {
+  id          String    @id @default(cuid())
+  orgId       String
+  org         Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  initiatedBy String?
+  taxTypes    String[]
+  result      Json?
+  status      String    @default("queued")
+  createdAt   DateTime  @default(now())
+  processedAt DateTime?
+
+  @@index([orgId, status])
+}
+
 
 model IntegrationEvent {
   id         String      @id @default(cuid())
