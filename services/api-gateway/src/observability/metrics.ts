@@ -45,6 +45,19 @@ const jobDuration = new Histogram({
   buckets: [0.1, 0.25, 0.5, 1, 2, 5, 10, 30],
 });
 
+const integrationEventDuration = new Histogram({
+  name: 'apgms_integration_event_duration_seconds',
+  help: 'Time to process payroll / POS integration events',
+  labelNames: ['tax_type', 'status'] as const,
+  buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1],
+});
+
+const integrationEventsTotal = new Counter({
+  name: 'apgms_integration_events_total',
+  help: 'Total payroll / POS integration events processed',
+  labelNames: ['tax_type', 'status'] as const,
+});
+
 // ---- Public API for DB/jobs instrumentation ----
 export const metrics = {
   httpRequestTotal,
@@ -52,6 +65,8 @@ export const metrics = {
   dbQueryDuration,
   dbQueryTotal,
   jobDuration,
+  integrationEventDuration,
+  integrationEventsTotal,
 
   async observeJob<T>(job: string, fn: () => Promise<T>): Promise<T> {
     const stop = jobDuration.startTimer({ job });

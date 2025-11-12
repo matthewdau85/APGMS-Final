@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { depositToOneWayAccount, markIntegrationEventProcessed, recordIntegrationEvent, TaxObligation } from "@apgms/shared";
 import { parseWithSchema } from "../lib/validation.js";
+import { metrics } from "../observability/metrics.js";
 
 const IntegrationEventSchema = z.object({
   orgId: z.string().min(1),
@@ -25,6 +26,7 @@ async function handleIntegrationEvent(
   taxType: TaxObligation,
 ) {
   const payload = parseWithSchema(IntegrationEventSchema, request.body);
+  const stopTimer = metrics.integrationEventDuration.startTimer({ tax_type: taxType });
   const event = await recordIntegrationEvent({
     orgId: payload.orgId,
     taxType,
@@ -32,13 +34,21 @@ async function handleIntegrationEvent(
     amount: payload.amount,
     metadata: payload.metadata,
   });
-  await depositToOneWayAccount({
-    orgId: payload.orgId,
-    taxType,
-    amount: payload.amount,
-  });
-  await markIntegrationEventProcessed(event.id);
-  reply.code(201).send({ eventId: event.id });
+  try {
+    await depositToOneWayAccount({
+      orgId: payload.orgId,
+      taxType,
+      amount: payload.amount,
+    });
+    await markIntegrationEventProcessed(event.id);
+    metrics.integrationEventsTotal.inc({ tax_type: taxType, status: "success" });
+    stopTimer({ status: "success" });
+    reply.code(201).send({ eventId: event.id });
+  } catch (error) {
+    metrics.integrationEventsTotal.inc({ tax_type: taxType, status: "failed" });
+    stopTimer({ status: "failed" });
+    throw error;
+  }
 }
 
 export async function registerIntegrationEventRoutes(app: FastifyInstance) {
