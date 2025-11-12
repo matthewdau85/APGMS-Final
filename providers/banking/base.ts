@@ -36,6 +36,14 @@ export abstract class BaseBankingProvider implements BankingProvider {
       );
     }
 
+    if (input.amount > this.capabilities.maxWriteCents) {
+      throw new AppError(
+        400,
+        "banking_write_cap_exceeded",
+        `Amount ${input.amount} exceeds ${this.id} capability of ${this.capabilities.maxWriteCents}`,
+      );
+    }
+
     return applyDesignatedAccountTransfer(
       {
         prisma: context.prisma,
@@ -91,4 +99,3 @@ export abstract class BaseBankingProvider implements BankingProvider {
     );
   }
 }
-
