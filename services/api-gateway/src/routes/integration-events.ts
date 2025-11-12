@@ -1,7 +1,15 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
-import { depositToOneWayAccount, markIntegrationEventProcessed, recordIntegrationEvent, TaxObligation } from "@apgms/shared";
+import {
+  depositToOneWayAccount,
+  fetchRecentDiscrepancies,
+  markIntegrationEventProcessed,
+  recordDiscrepancy,
+  recordIntegrationEvent,
+  TaxObligation,
+} from "@apgms/shared";
 import { parseWithSchema } from "../lib/validation.js";
 import { metrics } from "../observability/metrics.js";
 
@@ -19,6 +27,18 @@ const IntegrationEventSchema = z.object({
 });
 
 type IntegrationPayload = z.infer<typeof IntegrationEventSchema>;
+
+function extractExpectedAmount(metadata?: Record<string, unknown>) {
+  if (!metadata) return null;
+  const value = metadata.expectedAmount;
+  if (value == null) return null;
+  try {
+    const decimal = new Prisma.Decimal(value as string | number);
+    return decimal.gt(0) ? decimal : null;
+  } catch {
+    return null;
+  }
+}
 
 async function handleIntegrationEvent(
   request: FastifyRequest,
@@ -40,6 +60,23 @@ async function handleIntegrationEvent(
       taxType,
       amount: payload.amount,
     });
+
+    const expectedAmount = extractExpectedAmount(payload.metadata);
+    if (expectedAmount && expectedAmount.gt(new Prisma.Decimal(payload.amount))) {
+      await recordDiscrepancy({
+        orgId: payload.orgId,
+        taxType,
+        eventId: event.id,
+        expectedAmount,
+        actualAmount: payload.amount,
+        reason: "Secured amount below expected obligation",
+      });
+      metrics.integrationDiscrepanciesTotal.inc({
+        tax_type: taxType,
+        severity: "high",
+      });
+    }
+
     await markIntegrationEventProcessed(event.id);
     metrics.integrationEventsTotal.inc({ tax_type: taxType, status: "success" });
     stopTimer({ status: "success" });
@@ -52,6 +89,16 @@ async function handleIntegrationEvent(
 }
 
 export async function registerIntegrationEventRoutes(app: FastifyInstance) {
+  app.get("/integrations/discrepancies", async (request, reply) => {
+    const orgId = String((request.query as { orgId?: string }).orgId ?? "").trim();
+    if (!orgId) {
+      reply.code(400).send({ error: "orgId_is_required" });
+      return;
+    }
+    const alerts = await fetchRecentDiscrepancies(orgId);
+    reply.send({ discrepancies: alerts });
+  });
+
   app.post("/integrations/payroll", async (request, reply) => {
     await handleIntegrationEvent(request, reply, "PAYGW");
   });

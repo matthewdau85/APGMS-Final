@@ -58,6 +58,12 @@ const integrationEventsTotal = new Counter({
   labelNames: ['tax_type', 'status'] as const,
 });
 
+const integrationDiscrepanciesTotal = new Counter({
+  name: 'apgms_integration_discrepancies_total',
+  help: 'Discrepancy alerts raised when amounts mismatch expected values',
+  labelNames: ['tax_type', 'severity'] as const,
+});
+
 // ---- Public API for DB/jobs instrumentation ----
 export const metrics = {
   httpRequestTotal,
@@ -67,6 +73,7 @@ export const metrics = {
   jobDuration,
   integrationEventDuration,
   integrationEventsTotal,
+  integrationDiscrepanciesTotal,
 
   async observeJob<T>(job: string, fn: () => Promise<T>): Promise<T> {
     const stop = jobDuration.startTimer({ job });

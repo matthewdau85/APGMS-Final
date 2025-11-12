@@ -535,6 +535,22 @@ model OneWayAccount {
   @@index([orgId])
 }
 
+model DiscrepancyAlert {
+  id             String   @id @default(cuid())
+  orgId          String
+  org            Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  taxType        String
+  eventId        String
+  expectedAmount Decimal  @db.Decimal(24, 8)
+  actualAmount   Decimal  @db.Decimal(24, 8)
+  reason         String
+  resolved       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  @@index([orgId, taxType])
+  @@index([eventId])
+}
+
 model IntegrationEvent {
   id         String      @id @default(cuid())
   orgId      String
