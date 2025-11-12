@@ -288,7 +288,19 @@ export const registerAdvisoryRoutes: FastifyPluginAsync = async (app: FastifyIns
       return;
     }
 
-    const payload = ExportRequestSchema.parse(request.body ?? {});
+    const payloadParse = ExportRequestSchema.safeParse(request.body ?? {});
+    if (!payloadParse.success) {
+      reply.code(400).send({
+        error: {
+          code: "invalid_body",
+          message: "Validation failed",
+          details: payloadParse.error.flatten(),
+        },
+      });
+      return;
+    }
+
+    const payload = payloadParse.data;
 
     const exportId = randomUUID();
     const response = {
@@ -347,7 +359,19 @@ export const registerAdvisoryRoutes: FastifyPluginAsync = async (app: FastifyIns
       return;
     }
 
-    const payload = ControlUpdateSchema.parse(request.body ?? {});
+    const payloadParse = ControlUpdateSchema.safeParse(request.body ?? {});
+    if (!payloadParse.success) {
+      reply.code(400).send({
+        error: {
+          code: "invalid_body",
+          message: "Validation failed",
+          details: payloadParse.error.flatten(),
+        },
+      });
+      return;
+    }
+
+    const payload = payloadParse.data;
     const previousStatus = control.status;
 
     control.status = payload.status;
