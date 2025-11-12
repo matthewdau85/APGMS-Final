@@ -11,7 +11,7 @@ Keep the designated accounts controls at a “5/5” confidence level by exercis
 ## Runbook Steps
 1. Launch the nightly worker via Docker Compose: `docker compose up worker` (after running `docker compose build --no-cache worker` when dependencies change). Watch the logs for `designated-account-reconciliation:*` info/warn/error lines.
 2. Use `RegulatorEvidencePage.tsx` (webapp evidence center) to retrieve the latest `designated-reconciliation` entry, inspect the `wormUri`, and click **Verify** to confirm the SHA-256.
-3. Trigger `scripts/verify-designated-reconciliation.mjs` during deployments or via a scheduler to automate the health check.
+3. `scripts/verify-designated-reconciliation.mjs` now runs nightly via `.github/workflows/verify-designated-reconciliation.yml` (and is triggerable manually). Track the job run status in the governance channel so team members know whether the artifact creation succeeded.
 
 ## Retrospective Cadence
 Schedule quarterly reviews with compliance, operations, and engineering to:
