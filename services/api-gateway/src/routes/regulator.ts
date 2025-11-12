@@ -1,6 +1,13 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { Prisma } from "@prisma/client";
 
+import {
+  aggregateDetectorConcentration,
+  isDetectorConcentration,
+  type DetectorConcentration,
+  type DetectorFlaggedRow,
+} from "@apgms/shared";
+
 import { prisma } from "../db.js";
 import { recordAuditLog } from "../lib/audit.js";
 
@@ -10,6 +17,7 @@ type RegulatorRequest = FastifyRequest & {
 };
 
 const MAX_SNAPSHOTS = 20;
+const DETECTOR_CONCENTRATION_METRIC_KEY = "detector.concentration";
 
 function ensureOrgId(request: RegulatorRequest): string {
   const orgId = request.user?.orgId ?? request.regulatorSession?.orgId;
@@ -17,6 +25,62 @@ function ensureOrgId(request: RegulatorRequest): string {
     throw new Error("regulator_org_missing");
   }
   return orgId;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function asString(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function extractFlaggedRows(payload: unknown): DetectorFlaggedRow[] {
+  if (!isPlainObject(payload)) return [];
+  const detectors = (payload as Record<string, unknown>).detectors;
+  if (!isPlainObject(detectors)) return [];
+
+  const detectorsRecord = detectors as Record<string, unknown>;
+  const flaggedRows = (() => {
+    const direct = detectorsRecord.flaggedRows;
+    if (Array.isArray(direct)) {
+      return direct;
+    }
+    const flagged = detectorsRecord.flagged;
+    if (isPlainObject(flagged)) {
+      const nested = (flagged as Record<string, unknown>).rows;
+      if (Array.isArray(nested)) {
+        return nested;
+      }
+    }
+    return [];
+  })();
+
+  if (!Array.isArray(flaggedRows)) return [];
+
+  const rows: DetectorFlaggedRow[] = [];
+  for (const entry of flaggedRows) {
+    if (!isPlainObject(entry)) continue;
+    const entryRecord = entry as Record<string, unknown>;
+    const vendorRaw =
+      asString(entryRecord.vendor) ??
+      asString(entryRecord.vendorName) ??
+      asString(entryRecord.supplier) ??
+      asString(entryRecord.supplierName);
+    const approverRaw =
+      asString(entryRecord.approver) ??
+      asString(entryRecord.approverName) ??
+      asString(entryRecord.reviewer) ??
+      asString(entryRecord.reviewerName);
+
+    if (
+      (typeof vendorRaw === "string" && vendorRaw.trim().length > 0) ||
+      (typeof approverRaw === "string" && approverRaw.trim().length > 0)
+    ) {
+      rows.push({ vendor: vendorRaw ?? null, approver: approverRaw ?? null });
+    }
+  }
+  return rows;
 }
 
 function actorIdFrom(request: RegulatorRequest): string {
@@ -170,15 +234,90 @@ export async function registerRegulatorRoutes(app: FastifyInstance) {
       take: limit,
     });
 
+    const snapshotIds = snapshots.map((snapshot) => snapshot.id);
+    const concentrationMetrics = snapshotIds.length
+      ? await prisma.metric.findMany({
+          where: {
+            orgId,
+            key: DETECTOR_CONCENTRATION_METRIC_KEY,
+            scope: { in: snapshotIds },
+          },
+          orderBy: { recordedAt: "desc" },
+        })
+      : [];
+
+    const concentrationByScope = new Map<string, DetectorConcentration>();
+    for (const metric of concentrationMetrics) {
+      if (!metric.scope || concentrationByScope.has(metric.scope)) continue;
+      if (isDetectorConcentration(metric.data)) {
+        concentrationByScope.set(metric.scope, metric.data);
+      }
+    }
+
     await logRegulatorAction(request, "regulator.monitoring.snapshots", { limit });
 
+    const enrichedSnapshots = await Promise.all(
+      snapshots.map(async (snapshot) => {
+        const rawPayload = snapshot.payload as unknown;
+        const payloadObject: Record<string, unknown> = isPlainObject(rawPayload)
+          ? { ...rawPayload }
+          : {};
+
+        let concentration: DetectorConcentration | null =
+          concentrationByScope.get(snapshot.id) ?? null;
+
+        if (!concentration) {
+          const existing = payloadObject["detectorConcentration"];
+          if (isDetectorConcentration(existing)) {
+            concentration = existing;
+          }
+        }
+
+        if (!concentration) {
+          const flaggedRows = extractFlaggedRows(rawPayload);
+          if (flaggedRows.length > 0) {
+            concentration = aggregateDetectorConcentration(flaggedRows);
+            try {
+              await prisma.metric.upsert({
+                where: {
+                  orgId_key_scope: {
+                    orgId,
+                    key: DETECTOR_CONCENTRATION_METRIC_KEY,
+                    scope: snapshot.id,
+                  },
+                },
+                update: {
+                  data: concentration as unknown as Prisma.InputJsonValue,
+                  recordedAt: snapshot.createdAt,
+                },
+                create: {
+                  orgId,
+                  key: DETECTOR_CONCENTRATION_METRIC_KEY,
+                  scope: snapshot.id,
+                  data: concentration as unknown as Prisma.InputJsonValue,
+                  recordedAt: snapshot.createdAt,
+                },
+              });
+              concentrationByScope.set(snapshot.id, concentration);
+            } catch (error) {
+              request.log?.error({ err: error, snapshotId: snapshot.id }, "detector_metric_write_failed");
+            }
+          }
+        }
+
+        payloadObject["detectorConcentration"] = concentration;
+
+        return {
+          id: snapshot.id,
+          type: snapshot.type,
+          createdAt: snapshot.createdAt.toISOString(),
+          payload: payloadObject,
+        };
+      }),
+    );
+
     return {
-      snapshots: snapshots.map((snapshot) => ({
-        id: snapshot.id,
-        type: snapshot.type,
-        createdAt: snapshot.createdAt.toISOString(),
-        payload: snapshot.payload,
-      })),
+      snapshots: enrichedSnapshots,
     };
   });
 
