@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { prisma } from "../db.js";
 import { assertOrgAccess, assertRoleForBankLines, redactBankLine } from "../utils/orgScope.js";
+import { requireLedgerUser } from "./ledger-guard.js";
 
 const createBankLineSchema = z.object({
   orgId: z.string().min(1),
@@ -23,21 +24,10 @@ type BankLineRoutesDeps = {
   prisma: Pick<PrismaClient, "bankLine">;
 };
 
-function ensureUser(request: FastifyRequest, reply: FastifyReply) {
-  const user = (request as any).user as { orgId: string } | undefined;
-  if (!user) {
-    reply.code(401).send({
-      error: { code: "unauthorized", message: "Authentication required" }
-    });
-    return null;
-  }
-  return user;
-}
-
 export function createBankLinesPlugin(deps: BankLineRoutesDeps): FastifyPluginAsync {
   return async (app: FastifyInstance) => {
     app.post("/bank-lines", async (req, reply) => {
-      const user = ensureUser(req, reply);
+      const user = requireLedgerUser(req, reply);
       if (!user) return;
 
       const parsed = createBankLineSchema.safeParse(req.body);
@@ -100,7 +90,7 @@ export function createBankLinesPlugin(deps: BankLineRoutesDeps): FastifyPluginAs
     });
 
     app.get("/bank-lines", async (req, reply) => {
-      const user = ensureUser(req, reply);
+      const user = requireLedgerUser(req, reply);
       if (!user) return;
 
       if (!assertOrgAccess(req, reply, user.orgId)) return;

@@ -14,6 +14,7 @@ import { registerRegulatorAuthRoutes } from "./routes/regulator-auth.js";
 import { registerRegulatorRoutes } from "./routes/regulator.js";
 import { registerAdminDataRoutes } from "./routes/admin.data.js";
 import { registerBankLinesRoutes } from "./routes/bank-lines.js";
+import { registerAdvisoryRoutes } from "./routes/advisories/index.js";
 import { registerTaxRoutes } from "./routes/tax.js";
 import { registerConnectorRoutes, type ConnectorRoutesDeps } from "./routes/connectors.js";
 import { prisma } from "./db.js";
@@ -197,6 +198,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
     await secureScope.register(bankLinesPlugin);
     await secureScope.register(registerAdminDataRoutes);
     await secureScope.register(registerTaxRoutes);
+    await secureScope.register(registerAdvisoryRoutes);
     await secureScope.register(async (connectorScope) => {
       registerConnectorRoutes(connectorScope, options.connectorDeps);
     });
