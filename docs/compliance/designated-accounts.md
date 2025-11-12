@@ -39,3 +39,13 @@ The controls added in Phase 4.5 cover three pillars:
 3. Monitor for `DESIGNATED_WITHDRAWAL_ATTEMPT` alerts on the regulator portal.
    Each alert includes metadata describing the blocked request, satisfying the
    “no withdrawals from designated accounts” patent control.
+
+## Phase 1: Pillar Baseline
+
+| Pillar | Success Criteria | Phase 1 Tasks |
+| --- | --- | --- |
+| Provider abstraction | Every banking adapter (`providers/banking/*`) implements the shared interface, respects per-provider rate caps, and can register without downstream changes. | Audit `providers/banking` and the connector wiring for caps/ratios and add a regression test that exercises a mock provider to prove the shared surface is reusable. |
+| One-way policy engine | `@apgms/domain-policy` is the sole enforcement point for deposits, only allows `PAYROLL_CAPTURE`, `GST_CAPTURE`, and `BAS_ESCROW`, and logs the documented `DESIGNATED_WITHDRAWAL_ATTEMPT` message. | Review `packages/domain-policy/src/designated-accounts.ts` plus every caller to ensure the policy is always invoked, extend policy unit tests to cover each violation path, and verify alerts contain the metadata regulators expect. |
+| Nightly reconciliation artefact | The nightly worker (`worker/src/jobs/designated-reconciliation.ts`) runs for all orgs, emits a `designated-reconciliation` evidence entry with SHA-256 hash, and records audit log entries for traceability. | Confirm the worker job writes the audit log entries, ensure `generateDesignatedAccountReconciliationArtifact` persists the hash/payload, and document how to retrieve the artefact from the evidence listing. |
+
+Phase 1 completes once these audits/tests have produced measurable indicators that can be reviewed when rating each pillar 5/5.
