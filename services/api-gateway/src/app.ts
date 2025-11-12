@@ -5,6 +5,7 @@ import crypto from "node:crypto";
 import { context, trace } from "@opentelemetry/api";
 
 import { AppError, badRequest, conflict, forbidden, notFound, unauthorized } from "@apgms/shared";
+import type { EventBus } from "@apgms/shared/messaging/event-bus.js";
 import { config } from "./config.js";
 
 import rateLimit from "./plugins/rate-limit.js";
@@ -16,6 +17,7 @@ import { registerAdminDataRoutes } from "./routes/admin.data.js";
 import { registerBankLinesRoutes } from "./routes/bank-lines.js";
 import { registerTaxRoutes } from "./routes/tax.js";
 import { registerConnectorRoutes, type ConnectorRoutesDeps } from "./routes/connectors.js";
+import { registerDetectorMuteRoutes } from "./routes/detector-mutes.js";
 import { prisma } from "./db.js";
 import { parseWithSchema } from "./lib/validation.js";
 import { verifyChallenge, requireRecentVerification, type VerifyChallengeResult } from "./security/mfa.js";
@@ -23,6 +25,10 @@ import { recordAuditLog } from "./lib/audit.js";
 import { ensureRegulatorSessionActive } from "./lib/regulator-session.js";
 import { metrics, installHttpMetrics, registerMetricsRoute } from "./observability/metrics.js";
 import { closeProviders, initProviders } from "./providers.js";
+import {
+  DetectorMuteCache,
+  registerDetectorCacheInvalidation,
+} from "./cache/detector-mute-cache.js";
 
 // ---- keep your other domain code (types, helpers, shapes) exactly as you had ----
 // (omitted here for brevity - unchanged from your last working content)
@@ -30,6 +36,7 @@ import { closeProviders, initProviders } from "./providers.js";
 type BuildServerOptions = {
   bankLinesPlugin?: FastifyPluginAsync;
   connectorDeps?: ConnectorRoutesDeps;
+  eventBus?: EventBus | null;
 };
 
 export async function buildServer(options: BuildServerOptions = {}): Promise<FastifyInstance> {
@@ -41,7 +48,26 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
 
   const providers = await initProviders(app.log);
   (app as any).providers = providers;
+
+  const cache = new DetectorMuteCache({ redis: providers.redis ?? undefined, logger: app.log });
+  (app as any).detectorMuteCache = cache;
+
+  const cacheUnsubscribers = await registerDetectorCacheInvalidation({
+    cache,
+    bus: options.eventBus ?? null,
+    logger: app.log,
+  });
+
   app.addHook("onClose", async () => {
+    await Promise.all(
+      cacheUnsubscribers.map(async (unsubscribe) => {
+        try {
+          await unsubscribe();
+        } catch (error) {
+          app.log.warn({ err: error }, "detector_mute_cache_unsubscribe_failed");
+        }
+      }),
+    );
     await closeProviders(providers, app.log);
   });
 
@@ -197,6 +223,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
     await secureScope.register(bankLinesPlugin);
     await secureScope.register(registerAdminDataRoutes);
     await secureScope.register(registerTaxRoutes);
+    await secureScope.register(registerDetectorMuteRoutes);
     await secureScope.register(async (connectorScope) => {
       registerConnectorRoutes(connectorScope, options.connectorDeps);
     });

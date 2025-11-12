@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { runNightlyDesignatedAccountReconciliation } from "./jobs/designated-reconciliation.js";
 
 export { runNightlyDesignatedAccountReconciliation } from "./jobs/designated-reconciliation.js";
+export { upsertDetectorMute, deleteDetectorMute } from "./muting/service.js";
 
 const modulePath = fileURLToPath(import.meta.url);
 const invokedPath = process.argv[1] ? resolve(process.argv[1]) : null;
