@@ -1,5 +1,6 @@
 import type { Decimal, JsonValue } from "@prisma/client/runtime/library.js";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { PrismaClient } from "@prisma/client";
 
 import { prisma } from "../db.js";
 import { recordAuditLog } from "../lib/audit.js";
@@ -10,6 +11,11 @@ type RegulatorRequest = FastifyRequest & {
 };
 
 const MAX_SNAPSHOTS = 20;
+
+type RegulatorRoutesDeps = {
+  prisma?: PrismaClient;
+  auditLogger?: typeof recordAuditLog;
+};
 
 function ensureOrgId(request: RegulatorRequest): string {
   const orgId = request.user?.orgId ?? request.regulatorSession?.orgId;
@@ -26,9 +32,11 @@ function actorIdFrom(request: RegulatorRequest): string {
 async function logRegulatorAction(
   request: RegulatorRequest,
   action: string,
-  metadata?: Record<string, unknown | null>,
+  metadata: Record<string, unknown | null> | undefined,
+  auditLogger?: RegulatorRoutesDeps["auditLogger"],
 ) {
-  await recordAuditLog({
+  const logger = auditLogger ?? recordAuditLog;
+  await logger({
     orgId: ensureOrgId(request),
     actorId: actorIdFrom(request),
     action,
@@ -48,13 +56,16 @@ function formatPeriod(start: Date, end: Date): string {
   return `${start.toISOString().slice(0, 10)}-${end.toISOString().slice(0, 10)}`;
 }
 
-export async function registerRegulatorRoutes(app: FastifyInstance) {
-  app.get("/regulator/health", async (request: RegulatorRequest) => {
-    await logRegulatorAction(request, "regulator.health");
+export async function registerRegulatorRoutes(app: FastifyInstance, deps: RegulatorRoutesDeps = {}) {
+  const db = deps.prisma ?? prisma;
+  const auditLogger = deps.auditLogger;
+
+  app.get("/health", async (request: RegulatorRequest) => {
+    await logRegulatorAction(request, "regulator.health", undefined, auditLogger);
     return { ok: true, service: "regulator" };
   });
 
-  app.get("/regulator/compliance/report", async (request: RegulatorRequest) => {
+  app.get("/compliance/report", async (request: RegulatorRequest) => {
     const orgId = ensureOrgId(request);
 
     const [
@@ -64,24 +75,24 @@ export async function registerRegulatorRoutes(app: FastifyInstance) {
       resolvedThisQuarter,
       designatedAccounts,
     ] = await Promise.all([
-      prisma.basCycle.findMany({
+      db.basCycle.findMany({
         where: { orgId },
         orderBy: { periodStart: "desc" },
       }),
-      prisma.paymentPlanRequest.findMany({
+      db.paymentPlanRequest.findMany({
         where: { orgId },
         orderBy: { requestedAt: "desc" },
       }),
-      prisma.alert.count({
+      db.alert.count({
         where: { orgId, severity: "HIGH", resolvedAt: null },
       }),
-      prisma.alert.count({
+      db.alert.count({
         where: {
           orgId,
           resolvedAt: { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) },
         },
       }),
-      prisma.designatedAccount.findMany({ where: { orgId } }),
+      db.designatedAccount.findMany({ where: { orgId } }),
     ]);
 
     const basHistory = basCycles.map((cycle) => ({
@@ -113,14 +124,14 @@ export async function registerRegulatorRoutes(app: FastifyInstance) {
       { paygw: 0, gst: 0 },
     );
 
-    const nextBasCycle = await prisma.basCycle.findFirst({
+    const nextBasCycle = await db.basCycle.findFirst({
       where: { orgId, lodgedAt: null },
       orderBy: { periodEnd: "asc" },
     });
 
     await logRegulatorAction(request, "regulator.compliance.report", {
       basPeriods: basHistory.length,
-    });
+    }, auditLogger);
 
     return {
       orgId,
@@ -138,14 +149,14 @@ export async function registerRegulatorRoutes(app: FastifyInstance) {
     };
   });
 
-  app.get("/regulator/alerts", async (request: RegulatorRequest) => {
+  app.get("/alerts", async (request: RegulatorRequest) => {
     const orgId = ensureOrgId(request);
-    const alerts = await prisma.alert.findMany({
+    const alerts = await db.alert.findMany({
       where: { orgId },
       orderBy: { createdAt: "desc" },
     });
 
-    await logRegulatorAction(request, "regulator.alerts.list", { count: alerts.length });
+    await logRegulatorAction(request, "regulator.alerts.list", { count: alerts.length }, auditLogger);
 
     return {
       alerts: alerts.map((alert) => ({
@@ -160,20 +171,20 @@ export async function registerRegulatorRoutes(app: FastifyInstance) {
     };
   });
 
-  app.get("/regulator/monitoring/snapshots", async (request: RegulatorRequest) => {
+  app.get("/monitoring/snapshots", async (request: RegulatorRequest) => {
     const orgId = ensureOrgId(request);
     const limitParam = Number((request.query as { limit?: string | number }).limit ?? 5);
     const limit = Number.isFinite(limitParam)
       ? Math.min(Math.max(Math.trunc(limitParam), 1), MAX_SNAPSHOTS)
       : 5;
 
-    const snapshots = await prisma.monitoringSnapshot.findMany({
+    const snapshots = await db.monitoringSnapshot.findMany({
       where: { orgId },
       orderBy: { createdAt: "desc" },
       take: limit,
     });
 
-    await logRegulatorAction(request, "regulator.monitoring.snapshots", { limit });
+    await logRegulatorAction(request, "regulator.monitoring.snapshots", { limit }, auditLogger);
 
     return {
       snapshots: snapshots.map((snapshot) => ({
@@ -185,15 +196,15 @@ export async function registerRegulatorRoutes(app: FastifyInstance) {
     };
   });
 
-  app.get("/regulator/evidence", async (request: RegulatorRequest) => {
+  app.get("/evidence", async (request: RegulatorRequest) => {
     const orgId = ensureOrgId(request);
-    const artifacts = await prisma.evidenceArtifact.findMany({
+    const artifacts = await db.evidenceArtifact.findMany({
       where: { orgId },
       orderBy: { createdAt: "desc" },
       take: 50,
     });
 
-    await logRegulatorAction(request, "regulator.evidence.list", { count: artifacts.length });
+    await logRegulatorAction(request, "regulator.evidence.list", { count: artifacts.length }, auditLogger);
 
     return {
       artifacts: artifacts.map((artifact) => ({
@@ -206,9 +217,9 @@ export async function registerRegulatorRoutes(app: FastifyInstance) {
     };
   });
 
-  app.get("/regulator/evidence/:artifactId", async (request: RegulatorRequest, reply) => {
+  app.get("/evidence/:artifactId", async (request: RegulatorRequest, reply) => {
     const orgId = ensureOrgId(request);
-    const artifact = await prisma.evidenceArtifact.findUnique({
+    const artifact = await db.evidenceArtifact.findUnique({
       where: { id: (request.params as { artifactId: string }).artifactId },
     });
     if (!artifact || artifact.orgId !== orgId) {
@@ -216,7 +227,7 @@ export async function registerRegulatorRoutes(app: FastifyInstance) {
       return;
     }
 
-    await logRegulatorAction(request, "regulator.evidence.detail", { artifactId: artifact.id });
+    await logRegulatorAction(request, "regulator.evidence.detail", { artifactId: artifact.id }, auditLogger);
 
     return {
       artifact: {
@@ -230,23 +241,23 @@ export async function registerRegulatorRoutes(app: FastifyInstance) {
     };
   });
 
-  app.get("/regulator/bank-lines/summary", async (request: RegulatorRequest) => {
+  app.get("/bank-lines/summary", async (request: RegulatorRequest) => {
     const orgId = ensureOrgId(request);
     const [aggregate, firstEntry, lastEntry, recent] = await Promise.all([
-      prisma.bankLine.aggregate({
+      db.bankLine.aggregate({
         where: { orgId },
         _count: { id: true },
         _sum: { amount: true },
       }),
-      prisma.bankLine.findFirst({
+      db.bankLine.findFirst({
         where: { orgId },
         orderBy: { date: "asc" },
       }),
-      prisma.bankLine.findFirst({
+      db.bankLine.findFirst({
         where: { orgId },
         orderBy: { date: "desc" },
       }),
-      prisma.bankLine.findMany({
+      db.bankLine.findMany({
         where: { orgId },
         orderBy: { date: "desc" },
         take: 5,
@@ -255,7 +266,7 @@ export async function registerRegulatorRoutes(app: FastifyInstance) {
 
     await logRegulatorAction(request, "regulator.bank.summary", {
       entries: aggregate._count?.id ?? 0,
-    });
+    }, auditLogger);
 
     return {
       summary: {
