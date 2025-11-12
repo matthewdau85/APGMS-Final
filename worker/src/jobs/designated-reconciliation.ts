@@ -30,6 +30,10 @@ export async function runNightlyDesignatedAccountReconciliation(): Promise<void>
   const organisations = await prisma.org.findMany({
     select: { id: true },
   });
+  const runStart = Date.now();
+  let processed = 0;
+  let successes = 0;
+  let failures = 0;
 
   console.info(
     "designated-account-reconciliation: starting",
@@ -50,6 +54,7 @@ export async function runNightlyDesignatedAccountReconciliation(): Promise<void>
         );
       const durationMs = Date.now() - orgStart;
 
+      successes += 1;
       console.info(
         "designated-account-reconciliation: artifact generated",
         safeLogAttributes({
@@ -61,17 +66,26 @@ export async function runNightlyDesignatedAccountReconciliation(): Promise<void>
         }),
       );
     } catch (error) {
+      failures += 1;
       console.error(
         "designated-account-reconciliation: org failed",
         safeLogError(error),
         safeLogAttributes({ orgId: org.id }),
       );
       throw error;
+    } finally {
+      processed += 1;
     }
   }
 
   console.info(
-    "designated-account-reconciliation: completed",
-    safeLogAttributes({ orgCount: organisations.length }),
+    "designated-account-reconciliation: run summary",
+    safeLogAttributes({
+      orgCount: organisations.length,
+      processed,
+      successes,
+      failures,
+      durationMs: Date.now() - runStart,
+    }),
   );
 }
