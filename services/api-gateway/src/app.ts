@@ -16,6 +16,7 @@ import { registerAdminDataRoutes } from "./routes/admin.data.js";
 import { registerBankLinesRoutes } from "./routes/bank-lines.js";
 import { registerTaxRoutes } from "./routes/tax.js";
 import { registerConnectorRoutes, type ConnectorRoutesDeps } from "./routes/connectors.js";
+import { registerTenantSettingsRoutes } from "./routes/tenant-settings.js";
 import { prisma } from "./db.js";
 import { parseWithSchema } from "./lib/validation.js";
 import { verifyChallenge, requireRecentVerification, type VerifyChallengeResult } from "./security/mfa.js";
@@ -197,6 +198,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
     await secureScope.register(bankLinesPlugin);
     await secureScope.register(registerAdminDataRoutes);
     await secureScope.register(registerTaxRoutes);
+    await secureScope.register(registerTenantSettingsRoutes);
     await secureScope.register(async (connectorScope) => {
       registerConnectorRoutes(connectorScope, options.connectorDeps);
     });
