@@ -131,7 +131,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
       const error = new Error(`Origin ${origin} is not allowed`);
       cb(Object.assign(error, { code: "FST_CORS_FORBIDDEN_ORIGIN", statusCode: 403 }), false);
     },
-    methods: ["GET", "POST", "PATCH", "OPTIONS"],
+    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"]
   });
 
