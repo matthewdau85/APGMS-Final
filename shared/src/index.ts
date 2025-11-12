@@ -23,3 +23,4 @@ export * from "./messaging/in-memory-bus.js";
 export * from "./messaging/nats-bus.js";
 
 export * from "./ledger/one-way-account.js";
+export * from "./ledger/integration-events.js";

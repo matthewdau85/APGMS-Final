@@ -1,0 +1,39 @@
+import { Prisma } from "@prisma/client";
+
+import { prisma } from "../db.js";
+import { TaxObligation } from "./one-way-account.js";
+
+export type IntegrationEventStatus = "pending" | "processed" | "failed";
+
+export async function recordIntegrationEvent(params: {
+  orgId: string;
+  taxType: TaxObligation;
+  source: string;
+  amount: number | string | Prisma.Decimal;
+  metadata?: Record<string, unknown>;
+  status?: IntegrationEventStatus;
+}) {
+  const amountDecimal = new Prisma.Decimal(params.amount);
+  const metadata = params.metadata
+    ? (params.metadata as Prisma.InputJsonValue)
+    : Prisma.JsonNull;
+
+  const event = await prisma.integrationEvent.create({
+    data: {
+      orgId: params.orgId,
+      taxType: params.taxType,
+      source: params.source,
+      amount: amountDecimal,
+      metadata,
+      status: params.status ?? "pending",
+    },
+  });
+  return event;
+}
+
+export async function markIntegrationEventProcessed(eventId: string) {
+  return prisma.integrationEvent.update({
+    where: { id: eventId },
+    data: { status: "processed" },
+  });
+}

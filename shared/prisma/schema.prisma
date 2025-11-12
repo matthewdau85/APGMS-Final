@@ -534,3 +534,19 @@ model OneWayAccount {
   @@index([taxType])
   @@index([orgId])
 }
+
+model IntegrationEvent {
+  id         String      @id @default(cuid())
+  orgId      String
+  org        Org         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  taxType    String
+  source     String
+  amount     Decimal     @db.Decimal(24, 8)
+  metadata   Json?
+  status     String      @default("pending")
+  createdAt  DateTime    @default(now())
+  processedAt DateTime?
+
+  @@index([orgId, taxType])
+  @@index([taxType])
+}
