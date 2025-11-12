@@ -160,6 +160,34 @@ export async function registerIntegrationEventRoutes(app: FastifyInstance) {
     });
   });
 
+  app.get("/integrations/compliance-report", async (request, reply) => {
+    const query = request.query as { orgId?: string; taxType?: string };
+    const orgId = String(query.orgId ?? "").trim();
+    const taxType = String(query.taxType ?? "PAYGW").trim();
+    if (!orgId) {
+      reply.code(400).send({ error: "orgId_is_required" });
+      return;
+    }
+    const [obligationsTotal, discrepancies, anomaly] = await Promise.all([
+      aggregateObligations(orgId, taxType),
+      fetchRecentDiscrepancies(orgId),
+      analyzeIntegrationAnomaly(orgId, taxType),
+    ]);
+    reply.send({
+      orgId,
+      taxType,
+      pendingObligations: obligationsTotal.toString(),
+      discrepancies: discrepancies.map((alert) => ({
+        eventId: alert.eventId,
+        reason: alert.reason,
+        shortfall: alert.expectedAmount.minus(alert.actualAmount).toString(),
+        createdAt: alert.createdAt,
+      })),
+      anomaly,
+      generatedAt: new Date().toISOString(),
+    });
+  });
+
   app.post("/integrations/payroll", async (request, reply) => {
     await handleIntegrationEvent(request, reply, "PAYGW");
   });
