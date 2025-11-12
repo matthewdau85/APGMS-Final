@@ -1,4 +1,11 @@
+import { randomUUID } from "node:crypto";
+
 import { prisma } from "@apgms/shared/db.js";
+import type { EventBus } from "@apgms/shared/messaging/event-bus.js";
+import {
+  DETECTOR_NIGHTLY_SUBJECT,
+  mapNightlyToInvalidation,
+} from "@apgms/events";
 
 import {
   generateDesignatedAccountReconciliationArtifact,
@@ -22,7 +29,13 @@ async function recordAuditLog(entry: {
   });
 }
 
-export async function runNightlyDesignatedAccountReconciliation(): Promise<void> {
+type ReconciliationOptions = {
+  eventBus?: EventBus | null;
+};
+
+export async function runNightlyDesignatedAccountReconciliation(
+  options: ReconciliationOptions = {},
+): Promise<void> {
   const organisations = await prisma.org.findMany({
     select: { id: true },
   });
@@ -36,6 +49,27 @@ export async function runNightlyDesignatedAccountReconciliation(): Promise<void>
       org.id,
       SYSTEM_ACTOR,
     );
+
+    if (options.eventBus) {
+      const triggeredAt = new Date();
+      const iso = triggeredAt.toISOString();
+      const period = iso.slice(0, 10);
+      await options.eventBus.publish(DETECTOR_NIGHTLY_SUBJECT, {
+        id: randomUUID(),
+        orgId: org.id,
+        eventType: "detector.nightly",
+        key: `detector:${org.id}:${period}`,
+        ts: iso,
+        schemaVersion: "1",
+        source: "worker.designatedReconciliation",
+        dedupeId: `detector-nightly:${org.id}:${period}`,
+        payload: mapNightlyToInvalidation({
+          tenantId: org.id,
+          period,
+          triggeredAt: iso,
+        }),
+      });
+    }
   }
 }
 
