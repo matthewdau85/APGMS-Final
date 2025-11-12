@@ -11,6 +11,7 @@ import {
   recordIntegrationEvent,
   recordObligation,
   TaxObligation,
+  verifyObligations,
 } from "@apgms/shared";
 import { parseWithSchema } from "../lib/validation.js";
 import { metrics } from "../observability/metrics.js";
@@ -68,6 +69,21 @@ async function handleIntegrationEvent(
       eventId: event.id,
       amount: payload.amount,
     });
+    const verification = await verifyObligations(payload.orgId, taxType);
+    if (verification.shortfall?.greaterThan(0)) {
+      await recordDiscrepancy({
+        orgId: payload.orgId,
+        taxType,
+        eventId: event.id,
+        expectedAmount: verification.pending.toString(),
+        actualAmount: verification.balance.toString(),
+        reason: "Secured balance below total pending obligations",
+      });
+      metrics.integrationDiscrepanciesTotal.inc({
+        tax_type: taxType,
+        severity: "high",
+      });
+    }
 
     const expectedAmount = extractExpectedAmount(payload.metadata);
     if (expectedAmount && expectedAmount.gt(new Prisma.Decimal(payload.amount))) {

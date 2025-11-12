@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "../db.js";
+import { fetchOneWayAccount } from "./one-way-account.js";
 
 export type ObligationStatus = "pending" | "verified" | "settled";
 
@@ -32,4 +33,24 @@ export async function aggregateObligations(orgId: string, taxType: string) {
     WHERE "orgId" = ${orgId} AND "taxType" = ${taxType} AND "status" = 'pending'
   `;
   return result?.total ?? new Prisma.Decimal(0);
+}
+
+export async function markObligationsStatus(orgId: string, taxType: string, status: ObligationStatus) {
+  return prisma.integrationObligation.updateMany({
+    where: { orgId, taxType, status: "pending" },
+    data: { status },
+  });
+}
+
+export async function verifyObligations(orgId: string, taxType: string) {
+  const pending = await aggregateObligations(orgId, taxType);
+  const account = await fetchOneWayAccount({ orgId, taxType });
+  const balance = account?.balance ?? new Prisma.Decimal(0);
+  let shortfall: Prisma.Decimal | null = null;
+  if (balance.greaterThanOrEqualTo(pending)) {
+    await markObligationsStatus(orgId, taxType, "verified");
+  } else {
+    shortfall = pending.minus(balance);
+  }
+  return { pending, balance, shortfall };
 }
