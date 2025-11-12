@@ -565,6 +565,7 @@ model IntegrationObligation {
   @@index([eventId])
 }
 
+
 model IntegrationEvent {
   id         String      @id @default(cuid())
   orgId      String

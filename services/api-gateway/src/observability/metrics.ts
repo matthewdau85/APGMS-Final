@@ -70,6 +70,12 @@ const obligationsTotal = new Gauge({
   labelNames: ['tax_type'] as const,
 });
 
+const integrationAnomalyScore = new Gauge({
+  name: 'apgms_integration_anomaly_score',
+  help: 'Heuristic anomaly score ([-1,1]) for integration feeds',
+  labelNames: ['tax_type', 'severity'] as const,
+});
+
 // ---- Public API for DB/jobs instrumentation ----
 export const metrics = {
   httpRequestTotal,
@@ -81,6 +87,7 @@ export const metrics = {
   integrationEventsTotal,
   integrationDiscrepanciesTotal,
   obligationsTotal,
+  integrationAnomalyScore,
 
   async observeJob<T>(job: string, fn: () => Promise<T>): Promise<T> {
     const stop = jobDuration.startTimer({ job });

@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import {
   aggregateObligations,
+  analyzeIntegrationAnomaly,
   depositToOneWayAccount,
   fetchRecentDiscrepancies,
   markIntegrationEventProcessed,
@@ -134,6 +135,29 @@ export async function registerIntegrationEventRoutes(app: FastifyInstance) {
     const total = await aggregateObligations(orgId, taxType);
     metrics.obligationsTotal.set({ tax_type: taxType }, Number(total.toString()));
     reply.send({ orgId, taxType, pendingAmount: total.toString() });
+  });
+
+  app.get("/integrations/anomaly", async (request, reply) => {
+    const query = request.query as { orgId?: string; taxType?: string };
+    const orgId = String(query.orgId ?? "").trim();
+    const taxType = String(query.taxType ?? "PAYGW").trim();
+    if (!orgId) {
+      reply.code(400).send({ error: "orgId_is_required" });
+      return;
+    }
+    const analysis = await analyzeIntegrationAnomaly(orgId, taxType);
+    metrics.integrationAnomalyScore.set(
+      { tax_type: taxType, severity: analysis.severity },
+      Number(analysis.score.toFixed(4)),
+    );
+    reply.send({
+      orgId,
+      taxType,
+      severity: analysis.severity,
+      score: Number(analysis.score.toFixed(4)),
+      narrative: analysis.narrative,
+      explanation: analysis.explanation,
+    });
   });
 
   app.post("/integrations/payroll", async (request, reply) => {
