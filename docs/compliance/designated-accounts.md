@@ -62,5 +62,15 @@ Runbook: add the verification script to your monitoring cron (or alert pipeline)
 
 Phase 1 completes once these audits/tests have produced measurable indicators that can be reviewed when rating each pillar 5/5.
 
+## Phase 5: Governance & Validation
+
+| Task | Description |
+| --- | --- |
+| Task 1 | Compliance checks now span logs, alerts, and artefacts: the worker logs (`designated-account-reconciliation:*`) are collected centrally; alert dashboards monitor `DESIGNATED_WITHDRAWAL_ATTEMPT` metadata; evidence endpoints log SHA-256 and metadata via `generateDesignatedAccountReconciliationArtifact`; and `scripts/verify-designated-reconciliation.mjs` runs nightly (or in CI) to ensure an artefact was generated within 24 hours. |
+| Task 2 | Lessons per phase are documented above (provider cap guards, policy engine coverage, reconciliation artefact logging) so auditors can trace each pillar’s “5/5” evidence. Update this file whenever a new lesson arises, keeping the compliance story aligned with the living architecture. |
+| Task 3 | Retrospectives are scheduled quarterly with compliance/ops/engineering stakeholders to review the logged metrics (cap warnings, alerts, reconciliation success/failure counts) and tune automation; add the retrospective cadence to your runbook or sprint ritual so these governance checkpoints stay on the calendar. |
+
+Runbooks should link to this file plus `scripts/verify-designated-reconciliation.mjs` and the root `worker` logs, ensuring any new regulator or engineer knows where to confirm the pillars remain hardened.
+
 
 
