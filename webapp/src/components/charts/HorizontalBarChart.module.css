@@ -1,0 +1,53 @@
+.chartWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.chartTitle {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1f2933;
+}
+
+.barRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.barLabel {
+  flex: 0 0 140px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #52606d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.barTrack {
+  flex: 1;
+  background: #e4e7eb;
+  border-radius: 999px;
+  height: 0.75rem;
+  overflow: hidden;
+}
+
+.barFill {
+  height: 100%;
+  border-radius: inherit;
+  background-image: linear-gradient(90deg, #2563eb, #7c3aed);
+}
+
+.barValue {
+  font-size: 0.75rem;
+  color: #364152;
+  min-width: 3rem;
+  text-align: right;
+}
+
+.emptyState {
+  font-size: 0.8125rem;
+  color: #9aa5b1;
+}
