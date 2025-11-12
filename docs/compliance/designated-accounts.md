@@ -1,4 +1,4 @@
-# Designated Account Controls
+﻿# Designated Account Controls
 
 APGMS enforces the “deposit only” mandate for GST and PAYGW holding accounts.
 The controls added in Phase 4.5 cover three pillars:
@@ -21,6 +21,8 @@ The controls added in Phase 4.5 cover three pillars:
   24‑hour inflow deltas and a SHA‑256 hash. Regulator portal users can download
   the artefact from the normal evidence listing, providing auditable proof that
   the holding accounts remained ringfenced.
+
+Regulators can open the evidence center (webapp/src/RegulatorEvidencePage.tsx) to browse designated-reconciliation entries sorted by createdAt, view the persisted SHA-256 and wormUri, and click the built-in Verify button (which recomputes the hash client-side) before handing the artefact to auditors.
 
 ## Operational Checklist
 
@@ -49,3 +51,6 @@ The controls added in Phase 4.5 cover three pillars:
 | Nightly reconciliation artefact | The nightly worker (`worker/src/jobs/designated-reconciliation.ts`) runs for all orgs, emits a `designated-reconciliation` evidence entry with SHA-256 hash, and records audit log entries for traceability. | Confirm the worker job writes the audit log entries, ensure `generateDesignatedAccountReconciliationArtifact` persists the hash/payload, and document how to retrieve the artefact from the evidence listing. |
 
 Phase 1 completes once these audits/tests have produced measurable indicators that can be reviewed when rating each pillar 5/5.
+
+
+

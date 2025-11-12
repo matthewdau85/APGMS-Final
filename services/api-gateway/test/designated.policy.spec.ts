@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import { Prisma } from "@prisma/client";
 
+import { AppError } from "@apgms/shared";
 import {
   applyDesignatedAccountTransfer,
   generateDesignatedAccountReconciliationArtifact,
@@ -216,6 +217,49 @@ function createInMemoryPrisma(): { prisma: any; state: InMemoryState } {
   return { prisma, state };
 }
 
+test("mock banking provider credit exercises the shared policy surface", async () => {
+  const { prisma, state } = createInMemoryPrisma();
+
+  state.designatedAccounts.push({
+    id: "acct-paygw",
+    orgId: "org-1",
+    type: "PAYGW",
+    balance: new Prisma.Decimal(0),
+    updatedAt: new Date(),
+  });
+
+  const provider = createBankingProvider("mock");
+
+  assert.equal(provider.capabilities.maxWriteCents, 1_000_000);
+  assert.equal(provider.capabilities.maxReadTransactions, 200);
+
+  const context = {
+    prisma,
+    orgId: "org-1",
+    actorId: "system",
+    auditLogger: async (entry: any) => {
+      await prisma.auditLog.create({ data: entry });
+    },
+  };
+
+  const result = await provider.creditDesignatedAccount(context, {
+    accountId: "acct-paygw",
+    amount: 1200,
+    source: "PAYROLL_CAPTURE",
+  });
+
+  assert.equal(result.accountId, "acct-paygw");
+  assert.equal(result.newBalance, 1200);
+  assert.equal(result.source, "PAYROLL_CAPTURE");
+  assert.equal(state.designatedTransfers.length, 1);
+  assert.equal(state.alerts.length, 0);
+});
+
+test("createBankingProvider defaults to mock for unknown adapters", () => {
+  const provider = createBankingProvider("new-provider");
+  assert.equal(provider.id, "mock");
+});
+
 test("designated accounts block debit attempts and raise alerts", async () => {
   const { prisma, state } = createInMemoryPrisma();
 
@@ -250,6 +294,89 @@ test("designated accounts block debit attempts and raise alerts", async () => {
   assert.equal(state.alerts.length, 1);
   assert.equal(state.alerts[0].type, "DESIGNATED_WITHDRAWAL_ATTEMPT");
   assert.equal(state.auditLogs.some((entry) => entry.action === "designatedAccount.violation"), true);
+});
+
+test("deposit-only violations keep the documented message", async () => {
+  const { prisma, state } = createInMemoryPrisma();
+
+  state.designatedAccounts.push({
+    id: "acct-paygw",
+    orgId: "org-1",
+    type: "PAYGW",
+    balance: new Prisma.Decimal(500),
+    updatedAt: new Date(),
+  });
+
+  const provider = createBankingProvider("mock");
+
+  const context = {
+    prisma,
+    orgId: "org-1",
+    actorId: "system",
+    auditLogger: async (entry: any) => {
+      await prisma.auditLog.create({ data: entry });
+    },
+  };
+
+  await assert.rejects(
+    () =>
+      provider.simulateDebitAttempt(context, {
+        accountId: "acct-paygw",
+        amount: 250,
+        source: "PAYROLL_CAPTURE",
+      }),
+    (error: unknown) =>
+      error instanceof AppError && error.code === "designated_withdrawal_attempt",
+  );
+
+  assert.equal(state.alerts[0].message, "Designated accounts are deposit-only; debits are prohibited");
+  assert.equal(state.alerts[0].severity, "HIGH");
+});
+
+test("untrusted sources raise alerts with metadata", async () => {
+  const { prisma, state } = createInMemoryPrisma();
+
+  state.designatedAccounts.push({
+    id: "acct-paygw",
+    orgId: "org-1",
+    type: "PAYGW",
+    balance: new Prisma.Decimal(100),
+    updatedAt: new Date(),
+  });
+
+  const context = {
+    prisma,
+    orgId: "org-1",
+    actorId: "system",
+    auditLogger: async (entry: any) => {
+      await prisma.auditLog.create({ data: entry });
+    },
+  };
+
+  await assert.rejects(
+    () =>
+      applyDesignatedAccountTransfer(
+        {
+          prisma: context.prisma,
+          auditLogger: context.auditLogger,
+        },
+        {
+          orgId: context.orgId,
+          accountId: "acct-paygw",
+          amount: 500,
+          source: "SKETCHY_SOURCE",
+          actorId: context.actorId,
+        },
+      ),
+    (error: unknown) =>
+      error instanceof AppError && error.code === "designated_untrusted_source",
+  );
+
+  assert.equal(
+    state.alerts[0].message,
+    "Designated account funding source 'SKETCHY_SOURCE' is not whitelisted",
+  );
+  assert.equal(state.auditLogs[0].metadata.violation, "designated_untrusted_source");
 });
 
 test("designated account reconciliation emits evidence artefact", async () => {
