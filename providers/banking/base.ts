@@ -1,4 +1,4 @@
-import { AppError } from "@apgms/shared";
+import { AppError, safeLogAttributes } from "@apgms/shared";
 
 import {
   applyDesignatedAccountTransfer,
@@ -36,11 +36,32 @@ export abstract class BaseBankingProvider implements BankingProvider {
       );
     }
 
+    console.info(
+      "banking-provider: credit attempt",
+      safeLogAttributes({
+        providerId: this.id,
+        amount: input.amount,
+        maxWriteCents: this.capabilities.maxWriteCents,
+      }),
+    );
+
     if (input.amount > this.capabilities.maxWriteCents) {
       throw new AppError(
         400,
         "banking_write_cap_exceeded",
         `Amount ${input.amount} exceeds ${this.id} capability of ${this.capabilities.maxWriteCents}`,
+      );
+    }
+
+    const warningThreshold = this.capabilities.maxWriteCents * 0.9;
+    if (input.amount >= warningThreshold) {
+      console.warn(
+        "banking-provider: credit approaching cap",
+        safeLogAttributes({
+          providerId: this.id,
+          amount: input.amount,
+          maxWriteCents: this.capabilities.maxWriteCents,
+        }),
       );
     }
 
