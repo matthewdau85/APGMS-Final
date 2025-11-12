@@ -17,6 +17,7 @@ declare module "fastify" {
       redis?: { ping: () => Promise<string> } | null;
       nats?: { flush: () => Promise<void> } | null;
     };
+    detectorMuteCache?: import("../cache/detector-mute-cache.js").DetectorMuteCache;
   }
 
   interface FastifyRequest {
