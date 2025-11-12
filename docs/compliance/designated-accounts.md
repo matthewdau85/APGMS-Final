@@ -42,6 +42,16 @@ Regulators can open the evidence center (webapp/src/RegulatorEvidencePage.tsx) t
    Each alert includes metadata describing the blocked request, satisfying the
    “no withdrawals from designated accounts” patent control.
 
+## Phase 4: Nightly Reconciliation Artefact
+
+| Task | Description |
+| --- | --- |
+| Task 1 | `worker/src/jobs/designated-reconciliation.ts` logs start/end metrics plus per-org artifact hashes, and each run emits `banking-provider` info/warn events so operations can track which adapter processed which organisation. |
+| Task 2 | `generateDesignatedAccountReconciliationArtifact` stores the full SHA-256 + totals metadata (`summary`) for the evidence entry; end-to-end tests (e.g., `services/api-gateway/test/designated.policy.spec.ts`) continue to assert the artifact payload, hash, and audit log details. |
+| Task 3 | `scripts/verify-designated-reconciliation.mjs` can be executed nightly (via cron or scheduler) against the production database to ensure a `designated-reconciliation` artefact was created in the previous 24 hours, printing the latest `artifactId` and SHA-256 for auditors. |
+
+Runbook: add the verification script to your monitoring cron (or alert pipeline) and point stakeholders at the `RegulatorEvidencePage.tsx` evidence center so they can fetch the `designated-reconciliation` entry, inspect the stored SHA-256, and click “Verify” before handing it to auditors.
+
 ## Phase 1: Pillar Baseline
 
 | Pillar | Success Criteria | Phase 1 Tasks |
