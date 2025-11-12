@@ -1,4 +1,7 @@
 import "fastify";
+import type { dspPilotMetrics } from "../metrics/dsp-pilot.js";
+
+type DspPilotMetrics = typeof dspPilotMetrics;
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -11,6 +14,7 @@ declare module "fastify" {
       httpRequestTotal?: any;
       httpRequestDuration?: { startTimer: (labels?: Record<string,string>) => (labels?: Record<string,string>) => void };
     };
+    pilotMetrics?: DspPilotMetrics;
     isDraining?: () => boolean;
     setDraining?: (v: boolean) => void;
     providers?: {

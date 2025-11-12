@@ -22,6 +22,7 @@ import { verifyChallenge, requireRecentVerification, type VerifyChallengeResult 
 import { recordAuditLog } from "./lib/audit.js";
 import { ensureRegulatorSessionActive } from "./lib/regulator-session.js";
 import { metrics, installHttpMetrics, registerMetricsRoute } from "./observability/metrics.js";
+import { dspPilotMetrics } from "./metrics/dsp-pilot.js";
 import { closeProviders, initProviders } from "./providers.js";
 
 // ---- keep your other domain code (types, helpers, shapes) exactly as you had ----
@@ -36,6 +37,9 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
   const app = Fastify({ logger: true });
 
   installHttpMetrics(app);
+  app.decorate("pilotMetrics", dspPilotMetrics);
+  const pilotEnabled = process.env.DSP_NUMBER_PATTERN_ENABLED === "true";
+  dspPilotMetrics.setRolloutStatus(pilotEnabled);
 
   const allowedOrigins = new Set(config.cors.allowedOrigins);
 
