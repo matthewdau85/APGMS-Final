@@ -64,6 +64,12 @@ const integrationDiscrepanciesTotal = new Counter({
   labelNames: ['tax_type', 'severity'] as const,
 });
 
+const obligationsTotal = new Gauge({
+  name: 'apgms_integration_pending_obligation_amount',
+  help: 'Current pending obligations per tax type',
+  labelNames: ['tax_type'] as const,
+});
+
 // ---- Public API for DB/jobs instrumentation ----
 export const metrics = {
   httpRequestTotal,
@@ -74,6 +80,7 @@ export const metrics = {
   integrationEventDuration,
   integrationEventsTotal,
   integrationDiscrepanciesTotal,
+  obligationsTotal,
 
   async observeJob<T>(job: string, fn: () => Promise<T>): Promise<T> {
     const stop = jobDuration.startTimer({ job });

@@ -551,6 +551,20 @@ model DiscrepancyAlert {
   @@index([eventId])
 }
 
+model IntegrationObligation {
+  id        String   @id @default(cuid())
+  orgId     String
+  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  taxType   String
+  eventId   String
+  amount    Decimal  @db.Decimal(24, 8)
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+
+  @@index([orgId, taxType])
+  @@index([eventId])
+}
+
 model IntegrationEvent {
   id         String      @id @default(cuid())
   orgId      String

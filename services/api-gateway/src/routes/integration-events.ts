@@ -3,11 +3,13 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 import {
+  aggregateObligations,
   depositToOneWayAccount,
   fetchRecentDiscrepancies,
   markIntegrationEventProcessed,
   recordDiscrepancy,
   recordIntegrationEvent,
+  recordObligation,
   TaxObligation,
 } from "@apgms/shared";
 import { parseWithSchema } from "../lib/validation.js";
@@ -60,6 +62,12 @@ async function handleIntegrationEvent(
       taxType,
       amount: payload.amount,
     });
+    await recordObligation({
+      orgId: payload.orgId,
+      taxType,
+      eventId: event.id,
+      amount: payload.amount,
+    });
 
     const expectedAmount = extractExpectedAmount(payload.metadata);
     if (expectedAmount && expectedAmount.gt(new Prisma.Decimal(payload.amount))) {
@@ -97,6 +105,19 @@ export async function registerIntegrationEventRoutes(app: FastifyInstance) {
     }
     const alerts = await fetchRecentDiscrepancies(orgId);
     reply.send({ discrepancies: alerts });
+  });
+
+  app.get("/integrations/obligations", async (request, reply) => {
+    const query = request.query as { orgId?: string; taxType?: string };
+    const orgId = String(query.orgId ?? "").trim();
+    const taxType = String(query.taxType ?? "PAYGW").trim();
+    if (!orgId) {
+      reply.code(400).send({ error: "orgId_is_required" });
+      return;
+    }
+    const total = await aggregateObligations(orgId, taxType);
+    metrics.obligationsTotal.set({ tax_type: taxType }, Number(total.toString()));
+    reply.send({ orgId, taxType, pendingAmount: total.toString() });
   });
 
   app.post("/integrations/payroll", async (request, reply) => {

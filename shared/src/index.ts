@@ -25,3 +25,4 @@ export * from "./messaging/nats-bus.js";
 export * from "./ledger/one-way-account.js";
 export * from "./ledger/integration-events.js";
 export * from "./ledger/discrepancies.js";
+export * from "./ledger/obligations.js";
