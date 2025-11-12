@@ -1,1 +1,178 @@
-{}
+{
+  "dashboards": [
+    {
+      "uid": "dsp-pilot",
+      "title": "DSP Number Pattern Pilot",
+      "description": "Pilot health and KPI tracking for the DSP number pattern feature flag rollout.",
+      "tags": ["dsp", "pilot", "feature-flag"],
+      "panels": [
+        {
+          "id": 1,
+          "title": "Detection outcomes (5m rate)",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "sum(rate(dsp_pilot_detections_total[5m])) by (result)",
+              "legend": "{{result}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops"
+            }
+          }
+        },
+        {
+          "id": 2,
+          "title": "Precision (target \u2265 0.92)",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "avg_over_time(dsp_pilot_precision_ratio[1h])"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "red", "value": 0 },
+                  { "color": "orange", "value": 0.92 },
+                  { "color": "green", "value": 0.95 }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": 3,
+          "title": "False positive ratio (target \u2264 0.03)",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "avg_over_time(dsp_pilot_false_positive_ratio[1h])"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": 0 },
+                  { "color": "orange", "value": 0.02 },
+                  { "color": "red", "value": 0.03 }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": 4,
+          "title": "Mute duration p50/p95",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.5, sum(rate(dsp_pilot_mute_duration_hours_bucket[5m])) by (le))",
+              "legend": "p50"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(dsp_pilot_mute_duration_hours_bucket[5m])) by (le))",
+              "legend": "p95"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "h"
+            }
+          }
+        },
+        {
+          "id": 5,
+          "title": "Segmentation freshness (target \u2265 0.95)",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "avg_over_time(dsp_segmentation_freshness_ratio[1h])"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "red", "value": 0 },
+                  { "color": "orange", "value": 0.95 },
+                  { "color": "green", "value": 0.98 }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": 6,
+          "title": "Support volume delta (target \u2264 0.10)",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "avg_over_time(dsp_support_volume_delta_ratio[1h])"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": 0 },
+                  { "color": "orange", "value": 0.08 },
+                  { "color": "red", "value": 0.1 }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": 7,
+          "title": "Support contacts by channel (5m rate)",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "sum(rate(dsp_pilot_support_contacts_total[5m])) by (channel)",
+              "legend": "{{channel}}"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops"
+            }
+          }
+        },
+        {
+          "id": 8,
+          "title": "Rollout status",
+          "type": "stat",
+          "targets": [
+            {
+              "expr": "dsp_pilot_rollout_status"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "red", "value": 0 },
+                  { "color": "green", "value": 1 }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
