@@ -93,28 +93,38 @@ export function evaluateMute(
   metric: DetectorMetricIdentity,
   now: Date = new Date(),
 ): DetectorMuteEvaluation {
-  let candidate: DetectorMuteRecord | undefined;
+  let candidate:
+    | { record: DetectorMuteRecord; expired: boolean }
+    | undefined;
 
   for (const record of records) {
     if (!matchesMetric(record, metric)) {
       continue;
     }
+    const expired = isExpired(record, now);
     if (!candidate) {
-      candidate = record;
+      candidate = { record, expired };
+      continue;
+    }
+    if (candidate.expired && !expired) {
+      candidate = { record, expired };
+      continue;
+    }
+    if (!candidate.expired && expired) {
       continue;
     }
     const currentPriority = scopePriority[record.scope];
-    const candidatePriority = scopePriority[candidate.scope];
+    const candidatePriority = scopePriority[candidate.record.scope];
     if (currentPriority > candidatePriority) {
-      candidate = record;
+      candidate = { record, expired };
       continue;
     }
     if (
       currentPriority === candidatePriority &&
       (record.expiresAt?.getTime() ?? Number.POSITIVE_INFINITY) >
-        (candidate.expiresAt?.getTime() ?? Number.POSITIVE_INFINITY)
+        (candidate.record.expiresAt?.getTime() ?? Number.POSITIVE_INFINITY)
     ) {
-      candidate = record;
+      candidate = { record, expired };
     }
   }
 
@@ -122,11 +132,15 @@ export function evaluateMute(
     return { muted: false, reason: "NONE" };
   }
 
-  if (isExpired(candidate, now)) {
-    return { muted: false, reason: "EXPIRED", source: candidate };
+  if (candidate.expired) {
+    return { muted: false, reason: "EXPIRED", source: candidate.record };
   }
 
-  return { muted: true, reason: mapScopeToReason(candidate.scope), source: candidate };
+  return {
+    muted: true,
+    reason: mapScopeToReason(candidate.record.scope),
+    source: candidate.record,
+  };
 }
 
 export function embedMuteInMetric<T extends DetectorMetricIdentity>(
