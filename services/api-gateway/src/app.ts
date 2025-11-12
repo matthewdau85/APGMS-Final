@@ -131,7 +131,8 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
       cb(Object.assign(error, { code: "FST_CORS_FORBIDDEN_ORIGIN", statusCode: 403 }), false);
     },
     methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"]
+    allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key"],
+    exposedHeaders: ["Idempotent-Replay"],
   });
 
   app.get("/health", async () => ({ ok: true, service: "api-gateway" }));

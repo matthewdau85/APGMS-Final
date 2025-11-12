@@ -69,4 +69,28 @@ describe("security headers", () => {
       "http://localhost:5173",
     );
   });
+
+  it("allows Idempotency-Key preflight on /bank-lines and exposes replay header", async () => {
+    const response = await app.inject({
+      method: "OPTIONS",
+      url: "/bank-lines",
+      headers: {
+        origin: "http://localhost:5173",
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "Idempotency-Key, Content-Type",
+      },
+    });
+
+    assert.notEqual(response.statusCode, 403);
+    const allowed = String(response.headers["access-control-allow-headers"] ?? "");
+    assert.ok(
+      allowed.toLowerCase().includes("idempotency-key"),
+      `expected ACAH to include Idempotency-Key, got ${allowed}`,
+    );
+    const expose = String(response.headers["access-control-expose-headers"] ?? "");
+    assert.ok(
+      expose.toLowerCase().includes("idempotent-replay"),
+      `expected ACEH to include Idempotent-Replay, got ${expose}`,
+    );
+  });
 });
