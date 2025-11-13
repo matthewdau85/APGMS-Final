@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Decimal } from "@prisma/client/runtime/library";
 
 import { prisma } from "../db.js";
 import { fetchOneWayAccount } from "./one-way-account.js";
@@ -9,10 +9,10 @@ export async function recordObligation(params: {
   orgId: string;
   taxType: string;
   eventId: string;
-  amount: number | string | Prisma.Decimal;
+  amount: number | string | Decimal;
   status?: ObligationStatus;
 }) {
-  const amountDecimal = new Prisma.Decimal(params.amount);
+  const amountDecimal = new Decimal(params.amount);
   return prisma.integrationObligation.create({
     data: {
       orgId: params.orgId,
@@ -26,7 +26,7 @@ export async function recordObligation(params: {
 
 export async function aggregateObligations(orgId: string, taxType: string) {
   const [result] = await prisma.$queryRaw<
-    { total: Prisma.Decimal | null }[]
+    { total: Decimal | null }[]
   >`
     SELECT SUM("amount") as total
     FROM "IntegrationObligation"

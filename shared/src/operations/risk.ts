@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Decimal } from "@prisma/client/runtime/library";
 
 import { prisma } from "../db.js";
 import { analyzeIntegrationAnomaly } from "../analytics/anomaly.js";

@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Decimal } from "@prisma/client/runtime/library";
 
 import { prisma } from "../db.js";
 
@@ -36,10 +36,10 @@ export async function getOrCreateOneWayAccount(params: {
 export async function depositToOneWayAccount(params: {
   orgId: string;
   taxType: string;
-  amount: number | string | Prisma.Decimal;
+  amount: number | string | Decimal;
 }) {
   ensureTaxType(params.taxType);
-  const amountDecimal = new Prisma.Decimal(params.amount);
+  const amountDecimal = new Decimal(params.amount);
   const account = await getOrCreateOneWayAccount(params);
   const updated = await prisma.oneWayAccount.update({
     where: { id: account.id },

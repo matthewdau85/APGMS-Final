@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { InputJsonValue } from "@prisma/client/runtime/library";
 
 import { prisma } from "../db.js";
 
@@ -13,8 +13,8 @@ export async function logGovernmentSubmission(params: {
     data: {
       orgId: params.orgId,
       method: params.method,
-      payload: params.payload as Prisma.InputJsonValue,
-      response: params.response ? (params.response as Prisma.InputJsonValue) : Prisma.JsonNull,
+      payload: params.payload as InputJsonValue,
+      response: params.response ? (params.response as InputJsonValue) : Prisma.JsonNull,
       status: params.status ?? "pending",
     },
   });

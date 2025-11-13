@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Decimal } from "@prisma/client/runtime/library";
 
 import { prisma } from "../db.js";
 
@@ -9,7 +9,7 @@ const SEVERITY_THRESHOLD = {
   high: 0.6,
 };
 
-export function formatCurrency(value: Prisma.Decimal) {
+export function formatCurrency(value: Decimal) {
   return Number(value.toString()).toFixed(2);
 }
 

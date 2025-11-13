@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Decimal, InputJsonValue } from "@prisma/client/runtime/library";
 
 import { prisma } from "../db.js";
 
@@ -10,9 +10,7 @@ export async function createPaymentPlanRequest(params: {
   reason: string;
   details?: Record<string, unknown>;
 }) {
-  const payload = params.details
-    ? (params.details as Prisma.InputJsonValue)
-    : Prisma.JsonNull;
+  const payload = params.details ? (params.details as InputJsonValue) : Prisma.JsonNull;
   return prisma.paymentPlanRequest.create({
     data: {
       orgId: params.orgId,

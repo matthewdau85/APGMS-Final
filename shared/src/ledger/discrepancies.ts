@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Decimal } from "@prisma/client/runtime/library";
 
 import { prisma } from "../db.js";
 
@@ -6,12 +6,12 @@ export async function recordDiscrepancy(params: {
   orgId: string;
   taxType: string;
   eventId: string;
-  expectedAmount: number | string | Prisma.Decimal;
-  actualAmount: number | string | Prisma.Decimal;
+  expectedAmount: number | string | Decimal;
+  actualAmount: number | string | Decimal;
   reason: string;
 }) {
-  const expected = new Prisma.Decimal(params.expectedAmount);
-  const actual = new Prisma.Decimal(params.actualAmount);
+  const expected = new Decimal(params.expectedAmount);
+  const actual = new Decimal(params.actualAmount);
   return prisma.discrepancyAlert.create({
     data: {
       orgId: params.orgId,

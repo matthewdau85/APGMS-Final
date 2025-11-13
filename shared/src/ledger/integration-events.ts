@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Decimal } from "@prisma/client/runtime/library";
 
 import { prisma } from "../db.js";
 import { TaxObligation } from "./one-way-account.js";
@@ -9,7 +9,7 @@ export async function recordIntegrationEvent(params: {
   orgId: string;
   taxType: TaxObligation;
   source: string;
-  amount: number | string | Prisma.Decimal;
+  amount: number | string | Decimal;
   metadata?: Record<string, unknown>;
   status?: IntegrationEventStatus;
 }) {

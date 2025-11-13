@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Decimal } from "@prisma/client/runtime/library";
 
 import { prisma } from "../db.js";
 
@@ -8,10 +8,10 @@ export async function createTransferInstruction(params: {
   orgId: string;
   taxType: string;
   basId: string;
-  amount: number | string | Prisma.Decimal;
+  amount: number | string | Decimal;
   destination: string;
 }) {
-  const amountDecimal = new Prisma.Decimal(params.amount);
+  const amountDecimal = new Decimal(params.amount);
   return prisma.transferInstruction.create({
     data: {
       orgId: params.orgId,
