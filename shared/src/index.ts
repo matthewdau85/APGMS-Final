@@ -31,4 +31,5 @@ export * from "./ledger/bas.js";
 export * from "./ledger/transfers.js";
 export * from "./ledger/payment-plan.js";
 export * from "./analytics/payment-plan-summary.js";
+export * from "./observability/compliance-health.js";
 export * from "./operations/government.js";
