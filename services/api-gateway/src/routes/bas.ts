@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import { finalizeBasLodgment, recordBasLodgment } from "@apgms/shared";
+import { finalizeBasLodgment, recordBasLodgment, createTransferInstruction } from "@apgms/shared";
 import { verifyObligations } from "@apgms/shared";
 import { metrics } from "../observability/metrics.js";
 
@@ -41,6 +41,19 @@ export async function registerBasRoutes(app: FastifyInstance) {
       };
       if (result.shortfall && result.shortfall.gt(0)) {
         overallStatus = "failed";
+      }
+    }
+
+    if (overallStatus === "success") {
+      for (const type of TAX_TYPES) {
+        await createTransferInstruction({
+          orgId,
+          taxType: type.key,
+          basId: lodgment.id,
+          amount: verification[type.key as string].pending,
+          destination: `gov:${type.key.toLowerCase()}`,
+        });
+        metrics.transferInstructionTotal.inc({ tax_type: type.key, status: "queued" });
       }
     }
 
