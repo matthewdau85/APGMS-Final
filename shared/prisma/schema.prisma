@@ -595,6 +595,19 @@ model TransferInstruction {
   @@index([basId])
 }
 
+model GovernmentSubmission {
+  id        String   @id @default(cuid())
+  orgId     String
+  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  method    String
+  payload   Json
+  response  Json?
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+
+  @@index([orgId, status])
+}
+
 
 model IntegrationEvent {
   id         String      @id @default(cuid())

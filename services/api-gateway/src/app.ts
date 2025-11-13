@@ -206,6 +206,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
     await secureScope.register(registerBasRoutes);
     await secureScope.register(registerTransferRoutes);
     await secureScope.register(registerPaymentPlanRoutes);
+    await secureScope.register(registerAtoRoutes);
     await secureScope.register(async (connectorScope) => {
       registerConnectorRoutes(connectorScope, options.connectorDeps);
     });
