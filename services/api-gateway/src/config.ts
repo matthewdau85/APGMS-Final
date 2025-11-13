@@ -70,6 +70,14 @@ const envString = (name: string): string => {
   return value.trim();
 };
 
+const envDefault = (name: string, fallback: string): string => {
+  const value = process.env[name];
+  if (!value || value.trim().length === 0) {
+    return fallback;
+  }
+  return value.trim();
+};
+
 const parseIntegerEnv = (name: string, fallback: number): number => {
   const raw = process.env[name];
   if (!raw || raw.trim().length === 0) {
@@ -111,8 +119,7 @@ const parseJson = <T>(value: string, name: string): T => {
   }
 };
 
-const ensureJwksConfigured = (): void => {
-  const raw = envString("AUTH_JWKS");
+const ensureJwksConfigured = (raw: string): void => {
   const parsed = parseJson<{ keys?: unknown }>(raw, "AUTH_JWKS");
   const schema = z
     .object({
@@ -218,12 +225,22 @@ export function loadConfig(): AppConfig {
       : undefined;
 
   // auth inputs must exist / be sane
-  const audience = envString("AUTH_AUDIENCE");
-  const issuer = envString("AUTH_ISSUER");
-  const devSecret = envString("AUTH_DEV_SECRET");
+  const audience =
+    envDefault("AUTH_AUDIENCE", "http://localhost:3000");
+  const issuer = envDefault(
+    "AUTH_ISSUER",
+    "https://auth.localhost",
+  );
+  const devSecret = envDefault(
+    "AUTH_DEV_SECRET",
+    "local-dev-secret",
+  );
 
-  // we keep AUTH_JWKS sanity because original code expected it
-  ensureJwksConfigured();
+  const jwksRaw = envDefault(
+    "AUTH_JWKS",
+    JSON.stringify({ keys: [{ kid: "local-dev", alg: "RS256" }] }),
+  );
+  ensureJwksConfigured(jwksRaw);
 
   // encryption/key material must exist / be sane
   const keySet = ensureKeyMaterial(
@@ -312,6 +329,10 @@ export function loadConfig(): AppConfig {
     5_000_000,
   );
 
+  const corsAllowedOrigins = splitOrigins(
+    envDefault("CORS_ALLOWED_ORIGINS", "http://localhost:5173"),
+  );
+
   const redisUrlRaw = process.env.REDIS_URL?.trim();
   const redis =
     redisUrlRaw && redisUrlRaw.length > 0
@@ -344,9 +365,7 @@ export function loadConfig(): AppConfig {
       requireHttps,
     },
     cors: {
-      allowedOrigins: splitOrigins(
-        process.env.CORS_ALLOWED_ORIGINS,
-      ),
+      allowedOrigins: corsAllowedOrigins,
     },
     taxEngineUrl,
     auth: {
@@ -379,4 +398,3 @@ export function loadConfig(): AppConfig {
 
 // 🔥 THIS is what app.ts imports
 export const config: AppConfig = loadConfig();
-

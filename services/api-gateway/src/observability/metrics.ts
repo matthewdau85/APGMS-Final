@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
   Counter,
   Histogram,
+  Gauge,
   collectDefaultMetrics,
   register as promRegister,
 } from 'prom-client';
@@ -110,12 +111,6 @@ const riskEventsTotal = new Counter({
   name: 'apgms_risk_events_total',
   help: 'Risk events recorded',
   labelNames: ['severity'] as const,
-});
-
-const basLodgmentsTotal = new Counter({
-  name: 'apgms_bas_lodgments_total',
-  help: 'Total BAS lodgment attempts',
-  labelNames: ['status'] as const,
 });
 
 // ---- Public API for DB/jobs instrumentation ----

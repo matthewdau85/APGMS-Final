@@ -14,12 +14,12 @@ import { buildPaymentPlanNarrative } from "@apgms/shared";
 const PaymentPlanBodySchema = z.object({
   basCycleId: z.string().min(1),
   reason: z.string().min(10),
-  details: z.record(z.unknown()).optional(),
+  details: z.record(z.string(), z.unknown()).optional(),
 });
 
 const PaymentPlanStatusSchema = z.object({
   status: z.enum(["APPROVED", "REJECTED", "CANCELLED"]),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 type AuthenticatedRequest = FastifyRequest & { user?: { orgId?: string; sub?: string } };

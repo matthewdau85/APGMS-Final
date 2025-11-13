@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import crypto from "node:crypto";
 import { context, trace } from "@opentelemetry/api";
+import "dotenv/config.js";
 
 import { AppError, badRequest, conflict, forbidden, notFound, unauthorized } from "@apgms/shared";
 import { config } from "./config.js";

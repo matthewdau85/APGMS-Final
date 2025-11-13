@@ -9,9 +9,9 @@
     "dev": "tsx watch src/index.ts"
   },
   "dependencies": {
+    "@apgms/connectors": "workspace:*",
     "@apgms/domain-policy": "workspace:*",
     "@apgms/shared": "workspace:*",
-    "@apgms/connectors": "workspace:*",
     "@fastify/helmet": "^13.0.2",
     "@fastify/rate-limit": "^10.3.0",
     "@opentelemetry/api": "^1.9.0",
@@ -22,6 +22,7 @@
     "@prisma/client": "^6.17.1",
     "@simplewebauthn/server": "^13.2.2",
     "bcryptjs": "^3.0.3",
+    "dotenv": "^17.2.3",
     "fastify-plugin": "^5.1.0",
     "jose": "^6.1.0",
     "jsonwebtoken": "^9.0.2",
