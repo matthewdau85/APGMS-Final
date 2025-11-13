@@ -1,6 +1,11 @@
-import type { PaymentPlanRequest } from "@prisma/client";
+type PaymentPlanRecord = {
+  reason: string;
+  status: string;
+  detailsJson: Record<string, unknown> | null;
+  requestedAt: Date;
+};
 
-export function buildPaymentPlanNarrative(plan: Pick<PaymentPlanRequest, "reason" | "status" | "detailsJson" | "requestedAt">) {
+export function buildPaymentPlanNarrative(plan: PaymentPlanRecord) {
   const details = plan.detailsJson ?? {};
   const shortfalls = Array.isArray(details.shortfalls) ? details.shortfalls.join(", ") : null;
   return [

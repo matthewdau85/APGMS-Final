@@ -1,3 +1,4 @@
+import type { IntegrationEvent } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 
 import { prisma } from "../db.js";
@@ -23,8 +24,7 @@ export async function analyzeIntegrationAnomaly(orgId: string, taxType: string) 
     orderBy: { createdAt: "desc" },
     take: 24,
   });
-  type EventRecord = { amount: Decimal };
-  const amounts = events.map((event) => Number((event as EventRecord).amount.toString()));
+  const amounts = events.map((event: IntegrationEvent) => Number(event.amount.toString()));
   const latestAmount = amounts[0] ?? 0;
   const mean =
     amounts.length > 0
