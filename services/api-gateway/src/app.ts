@@ -19,6 +19,7 @@ import { registerConnectorRoutes, type ConnectorRoutesDeps } from "./routes/conn
 import { prisma } from "./db.js";
 import { parseWithSchema } from "./lib/validation.js";
 import { registerBasRoutes } from "./routes/bas.js";
+import { registerTransferRoutes } from "./routes/transfers.js";
 import { registerIntegrationEventRoutes } from "./routes/integration-events.js";
 import { verifyChallenge, requireRecentVerification, type VerifyChallengeResult } from "./security/mfa.js";
 import { recordAuditLog } from "./lib/audit.js";
@@ -202,6 +203,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
     await secureScope.register(registerTaxRoutes);
     await secureScope.register(registerIntegrationEventRoutes);
     await secureScope.register(registerBasRoutes);
+    await secureScope.register(registerTransferRoutes);
     await secureScope.register(async (connectorScope) => {
       registerConnectorRoutes(connectorScope, options.connectorDeps);
     });
