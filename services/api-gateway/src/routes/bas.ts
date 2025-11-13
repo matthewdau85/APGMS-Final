@@ -1,6 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import { finalizeBasLodgment, recordBasLodgment, createTransferInstruction } from "@apgms/shared";
+import {
+  finalizeBasLodgment,
+  recordBasLodgment,
+  createTransferInstruction,
+  createPaymentPlanRequest,
+} from "@apgms/shared";
 import { verifyObligations } from "@apgms/shared";
 import { metrics } from "../observability/metrics.js";
 
@@ -10,7 +15,7 @@ const TAX_TYPES: Array<{ key: string; label: string }> = [
 ];
 
 type LodgmentRequest = FastifyRequest<{
-  Querystring: { orgId?: string };
+  Querystring: { orgId?: string; basCycleId?: string };
   Body?: { initiatedBy?: string };
 }>;
 
@@ -22,6 +27,7 @@ export async function registerBasRoutes(app: FastifyInstance) {
       return;
     }
 
+    const basCycleId = String(request.query.basCycleId ?? "manual");
     const lodgment = await recordBasLodgment({
       orgId,
       initiatedBy: request.body?.initiatedBy,
@@ -31,6 +37,7 @@ export async function registerBasRoutes(app: FastifyInstance) {
 
     const verification: Record<string, unknown> = {};
     let overallStatus: "success" | "failed" = "success";
+    const shortfalls: string[] = [];
 
     for (const type of TAX_TYPES) {
       const result = await verifyObligations(orgId, type.key);
@@ -41,6 +48,7 @@ export async function registerBasRoutes(app: FastifyInstance) {
       };
       if (result.shortfall && result.shortfall.gt(0)) {
         overallStatus = "failed";
+        shortfalls.push(`${type.key} shortfall ${result.shortfall.toString()}`);
       }
     }
 
@@ -57,6 +65,19 @@ export async function registerBasRoutes(app: FastifyInstance) {
       }
     }
 
+    if (overallStatus === "failed") {
+      const reason = shortfalls.length > 0 ? shortfalls.join("; ") : "Verification failed";
+      await createPaymentPlanRequest({
+        orgId,
+        basCycleId,
+        reason,
+        details: {
+          shortfalls,
+          verification,
+        },
+      });
+      metrics.paymentPlanRequestsTotal.inc({ status: "created" });
+    }
     await finalizeBasLodgment(lodgment.id, verification, overallStatus);
     metrics.basLodgmentsTotal.inc({ status: overallStatus });
 

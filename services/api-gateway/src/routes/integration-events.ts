@@ -7,6 +7,7 @@ import {
   analyzeIntegrationAnomaly,
   depositToOneWayAccount,
   fetchRecentDiscrepancies,
+  listPaymentPlans,
   markIntegrationEventProcessed,
   recordDiscrepancy,
   recordIntegrationEvent,
@@ -173,6 +174,7 @@ export async function registerIntegrationEventRoutes(app: FastifyInstance) {
       fetchRecentDiscrepancies(orgId),
       analyzeIntegrationAnomaly(orgId, taxType),
     ]);
+    const plans = await listPaymentPlans(orgId);
     reply.send({
       orgId,
       taxType,
@@ -184,6 +186,13 @@ export async function registerIntegrationEventRoutes(app: FastifyInstance) {
         createdAt: alert.createdAt,
       })),
       anomaly,
+      paymentPlans: plans.map((plan) => ({
+        id: plan.id,
+        basCycleId: plan.basCycleId,
+        status: plan.status,
+        reason: plan.reason,
+        requestedAt: plan.requestedAt,
+      })),
       generatedAt: new Date().toISOString(),
     });
   });
