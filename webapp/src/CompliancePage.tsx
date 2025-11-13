@@ -4,8 +4,10 @@ import {
   fetchEvidenceArtifacts,
   createEvidenceArtifact,
   fetchEvidenceArtifactDetail,
+  fetchBenfordAdvisorySettings,
 } from "./api";
 import { getToken } from "./auth";
+import enAu from "./i18n/en-AU.json";
 
 type ComplianceReport = Awaited<ReturnType<typeof fetchComplianceReport>>;
 
@@ -25,6 +27,14 @@ export default function CompliancePage() {
   const [artifactError, setArtifactError] = useState<string | null>(null);
   const [artifactSuccess, setArtifactSuccess] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [benfordSettings, setBenfordSettings] = useState<{
+    tenantId: string;
+    region: string;
+    locale: string;
+    showAtoContext: boolean;
+  } | null>(null);
+  const [benfordLoading, setBenfordLoading] = useState(true);
+  const [benfordError, setBenfordError] = useState<string | null>(null);
 
   const loadReport = async () => {
     if (!token) return;
@@ -57,12 +67,28 @@ export default function CompliancePage() {
     }
   };
 
+  const loadBenfordSettings = async () => {
+    if (!token) return;
+    setBenfordLoading(true);
+    setBenfordError(null);
+    try {
+      const response = await fetchBenfordAdvisorySettings(token);
+      setBenfordSettings(response);
+    } catch (err) {
+      console.error(err);
+      setBenfordError("Unable to load advisory context");
+    } finally {
+      setBenfordLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!token) {
       return;
     }
     void loadReport();
     void loadArtifacts();
+    void loadBenfordSettings();
   }, [token]);
 
   if (!token) {
@@ -113,6 +139,21 @@ export default function CompliancePage() {
     }
   }
 
+  const advisoryDetails: string[] = [
+    "Benford anomaly detection monitors ledger variance to surface issues before lodgment.",
+  ];
+
+  if (!benfordLoading && benfordSettings?.showAtoContext) {
+    const localized = enAu.benford?.atoContext ?? null;
+    if (localized) {
+      advisoryDetails.push(localized);
+    }
+  }
+
+  if (!benfordLoading && benfordSettings && !benfordSettings.showAtoContext) {
+    advisoryDetails.push("Regulator context sharing is disabled for this tenant.");
+  }
+
   return (
     <div style={{ display: "grid", gap: "24px" }}>
       <header>
@@ -133,6 +174,21 @@ export default function CompliancePage() {
             <SummaryCard label="Resolved This Quarter" value={report.alertsSummary.resolvedThisQuarter.toString()} />
             <SummaryCard label="PAYGW Secured" value={currencyFormatter.format(report.designatedTotals.paygw)} />
             <SummaryCard label="GST Secured" value={currencyFormatter.format(report.designatedTotals.gst)} />
+          </section>
+
+          <section style={cardStyle}>
+            <h2 style={sectionTitleStyle}>Benford Advisory Context</h2>
+            {benfordLoading && <div style={infoTextStyle}>Loading advisory context…</div>}
+            {benfordError && <div style={errorTextStyle}>{benfordError}</div>}
+            {!benfordLoading && !benfordError && (
+              <ul style={detailListStyle}>
+                {advisoryDetails.map((detail) => (
+                  <li key={detail} style={detailItemStyle}>
+                    {detail}
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
           <section style={cardStyle}>
@@ -368,6 +424,20 @@ const cardHeaderStyle: React.CSSProperties = {
   marginBottom: "16px",
   gap: "12px",
   flexWrap: "wrap",
+};
+
+const detailListStyle: React.CSSProperties = {
+  listStyle: "disc",
+  margin: 0,
+  paddingLeft: "20px",
+  display: "grid",
+  gap: "8px",
+};
+
+const detailItemStyle: React.CSSProperties = {
+  fontSize: "14px",
+  lineHeight: 1.5,
+  color: "#1f2933",
 };
 
 const sectionTitleStyle: React.CSSProperties = {

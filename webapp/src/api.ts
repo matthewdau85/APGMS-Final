@@ -302,6 +302,41 @@ export async function fetchComplianceReport(token: string) {
   }>;
 }
 
+export async function fetchBenfordAdvisorySettings(token: string) {
+  const res = await fetch(`${API_BASE}/tenant-settings/benford`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    throw new Error("failed_benford_settings");
+  }
+  return res.json() as Promise<{
+    tenantId: string;
+    region: string;
+    locale: string;
+    showAtoContext: boolean;
+  }>;
+}
+
+export async function updateBenfordAdvisorySettings(
+  token: string,
+  payload: { showAtoContext?: boolean; region?: string; locale?: string },
+) {
+  const res = await fetch(`${API_BASE}/tenant-settings/benford`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    throw new Error("failed_update_benford_settings");
+  }
+  return res.json() as Promise<{
+    tenantId: string;
+    region: string;
+    locale: string;
+    showAtoContext: boolean;
+  }>;
+}
+
 export async function fetchSecurityUsers(token: string) {
   const res = await fetch(`${API_BASE}/security/users`, {
     headers: authHeaders(token),
