@@ -337,6 +337,7 @@ model Org {
   oneWayAccounts OneWayAccount[]
   discrepancyAlerts DiscrepancyAlert[]
   integrationObligations IntegrationObligation[]
+  integrationEvents IntegrationEvent[]
   basLodgments BasLodgment[]
   transferInstructions TransferInstruction[]
   governmentSubmissions GovernmentSubmission[]
