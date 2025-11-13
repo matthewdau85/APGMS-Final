@@ -29,6 +29,7 @@ import { closeProviders, initProviders } from "./providers.js";
 import { registerPaymentPlanRoutes } from "./routes/payment-plans.js";
 import { registerAtoRoutes } from "./routes/ato.js";
 import { registerMonitoringRoutes } from "./routes/monitoring.js";
+import { registerRiskRoutes } from "./routes/risk.js";
 
 // ---- keep your other domain code (types, helpers, shapes) exactly as you had ----
 // (omitted here for brevity - unchanged from your last working content)
@@ -210,6 +211,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
     await secureScope.register(registerPaymentPlanRoutes);
     await secureScope.register(registerAtoRoutes);
     await secureScope.register(registerMonitoringRoutes);
+    await secureScope.register(registerRiskRoutes);
     await secureScope.register(async (connectorScope) => {
       registerConnectorRoutes(connectorScope, options.connectorDeps);
     });

@@ -106,6 +106,12 @@ const atoReportsTotal = new Counter({
   labelNames: ['status'] as const,
 });
 
+const riskEventsTotal = new Counter({
+  name: 'apgms_risk_events_total',
+  help: 'Risk events recorded',
+  labelNames: ['severity'] as const,
+});
+
 const basLodgmentsTotal = new Counter({
   name: 'apgms_bas_lodgments_total',
   help: 'Total BAS lodgment attempts',
@@ -129,6 +135,7 @@ export const metrics = {
   transferExecutionTotal,
   paymentPlanRequestsTotal,
   atoReportsTotal,
+  riskEventsTotal,
 
   async observeJob<T>(job: string, fn: () => Promise<T>): Promise<T> {
     const stop = jobDuration.startTimer({ job });

@@ -608,6 +608,21 @@ model GovernmentSubmission {
   @@index([orgId, status])
 }
 
+model RiskEvent {
+  id          String   @id @default(cuid())
+  orgId       String
+  org         Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  taxType     String
+  severity    String
+  score       Float
+  description String
+  resolved    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  resolvedAt  DateTime?
+
+  @@index([orgId, severity, resolved])
+}
+
 
 model IntegrationEvent {
   id         String      @id @default(cuid())
