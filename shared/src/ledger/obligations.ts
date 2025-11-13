@@ -32,7 +32,7 @@ export async function aggregateObligations(orgId: string, taxType: string) {
     FROM "IntegrationObligation"
     WHERE "orgId" = ${orgId} AND "taxType" = ${taxType} AND "status" = 'pending'
   `;
-  return result?.total ?? new Prisma.Decimal(0);
+  return result?.total ?? new Decimal(0);
 }
 
 export async function markObligationsStatus(orgId: string, taxType: string, status: ObligationStatus) {
@@ -45,8 +45,8 @@ export async function markObligationsStatus(orgId: string, taxType: string, stat
 export async function verifyObligations(orgId: string, taxType: string) {
   const pending = await aggregateObligations(orgId, taxType);
   const account = await fetchOneWayAccount({ orgId, taxType });
-  const balance = account?.balance ?? new Prisma.Decimal(0);
-  let shortfall: Prisma.Decimal | null = null;
+  const balance = account?.balance ?? new Decimal(0);
+  let shortfall: Decimal | null = null;
   if (balance.greaterThanOrEqualTo(pending)) {
     await markObligationsStatus(orgId, taxType, "verified");
   } else {

@@ -1,4 +1,4 @@
-import { Decimal } from "@prisma/client/runtime/library";
+import { Decimal, InputJsonValue } from "@prisma/client/runtime/library";
 
 import { prisma } from "../db.js";
 import { TaxObligation } from "./one-way-account.js";
@@ -13,10 +13,8 @@ export async function recordIntegrationEvent(params: {
   metadata?: Record<string, unknown>;
   status?: IntegrationEventStatus;
 }) {
-  const amountDecimal = new Prisma.Decimal(params.amount);
-  const metadata = params.metadata
-    ? (params.metadata as Prisma.InputJsonValue)
-    : Prisma.JsonNull;
+  const amountDecimal = new Decimal(params.amount);
+  const metadata = params.metadata ? (params.metadata as InputJsonValue) : null;
 
   const event = await prisma.integrationEvent.create({
     data: {

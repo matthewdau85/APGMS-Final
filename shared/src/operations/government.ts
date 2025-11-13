@@ -14,7 +14,7 @@ export async function logGovernmentSubmission(params: {
       orgId: params.orgId,
       method: params.method,
       payload: params.payload as InputJsonValue,
-      response: params.response ? (params.response as InputJsonValue) : Prisma.JsonNull,
+      response: params.response ? (params.response as InputJsonValue) : null,
       status: params.status ?? "pending",
     },
   });

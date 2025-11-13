@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { InputJsonValue } from "@prisma/client/runtime/library";
 
 import { prisma } from "../db.js";
 
@@ -17,7 +17,7 @@ export async function recordBasLodgment(params: {
       initiatedBy: params.initiatedBy,
       taxTypes: params.taxTypes,
       status: params.status ?? "queued",
-      result: params.result ? (params.result as Prisma.InputJsonValue) : Prisma.JsonNull,
+      result: params.result ? (params.result as InputJsonValue) : null,
     },
   });
 }
@@ -26,7 +26,7 @@ export async function finalizeBasLodgment(id: string, result: Record<string, unk
   return prisma.basLodgment.update({
     where: { id },
     data: {
-      result: result as Prisma.InputJsonValue,
+      result: result as InputJsonValue,
       status,
       processedAt: new Date(),
     },

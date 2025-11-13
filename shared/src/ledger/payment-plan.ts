@@ -10,7 +10,7 @@ export async function createPaymentPlanRequest(params: {
   reason: string;
   details?: Record<string, unknown>;
 }) {
-  const payload = params.details ? (params.details as InputJsonValue) : Prisma.JsonNull;
+  const payload = params.details ? (params.details as InputJsonValue) : null;
   return prisma.paymentPlanRequest.create({
     data: {
       orgId: params.orgId,
@@ -39,9 +39,7 @@ export async function updatePaymentPlanStatus(
     where: { id },
     data: {
       status,
-      detailsJson: metadata
-        ? (metadata as Prisma.InputJsonValue)
-        : undefined,
+      detailsJson: metadata ? (metadata as InputJsonValue) : undefined,
     },
   });
 }

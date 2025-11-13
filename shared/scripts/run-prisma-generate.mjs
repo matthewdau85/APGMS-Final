@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import { rm, readdir } from "node:fs/promises";
+import { join } from "node:path";
 
 const env = { ...process.env };
 
@@ -17,6 +19,22 @@ const runner =
   process.platform === "win32"
     ? ["cmd.exe", "/d", "/s", "/c", command, ...args]
     : [command, ...args];
+
+const cleanClient = async () => {
+  const dir = join(process.cwd(), "..", "node_modules", ".pnpm");
+  try {
+    const entries = await readdir(dir);
+    await Promise.all(
+      entries
+        .filter((entry) => entry.startsWith("@prisma+client@"))
+        .map((entry) => rm(join(dir, entry), { recursive: true, force: true })),
+    );
+  } catch {
+    // ignore
+  }
+};
+
+await cleanClient();
 
 const child = spawn(runner[0], runner.slice(1), {
   stdio: "inherit",

@@ -23,9 +23,13 @@ export async function analyzeIntegrationAnomaly(orgId: string, taxType: string) 
     orderBy: { createdAt: "desc" },
     take: 24,
   });
-  const amounts = events.map((event) => Number(event.amount.toString()));
+  type EventRecord = { amount: Decimal };
+  const amounts = events.map((event) => Number((event as EventRecord).amount.toString()));
   const latestAmount = amounts[0] ?? 0;
-  const mean = amounts.length > 0 ? amounts.reduce((sum, value) => sum + value, 0) / amounts.length : 0;
+  const mean =
+    amounts.length > 0
+      ? amounts.reduce((sum: number, value: number) => sum + value, 0) / amounts.length
+      : 0;
   const ratio = mean > 0 ? (latestAmount - mean) / mean : 0;
   let severity: AnomalySeverity = "low";
   if (ratio >= SEVERITY_THRESHOLD.high) severity = "high";
