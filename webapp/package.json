@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "vite --strictPort",
-    "build": "vite build",
+    "build": "node scripts/clean-dist.js && vite build",
     "preview": "vite preview --strictPort"
   },
   "dependencies": {
