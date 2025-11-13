@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
+import { prisma } from "../db.js";
 import {
   createPaymentPlanRequest,
   listPaymentPlans,
@@ -8,6 +9,7 @@ import {
 } from "@apgms/shared";
 import { authGuard } from "../auth.js";
 import { parseWithSchema } from "../lib/validation.js";
+import { buildPaymentPlanNarrative } from "@apgms/shared";
 
 const PaymentPlanBodySchema = z.object({
   basCycleId: z.string().min(1),
@@ -63,5 +65,27 @@ export async function registerPaymentPlanRoutes(app: FastifyInstance) {
     } catch (error) {
       reply.code(404).send({ error: "plan_not_found" });
     }
+  });
+
+  app.get("/payment-plans/:id/summary", async (request: FastifyRequest, reply: FastifyReply) => {
+    const id = (request.params as { id: string }).id;
+    const plan = await prisma.paymentPlanRequest.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        orgId: true,
+        basCycleId: true,
+        reason: true,
+        status: true,
+        detailsJson: true,
+        requestedAt: true,
+      },
+    });
+    if (!plan) {
+      reply.code(404).send({ error: "plan_not_found" });
+      return;
+    }
+    const narrative = buildPaymentPlanNarrative(plan);
+    reply.send({ plan, summary: narrative });
   });
 }
