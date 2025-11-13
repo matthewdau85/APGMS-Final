@@ -8,5 +8,6 @@ Run these checks before each release and record evidence in the release ticket:
 - [ ] Confirm DPIA/ASVS documentation is current (`docs/privacy/dpia.md`, `docs/security/ASVS-mapping.md`)
 - [ ] Ensure the security workflow (SBOM/SCA/Trivy/Gitleaks) succeeded in CI
 - [ ] `pnpm smoke:regulator` and capture the console output in the release ticket (proves regulator portal endpoints respond with expected evidence).
+- [ ] Capture monitoring evidence (run `node scripts/collect-monitoring-evidence.mjs` with `APGMS_MONITORING_TOKEN`, save artifacts/monitoring/<timestamp>) and link it from the release notes.
 
 Attach the generated evidence file and notes to the release artefact.
