@@ -26,6 +26,7 @@ import { recordAuditLog } from "./lib/audit.js";
 import { ensureRegulatorSessionActive } from "./lib/regulator-session.js";
 import { metrics, installHttpMetrics, registerMetricsRoute } from "./observability/metrics.js";
 import { closeProviders, initProviders } from "./providers.js";
+import { registerPaymentPlanRoutes } from "./routes/payment-plans.js";
 
 // ---- keep your other domain code (types, helpers, shapes) exactly as you had ----
 // (omitted here for brevity - unchanged from your last working content)
@@ -204,6 +205,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
     await secureScope.register(registerIntegrationEventRoutes);
     await secureScope.register(registerBasRoutes);
     await secureScope.register(registerTransferRoutes);
+    await secureScope.register(registerPaymentPlanRoutes);
     await secureScope.register(async (connectorScope) => {
       registerConnectorRoutes(connectorScope, options.connectorDeps);
     });

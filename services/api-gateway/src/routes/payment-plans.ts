@@ -1,0 +1,67 @@
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { z } from "zod";
+
+import {
+  createPaymentPlanRequest,
+  listPaymentPlans,
+  updatePaymentPlanStatus,
+} from "@apgms/shared";
+import { authGuard } from "../auth.js";
+import { parseWithSchema } from "../lib/validation.js";
+
+const PaymentPlanBodySchema = z.object({
+  basCycleId: z.string().min(1),
+  reason: z.string().min(10),
+  details: z.record(z.unknown()).optional(),
+});
+
+const PaymentPlanStatusSchema = z.object({
+  status: z.enum(["APPROVED", "REJECTED", "CANCELLED"]),
+  metadata: z.record(z.unknown()).optional(),
+});
+
+type AuthenticatedRequest = FastifyRequest & { user?: { orgId?: string; sub?: string } };
+
+export async function registerPaymentPlanRoutes(app: FastifyInstance) {
+  app.addHook("onRequest", authGuard);
+
+  app.get("/payment-plans", async (request: AuthenticatedRequest, reply: FastifyReply) => {
+    const orgId = request.user?.orgId;
+    if (!orgId) {
+      reply.code(401).send({ error: "unauthenticated" });
+      return;
+    }
+    const plans = await listPaymentPlans(orgId);
+    reply.send({ plans });
+  });
+
+  app.post("/payment-plans", async (request: AuthenticatedRequest, reply: FastifyReply) => {
+    const orgId = request.user?.orgId;
+    if (!orgId) {
+      reply.code(401).send({ error: "unauthenticated" });
+      return;
+    }
+    const payload = parseWithSchema(PaymentPlanBodySchema, request.body);
+    const plan = await createPaymentPlanRequest({
+      orgId,
+      basCycleId: payload.basCycleId,
+      reason: payload.reason,
+      details: payload.details,
+    });
+    reply.code(201).send({ plan });
+  });
+
+  app.post("/payment-plans/:id/status", async (request: FastifyRequest, reply: FastifyReply) => {
+    const payload = parseWithSchema(PaymentPlanStatusSchema, request.body);
+    try {
+      const updated = await updatePaymentPlanStatus(
+        (request.params as { id: string }).id,
+        payload.status,
+        payload.metadata,
+      );
+      reply.send({ updated });
+    } catch (error) {
+      reply.code(404).send({ error: "plan_not_found" });
+    }
+  });
+}
