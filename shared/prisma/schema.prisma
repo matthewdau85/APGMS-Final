@@ -334,6 +334,13 @@ model Org {
   deletedAt  DateTime?
 
   users      User[]
+  oneWayAccounts OneWayAccount[]
+  discrepancyAlerts DiscrepancyAlert[]
+  integrationObligations IntegrationObligation[]
+  basLodgments BasLodgment[]
+  transferInstructions TransferInstruction[]
+  governmentSubmissions GovernmentSubmission[]
+  riskEvents RiskEvent[]
   lines      BankLine[]
   tombstones OrgTombstone[]
   alerts     Alert[]
