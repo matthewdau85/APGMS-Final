@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
-import { Prisma, type PrismaClient } from "@prisma/client";
+import { Decimal } from "@prisma/client/runtime/library";
+import type { PrismaClient } from "@prisma/client";
 
 import { conflict, notFound } from "@apgms/shared";
 import {
@@ -35,6 +36,21 @@ export type ApplyDesignatedTransferResult = {
   transferId: string;
   source: DesignatedTransferSource;
 };
+
+type AccountWithTransfers = {
+  id: string;
+  type: string;
+  balance: Decimal;
+  transfers: { amount: Decimal }[];
+};
+
+const runTransaction = async <T>(
+  prisma: PrismaClient,
+  fn: (tx: PrismaClient) => Promise<T>,
+): Promise<T> =>
+  prisma.$transaction(
+    fn as Parameters<PrismaClient["$transaction"]>[0],
+  ) as Promise<T>;
 
 async function ensureViolationAlert(
   prisma: PrismaClient,
@@ -109,9 +125,9 @@ export async function applyDesignatedAccountTransfer(
     );
   }
 
-  const amountDecimal = new Prisma.Decimal(input.amount);
+  const amountDecimal = new Decimal(input.amount);
 
-  const result = await context.prisma.$transaction(async (tx) => {
+  const result = await runTransaction(context.prisma, async (tx) => {
     const account = await tx.designatedAccount.findUnique({
       where: { id: input.accountId },
     });
@@ -147,7 +163,7 @@ export async function applyDesignatedAccountTransfer(
       newBalance: Number(updatedBalance),
       transferId: transfer.id,
       source: normalizedSource,
-    };
+    } satisfies ApplyDesignatedTransferResult;
   });
 
   if (context.auditLogger) {
@@ -182,6 +198,14 @@ export type DesignatedReconciliationSummary = {
   }>;
 };
 
+type DesignatedMovement = {
+  accountId: string;
+  type: string;
+  balance: number;
+  inflow24h: number;
+  transferCount24h: number;
+};
+
 export async function generateDesignatedAccountReconciliationArtifact(
   context: PolicyContext,
   orgId: string,
@@ -194,7 +218,7 @@ export async function generateDesignatedAccountReconciliationArtifact(
   const now = new Date();
   const cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-  const accounts = await context.prisma.designatedAccount.findMany({
+  const accounts = (await context.prisma.designatedAccount.findMany({
     where: { orgId },
     include: {
       transfers: {
@@ -206,24 +230,31 @@ export async function generateDesignatedAccountReconciliationArtifact(
         orderBy: { createdAt: "asc" },
       },
     },
-  });
+  })) as AccountWithTransfers[];
 
-  const movements = accounts.map((account) => {
-    const inflow = account.transfers.reduce((acc, transfer) => {
-      return acc + Number(transfer.amount);
-    }, 0);
+  const movements: DesignatedMovement[] = accounts.map(
+    (account: AccountWithTransfers) => {
+      const inflow = account.transfers.reduce(
+        (acc: number, transfer: { amount: Decimal }) =>
+          acc + Number(transfer.amount),
+        0,
+      );
 
-    return {
-      accountId: account.id,
-      type: account.type,
-      balance: Number(account.balance),
-      inflow24h: Number(inflow.toFixed(2)),
-      transferCount24h: account.transfers.length,
-    };
-  });
+      return {
+        accountId: account.id,
+        type: account.type,
+        balance: Number(account.balance),
+        inflow24h: Number(inflow.toFixed(2)),
+        transferCount24h: account.transfers.length,
+      };
+    },
+  );
 
   const totals = movements.reduce(
-    (acc, entry) => {
+    (
+      acc: { paygw: number; gst: number },
+      entry: DesignatedMovement,
+    ) => {
       if (entry.type.toUpperCase() === "PAYGW") {
         acc.paygw += entry.balance;
       } else if (entry.type.toUpperCase() === "GST") {
@@ -244,7 +275,7 @@ export async function generateDesignatedAccountReconciliationArtifact(
     .update(JSON.stringify(summary))
     .digest("hex");
 
-  const artifact = await context.prisma.$transaction(async (tx) => {
+  const artifact = await runTransaction(context.prisma, async (tx) => {
     const created = await tx.evidenceArtifact.create({
       data: {
         orgId,
