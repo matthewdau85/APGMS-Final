@@ -9,7 +9,8 @@ if (!env.DATABASE_URL) {
 }
 
 if (!env.SHADOW_DATABASE_URL) {
-  env.SHADOW_DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/apgms_shadow?schema=public";
+  env.SHADOW_DATABASE_URL =
+    "postgresql://postgres:postgres@localhost:5432/apgms_shadow?schema=public";
 }
 
 const command = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
@@ -30,7 +31,7 @@ const cleanClient = async () => {
         .map((entry) => rm(join(dir, entry), { recursive: true, force: true })),
     );
   } catch {
-    // ignore
+    // ignore missing directory/errors
   }
 };
 

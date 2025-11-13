@@ -1,23 +1,32 @@
-type PaymentPlanRecord = {
+import type { JsonValue } from "@prisma/client/runtime/library";
+
+export type PaymentPlanSummaryInput = {
+  id: string;
+  orgId: string;
+  basCycleId: string;
   reason: string;
   status: string;
-  detailsJson: Record<string, unknown> | null;
   requestedAt: Date;
+  detailsJson: JsonValue;
 };
 
-export function buildPaymentPlanNarrative(plan: PaymentPlanRecord) {
-  const details = plan.detailsJson ?? {};
-  const shortfalls = Array.isArray(details.shortfalls) ? details.shortfalls.join(", ") : null;
-  return [
-    `Payment plan request submitted on ${new Date(plan.requestedAt).toISOString().split("T")[0]}.`,
-    `Reason:${plan.reason ? ` ${plan.reason}` : " not provided"}.`,
-    plan.status === "APPROVED"
-      ? "The plan is approved; transfers can be scheduled per the agreed timeline."
-      : plan.status === "REJECTED"
-      ? "The plan is rejected; please submit additional documentation."
-      : "The plan is awaiting review.",
-    shortfalls ? `Shortfalls recorded: ${shortfalls}.` : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
+const describeDetails = (details: JsonValue): string => {
+  if (details === null) {
+    return "no details provided";
+  }
+  if (typeof details === "string" || typeof details === "number" || typeof details === "boolean") {
+    return details.toString();
+  }
+  try {
+    return JSON.stringify(details);
+  } catch {
+    return "complex details";
+  }
+};
+
+export function buildPaymentPlanNarrative(plan: PaymentPlanSummaryInput): string {
+  const formattedDate =
+    plan.requestedAt instanceof Date ? plan.requestedAt.toISOString() : String(plan.requestedAt);
+  const detailsDescription = describeDetails(plan.detailsJson);
+  return `Payment plan ${plan.id} for cycle ${plan.basCycleId} is ${plan.status}. Reason: ${plan.reason}. Details: ${detailsDescription}. Requested at ${formattedDate}; org ${plan.orgId}.`;
 }

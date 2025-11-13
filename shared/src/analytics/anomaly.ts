@@ -1,4 +1,3 @@
-import type { IntegrationEvent } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 
 import { prisma } from "../db.js";
@@ -14,6 +13,10 @@ export function formatCurrency(value: Decimal) {
   return Number(value.toString()).toFixed(2);
 }
 
+type IntegrationEventLike = {
+  amount: Decimal | number | string | null;
+};
+
 export async function analyzeIntegrationAnomaly(orgId: string, taxType: string) {
   const events = await prisma.integrationEvent.findMany({
     where: {
@@ -24,28 +27,46 @@ export async function analyzeIntegrationAnomaly(orgId: string, taxType: string) 
     orderBy: { createdAt: "desc" },
     take: 24,
   });
-  const amounts = events.map((event: IntegrationEvent) => Number(event.amount.toString()));
+
+  const amounts: number[] = events.map((event: IntegrationEventLike) => {
+    const decimal = new Decimal(event.amount as Decimal | number | string);
+    return Number(decimal.toString());
+  });
+
   const latestAmount = amounts[0] ?? 0;
+
   const mean =
     amounts.length > 0
       ? amounts.reduce((sum: number, value: number) => sum + value, 0) / amounts.length
       : 0;
+
   const ratio = mean > 0 ? (latestAmount - mean) / mean : 0;
+
   let severity: AnomalySeverity = "low";
-  if (ratio >= SEVERITY_THRESHOLD.high) severity = "high";
-  else if (ratio >= SEVERITY_THRESHOLD.medium) severity = "medium";
+  if (ratio >= SEVERITY_THRESHOLD.high) {
+    severity = "high";
+  } else if (ratio >= SEVERITY_THRESHOLD.medium) {
+    severity = "medium";
+  }
+
   const explanation =
     Math.abs(ratio) <= 0.1
       ? "Recent deposits are within normal historical variation."
       : ratio > 0
       ? `Recent deposits exceed the historical average by ${Math.round(ratio * 100)}%.`
       : `Recent deposits fall below the historical average by ${Math.round(-ratio * 100)}%.`;
+
   const template = `
     Latest ${taxType} deposit: $${latestAmount.toFixed(2)}.
     Historical average: $${mean.toFixed(2)}.
     Severity: ${severity}.
-    Advice: ${ratio >= SEVERITY_THRESHOLD.medium ? "Monitor upcoming BAS lodgments closely." : "Status normal."}
+    Advice: ${
+      ratio >= SEVERITY_THRESHOLD.medium
+        ? "Monitor upcoming BAS lodgments closely."
+        : "Status normal."
+    }
   `;
+
   return {
     severity,
     score: Math.min(Math.max(ratio, -1), 1),
