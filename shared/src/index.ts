@@ -29,3 +29,4 @@ export * from "./ledger/obligations.js";
 export * from "./analytics/anomaly.js";
 export * from "./ledger/bas.js";
 export * from "./ledger/transfers.js";
+export * from "./ledger/payment-plan.js";
