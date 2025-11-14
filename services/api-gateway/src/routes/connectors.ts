@@ -2,15 +2,15 @@
 import { z } from "zod";
 
 import { parseWithSchema } from "../lib/validation.js";
-import { assertOrgAccess, assertRoleForBankLines } from "../utils/orgScope.js";
+import { assertRoleForBankLines, requireOrgContext } from "../utils/orgScope.js";
 import { prisma } from "../db.js";
-import { recordAuditLog } from "../lib/audit.js";
+import { recordAuditLog, recordCriticalAuditLog } from "../lib/audit.js";
+import { withIdempotency } from "../lib/idempotency.js";
 import { capturePayroll, capturePos } from "@apgms/connectors";
 import type { AuditLogger } from "@apgms/domain-policy";
 import type { JsonValue } from "@prisma/client/runtime/library.js";
 
 const CaptureBodySchema = z.object({
-  orgId: z.string().min(1),
   amount: z.number().positive(),
 });
 
@@ -26,25 +26,6 @@ const defaultConnectorDeps: ConnectorRoutesDeps = {
   capturePos,
 };
 
-function captureContext(request: FastifyRequest) {
-  return {
-    prisma,
-    auditLogger: async (entry: Parameters<AuditLogger>[0]) => {
-      const metadata =
-        entry.metadata == null
-          ? null
-          : (JSON.parse(JSON.stringify(entry.metadata)) as JsonValue);
-      return recordAuditLog({
-        orgId: entry.orgId,
-        actorId: entry.actorId,
-        action: entry.action,
-        metadata,
-        throwOnError: true,
-      });
-    },
-  };
-}
-
 async function processCapture(
   request: FastifyRequest,
   reply: FastifyReply,
@@ -52,22 +33,55 @@ async function processCapture(
   payload: CapturePayload,
   deps: ConnectorRoutesDeps,
 ) {
-  const user = (request as FastifyRequest & { user?: { orgId?: string; sub?: string } }).user;
-  if (!user) {
-    reply.code(401).send({ error: "unauthorized" });
-    return;
-  }
-
-  if (!assertOrgAccess(request, reply, payload.orgId)) return;
+  const ctx = requireOrgContext(request, reply);
+  if (!ctx) return;
   if (!assertRoleForBankLines(request, reply)) return;
 
-  const actorId = user.sub;
-  const context = captureContext(request as FastifyRequest);
+  await withIdempotency(
+    request,
+    reply,
+    {
+      prisma,
+      orgId: ctx.orgId,
+      actorId: ctx.actorId,
+      requestPayload: payload,
+    },
+    async () => {
+      const captureFn = type === "payroll" ? deps.capturePayroll : deps.capturePos;
+      const result = await captureFn(
+        {
+          prisma,
+          auditLogger: async (entry) => {
+            const metadata =
+              entry.metadata == null
+                ? null
+                : (JSON.parse(JSON.stringify(entry.metadata)) as JsonValue);
+            return recordAuditLog({
+              ...entry,
+              metadata,
+              throwOnError: true,
+            });
+          },
+        },
+        {
+          orgId: ctx.orgId,
+          amount: payload.amount,
+          actorId: ctx.actorId,
+        },
+      );
 
-  const captureFn = type === "payroll" ? deps.capturePayroll : deps.capturePos;
-  const result = await captureFn(context, { ...payload, actorId });
+      await recordCriticalAuditLog({
+        orgId: ctx.orgId,
+        actorId: ctx.actorId,
+        action: `demo.connectors.${type}`,
+        metadata: { amount: payload.amount },
+      });
 
-  reply.send(result);
+      reply.send(result);
+
+      return { statusCode: 200 };
+    },
+  );
 }
 
 export function registerConnectorRoutes(app: FastifyInstance, deps: ConnectorRoutesDeps = defaultConnectorDeps) {

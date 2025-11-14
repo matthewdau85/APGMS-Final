@@ -3,6 +3,10 @@ import { z } from "zod";
 
 import { markTransferStatus } from "@apgms/shared";
 import { metrics } from "../observability/metrics.js";
+import { prisma } from "../db.js";
+import { requireOrgContext } from "../utils/orgScope.js";
+import { withIdempotency } from "../lib/idempotency.js";
+import { recordCriticalAuditLog } from "../lib/audit.js";
 
 const TransferRequestSchema = z.object({
   instructionId: z.string().min(1),
@@ -19,13 +23,40 @@ export async function registerTransferRoutes(app: FastifyInstance) {
       return;
     }
 
+    const ctx = requireOrgContext(request, reply);
+    if (!ctx) return;
+
     try {
-      await markTransferStatus(payload.instructionId, "sent");
-      metrics.transferExecutionTotal.inc({ status: "success" });
-      reply.send({ instructionId: payload.instructionId, status: "sent" });
+      await withIdempotency(
+        request,
+        reply,
+        {
+          prisma,
+          orgId: ctx.orgId,
+          actorId: ctx.actorId,
+          requestPayload: payload,
+        },
+        async () => {
+          await markTransferStatus(payload.instructionId, "sent");
+          await recordCriticalAuditLog({
+            orgId: ctx.orgId,
+            actorId: ctx.actorId,
+            action: "bas.transfer",
+            metadata: { instructionId: payload.instructionId },
+          });
+          metrics.transferExecutionTotal.inc({ status: "success" });
+          reply.send({ instructionId: payload.instructionId, status: "sent" });
+          return { statusCode: 200 };
+        },
+      );
     } catch (error) {
       metrics.transferExecutionTotal.inc({ status: "failed" });
-      reply.code(500).send({ error: "transfer_failed" });
+      const message = error instanceof Error ? error.message : undefined;
+      if (message?.includes("idempotent_replay")) {
+        reply.code(409).send({ error: "transfer_conflict" });
+      } else {
+        reply.code(500).send({ error: "transfer_failed" });
+      }
     }
   });
 }
