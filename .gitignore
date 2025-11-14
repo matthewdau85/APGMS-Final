@@ -32,3 +32,8 @@ gate.ps1
 Thumbs.db
 .vscode/
 .idea/
+apgms-run-*.log
+claude-pack*
+export-repo.ps1
+make-claude-pack.ps1
+jest.config.cjs

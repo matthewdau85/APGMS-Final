@@ -623,6 +623,65 @@ export async function fetchRegulatorEvidenceDetail(token: string, artifactId: st
   }>;
 }
 
+export async function generateDemoBankLines(
+  token: string,
+  payload: { daysBack?: number; intensity?: "low" | "high" } = {},
+) {
+  const res = await fetch(`${API_BASE}/demo/banking/generate`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("failed_demo_bank_lines");
+  return res.json() as Promise<{
+    note: string;
+    generated: number;
+    intensity: string;
+    range: string;
+    rows: Array<{ id: string; amount: number; date: string }>;
+  }>;
+}
+
+export async function runDemoPayroll(
+  token: string,
+  payload: { includeBankLines?: boolean; note?: string } = {},
+) {
+  const res = await fetch(`${API_BASE}/demo/payroll/run`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("failed_demo_payroll");
+  return res.json() as Promise<{
+    note: string;
+    payRunId: string;
+    totalPaygWithheld: number;
+    payslips: number;
+  }>;
+}
+
+export async function compileDemoBas(
+  token: string,
+  payload: { year: number; month: number },
+) {
+  const res = await fetch(`${API_BASE}/demo/bas/compile`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("failed_demo_bas");
+  return res.json() as Promise<{
+    note: string;
+    period: { year: number; month: number };
+    gstCollected: number;
+    gstCredits: number;
+    netGst: number;
+    paygWithheld: number;
+    bankLines: number;
+    payslips: number;
+  }>;
+}
+
 export async function fetchRegulatorBankSummary(token: string) {
   const res = await fetch(`${API_BASE}/regulator/bank-lines/summary`, {
     headers: authHeaders(token),

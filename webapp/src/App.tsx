@@ -8,6 +8,7 @@ import AlertsPage from "./AlertsPage";
 import BasPage from "./BasPage";
 import CompliancePage from "./CompliancePage";
 import SecurityPage from "./SecurityPage";
+import DemoPage from "./DemoPage";
 import ProtectedLayout from "./ProtectedLayout";
 import RegulatorLoginPage from "./RegulatorLoginPage";
 import RegulatorLayout from "./RegulatorLayout";
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="/alerts" element={<AlertsPage />} />
           <Route path="/bas" element={<BasPage />} />
           <Route path="/compliance" element={<CompliancePage />} />
+          <Route path="/demo" element={<DemoPage />} />
           <Route path="/security" element={<SecurityPage />} />
         </Route>
         {/* catch-all */}
