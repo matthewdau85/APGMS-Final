@@ -8,6 +8,7 @@ import {
   verifyObligations,
 } from "@apgms/shared";
 import { metrics } from "../observability/metrics.js";
+import { assertOrgAccess } from "../utils/orgScope.js";
 
 const TAX_TYPES: Array<{ key: string; label: string }> = [
   { key: "PAYGW", label: "PAYGW obligations" },
@@ -15,9 +16,21 @@ const TAX_TYPES: Array<{ key: string; label: string }> = [
 ];
 
 type LodgmentRequest = FastifyRequest<{
-  Querystring: { orgId?: string; basCycleId?: string };
+  Querystring: { basCycleId?: string };
   Body?: { initiatedBy?: string };
 }>;
+
+function ensureUserOrg(request: FastifyRequest, reply: FastifyReply): string | null {
+  const user = (request as any).user as { orgId?: string } | undefined;
+  if (!user?.orgId) {
+    reply.code(401).send({ error: "unauthorized", message: "Authentication required" });
+    return null;
+  }
+  if (!assertOrgAccess(request, reply, user.orgId)) {
+    return null;
+  }
+  return user.orgId;
+}
 
 type VerificationEntry = {
   balance: string;
@@ -31,11 +44,8 @@ export async function registerBasRoutes(
   app.post(
     "/bas/lodgment",
     async (request: LodgmentRequest, reply: FastifyReply): Promise<void> => {
-      const orgId = String(request.query.orgId ?? "").trim();
-      if (!orgId) {
-        reply.code(400).send({ error: "orgId is required" });
-        return;
-      }
+      const orgId = ensureUserOrg(request, reply);
+      if (!orgId) return;
 
       const basCycleId = String(request.query.basCycleId ?? "manual");
       const lodgment = await recordBasLodgment({
