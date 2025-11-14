@@ -9,6 +9,7 @@ import {
 } from "@apgms/shared";
 import { metrics } from "../observability/metrics.js";
 import { assertOrgAccess } from "../utils/orgScope.js";
+import { recordCriticalAuditLog } from "../lib/audit.js";
 
 const TAX_TYPES: Array<{ key: string; label: string }> = [
   { key: "PAYGW", label: "PAYGW obligations" },
@@ -115,6 +116,17 @@ export async function registerBasRoutes(
 
       await finalizeBasLodgment(lodgment.id, verification, overallStatus);
       metrics.basLodgmentsTotal.inc({ status: overallStatus });
+
+      await recordCriticalAuditLog({
+        orgId,
+        actorId: request.user?.sub ?? "system",
+        action: "bas.lodgment",
+        metadata: {
+          basCycleId,
+          status: overallStatus,
+          shortfalls,
+        },
+      });
 
       reply.send({
         lodgmentId: lodgment.id,

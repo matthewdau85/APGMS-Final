@@ -46,7 +46,7 @@ export async function recordAuditLog({
         orgId,
         actorId,
         action,
-    metadata: metadataValue ?? Prisma.JsonNull,
+        metadata: metadataValue ?? Prisma.JsonNull,
         createdAt,
         hash,
         prevHash,
@@ -59,4 +59,8 @@ export async function recordAuditLog({
     // eslint-disable-next-line no-console
     console.warn("audit-log failure", { error, orgId, action });
   }
+}
+
+export async function recordCriticalAuditLog(params: Omit<RecordAuditLogParams, "throwOnError">) {
+  await recordAuditLog({ ...params, throwOnError: true });
 }
