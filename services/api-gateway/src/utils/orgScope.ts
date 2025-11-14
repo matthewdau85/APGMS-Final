@@ -1,6 +1,6 @@
 // services/api-gateway/src/utils/orgScope.ts
 import type { BankLine } from "@prisma/client";
-import { FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyReply, FastifyRequest } from "fastify";
 
 // roles you consider allowed to create/update bank lines
 const ALLOWED_ROLES_FOR_BANKLINES = ["owner", "admin", "accountant"] as const;
@@ -53,6 +53,38 @@ export function assertRoleForBankLines(
   }
 
   return true;
+}
+
+export type OrgContext = {
+  orgId: string;
+  actorId: string;
+  role: string;
+};
+
+function resolveUser(request: FastifyRequest): { orgId?: string; sub?: string; role?: string } | undefined {
+  return (request as any).user as { orgId?: string; sub?: string; role?: string } | undefined;
+}
+
+export function requireOrgContext(request: FastifyRequest, reply: FastifyReply): OrgContext | null {
+  const user = resolveUser(request);
+  if (!user?.orgId) {
+    reply.code(401).send({
+      error: { code: "unauthenticated", message: "Authentication required" }
+    });
+    return null;
+  }
+  if (!assertOrgAccess(request, reply, user.orgId)) {
+    return null;
+  }
+  if (!user.role) {
+    reply.code(403).send({ error: { code: "forbidden_role", message: "Role missing" } });
+    return null;
+  }
+  return {
+    orgId: user.orgId,
+    actorId: user.sub ?? "unknown",
+    role: user.role,
+  };
 }
 
 // Redact sensitive fields before sending DB rows out.
