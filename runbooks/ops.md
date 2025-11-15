@@ -28,6 +28,11 @@
 ## Regulator Access
 - Only the regulator auth/session bootstrap is wired today. Evidence catalogue, monitoring snapshots, and bank summary routes remain TODO; direct auditors to the compliance backlog for progress before promising those controls.
 
+## Startup Checklist / Known Pitfalls
+- **Verify Postgres before booting**: `DATABASE_URL` must point at a reachable instance before `pnpm dev` or any gateway start command. Run `pg_isready -d "$DATABASE_URL"` (and `redis-cli ping` if Redis is enabled) from the host to confirm connectivity. The `/compliance/report` and `/admin/export/dev-org` handlers depend on Prisma queries like `prisma.basCycle.findMany` and will throw `PrismaClientInitializationError: Can't reach database server at localhost:5432` if Postgres is down or misconfigured, causing 500s during `pnpm run backup:evidence-pack` and `pnpm k6:smoke`.
+- **Ensure port 6565 is free**: k6 occasionally warns when another process has bound the mock evidence server port. Run `netstat -aon | findstr 6565` (or platform equivalent) and kill any conflicting process before launching the smoke/evidence pack jobs.
+- After correcting infra (start Postgres/Redis, free the port), restart the gateway so Prisma connections are recreated, then re-run `pnpm run backup:evidence-pack -- --token=changeme` followed by `pnpm k6:smoke` to complete the runbook checks.
+
 
 
 
