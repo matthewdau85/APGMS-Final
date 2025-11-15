@@ -4,6 +4,15 @@
 - Fastify-based HTTP gateway exposing authenticated APIs.
 - Dependencies: Postgres (DATABASE_URL), Redis (if configured), PII KMS providers.
 
+### Dependency checks before bring-up
+- Confirm the default containers are running (or point the env vars at reachable services):
+  - `docker compose up -d db redis` exposes Postgres on `localhost:5432` and Redis on `localhost:6379`.
+  - If you rely on external infrastructure, export `DATABASE_URL`, `SHADOW_DATABASE_URL`, and `REDIS_URL` with those hosts before starting the gateway.
+- Sanity check connectivity **before** launching `pnpm --filter @apgms/api-gateway dev`:
+  - `pg_isready -h <host> -p 5432` (or `psql "$DATABASE_URL" -c "select 1"`) must succeed or Prisma will raise `PrismaClientInitializationError: Can't reach database server` on `/compliance/report`, `/admin/export/:org`, etc.
+  - `redis-cli -u $REDIS_URL ping` (or `redis-cli -h localhost -p 6379 ping`) must return `PONG`; otherwise Fastify will log `redis_client_error` for every request that touches rate limits/session stores.
+- Restart the gateway after changing any of these endpoints so Fastify picks up the new sockets.
+
 ## Start/Stop Procedures
 - **Start**: pnpm --filter @apgms/api-gateway dev
 - **Graceful shutdown**: send SIGTERM/SIGINT; handler drains and calls fastify.close() (services/api-gateway/src/index.ts).
@@ -41,7 +50,7 @@
 - File follow-up tasks to improve automation or documentation.
 - Capture command evidence with `pnpm compliance:evidence --tag <incident-id>` and archive the output in `artifacts/compliance/`.
 - Populate `status/incidents/<incident-id>.md` using the template provided to keep public status in sync.
-- Run `pnpm backup:evidence-pack -- --base-url http://localhost:3000 --org <org> --token <jwt>` against the affected environment to snapshot export/compliance JSON.
+- Run `pnpm backup:evidence-pack -- --base-url http://localhost:3000 --org <org> --token <jwt>` against the affected environment to snapshot export/compliance JSON; this CLI calls `/admin/export/<org>` and `/compliance/report` in parallel, so the database **must** be reachable or you will repeat the Prisma/ECONNREFUSED failures seen in the Fastify logs. Re-run the command after database/Redis restarts to capture a clean artifact.
 - Run applicable chaos experiment from `docs/ops/chaos.md` after remediation to validate fixes.
 
 ## Contact
@@ -55,8 +64,8 @@
 - [ ] Kill process with CTRL+C and confirm graceful shutdown log.
 - [ ] Bring DB down, `/ready` returns 503.
 - [ ] curl http://localhost:3000/metrics outputs Prometheus counters.
-- [ ] pnpm k6:smoke -- --env BASE_URL=http://localhost:3000 passes (requires k6).
-- [ ] Generate an evidence pack with `curl -X POST -H "Authorization: Bearer $TOKEN" http://localhost:3000/compliance/evidence` and confirm it appears in `/compliance/evidence`.
+- [ ] pnpm k6:smoke -- --env BASE_URL=http://localhost:3000 passes (requires k6). If k6 logs an "address already in use" warning for port 6565, run `netstat -aon | findstr 6565` (Windows) or `lsof -i :6565` (macOS/Linux) and `taskkill /PID <pid> /F` (or `kill -9 <pid>`) before rerunning the smoke.
+- [ ] Generate an evidence pack with `curl -X POST -H "Authorization: Bearer $TOKEN" http://localhost:3000/compliance/evidence` and confirm it appears in `/compliance/evidence`. Follow up by running `pnpm backup:evidence-pack -- --token=$TOKEN` to exercise the `/admin/export/<org>` + `/compliance/report` proxy routes end-to-end; failures here usually mean Postgres/Redis are offline or `DATABASE_URL` is still pointing at `localhost` while the DB lives elsewhere.
 - [ ] `pnpm smoke:regulator` logs in with the regulator access code and exercises `/regulator/*` endpoints end-to-end.
 
 
