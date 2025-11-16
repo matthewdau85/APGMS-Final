@@ -1,7 +1,9 @@
 // webapp/src/main.tsx
 import React from "react";
 import { createRoot } from "react-dom/client";
+import { Provider } from "react-redux";
 import App from "./App";
+import { store } from "./store";
 
 const el = document.getElementById("root");
 if (!el) {
@@ -9,6 +11,8 @@ if (!el) {
 }
 createRoot(el).render(
   <React.StrictMode>
-    <App />
+    <Provider store={store}>
+      <App />
+    </Provider>
   </React.StrictMode>
 );

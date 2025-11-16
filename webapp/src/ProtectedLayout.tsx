@@ -7,6 +7,7 @@ const navItems: Array<{ to: string; label: string }> = [
   { to: "/feeds", label: "Payroll & GST Feeds" },
   { to: "/alerts", label: "Alerts" },
   { to: "/bas", label: "BAS Lodgment" },
+  { to: "/payment-plans", label: "Payment plans" },
   { to: "/compliance", label: "Compliance" },
   { to: "/demo", label: "Demo mode" },
   { to: "/security", label: "Security / Access" },
