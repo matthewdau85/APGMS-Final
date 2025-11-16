@@ -55,3 +55,5 @@
 - **Innovation Signals**
 - `/compliance/status` adds `forecast` and `tierStatus` so you can treat the forecasted obligations as “virtual balances” and trigger warnings when the tier drops to `escalate`. Surface these signals on your dashboard/alerting playbooks to flag unusual shortfalls before BAS lodgment.
 - Log the heuristic you use for `forecastObligations`/`computeTierStatus` so regulators can understand the predictive engine even if it’s just historical averages; store the tuning notes in `artifacts/compliance/`.
+- **Stakeholder Connection**
+- Follow `docs/runbooks/stakeholder-connect.md` for the first-run checklist: populate `DESIGNATED_BANKING_*` plus `DSP_PRODUCT_ID`, run through the pilot steps, and ship the generated `artifacts/compliance/partner-info.json` + pilot report to your external partner/regulator. Update this located doc when the partner URL, certificate, or DSP product changes so future deployments know what to document.

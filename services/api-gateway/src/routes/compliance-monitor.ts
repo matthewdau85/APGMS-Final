@@ -25,10 +25,78 @@ import { complianceTransferSchema } from "../schemas/compliance-transfer.js";
 import { forecastObligations, computeTierStatus } from "@apgms/shared/ledger/predictive.js";
 import { applyDesignatedAccountTransfer } from "@apgms/domain-policy";
 import { z } from "zod";
+import fs from "node:fs";
+import path from "node:path";
 
 const REMEDIATION_GUIDANCE =
   "Re-ingest missing payroll/POS batches, rerun the reconciliation job, and capture the remediation evidence before BAS lodgment.";
 
+const complianceArtifactDir = path.join(process.cwd(), "artifacts", "compliance");
+const partnerInfoFile = path.join(complianceArtifactDir, "partner-info.json");
+
+function ensureArtifactDir(): void {
+  fs.mkdirSync(complianceArtifactDir, { recursive: true });
+}
+
+function logPartnerMetadata(): Record<string, unknown> | null {
+  const partnerUrl = process.env.DESIGNATED_BANKING_URL?.trim();
+  if (!partnerUrl) {
+    return null;
+  }
+  ensureArtifactDir();
+  const productId = process.env.DSP_PRODUCT_ID?.trim() ?? null;
+  const fingerprint = process.env.DESIGNATED_BANKING_CERT_FINGERPRINT?.trim() ?? null;
+  const entry = {
+    timestamp: new Date().toISOString(),
+    partnerUrl,
+    productId,
+    fingerprint,
+  };
+  fs.writeFileSync(partnerInfoFile, JSON.stringify(entry, null, 2));
+  return entry;
+}
+
+function readPartnerMetadata(): Record<string, unknown> | null {
+  if (!fs.existsSync(partnerInfoFile)) {
+    return null;
+  }
+  try {
+    const text = fs.readFileSync(partnerInfoFile, "utf8");
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+async function buildPilotReport(payload: {
+  orgId: string;
+  transfers: TransferRecord[];
+  alerts: Awaited<ReturnType<typeof prisma.alert.findMany>>;
+  reminderCycles: Awaited<ReturnType<typeof prisma.basCycle.findMany>>;
+}) {
+  ensureArtifactDir();
+  const file = path.join(
+    complianceArtifactDir,
+    `pilot-report-${Date.now()}.json`,
+  );
+  const base = {
+    timestamp: new Date().toISOString(),
+    orgId: payload.orgId,
+    transfers: payload.transfers,
+    alerts: payload.alerts.map((alert) => ({
+      id: alert.id,
+      message: alert.message,
+      severity: alert.severity,
+      resolvedAt: alert.resolvedAt,
+    })),
+    reminders: payload.reminderCycles.map((cycle) => ({
+      id: cycle.id,
+      due: cycle.periodEnd.toISOString(),
+      status: cycle.paymentPlanRequests.length > 0 ? "payment_plan" : "pending",
+    })),
+  };
+  fs.writeFileSync(file, JSON.stringify(base, null, 2));
+}
 function contributionLog(
   app: FastifyInstance,
   req: FastifyRequest,
@@ -330,6 +398,26 @@ export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) =
       ),
     };
 
+    const reminderCycles = await prisma.basCycle.findMany({
+      where: { orgId, lodgedAt: null },
+      orderBy: { periodEnd: "asc" },
+      take: 3,
+    });
+    const afterAlerts = await prisma.alert.findMany({
+      where: { orgId, resolvedAt: null },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+    });
+
+    await buildPilotReport({
+      orgId,
+      transfers,
+      alerts: afterAlerts,
+      reminderCycles,
+    });
+
+    logPartnerMetadata();
+
     const logEntry = buildSecurityLogEntry(
       {
         event: "designated.transfer",
@@ -351,6 +439,7 @@ export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) =
       forecast,
       tierStatus,
       nextSteps: REMEDIATION_GUIDANCE,
+
     });
   });
 
@@ -406,6 +495,10 @@ export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) =
       ),
     };
 
+    const partnerStatus = readPartnerMetadata() ?? {
+      url: process.env.DESIGNATED_BANKING_URL ?? null,
+      productId: process.env.DSP_PRODUCT_ID ?? null,
+    };
     reply.send({
       accounts: accounts.map((account) => ({
         type: account.type,
@@ -426,6 +519,7 @@ export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) =
       tierStatus: tierStatuses,
       remediation:
         pending.length > 0 ? REMEDIATION_GUIDANCE : "Buffers are healthy and ready for BAS.",
+      partnerStatus,
     });
   });
 
