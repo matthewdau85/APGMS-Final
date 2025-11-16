@@ -33,8 +33,10 @@ export class CbaBankingProvider extends BaseBankingProvider {
     context: BankingProviderContext,
     input: CreditDesignatedAccountInput,
   ) {
+    this.validateCreditDesignatedAccountInput(input);
+
     console.info(
-      "banking-provider:cba credit", 
+      "banking-provider:cba credit",
       safeLogAttributes({
         orgId: context.orgId,
         actorId: context.actorId,
@@ -51,7 +53,7 @@ export class CbaBankingProvider extends BaseBankingProvider {
       reference: input.source,
     });
 
-    return super.creditDesignatedAccount(context, input);
+    return this.applyCreditDesignatedAccount(context, input);
   }
 }
 

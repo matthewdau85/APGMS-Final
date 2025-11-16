@@ -25,10 +25,9 @@ export abstract class BaseBankingProvider implements BankingProvider {
     this.capabilities = capabilities;
   }
 
-  async creditDesignatedAccount(
-    context: BankingProviderContext,
+  protected validateCreditDesignatedAccountInput(
     input: CreditDesignatedAccountInput,
-  ): Promise<ApplyDesignatedTransferResult> {
+  ) {
     if (input.amount <= 0) {
       throw new AppError(
         400,
@@ -65,7 +64,12 @@ export abstract class BaseBankingProvider implements BankingProvider {
         }),
       );
     }
+  }
 
+  protected async applyCreditDesignatedAccount(
+    context: BankingProviderContext,
+    input: CreditDesignatedAccountInput,
+  ): Promise<ApplyDesignatedTransferResult> {
     return applyDesignatedAccountTransfer(
       {
         prisma: context.prisma,
@@ -79,6 +83,15 @@ export abstract class BaseBankingProvider implements BankingProvider {
         actorId: context.actorId,
       },
     );
+  }
+
+  async creditDesignatedAccount(
+    context: BankingProviderContext,
+    input: CreditDesignatedAccountInput,
+  ): Promise<ApplyDesignatedTransferResult> {
+    this.validateCreditDesignatedAccountInput(input);
+
+    return this.applyCreditDesignatedAccount(context, input);
   }
 
   async simulateDebitAttempt(
