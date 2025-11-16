@@ -1,0 +1,18 @@
+{
+  "productName": "APGMS Payroll + BAS",
+  "productId": "PRD-012345",
+  "softwareId": "A0000000000001",
+  "machineCredential": {
+    "keystoreAlias": "apgms",
+    "keystorePath": "secrets/ato/apgms-mc.p12",
+    "contact": "compliance@apgms.test"
+  },
+  "atoContacts": [
+    {
+      "name": "April Lister",
+      "role": "DSP Compliance",
+      "email": "april.lister@apgms.test"
+    }
+  ],
+  "notes": "Registration captured per ATO DSP operational framework. Update with real identifiers before production use."
+}
