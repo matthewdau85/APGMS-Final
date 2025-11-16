@@ -44,6 +44,11 @@ export interface AppConfig {
     readonly maxReadTransactions: number;
     readonly maxWriteCents: number;
   };
+  readonly payto: {
+    readonly providerId: string;
+    readonly baseUrl?: string;
+    readonly credentialSecret?: string;
+  };
   readonly redis?: {
     readonly url: string;
   };
@@ -329,6 +334,16 @@ export function loadConfig(): AppConfig {
     5_000_000,
   );
 
+  const paytoProvider =
+    process.env.PAYTO_PROVIDER?.trim().toLowerCase() ?? "mock";
+  const paytoBaseUrlRaw = process.env.PAYTO_PROVIDER_BASE_URL?.trim();
+  const paytoBaseUrl =
+    paytoBaseUrlRaw && paytoBaseUrlRaw.length > 0
+      ? ensureUrl(paytoBaseUrlRaw, "PAYTO_PROVIDER_BASE_URL")
+      : undefined;
+  const paytoSecret =
+    process.env.PAYTO_PROVIDER_SECRET_PATH?.trim() || undefined;
+
   const corsAllowedOrigins = splitOrigins(
     envDefault("CORS_ALLOWED_ORIGINS", "http://localhost:5173"),
   );
@@ -390,6 +405,11 @@ export function loadConfig(): AppConfig {
       providerId: bankingProvider.length > 0 ? bankingProvider : "mock",
       maxReadTransactions: bankingMaxRead,
       maxWriteCents: bankingMaxWrite,
+    },
+    payto: {
+      providerId: paytoProvider.length > 0 ? paytoProvider : "mock",
+      baseUrl: paytoBaseUrl,
+      credentialSecret: paytoSecret,
     },
     redis,
     nats,

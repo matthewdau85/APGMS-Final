@@ -3,6 +3,7 @@
 ## Storage & Encryption
 - TFNs are tokenised with per-environment salts and stored as HMAC digests (services/api-gateway/src/lib/pii.ts:33).
 - Any raw TFN temporarily processed is encrypted with AES-256-GCM envelope keys provided by the KMS configuration (services/api-gateway/src/security/providers.ts:12).
+- Onboarding validation accepts TFNs via POST and immediately tokenises/encrypts them before invoking PayTo providers so no TFN appears in query strings or logs (services/api-gateway/src/routes/onboarding.ts).
 
 ## Access Controls
 - Only users with admin role and matching orgId can request decrypt operations; JWT authentication and anomaly counters enforce rate limits (services/api-gateway/src/app.ts:73).

@@ -1,7 +1,13 @@
 import { createHash } from "node:crypto";
-import { Prisma } from "@prisma/client";
+import { Decimal } from "@prisma/client/runtime/library";
 import { conflict, notFound } from "@apgms/shared";
 import { evaluateDesignatedAccountPolicy, normalizeTransferSource, } from "@apgms/shared/ledger";
+const decimalToCents = (value) => {
+    const numeric = value instanceof Decimal ? Number(value) : value;
+    return Math.round(numeric * 100);
+};
+const centsToDollars = (cents) => cents / 100;
+const runTransaction = async (prisma, fn) => prisma.$transaction(fn);
 async function ensureViolationAlert(prisma, orgId, message) {
     const existing = await prisma.alert.findFirst({
         where: {
@@ -50,8 +56,8 @@ export async function applyDesignatedAccountTransfer(context, input) {
         // Defensive, should not happen given evaluation above.
         throw conflict("designated_untrusted_source", `Designated account funding source '${input.source}' is not whitelisted`);
     }
-    const amountDecimal = new Prisma.Decimal(input.amount);
-    const result = await context.prisma.$transaction(async (tx) => {
+    const amountDecimal = new Decimal(input.amount);
+    const result = await runTransaction(context.prisma, async (tx) => {
         const account = await tx.designatedAccount.findUnique({
             where: { id: input.accountId },
         });
@@ -99,7 +105,7 @@ export async function applyDesignatedAccountTransfer(context, input) {
 export async function generateDesignatedAccountReconciliationArtifact(context, orgId, actorId = "system") {
     const now = new Date();
     const cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const accounts = await context.prisma.designatedAccount.findMany({
+    const accounts = (await context.prisma.designatedAccount.findMany({
         where: { orgId },
         include: {
             transfers: {
@@ -111,16 +117,14 @@ export async function generateDesignatedAccountReconciliationArtifact(context, o
                 orderBy: { createdAt: "asc" },
             },
         },
-    });
+    }));
     const movements = accounts.map((account) => {
-        const inflow = account.transfers.reduce((acc, transfer) => {
-            return acc + Number(transfer.amount);
-        }, 0);
+        const inflowCents = account.transfers.reduce((acc, transfer) => acc + decimalToCents(transfer.amount), 0);
         return {
             accountId: account.id,
             type: account.type,
-            balance: Number(account.balance),
-            inflow24h: Number(inflow.toFixed(2)),
+            balance: centsToDollars(decimalToCents(account.balance)),
+            inflow24h: centsToDollars(inflowCents),
             transferCount24h: account.transfers.length,
         };
     });
@@ -141,7 +145,7 @@ export async function generateDesignatedAccountReconciliationArtifact(context, o
     const sha256 = createHash("sha256")
         .update(JSON.stringify(summary))
         .digest("hex");
-    const artifact = await context.prisma.$transaction(async (tx) => {
+    const artifact = await runTransaction(context.prisma, async (tx) => {
         const created = await tx.evidenceArtifact.create({
             data: {
                 orgId,

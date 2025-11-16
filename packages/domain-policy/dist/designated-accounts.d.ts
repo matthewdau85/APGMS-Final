@@ -1,4 +1,4 @@
-import { type PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { type DesignatedTransferSource } from "@apgms/shared/ledger";
 export type AuditLogger = (entry: {
     orgId: string;
