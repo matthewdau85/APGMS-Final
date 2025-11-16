@@ -96,9 +96,15 @@ export class NabClient {
       );
     }
 
+    const parsedStatus = typeof parsed?.status === "string" ? parsed.status : undefined;
+    const status: NabCreditResponse["status"] =
+      parsedStatus === "accepted" || parsedStatus === "queued" || parsedStatus === "failed"
+        ? parsedStatus
+        : "queued";
+
     return {
       reference: String(parsed?.reference ?? parsed?.id ?? request.reference),
-      status: (parsed?.status === "accepted" ? "accepted" : "queued") as NabCreditResponse["status"],
+      status,
     };
   }
 }

@@ -62,3 +62,26 @@ test("NabClient returns reference data on success", async () => {
   assert.equal(result.reference, "abc123");
   assert.equal(result.status, "accepted");
 });
+
+test("NabClient propagates failed status", async () => {
+  const fetchImpl: typeof fetch = async () =>
+    new Response(JSON.stringify({ reference: "abc123", status: "failed" }), { status: 200 });
+  const client = new NabClient(
+    {
+      baseUrl: "https://sandbox.nab.invalid/api",
+      clientId: "client",
+      clientSecret: "secret",
+    },
+    fetchImpl,
+  );
+
+  const result = await client.creditDesignatedAccount({
+    orgId: "org",
+    accountId: "acct",
+    amountCents: 500,
+    reference: "transfer",
+  });
+
+  assert.equal(result.reference, "abc123");
+  assert.equal(result.status, "failed");
+});
