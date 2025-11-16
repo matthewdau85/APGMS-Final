@@ -1,12 +1,26 @@
 # DSP Operational Framework Control Matrix
 
-| Requirement | Control Summary | Evidence Source | Owner | Status |
+The Australian Taxation Office (ATO) DSP Operational Security Framework (OSF) groups controls into governance, identity & access management (IAM), information & system security, logging/monitoring, and incident management. We refreshed the matrix on **2025-11-16** using the most recent public OSF control identifiers (IAM-01, IAM-02, LOG-01, etc.) after attempting to fetch the updated checklist from `softwaredevelopers.ato.gov.au` (latest download attempt returned an Envoy 503, so we continue to use the February 2023 control list maintained by the compliance team).
+
+| Control ID | Requirement | Implementation summary | Evidence | Status |
 | --- | --- | --- | --- | --- |
-| MFA for privileged access | Enforce WebAuthn/TOTP in API gateway and admin portal | Phase 2 stories, auth configuration | Security | Planned |
-| Security posture & incident response | Incident runbook (`runbooks/ndb.md`), audit logging, 24h notification commitment | Runbook updates, audit log pipeline | Security/Ops | Planned |
-| Penetration testing | Annual API/application pen test with remediation tracking | Pen test report, ticket references | Security | Planned |
-| Data residency (AU) | Deploy production infrastructure in AU regions; restrict data export | Infra IaC, environment configs | Ops | Planned |
-| TFN protections | Masking library, vault secrets, TFN SOP (`docs/security/TFN-SOP.md`) | Code references, SOP | Privacy | In progress |
-| Logging & evidence | Immutable audit log pipeline + nightly evidence job (`pnpm compliance:evidence`) | Evidence artifacts | Ops | Planned |
-| Change management | Feature freeze policy, blue/green deploy documentation | Release checklist | Product/Ops | Planned |
-| Support & SLAs | Pilot support playbook, status site updates (`status/README.md`) | Support SOP | Customer Success | Planned |
+| GOV-01 | Document security contacts and disclosure timelines | `SECURITY.md` now captures the reporting alias, triage timelines, and coordination steps that align with OSF governance expectations. | `SECURITY.md` | Complete |
+| GOV-02 | Map control owners and runbooks | Ops, security, and compliance runbooks specify owners for ingestion, admin controls, NDB notifications, and designated accounts. | `docs/runbooks/compliance-monitoring.md`, `docs/runbooks/admin-controls.md`, `runbooks/ndb.md`, `docs/security/ASVS-mapping.md` | Complete |
+| IAM-01 | Enforce MFA for privileged access | `/auth/login` embeds `mfaEnabled`, BAS lodgment and alert resolution require one-time codes, and the web portal exposes enrolment + enforcement states. | `services/api-gateway/src/auth.ts`, `services/api-gateway/src/routes/auth.ts`, `webapp/src/BasPage.tsx`, `webapp/src/AlertsPage.tsx`, `webapp/src/SecurityPage.tsx`, `docs/security/ASVS-mapping.md` | In pilot (beta prompts wired, production policy pending) |
+| IAM-02 | Authenticate sessions with signed JWTs and per-request guards | `createAuthGuard` verifies issuer/audience + RS256/HS256 signatures and attaches scoped principals before domain routers execute; deployment configs declare the JWT inputs. | `services/api-gateway/src/auth.ts`, `docker-compose.yml`, `docs/security/ASVS-mapping.md` | Complete |
+| LOG-01 | Capture immutable audit trails for privileged events | `recordAuditLog` chains SHA-256 hashes, and admin delete/export routes generate both security log entries and durable audit rows with correlation IDs. | `services/api-gateway/src/lib/audit.ts`, `services/api-gateway/src/routes/admin.data.js`, `shared/src/security-log.ts`, `docs/security/ASVS-mapping.md` | Complete |
+| LOG-02 | Centralise security-event monitoring with alert hooks | `secLog` publishes `security_event` lines enriched with correlation IDs and metrics counters, and the ops runbook instructs teams to stream those logs into their SIEM + Prometheus dashboards. | `docs/runbooks/admin-controls.md`, `docs/runbooks/compliance-monitoring.md`, `shared/src/security-log.ts`, `docs/security/ASVS-mapping.md` | Needs SIEM integration follow-up |
+| CR-01 | Rotate signing/encryption keys and document the workflow | `pnpm security:rotate-keys` runs `scripts/rotate-pii-keys.mjs` to issue new JWKS + envelope-key material, and the secrets runbook documents evidence capture and rollback. | `package.json`, `scripts/rotate-pii-keys.mjs`, `docs/runbooks/secrets-management.md`, `docs/security/ASVS-mapping.md` | Complete |
+| INF-01 | Secure infrastructure configuration and data locality | Deployment manifests restrict dependencies to the internal bridge network, enforce TLS between components, and keep ledgers in AU-hosted Postgres/Redis clusters once IaC is wired. | `docker-compose.yml`, `docs/runbooks/compliance-monitoring.md` | Planned (waiting on IaC regions) |
+| MON-01 | Monitor compliance buffers and regulator evidence | `/compliance/*` endpoints, designated-account reconciliation jobs, and the compliance monitoring runbook describe how to capture shortfalls and remediation evidence for OSF submissions. | `docs/runbooks/compliance-monitoring.md`, `worker/src/jobs/designated-reconciliation.ts` | Complete |
+| IR-01 | Maintain an incident & breach notification plan | The NDB runbook spells out confirmation, containment, OAIC templates, customer notices, and retrospectives to satisfy OSF incident requirements. | `runbooks/ndb.md` | Complete |
+
+## Control gaps & remediation plan
+- **IAM-01 hard enforcement:** MFA prompts exist in the API/webapp, but org-wide enforcement switches and device binding still need acceptance testing. Action: extend the questionnaire hand-off checklist with an MFA pilot exit criteria and capture production-ready rollout evidence under `artifacts/compliance/mfa/`. Owner: Security (Q1 FY26).
+- **LOG-02 SIEM hookup:** Security events are logged and counted but not yet forwarded to the managed SIEM or alerting platform. Action: build a Fluent Bit (or OpenTelemetry) pipeline that ships `security_event` and `apgms_http_requests_total` metrics to the compliance monitoring workspace, and document the dashboard URL inside `docs/dsp-osf/evidence-index.md`. Owner: Ops (Dec 2025).
+- **INF-01 AU residency proof:** Terraform stubs exist, yet the deployment note still references future AU region pins. Action: capture the chosen region plus hosting provider once the IaC project lands, update the TFN SOP with the storage location, and attach the signed hosting attestation to `status/dsp-osf.md`. Owner: Compliance/Ops (Q2 FY26).
+
+## Submission checklist
+1. Export the latest `docs/dsp-osf/questionnaire.md` answers to PDF and file it under `artifacts/compliance/osf/questionnaire-<date>.pdf`.
+2. Attach supporting evidence (audit log samples, MFA screenshots, designated account reports) to the same folder.
+3. Update `status/dsp-osf.md` with the submission ID, reviewer, and next review window so auditors can track certification progress alongside code changes.
