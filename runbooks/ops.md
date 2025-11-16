@@ -17,6 +17,19 @@
   - `redis-cli -u $REDIS_URL ping` (or `redis-cli -h localhost -p 6379 ping`) must return `PONG`; otherwise Fastify will log `redis_client_error` for every request that touches rate limits/session stores.
 - Restart the gateway after changing any of these endpoints so Fastify picks up the new sockets.
 
+## Onshore Hosting Deployment Steps
+1. **Map the target topology**: Choose the onshore IaaS topology from `docs/compliance/hosting.md` §1 and confirm the region/availability zones belong to an Australian facility operated by an approved vendor (NEXTDC, Equinix AU, or CDC).
+2. **Configure IaC**: Update `infra/iac` variables so Terraform pins `region = "ap-southeast-2"` (or equivalent AU region) and stores the backend state in an AU bucket. Keep the state bucket, secrets manager, and logging endpoints within the same geography.
+3. **Provision networking + data stores**: Create private subnets, bastions, and Postgres/Redis clusters in the selected facility. Capture evidence (console screenshots, Terraform state summaries) and file them under `artifacts/compliance/vendors/` for OSF residency controls.
+4. **Harden access**: Enforce MFA on all bastion accounts, ensure TLS certificates terminate onshore, and validate that `PII_KEYS`/`PII_SALTS` are rotated via the AU-hosted secret manager before ingesting real data.
+5. **Run smoke tests**: Use `/ready`, `/metrics`, and `/tax/health` to validate connectivity, then sign off that no data paths leave Australia. Record the deployment, change ticket, and evidence links in the ops log.
+
+## Hosting Contingency & Failover
+- **Primary facility outage**: Shift DNS / load balancer targets to the warm-standby stack hosted in a second approved AU facility. Replicate Postgres via logical replication restricted to AU IP ranges; test failover quarterly.
+- **Loss of vendor access**: Execute the vendor exit checklist (see `docs/compliance/hosting.md` §5) to revoke Smart Hands credentials, revoke cross-connects, and ship encrypted backups to the alternate site.
+- **Last-resort DR**: If both AU facilities fail, pause data ingestion, queue payroll batches locally (encrypted with `PII_KEYS`), and notify the compliance lead. Offshore failover is not permitted without a formally approved exception; default to degraded-but-onshore service until facilities recover.
+- **Evidence capture**: Document each invocation of this plan (timeline, commands, customer comms) under `artifacts/compliance/incidents/` so the response satisfies DSP OSF continuity requirements.
+
 ## Start/Stop Procedures
 - **Start**: `pnpm --filter @apgms/api-gateway dev`.
 - Ensure Postgres is listening on `localhost:5432` (or that `DATABASE_URL`/`SHADOW_DATABASE_URL` point to the actual host) before running the start command. Bringing up the default `db`/`redis` containers via `docker compose up -d db redis` and confirming `docker ps` shows `apgms-db` healthy is the recommended flow.
