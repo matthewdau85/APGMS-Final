@@ -5,7 +5,7 @@ This blueprint closes the production-readiness gap by defining the concrete topo
 ## Architecture
 
 1. **Active/Active API gateways** – Deploy two Fastify pods per region (Sydney + Melbourne). The readiness handler (`/ready`) already exposes drain state; use it with rolling deployments.
-2. **Bank provider fan-out** – The banking provider registry now includes ANZ, NAB, CBA, and the mock provider. Use Kubernetes node labels to pin pods that talk to ANZ/CBA inside the corresponding private subnets.
+2. **Bank provider fan-out** – The banking provider registry now includes ANZ, NAB, CBA, Westpac, and the mock provider. Use Kubernetes node labels to pin pods that talk to each bank-specific private subnet.
 3. **NATS and Redis HA** – Run NATS JetStream in clustered mode (3 nodes) and Redis in a managed multi-zone configuration. Health checks in `services/api-gateway/src/app.ts` will surface readiness if either dependency becomes unavailable.
 4. **Vault-backed secrets** – The secret hydrator ensures pods never store raw credentials. Configure `SECRETS_PROVIDER=vault` with per-environment KV namespaces.
 5. **Disaster recovery** – `scripts/export-evidence-pack.ts` + `scripts/backup-evidence-pack.ts` (via SBOM job) mirror compliance artifacts into WORM storage daily.
@@ -13,9 +13,10 @@ This blueprint closes the production-readiness gap by defining the concrete topo
 ## Runbook
 
 1. `pnpm setup:wizard` – capture the org, provider, and designated accounts for each tenant.
-2. `pnpm pilot:seed --org <org>` – create the pilot ingestion data and verify `/compliance/precheck`.
-3. `pnpm api deploy` (CI job) – deploy the tagged container images to both regions.
-4. Use the checklist below before flipping traffic.
+2. `pnpm setup:payto artifacts/onboarding/<org>-designated-plan.json` – push PayTo mandates + evidence directly into the PayTo endpoint and store the signed response.
+3. `pnpm pilot:seed --org <org>` – create the pilot ingestion data and verify `/compliance/precheck`.
+4. `pnpm api deploy` (CI job) – deploy the tagged container images to both regions.
+5. Use the checklist below before flipping traffic.
 
 ### Cutover checklist
 

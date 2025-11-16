@@ -16,6 +16,7 @@ The APGMS stack enforces designated one-way accounts, hashed audit logs, and mul
 
 - Execute `pnpm setup:wizard` to capture the org ID, PAYGW/GST account numbers, contact emails, and PayTo automation metadata.
 - The wizard generates artifacts in `artifacts/onboarding/` that reference the designated account enforcement policy (`applyDesignatedAccountTransfer`) so compliance teams can hand the document to banks/regulators.
+- For automated PayTo mandate provisioning, run `pnpm setup:payto artifacts/onboarding/<org>-designated-plan.json`. The helper posts the generated mandate to `APGMS_PAYTO_CONFIG_ENDPOINT`, signs with `PAYTO_SETUP_TOKEN`, and snapshots the HTTP exchange for auditors.
 
 ## Reporting & compliance
 

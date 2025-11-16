@@ -2,6 +2,7 @@ import { AnzBankingProvider } from "./anz.js";
 import { CbaBankingProvider } from "./cba.js";
 import { MockBankingProvider } from "./mock.js";
 import { NabBankingProvider } from "./nab.js";
+import { WestpacBankingProvider } from "./westpac.js";
 import type { BankingProvider, BankingProviderId } from "./types.js";
 
 export * from "./types.js";
@@ -17,6 +18,9 @@ export function createBankingProvider(
       return new AnzBankingProvider();
     case "cba":
       return new CbaBankingProvider();
+    case "wbc":
+    case "westpac":
+      return new WestpacBankingProvider();
     case "mock":
     default:
       return new MockBankingProvider();

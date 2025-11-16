@@ -8,6 +8,7 @@ const PROVIDERS = [
   { id: "anz", label: "Australia & New Zealand Banking Group" },
   { id: "nab", label: "National Australia Bank" },
   { id: "cba", label: "Commonwealth Bank of Australia" },
+  { id: "wbc", label: "Westpac Banking Corporation" },
   { id: "mock", label: "Mock provider (sandbox)" },
 ] as const;
 

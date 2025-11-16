@@ -36,6 +36,7 @@
     "security:rotate-keys": "node scripts/rotate-pii-keys.mjs",
         "backup:evidence-pack": "tsx scripts/export-evidence-pack.ts",
         "setup:wizard": "tsx scripts/setup-designated-account-wizard.ts",
+        "setup:payto": "tsx scripts/payto-auto-config.ts",
         "pilot:seed": "tsx scripts/pilot-data-seeder.ts",
         "secrets:vault-sync": "tsx scripts/vault-sync.ts"
     },
