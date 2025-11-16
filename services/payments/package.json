@@ -1,0 +1,11 @@
+{
+  "name": "@apgms/payments-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest --config ./jest.config.js"
+  }
+}
