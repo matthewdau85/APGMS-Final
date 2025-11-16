@@ -14,12 +14,15 @@ import {
   buildSecurityContextFromRequest,
   buildSecurityLogEntry,
 } from "@apgms/shared/security-log.js";
+import { recordAuditLog } from "../lib/audit.js";
 import { prisma } from "../db.js";
 import {
   contributionSchema,
   precheckSchema,
 } from "../schemas/designated-ingest.js";
+import { complianceTransferSchema } from "../schemas/compliance-transfer.js";
 import { forecastObligations, computeTierStatus } from "@apgms/shared/ledger/predictive.js";
+import { applyDesignatedAccountTransfer } from "@apgms/domain-policy";
 import { z } from "zod";
 
 const REMEDIATION_GUIDANCE =
@@ -80,6 +83,58 @@ async function fetchPendingContributions(orgId: string) {
       createdAt: entry.createdAt,
     })),
   ];
+}
+
+async function recordTransferAudit(entry: {
+  orgId: string;
+  actorId: string;
+  action: string;
+  metadata: Record<string, unknown>;
+}) {
+  await recordAuditLog({
+    orgId: entry.orgId,
+    actorId: entry.actorId,
+    action: entry.action,
+    metadata: entry.metadata,
+  });
+}
+
+type TransferRecord = {
+  type: "PAYGW" | "GST";
+  amount: number;
+  transferId: string;
+  accountId: string;
+};
+
+async function executeTransfer(
+  orgId: string,
+  account: Awaited<ReturnType<typeof ensureDesignatedAccountCoverage>>,
+  amount: number,
+  actor: string,
+  description: string,
+  type: "PAYGW" | "GST",
+): Promise<TransferRecord> {
+  const result = await applyDesignatedAccountTransfer(
+    {
+      prisma,
+      auditLogger: (audit) =>
+        recordTransferAudit({ orgId, actorId: actor, action: audit.action, metadata: audit.metadata ?? {} }),
+    },
+    {
+      orgId,
+      accountId: account.id,
+      amount,
+      source: "bas_transfer",
+      actorId: actor,
+    },
+  );
+
+  return {
+    type,
+    amount,
+    transferId: result.transferId,
+    accountId: account.id,
+  };
 }
 
 export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) => {
@@ -186,6 +241,114 @@ export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) =
         remediation: REMEDIATION_GUIDANCE,
       });
     }
+  });
+
+  app.post("/compliance/transfer", async (req, reply) => {
+    const body = parseWithSchema(complianceTransferSchema, req.body);
+    const orgId = body.orgId ?? resolveOrgId(req);
+    if (!orgId) {
+      reply.code(400).send({ error: "org_missing" });
+      return;
+    }
+
+    if (body.paygwAmount <= 0 && body.gstAmount <= 0) {
+      reply.code(400).send({ error: "no_transfer_amount" });
+      return;
+    }
+
+    const latest = await prisma.basCycle.findFirst({
+      where: { orgId, lodgedAt: null },
+      orderBy: { periodEnd: "desc" },
+    });
+    if (!latest) {
+      reply.code(404).send({ error: "bas_cycle_missing" });
+      return;
+    }
+
+    const cycleContext = {
+      cycleId: latest.id,
+      description: body.description ?? "BAS transfer",
+    };
+
+    const transfers: TransferRecord[] = [];
+    const principal = (req.user as any)?.sub ?? "system";
+
+    if (body.paygwAmount > 0) {
+      const account = await ensureDesignatedAccountCoverage(
+        prisma,
+        orgId,
+        "PAYGW_BUFFER",
+        body.paygwAmount,
+        cycleContext,
+      );
+      transfers.push(
+        await executeTransfer(
+          orgId,
+          account,
+          body.paygwAmount,
+          principal,
+          body.description ?? "BAS transfer",
+          "PAYGW",
+        ),
+      );
+    }
+
+    if (body.gstAmount > 0) {
+      const account = await ensureDesignatedAccountCoverage(
+        prisma,
+        orgId,
+        "GST_BUFFER",
+        body.gstAmount,
+        cycleContext,
+      );
+      transfers.push(
+        await executeTransfer(
+          orgId,
+          account,
+          body.gstAmount,
+          principal,
+          body.description ?? "BAS transfer",
+          "GST",
+        ),
+      );
+    }
+
+    const forecast = await forecastObligations(prisma, orgId);
+    const tierStatus = {
+      paygw: computeTierStatus(
+        transfers.find((tran) => tran.type === "PAYGW")?.amount ?? 0,
+        forecast.paygwForecast,
+        forecast.paygwForecast * 0.1,
+      ),
+      gst: computeTierStatus(
+        transfers.find((tran) => tran.type === "GST")?.amount ?? 0,
+        forecast.gstForecast,
+        forecast.gstForecast * 0.1,
+      ),
+    };
+
+    const logEntry = buildSecurityLogEntry(
+      {
+        event: "designated.transfer",
+        orgId,
+        principal,
+        metadata: {
+          transfers,
+          description: body.description ?? "BAS transfer",
+          cycleId: latest.id,
+        },
+      },
+      buildSecurityContextFromRequest(req),
+    );
+    logSecurityEvent(app.log, logEntry);
+
+    reply.send({
+      status: "transferred",
+      transfers,
+      forecast,
+      tierStatus,
+      nextSteps: REMEDIATION_GUIDANCE,
+    });
   });
 
   app.get("/compliance/status", async (req, reply) => {
