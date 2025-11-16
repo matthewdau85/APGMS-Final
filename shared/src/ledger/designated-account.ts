@@ -1,8 +1,10 @@
-import type { PrismaClient, DesignatedAccount } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { conflict } from "../errors.js";
-import { applyDesignatedAccountTransfer } from "@apgms/domain-policy";
+import type { DesignatedAccountType } from "./types.js";
 
-export type DesignatedAccountType = "PAYGW_BUFFER" | "GST_BUFFER";
+type DesignatedAccountRecord = NonNullable<
+  Awaited<ReturnType<PrismaClient["designatedAccount"]["findFirst"]>>
+>;
 
 const ALLOWED_TYPES: DesignatedAccountType[] = ["PAYGW_BUFFER", "GST_BUFFER"];
 
@@ -13,16 +15,16 @@ function assertTaxType(type: string): asserts type is DesignatedAccountType {
 }
 
 export interface BankingAdapter {
-  getBalance(account: DesignatedAccount): Promise<number>;
-  blockTransfer?(account: DesignatedAccount, shortfall: number): Promise<void>;
+  getBalance(account: DesignatedAccountRecord): Promise<number>;
+  blockTransfer?(account: DesignatedAccountRecord, shortfall: number): Promise<void>;
 }
 
 class PrismaBankingAdapter implements BankingAdapter {
-  async getBalance(account: DesignatedAccount): Promise<number> {
+  async getBalance(account: DesignatedAccountRecord): Promise<number> {
     return Number(account.balance);
   }
 
-  async blockTransfer(account: DesignatedAccount, shortfall: number): Promise<void> {
+  async blockTransfer(account: DesignatedAccountRecord, shortfall: number): Promise<void> {
     await account; // no-op for now; placeholder for future alerts/sandbox plan
   }
 }
@@ -31,18 +33,20 @@ class PartnerBankingAdapter implements BankingAdapter {
   constructor(private url: string, private token?: string) {}
 
   private headers(): Record<string, string> {
-    const auth = this.token ? { Authorization: `Bearer ${this.token}` } : {};
-    return {
+    const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      ...auth,
     };
+    if (this.token) {
+      headers.Authorization = `Bearer ${this.token}`;
+    }
+    return headers;
   }
 
-  private accountEndpoint(account: DesignatedAccount) {
+  private accountEndpoint(account: DesignatedAccountRecord) {
     return `${this.url.replace(/\/$/, "")}/accounts/${account.id}`;
   }
 
-  async getBalance(account: DesignatedAccount): Promise<number> {
+  async getBalance(account: DesignatedAccountRecord): Promise<number> {
     const res = await fetch(`${this.accountEndpoint(account)}/balance`, {
       headers: this.headers(),
     });
@@ -53,7 +57,7 @@ class PartnerBankingAdapter implements BankingAdapter {
     return Number(payload.balance ?? 0);
   }
 
-  async blockTransfer(account: DesignatedAccount, shortfall: number): Promise<void> {
+  async blockTransfer(account: DesignatedAccountRecord, shortfall: number): Promise<void> {
     await fetch(`${this.accountEndpoint(account)}/lock`, {
       method: "POST",
       headers: this.headers(),
@@ -81,7 +85,7 @@ export async function getDesignatedAccountByType(
   prisma: PrismaClient,
   orgId: string,
   type: string,
-): Promise<DesignatedAccount> {
+): Promise<DesignatedAccountRecord> {
   assertTaxType(type);
   const account = await prisma.designatedAccount.findFirst({
     where: { orgId, type },
@@ -106,7 +110,7 @@ export async function ensureDesignatedAccountCoverage(
   type: DesignatedAccountType,
   requiredAmount: number,
   context?: CoverageContext,
-): Promise<DesignatedAccount> {
+): Promise<DesignatedAccountRecord> {
   const account = await getDesignatedAccountByType(prisma, orgId, type);
   const balance = await currentAdapter.getBalance(account);
   const shortfall = requiredAmount - balance;
@@ -166,10 +170,10 @@ export async function reconcileAccountSnapshot(
   orgId: string,
   type: DesignatedAccountType,
 ): Promise<{
-  account: DesignatedAccount;
+  account: DesignatedAccountRecord;
   balance: number;
   updatedAt: Date;
-#  locked: boolean;
+  locked: boolean;
 }> {
   const account = await getDesignatedAccountByType(prisma, orgId, type);
   return {

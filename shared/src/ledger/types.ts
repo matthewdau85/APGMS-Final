@@ -1,4 +1,4 @@
-export const DESIGNATED_ACCOUNT_TYPES = ["PAYGW", "GST"] as const;
+export const DESIGNATED_ACCOUNT_TYPES = ["PAYGW_BUFFER", "GST_BUFFER"] as const;
 
 export type DesignatedAccountType = (typeof DESIGNATED_ACCOUNT_TYPES)[number];
 

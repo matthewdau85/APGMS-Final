@@ -40,7 +40,7 @@ export async function recordPayrollContribution(params: {
       resource: "payrollContribution",
     },
     async ({ idempotencyKey }) => {
-      await params.prisma.payrollContribution.create({
+      const contribution = await params.prisma.payrollContribution.create({
         data: {
           orgId: params.orgId,
           amount: new Decimal(params.amount),
@@ -50,6 +50,12 @@ export async function recordPayrollContribution(params: {
           idempotencyKey,
         },
       });
+      return {
+        statusCode: 201,
+        resource: "payrollContribution",
+        resourceId: contribution.id,
+        body: { id: contribution.id },
+      };
     },
   );
 }
@@ -80,7 +86,7 @@ export async function recordPosTransaction(params: {
       resource: "posTransaction",
     },
     async ({ idempotencyKey }) => {
-      await params.prisma.posTransaction.create({
+      const transaction = await params.prisma.posTransaction.create({
         data: {
           orgId: params.orgId,
           amount: new Decimal(params.amount),
@@ -90,6 +96,12 @@ export async function recordPosTransaction(params: {
           idempotencyKey,
         },
       });
+      return {
+        statusCode: 201,
+        resource: "posTransaction",
+        resourceId: transaction.id,
+        body: { id: transaction.id },
+      };
     },
   );
 }
