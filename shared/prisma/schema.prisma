@@ -543,6 +543,40 @@ model OneWayAccount {
   @@index([orgId])
 }
 
+model PayrollContribution {
+  id              String   @id @default(cuid())
+  org             Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId           String
+  amount          Decimal  @db.Decimal(20, 2)
+  source          String
+  payload         Json?
+  actorId         String?
+  idempotencyKey  String?
+  appliedAt       DateTime?
+  transferId      String?
+  createdAt       DateTime @default(now())
+
+  @@index([orgId, appliedAt])
+  @@unique([orgId, idempotencyKey])
+}
+
+model PosTransaction {
+  id              String   @id @default(cuid())
+  org             Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId           String
+  amount          Decimal  @db.Decimal(20, 2)
+  source          String
+  payload         Json?
+  actorId         String?
+  idempotencyKey  String?
+  appliedAt       DateTime?
+  transferId      String?
+  createdAt       DateTime @default(now())
+
+  @@index([orgId, appliedAt])
+  @@unique([orgId, idempotencyKey])
+}
+
 model DiscrepancyAlert {
   id             String   @id @default(cuid())
   orgId          String

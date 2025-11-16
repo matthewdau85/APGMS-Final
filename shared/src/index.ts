@@ -4,6 +4,7 @@ export * from "./masking.js";
 export * from "./security/password.js";
 export * from "./redaction.js";
 export * from "./logging.js";
+export * from "./security-log.js";
 export * from "./errors.js";
 export * from "./crypto/envelope.js";
 export * from "./security/totp.js";

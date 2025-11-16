@@ -3,10 +3,17 @@ import {
   safeLogError,
 } from "@apgms/shared";
 import { prisma } from "@apgms/shared/db.js";
-
 import {
   generateDesignatedAccountReconciliationArtifact,
 } from "@apgms/domain-policy";
+import {
+  applyPendingContributions,
+  summarizeContributions,
+} from "@apgms/shared/ledger/ingest.js";
+import {
+  DesignatedAccountType,
+  ensureDesignatedAccountCoverage,
+} from "@apgms/shared/ledger/designated-account.js";
 
 const SYSTEM_ACTOR = "system";
 
@@ -34,6 +41,7 @@ export async function runNightlyDesignatedAccountReconciliation(): Promise<void>
   let processed = 0;
   let successes = 0;
   let failures = 0;
+  const failureDetails: Array<{ orgId: string; error: string }> = [];
 
   console.info(
     "designated-account-reconciliation: starting",
@@ -43,6 +51,34 @@ export async function runNightlyDesignatedAccountReconciliation(): Promise<void>
   for (const org of organisations) {
     const orgStart = Date.now();
     try {
+      await applyPendingContributions({
+        prisma,
+        orgId: org.id,
+        actorId: SYSTEM_ACTOR,
+        auditLogger: recordAuditLog,
+      });
+
+      const totals = await summarizeContributions(prisma, org.id);
+      const latestCycle = await prisma.basCycle.findFirst({
+        where: { orgId: org.id },
+        orderBy: { periodStart: "desc" },
+      });
+
+      if (latestCycle) {
+        await ensureDesignatedAccountCoverage(
+          prisma,
+          org.id,
+          "PAYGW_BUFFER",
+          Number(latestCycle.paygwRequired),
+        );
+        await ensureDesignatedAccountCoverage(
+          prisma,
+          org.id,
+          "GST_BUFFER",
+          Number(latestCycle.gstRequired),
+        );
+      }
+
       const { artifactId, sha256, summary } =
         await generateDesignatedAccountReconciliationArtifact(
           {
@@ -63,6 +99,7 @@ export async function runNightlyDesignatedAccountReconciliation(): Promise<void>
           sha256,
           totals: summary.totals,
           durationMs,
+          contributions: totals,
         }),
       );
     } catch (error) {
@@ -72,7 +109,21 @@ export async function runNightlyDesignatedAccountReconciliation(): Promise<void>
         safeLogError(error),
         safeLogAttributes({ orgId: org.id }),
       );
-      throw error;
+      failureDetails.push({
+        orgId: org.id,
+        error:
+          error instanceof Error
+            ? error.message
+            : typeof error === "string"
+              ? error
+              : (() => {
+                try {
+                  return JSON.stringify(error);
+                } catch {
+                  return "unknown_error";
+                }
+              })(),
+      });
     } finally {
       processed += 1;
     }
@@ -85,6 +136,7 @@ export async function runNightlyDesignatedAccountReconciliation(): Promise<void>
       processed,
       successes,
       failures,
+      failureDetails,
       durationMs: Date.now() - runStart,
     }),
   );

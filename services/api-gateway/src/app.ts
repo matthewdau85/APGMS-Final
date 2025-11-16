@@ -32,6 +32,8 @@ import { registerAtoRoutes } from "./routes/ato.js";
 import { registerMonitoringRoutes } from "./routes/monitoring.js";
 import { registerRiskRoutes } from "./routes/risk.js";
 import { registerDemoRoutes } from "./routes/demo.js";
+import { registerComplianceProxy } from "./routes/compliance-proxy.js";
+import { registerComplianceMonitorRoutes } from "./routes/compliance-monitor.js";
 
 // ---- keep your other domain code (types, helpers, shapes) exactly as you had ----
 // (omitted here for brevity - unchanged from your last working content)
@@ -116,6 +118,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
 
   await app.register(rateLimit);
   await app.register(helmet, {
+    hidePoweredBy: true,
     frameguard: { action: "deny" },
     contentSecurityPolicy: {
       directives: {
@@ -126,10 +129,19 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
         styleSrc: ["'self'"],
         imgSrc: ["'self'", "data:"],
         objectSrc: ["'none'"],
-        frameAncestors: ["'none'"]
-      }
+        frameAncestors: ["'none'"],
+      },
     },
-    crossOriginEmbedderPolicy: false
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "same-site" },
+    dnsPrefetchControl: { allow: false },
+    referrerPolicy: { policy: "no-referrer" },
+    xssFilter: true,
+    hsts: {
+      maxAge: 15552000,
+      includeSubDomains: true,
+      preload: true,
+    },
   });
 
   await app.register(cors, {
@@ -215,6 +227,8 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
     await secureScope.register(registerMonitoringRoutes);
     await secureScope.register(registerRiskRoutes);
     await secureScope.register(registerDemoRoutes);
+    await secureScope.register(registerComplianceMonitorRoutes);
+    await registerComplianceProxy(app);
     await secureScope.register(async (connectorScope) => {
       registerConnectorRoutes(connectorScope, options.connectorDeps);
     });

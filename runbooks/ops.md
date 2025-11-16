@@ -8,6 +8,20 @@
 - `/admin/data` - authenticated stub for admin datasets. In-memory only; used for smoke validation of auth plumbing, not for real exports.
 - `/tax/health` - authenticated proxy that pings the configured tax engine URL with a short timeout for observability.
 
+## Dependency checks before bring-up
+- Confirm the default containers are running (or point the env vars at reachable services):
+  - `docker compose up -d db redis` exposes Postgres on `localhost:5432` and Redis on `localhost:6379`.
+  - If you rely on external infrastructure, export `DATABASE_URL`, `SHADOW_DATABASE_URL`, and `REDIS_URL` with those hosts before starting the gateway.
+- Sanity check connectivity **before** launching `pnpm --filter @apgms/api-gateway dev`:
+  - `pg_isready -h <host> -p 5432` (or `psql "$DATABASE_URL" -c "select 1"`) must succeed or Prisma will raise `PrismaClientInitializationError: Can't reach database server` on `/compliance/report`, `/admin/export/:org`, etc.
+  - `redis-cli -u $REDIS_URL ping` (or `redis-cli -h localhost -p 6379 ping`) must return `PONG`; otherwise Fastify will log `redis_client_error` for every request that touches rate limits/session stores.
+- Restart the gateway after changing any of these endpoints so Fastify picks up the new sockets.
+
+## Start/Stop Procedures
+- **Start**: `pnpm --filter @apgms/api-gateway dev`.
+- Ensure Postgres is listening on `localhost:5432` (or that `DATABASE_URL`/`SHADOW_DATABASE_URL` point to the actual host) before running the start command. Bringing up the default `db`/`redis` containers via `docker compose up -d db redis` and confirming `docker ps` shows `apgms-db` healthy is the recommended flow.
+- **Graceful shutdown**: send SIGTERM/SIGINT; the handler drains and calls `fastify.close()` (`services/api-gateway/src/index.ts`). Verify shutdown by checking the logs for an `api-gateway shut down cleanly` line.
+
 ## Auth & Routing Notes
 - `buildServer` now registers `/bank-lines`, `/admin/data`, and `/tax/*` inside a Fastify scope that attaches `authGuard`, so every domain route receives `request.user` populated before its own role/policy checks run (`services/api-gateway/src/app.ts`).
 - The admin/tax routers still invoke `authenticateRequest` for audit metrics; ensure `AUTH_JWKS`, `AUTH_AUDIENCE`, and `AUTH_ISSUER` are present in every deployment so those hooks succeed.
@@ -28,7 +42,7 @@
 ## Regulator Access
 - Only the regulator auth/session bootstrap is wired today. Evidence catalogue, monitoring snapshots, and bank summary routes remain TODO; direct auditors to the compliance backlog for progress before promising those controls.
 
-
-
-
-
+## Compliance Monitoring & Designated Accounts
+- Payroll/POS ingestion now writes into the `PayrollContribution` and `PosTransaction` ledgers via `shared/src/ledger/ingest.ts`. The nightly worker applies those entries to the `PAYGW_BUFFER` and `GST_BUFFER` pools, then validates the balances against the most recent `BasCycle` obligations through `ensureDesignatedAccountCoverage` (`shared/src/ledger/designated-account.ts`), surfacing `DESIGNATED_FUNDS_SHORTFALL` alerts if transfers would overdraw the buffers.
+- When alerts fire, re-ingest missing payroll or POS transactions, rerun the reconciliation job, and document the incident inside the audit log and the compliance dashboard before contacting the business or ATO. The dashboard should display pending contributions, outstanding alerts, and any penalty/remission discussions so ops teams can track high-risk BAS lodgments.
+- Automated compliance notifications should remind teams about upcoming lodgments, call out imposed penalties/interest, and record proactive remediation steps so the system can later show evidence for remission requests or payment-plan negotiations.
