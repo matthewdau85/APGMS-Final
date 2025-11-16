@@ -5,6 +5,10 @@ This runbook notes the safeguards that surround the designated one-way accounts,
 ## Data Ingestion & Reconciliation
 - The ingestion helpers (`shared/src/ledger/ingest.ts`) capture payroll contributions and POS transactions into the `PayrollContribution` and `PosTransaction` tables. They rely on the shared idempotency guard so duplicate submissions (from retries or manual overrides) cannot be replayed.
 - The nightly `worker/src/jobs/designated-reconciliation.ts` job applies pending contributions to the `PAYGW_BUFFER` and `GST_BUFFER` ledgers before BAS lodgment, then validates the balances against the latest `BasCycle` obligations through `ensureDesignatedAccountCoverage`. If the buffers do not cover the required funds, the job raises a `DESIGNATED_FUNDS_SHORTFALL` alert and does not proceed with the transfer artefact until the discrepancy is resolved.
+- Organisations can now select how frequently contributions are applied to the designated accounts. Call `GET /org/settings/securing` to inspect the current schedule (`weekly` by default) and `PUT /org/settings/securing` with `{ "schedule": "daily" }` or `{ "schedule": "weekly" }` to switch modes. The worker only applies completed windows (e.g., yesterday’s batches for daily, last week’s batches for weekly) so you can delay fund movements until the window closes.
+
+## Discrepancy Remediation
+- Shortfall alerts in `DiscrepancyAlert` can be acknowledged directly via `POST /discrepancies/:id/resolve`. Supply `{ "resolution": "top_up", "amountCents": <value>, "note": "wired additional funds" }` when topping up, or `{ "resolution": "reschedule", "plannedDate": "2025-01-22T00:00:00.000Z" }` to document a reschedule plan. The endpoint records the resolution in the audit/security logs and clears the alert so regulators can see that the operator has taken action.
 
 ## Alert/Ticket Handling
 1. When the shortfall alert appears, check the dashboard for missing contributions and reconcile the relevant payroll or POS ingestion records. Investigate whether the business replayed the same data, missed a payroll run, or forwarded incomplete POS batches.

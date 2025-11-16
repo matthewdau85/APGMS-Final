@@ -35,6 +35,34 @@ const complianceArtifactDir = path.join(process.cwd(), "artifacts", "compliance"
 const partnerInfoFile = path.join(complianceArtifactDir, "partner-info.json");
 const tierStateDir = path.join(complianceArtifactDir, "tier-state");
 
+const securingScheduleSchema = z.object({
+  schedule: z.enum(["daily", "weekly"]),
+});
+
+const discrepancyResolutionSchema = z
+  .object({
+    resolution: z.enum(["top_up", "reschedule"]),
+    amountCents: z.number().int().positive().optional(),
+    plannedDate: z.string().datetime().optional(),
+    note: z.string().max(500).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.resolution === "top_up" && typeof value.amountCents !== "number") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "amountCents required for top_up",
+        path: ["amountCents"],
+      });
+    }
+    if (value.resolution === "reschedule" && !value.plannedDate) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "plannedDate required for reschedule",
+        path: ["plannedDate"],
+      });
+    }
+  });
+
 function ensureArtifactDir(): void {
   fs.mkdirSync(complianceArtifactDir, { recursive: true });
 }
@@ -316,6 +344,43 @@ export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) =
     });
     contributionLog(app, req, contribution, "pos");
     reply.code(202).send({ status: "queued" });
+  });
+
+  app.get("/org/settings/securing", async (req, reply) => {
+    const orgId = resolveOrgId(req);
+    if (!orgId) {
+      reply.code(401).send({ error: "unauthenticated" });
+      return;
+    }
+    const org = await prisma.org.findUnique({
+      where: { id: orgId },
+      select: { securingSchedule: true },
+    });
+    if (!org) {
+      reply.code(404).send({ error: "org_not_found" });
+      return;
+    }
+    reply.send({ orgId, schedule: org.securingSchedule });
+  });
+
+  app.put("/org/settings/securing", async (req, reply) => {
+    const orgId = resolveOrgId(req);
+    if (!orgId) {
+      reply.code(401).send({ error: "unauthenticated" });
+      return;
+    }
+    const body = parseWithSchema(securingScheduleSchema, req.body);
+    await prisma.org.update({
+      where: { id: orgId },
+      data: { securingSchedule: body.schedule },
+    });
+    await recordAuditLog({
+      orgId,
+      actorId: (req.user as any)?.sub ?? "system",
+      action: "org.securingSchedule.updated",
+      metadata: { schedule: body.schedule },
+    });
+    reply.send({ orgId, schedule: body.schedule });
   });
 
   app.get("/compliance/pending", async (req, reply) => {
@@ -679,6 +744,74 @@ export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) =
     logSecurityEvent(app.log, entry);
 
     reply.send({ status: "resolved", alertId });
+  });
+
+  app.post("/discrepancies/:id/resolve", async (req, reply) => {
+    const orgId = resolveOrgId(req);
+    if (!orgId) {
+      reply.code(401).send({ error: "unauthenticated" });
+      return;
+    }
+    const alertId = (req.params as { id: string }).id;
+    const body = parseWithSchema(discrepancyResolutionSchema, req.body);
+    const alert = await prisma.discrepancyAlert.findFirst({
+      where: { id: alertId, orgId },
+    });
+    if (!alert) {
+      reply.code(404).send({ error: "discrepancy_not_found" });
+      return;
+    }
+    if (alert.resolved) {
+      reply.code(409).send({ error: "discrepancy_already_resolved" });
+      return;
+    }
+    const principal = (req.user as any)?.sub ?? "system";
+    const payload =
+      body.resolution === "top_up"
+        ? { amountCents: body.amountCents }
+        : { plannedDate: body.plannedDate };
+    const resolved = await prisma.discrepancyAlert.update({
+      where: { id: alertId },
+      data: {
+        resolved: true,
+        resolvedAt: new Date(),
+        resolvedBy: principal,
+        resolutionType: body.resolution,
+        resolutionNote: body.note ?? null,
+        resolutionPayload: payload,
+      },
+    });
+
+    await recordAuditLog({
+      orgId,
+      actorId: principal,
+      action: "discrepancy.resolve",
+      metadata: {
+        alertId,
+        resolution: body.resolution,
+        payload,
+      },
+    });
+
+    const entry = buildSecurityLogEntry(
+      {
+        event: "discrepancy.resolve",
+        orgId,
+        principal,
+        metadata: {
+          alertId,
+          resolution: body.resolution,
+        },
+      },
+      buildSecurityContextFromRequest(req),
+    );
+    logSecurityEvent(app.log, entry);
+
+    reply.send({
+      status: "resolved",
+      alertId,
+      resolution: resolved.resolutionType,
+    });
   });
 
   app.get("/compliance/reminders", async (req, reply) => {

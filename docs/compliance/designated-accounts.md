@@ -30,9 +30,11 @@ Regulators can open the evidence center (webapp/src/RegulatorEvidencePage.tsx) t
 
    | Variable                        | Purpose                                      |
    | ------------------------------- | -------------------------------------------- |
-   | `BANKING_PROVIDER`              | Adapter ID (`nab`, `anz`, `mock`)            |
+   | `BANKING_PROVIDER_ID`           | Adapter ID (`nab`, `anz`, `mock`)            |
    | `BANKING_MAX_READ_TRANSACTIONS` | Max transactions fetched per polling window  |
    | `BANKING_MAX_WRITE_CENTS`       | Maximum credit per call (cents)              |
+   | `NAB_API_BASE_URL`              | Base URL for the NAB sandbox/live API        |
+   | `NAB_CLIENT_ID`/`NAB_CLIENT_SECRET` | Credentials passed to the NAB adapter   |
 
 2. Schedule the worker entry point `worker/src/index.ts` to run nightly (e.g. via
    `cron`). The job iterates all organisations and records the reconciliation
