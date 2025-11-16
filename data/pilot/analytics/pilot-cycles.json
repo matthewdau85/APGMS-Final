@@ -1,0 +1,38 @@
+{
+  "generatedAt": "2024-10-01T00:00:00.000Z",
+  "description": "Synthetic pilot BAS cycles derived from payroll/POS fixtures. Values are in AUD dollars for PAYGW and GST obligations.",
+  "orgs": [
+    {
+      "orgId": "pilot-cafe",
+      "name": "Harborview Cafe",
+      "industry": "Hospitality",
+      "paygwHistory": [12500, 13120, 14010, 15005, 16200, 17050],
+      "gstHistory": [8200, 8300, 8450, 8600, 8800, 9100],
+      "actualNext": { "paygw": 18200, "gst": 9500 }
+    },
+    {
+      "orgId": "pilot-fabrication",
+      "name": "Metro Fabrication",
+      "industry": "Manufacturing",
+      "paygwHistory": [22000, 21850, 22500, 23050, 23600, 24100],
+      "gstHistory": [15200, 15050, 15300, 15600, 15850, 16010],
+      "actualNext": { "paygw": 24500, "gst": 16320 }
+    },
+    {
+      "orgId": "pilot-digital",
+      "name": "Signal Digital",
+      "industry": "Professional Services",
+      "paygwHistory": [9800, 10050, 10100, 10320, 10450, 10600],
+      "gstHistory": [5400, 5450, 5500, 5525, 5560, 5600],
+      "actualNext": { "paygw": 10810, "gst": 5650 }
+    },
+    {
+      "orgId": "pilot-contractor",
+      "name": "Trident Contractors",
+      "industry": "Construction",
+      "paygwHistory": [18000, 17650, 18300, 19050, 20500, 21200],
+      "gstHistory": [12200, 12000, 12120, 12450, 12600, 12900],
+      "actualNext": { "paygw": 21900, "gst": 13350 }
+    }
+  ]
+}
