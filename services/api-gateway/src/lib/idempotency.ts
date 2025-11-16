@@ -2,7 +2,7 @@
 import { Prisma } from "@prisma/client";
 import { createHash } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
-import { conflict } from "@apgms/shared";
+import { badRequest, conflict } from "@apgms/shared";
 
 type Ctx = {
   prisma: PrismaClient;
@@ -19,25 +19,39 @@ type HandlerResult = {
   body?: unknown;
 };
 
-function getIdempotencyKeyFromHeaders(req: any): string {
-  const h = (req?.headers ?? {}) as Record<string, unknown>;
-  for (const k of ["idempotency-key", "Idempotency-Key", "IDEMPOTENCY-KEY"]) {
-    const v = h[k];
-    if (typeof v === "string" && v.trim()) return v.trim();
-  }
-  return `auto:${cryptoSafe()}`;
-}
-
-function cryptoSafe(): string {
-  return (
-    Math.random().toString(36).slice(2, 10) +
-    Math.random().toString(36).slice(2, 10)
-  );
-}
-
 function hashPayload(payload: unknown): string {
   const raw = typeof payload === "string" ? payload : JSON.stringify(payload ?? null);
   return createHash("sha256").update(raw).digest("hex");
+}
+
+function derivePayloadDigest(ctx: Ctx): string {
+  const resource = ctx.resource ?? "";
+  const payloadString = typeof ctx.requestPayload === "string"
+    ? ctx.requestPayload
+    : JSON.stringify(ctx.requestPayload ?? null);
+  const digestInput = `${ctx.orgId ?? ""}:${resource}:${payloadString}`;
+  return createHash("sha256").update(digestInput).digest("hex");
+}
+
+function resolveIdempotencyKey(request: unknown, ctx: Ctx): string {
+  const headers = (request as any)?.headers as Record<string, unknown> | undefined;
+  if (headers) {
+    for (const key of ["idempotency-key", "Idempotency-Key", "IDEMPOTENCY-KEY"]) {
+      const value = headers[key];
+      if (typeof value === "string" && value.trim()) {
+        return value.trim();
+      }
+    }
+  }
+
+  if (ctx.requestPayload !== undefined) {
+    return `payload:${derivePayloadDigest(ctx)}`;
+  }
+
+  throw badRequest(
+    "missing_idempotency_key",
+    "Idempotency-Key header or request payload is required",
+  );
 }
 
 /**
@@ -50,7 +64,7 @@ export async function withIdempotency<T extends HandlerResult>(
   ctx: Ctx,
   handler: (args: { idempotencyKey: string }) => Promise<T>
 ): Promise<T> {
-  const key = getIdempotencyKeyFromHeaders(request as any);
+  const key = resolveIdempotencyKey(request, ctx);
 
   // 1) Guard: fail if key already seen for this org
   const existing = await ctx.prisma.idempotencyEntry.findUnique({
