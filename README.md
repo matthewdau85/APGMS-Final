@@ -63,6 +63,13 @@ curl -sf http://localhost:3000/ready
 curl -sf http://localhost:3000/metrics
 ```
 
+### Phase 1 Demo
+
+Need to exercise the sandboxed ingestion + BAS flow? The Fastify demo ships with JWT-protected
+routes (`/ready`, `/balances/:code`, `/demo/transfer`, `/demo/forecast`) and scripts to
+produce reconciliation/STP artifacts. See [`docs/demo-vs-production.md`](docs/demo-vs-production.md)
+for feature parity, required env vars, and the commands to start the demo alongside NATS.
+
 ---
 
 ## API Idempotency

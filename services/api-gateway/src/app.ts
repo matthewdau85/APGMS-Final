@@ -34,6 +34,7 @@ import { registerRiskRoutes } from "./routes/risk.js";
 import { registerDemoRoutes } from "./routes/demo.js";
 import { registerComplianceProxy } from "./routes/compliance-proxy.js";
 import { registerComplianceMonitorRoutes } from "./routes/compliance-monitor.js";
+import { startPayrollIngestion } from "./ingestion/payroll.js";
 
 // ---- keep your other domain code (types, helpers, shapes) exactly as you had ----
 // (omitted here for brevity - unchanged from your last working content)
@@ -55,6 +56,13 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
   app.addHook("onClose", async () => {
     await closeProviders(providers, app.log);
   });
+
+  const payrollIngestion = await startPayrollIngestion(app.log);
+  if (payrollIngestion) {
+    app.addHook("onClose", async () => {
+      await payrollIngestion.stop();
+    });
+  }
 
   const drainingState = { value: false };
   (app as any).isDraining = () => drainingState.value;

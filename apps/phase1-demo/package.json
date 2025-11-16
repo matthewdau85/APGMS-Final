@@ -7,16 +7,23 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "dev": "tsx src/index.ts",
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "generate:evidence": "tsx scripts/generate-evidence.ts",
+    "generate:stp": "tsx scripts/generate-stp.ts"
   },
   "dependencies": {
+    "@apgms/domain-policy": "workspace:*",
+    "@apgms/ingestion-nats": "workspace:*",
     "@apgms/ledger": "workspace:*",
     "@apgms/shared": "workspace:*",
     "@prisma/client": "^6.17.1",
     "fastify": "^5.6.1",
-    "uuid": "^10.0.0"
+    "jsonwebtoken": "^9.0.2",
+    "uuid": "^10.0.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.7",
     "@types/uuid": "^11.0.0"
   }
 }

@@ -24,6 +24,7 @@ enum AccountSubtype {
   BANK
   PAYGW_BUFFER
   GST_BUFFER
+  PAYGI_BUFFER
   CLEARING
   SUSPENSE
   RECEIVABLE
@@ -351,6 +352,8 @@ model Org {
   paymentPlanRequests PaymentPlanRequest[]
   regulatorSessions RegulatorSession[]
   monitoringSnapshots MonitoringSnapshot[]
+  payrollContributions PayrollContribution[]
+  posTransactions PosTransaction[]
 
   // payroll backrefs
   employees  Employee[]

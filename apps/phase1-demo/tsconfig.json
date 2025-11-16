@@ -4,7 +4,17 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "module": "ESNext",
-    "moduleResolution": "Node"
+    "moduleResolution": "Node",
+    "paths": {
+      "@apgms/shared": ["shared/src/index"],
+      "@apgms/shared/*": ["shared/src/*"],
+      "@apgms/ledger": ["packages/ledger/src/index"],
+      "@apgms/ledger/*": ["packages/ledger/src/*"],
+      "@apgms/domain-policy": ["packages/domain-policy/src/index"],
+      "@apgms/domain-policy/*": ["packages/domain-policy/src/*"],
+      "@apgms/ingestion-nats": ["packages/ingestion-nats/src/index"],
+      "@apgms/ingestion-nats/*": ["packages/ingestion-nats/src/*"]
+    }
   },
   "include": ["src/**/*.ts"],
   "exclude": ["dist"]

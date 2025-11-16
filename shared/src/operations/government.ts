@@ -1,4 +1,4 @@
-import { InputJsonValue } from "@prisma/client/runtime/library";
+import type { InputJsonValue } from "@prisma/client/runtime/library";
 
 import { prisma } from "../db.js";
 

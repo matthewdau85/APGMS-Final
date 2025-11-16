@@ -53,6 +53,15 @@ export interface AppConfig {
     readonly username?: string;
     readonly password?: string;
   };
+  readonly ingestion?: {
+    readonly payrollSubject?: string;
+    readonly durableName: string;
+    readonly nats?: {
+      readonly url: string;
+      readonly stream: string;
+      readonly subjectPrefix: string;
+    };
+  };
 }
 
 const base64Regex = /^[A-Za-z0-9+/=]+$/;
@@ -352,6 +361,28 @@ export function loadConfig(): AppConfig {
         }
       : undefined;
 
+  const ingestionSubject = process.env.INGESTION_PAYROLL_SUBJECT?.trim();
+  const ingestionNatsUrlRaw = process.env.INGESTION_NATS_URL?.trim() || natsUrlRaw;
+  const ingestionStream =
+    process.env.INGESTION_STREAM?.trim() || process.env.NATS_STREAM?.trim() || "APGMS";
+  const ingestionPrefix =
+    process.env.INGESTION_SUBJECT_PREFIX?.trim() || process.env.NATS_SUBJECT_PREFIX?.trim() || "apgms.dev";
+  const ingestion =
+    ingestionSubject && ingestionNatsUrlRaw
+      ? {
+          payrollSubject: ingestionSubject,
+          durableName: process.env.INGESTION_PAYROLL_DURABLE?.trim() || "api-payroll",
+          nats: {
+            url: ensureUrl(
+              ingestionNatsUrlRaw,
+              ingestionNatsUrlRaw === natsUrlRaw ? "NATS_URL" : "INGESTION_NATS_URL",
+            ),
+            stream: ingestionStream,
+            subjectPrefix: ingestionPrefix,
+          },
+        }
+      : undefined;
+
   return {
     databaseUrl,
     shadowDatabaseUrl,
@@ -393,6 +424,7 @@ export function loadConfig(): AppConfig {
     },
     redis,
     nats,
+    ingestion,
   };
 }
 
