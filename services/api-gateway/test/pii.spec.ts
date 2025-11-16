@@ -13,8 +13,7 @@ import {
   type KeyManagementService,
   type TokenSaltProvider,
 } from "../src/lib/pii";
-import { isValidABN } from "@apgms/shared-au/abn";
-import { isValidTFN } from "@apgms/shared-au/tfn";
+import { isValidABN, isValidTFN } from "../src/lib/au";
 
 const TEST_KEY = Buffer.alloc(32, 7);
 const TEST_SALT = Buffer.from("test-salt-secret", "utf8");

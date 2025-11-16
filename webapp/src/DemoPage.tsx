@@ -1,4 +1,22 @@
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  Checkbox,
+  FormControl,
+  FormControlLabel,
+  InputLabel,
+  MenuItem,
+  Select,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
+
 import {
   compileDemoBas,
   generateDemoBankLines,
@@ -30,30 +48,69 @@ export default function DemoPage() {
   const [bankState, setBankState] = useState<BankFeedState>({ busy: false });
   const [demoDays, setDemoDays] = useState(7);
   const [demoIntensity, setDemoIntensity] = useState<"low" | "high">("low");
+  const [bankFormError, setBankFormError] = useState<string | null>(null);
+
   const [payrollState, setPayrollState] = useState<PayrollState>({ busy: false });
   const [includeBank, setIncludeBank] = useState(true);
+
   const [basState, setBasState] = useState<BasState>({ busy: false });
-  const [basPeriod, setBasPeriod] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() + 1 });
+  const [basFormError, setBasFormError] = useState<string | null>(null);
+  const [basPeriod, setBasPeriod] = useState({
+    year: new Date().getFullYear(),
+    month: new Date().getMonth() + 1,
+  });
 
-  const bankSection = useMemo(() => {
-    if (!bankState.summary) return null;
+  const renderSummary = (label: string, text?: string) => {
+    if (!text) return null;
     return (
-      <pre style={preStyle}>{bankState.summary}</pre>
+      <Box sx={{ mt: 2 }}>
+        <Typography variant="subtitle2" color="text.secondary">
+          {label}
+        </Typography>
+        <Box
+          component="pre"
+          sx={{
+            mt: 1,
+            fontFamily: "Roboto Mono, monospace",
+            fontSize: 13,
+            bgcolor: "background.paper",
+            borderRadius: 1,
+            p: 2,
+            border: "1px solid",
+            borderColor: "divider",
+            overflowX: "auto",
+          }}
+        >
+          {text}
+        </Box>
+      </Box>
     );
-  }, [bankState.summary]);
+  };
 
-  const payrollSection = useMemo(() => {
-    if (!payrollState.summary) return null;
-    return <pre style={preStyle}>{payrollState.summary}</pre>;
-  }, [payrollState.summary]);
+  const validateBankInputs = () => {
+    if (demoDays < 1 || demoDays > 30) {
+      setBankFormError("Days back must be between 1 and 30.");
+      return false;
+    }
+    setBankFormError(null);
+    return true;
+  };
 
-  const basSection = useMemo(() => {
-    if (!basState.summary) return null;
-    return <pre style={preStyle}>{basState.summary}</pre>;
-  }, [basState.summary]);
+  const validateBasInputs = () => {
+    if (basPeriod.year < 2020 || basPeriod.year > 2100) {
+      setBasFormError("Year must be between 2020 and 2100.");
+      return false;
+    }
+    if (basPeriod.month < 1 || basPeriod.month > 12) {
+      setBasFormError("Month must be between 1 and 12.");
+      return false;
+    }
+    setBasFormError(null);
+    return true;
+  };
 
-  async function handleGenerateBankFeed() {
-    if (!token) return;
+  const handleGenerateBankFeed = async () => {
+    if (!token || !validateBankInputs()) return;
     setBankState({ busy: true });
     try {
       const response = await generateDemoBankLines(token, {
@@ -66,34 +123,26 @@ export default function DemoPage() {
         rows: response.rows,
       });
     } catch (error) {
-      setBankState({
-        busy: false,
-        error: "Unable to generate demo bank feed",
-      });
+      setBankState({ busy: false, error: "Unable to generate demo bank feed" });
     }
-  }
+  };
 
-  async function handleRunPayroll() {
+  const handleRunPayroll = async () => {
     if (!token) return;
     setPayrollState({ busy: true });
     try {
-      const response = await runDemoPayroll(token, {
-        includeBankLines: includeBank,
-      });
+      const response = await runDemoPayroll(token, { includeBankLines: includeBank });
       setPayrollState({
         busy: false,
         summary: `${response.note}\nPAYGW secured: ${response.totalPaygWithheld.toFixed(2)}\nPayslips: ${response.payslips}\npayRunId: ${response.payRunId}`,
       });
     } catch (error) {
-      setPayrollState({
-        busy: false,
-        error: "Unable to run demo payroll",
-      });
+      setPayrollState({ busy: false, error: "Unable to run demo payroll" });
     }
-  }
+  };
 
-  async function handleCompileBas() {
-    if (!token) return;
+  const handleCompileBas = async () => {
+    if (!token || !validateBasInputs()) return;
     setBasState({ busy: true });
     try {
       const response = await compileDemoBas(token, {
@@ -105,159 +154,147 @@ export default function DemoPage() {
         summary: `${response.note}\nPeriod: ${response.period.year}-${response.period.month}\nGST Collected ${response.gstCollected}\nGST Credits ${response.gstCredits}\nNet GST ${response.netGst}\nPAYGW ${response.paygWithheld}\nBank lines: ${response.bankLines}\nPayslips: ${response.payslips}`,
       });
     } catch (error) {
-      setBasState({
-        busy: false,
-        error: "Unable to compile demo BAS",
-      });
+      setBasState({ busy: false, error: "Unable to compile demo BAS" });
     }
-  }
+  };
 
   return (
-    <div style={{ display: "grid", gap: "24px" }}>
-      <section style={cardStyle}>
-        <h2 style={headingStyle}>Demo bank feed</h2>
-        <p style={descriptionStyle}>
-          Replay a position/day feed that locks PAYGW & GST capture for the demo organisation.
-        </p>
-        <div style={controlsRow}>
-          <label>
-            Days back
-            <input
-              type="number"
-              value={demoDays}
-              onChange={(event) => setDemoDays(Number(event.target.value))}
-              min={1}
-              max={30}
-              style={inputStyle}
-            />
-          </label>
-          <label>
-            Intensity
-            <select
-              value={demoIntensity}
-              onChange={(event) => setDemoIntensity(event.target.value as "low" | "high")}
-              style={inputStyle}
+    <Box sx={{ p: { xs: 2, md: 4 } }}>
+      <Stack spacing={3}>
+        <Card>
+          <CardHeader
+            title="Demo bank feed"
+            subheader="Replay a position/day feed that locks PAYGW & GST capture for the demo organisation."
+          />
+          <CardContent>
+            <Stack spacing={2} direction={{ xs: "column", md: "row" }}>
+              <TextField
+                type="number"
+                label="Days back"
+                value={demoDays}
+                onChange={(event) => setDemoDays(Number(event.target.value))}
+                inputProps={{ min: 1, max: 30 }}
+                fullWidth
+              />
+              <FormControl fullWidth>
+                <InputLabel id="demo-intensity-label">Intensity</InputLabel>
+                <Select
+                  labelId="demo-intensity-label"
+                  value={demoIntensity}
+                  label="Intensity"
+                  onChange={(event) =>
+                    setDemoIntensity(event.target.value as "low" | "high")
+                  }
+                >
+                  <MenuItem value="low">Low</MenuItem>
+                  <MenuItem value="high">High</MenuItem>
+                </Select>
+              </FormControl>
+            </Stack>
+            {bankFormError && (
+              <Alert severity="error" sx={{ mt: 2 }}>
+                {bankFormError}
+              </Alert>
+            )}
+            {bankState.error && (
+              <Alert severity="error" sx={{ mt: 2 }}>
+                {bankState.error}
+              </Alert>
+            )}
+            <Button
+              sx={{ mt: 3 }}
+              variant="contained"
+              onClick={handleGenerateBankFeed}
+              disabled={bankState.busy}
             >
-              <option value="low">Low</option>
-              <option value="high">High</option>
-            </select>
-          </label>
-        </div>
-        <button onClick={handleGenerateBankFeed} disabled={bankState.busy} style={buttonStyle}>
-          {bankState.busy ? "Generating…" : "Generate demo bank feed"}
-        </button>
-        {bankState.error && <div style={errorStyle}>{bankState.error}</div>}
-        {bankSection}
-      </section>
+              {bankState.busy ? "Generating…" : "Generate demo bank feed"}
+            </Button>
+            {renderSummary("Bank feed", bankState.summary)}
+          </CardContent>
+        </Card>
 
-      <section style={cardStyle}>
-        <h2 style={headingStyle}>Demo payroll run</h2>
-        <p style={descriptionStyle}>Create a payroll run and optionally mirror it in the bank feed.</p>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <label style={{ fontSize: "13px" }}>
-            <input
-              type="checkbox"
-              checked={includeBank}
-              onChange={(event) => setIncludeBank(event.target.checked)}
-            />{" "}
-            Create linked bank line
-          </label>
-        </div>
-        <button onClick={handleRunPayroll} disabled={payrollState.busy} style={buttonStyle}>
-          {payrollState.busy ? "Running…" : "Run demo payroll"}
-        </button>
-        {payrollState.error && <div style={errorStyle}>{payrollState.error}</div>}
-        {payrollSection}
-      </section>
+        <Card>
+          <CardHeader
+            title="Demo payroll run"
+            subheader="Create a payroll run and optionally mirror it in the bank feed."
+          />
+          <CardContent>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={includeBank}
+                  onChange={(event) => setIncludeBank(event.target.checked)}
+                />
+              }
+              label="Create linked bank line"
+            />
+            {payrollState.error && (
+              <Alert severity="error" sx={{ mt: 2 }}>
+                {payrollState.error}
+              </Alert>
+            )}
+            <Button
+              sx={{ mt: 2 }}
+              variant="contained"
+              onClick={handleRunPayroll}
+              disabled={payrollState.busy}
+            >
+              {payrollState.busy ? "Running…" : "Run demo payroll"}
+            </Button>
+            {renderSummary("Payroll", payrollState.summary)}
+          </CardContent>
+        </Card>
 
-      <section style={cardStyle}>
-        <h2 style={headingStyle}>Demo BAS compile</h2>
-        <p style={descriptionStyle}>Compile a mock BAS report for the chosen period.</p>
-        <div style={controlsRow}>
-          <label>
-            Year
-            <input
-              type="number"
-              value={basPeriod.year}
-              onChange={(event) => setBasPeriod((prev) => ({ ...prev, year: Number(event.target.value) }))}
-              style={inputStyle}
-            />
-          </label>
-          <label>
-            Month
-            <input
-              type="number"
-              min={1}
-              max={12}
-              value={basPeriod.month}
-              onChange={(event) => setBasPeriod((prev) => ({ ...prev, month: Number(event.target.value) }))}
-              style={inputStyle}
-            />
-          </label>
-        </div>
-        <button onClick={handleCompileBas} disabled={basState.busy} style={buttonStyle}>
-          {basState.busy ? "Compiling…" : "Compile demo BAS"}
-        </button>
-        {basState.error && <div style={errorStyle}>{basState.error}</div>}
-        {basSection}
-      </section>
-    </div>
+        <Card>
+          <CardHeader
+            title="Demo BAS compile"
+            subheader="Compile a mock BAS report for the chosen period."
+          />
+          <CardContent>
+            <Stack spacing={2} direction={{ xs: "column", md: "row" }}>
+              <TextField
+                type="number"
+                label="Year"
+                value={basPeriod.year}
+                onChange={(event) =>
+                  setBasPeriod((prev) => ({ ...prev, year: Number(event.target.value) || prev.year }))
+                }
+                inputProps={{ min: 2020, max: 2100 }}
+                fullWidth
+              />
+              <TextField
+                type="number"
+                label="Month"
+                value={basPeriod.month}
+                onChange={(event) =>
+                  setBasPeriod((prev) => ({ ...prev, month: Number(event.target.value) || prev.month }))
+                }
+                inputProps={{ min: 1, max: 12 }}
+                fullWidth
+              />
+            </Stack>
+            {basFormError && (
+              <Alert severity="error" sx={{ mt: 2 }}>
+                {basFormError}
+              </Alert>
+            )}
+            {basState.error && (
+              <Alert severity="error" sx={{ mt: 2 }}>
+                {basState.error}
+              </Alert>
+            )}
+            <Button
+              sx={{ mt: 3 }}
+              variant="contained"
+              onClick={handleCompileBas}
+              disabled={basState.busy}
+            >
+              {basState.busy ? "Compiling…" : "Compile demo BAS"}
+            </Button>
+            {renderSummary("BAS", basState.summary)}
+          </CardContent>
+        </Card>
+      </Stack>
+    </Box>
   );
 }
-
-const cardStyle: React.CSSProperties = {
-  backgroundColor: "#fff",
-  borderRadius: "12px",
-  padding: "20px",
-  boxShadow: "0 1px 4px rgba(31, 41, 55, 0.08)",
-  border: "1px solid #e2e8f0",
-};
-
-const headingStyle: React.CSSProperties = {
-  margin: 0,
-  fontSize: "18px",
-  marginBottom: "6px",
-};
-
-const descriptionStyle: React.CSSProperties = {
-  margin: 0,
-  color: "#475569",
-  marginBottom: "12px",
-};
-
-const controlsRow: React.CSSProperties = {
-  display: "flex",
-  gap: "16px",
-  flexWrap: "wrap",
-  marginBottom: "12px",
-};
-
-const inputStyle: React.CSSProperties = {
-  marginTop: "4px",
-  width: "120px",
-  padding: "8px",
-};
-
-const buttonStyle: React.CSSProperties = {
-  marginTop: "8px",
-  padding: "10px 14px",
-  borderRadius: "6px",
-  border: "none",
-  backgroundColor: "#111827",
-  color: "#fff",
-  cursor: "pointer",
-};
-
-const errorStyle: React.CSSProperties = {
-  color: "#b91c1c",
-  marginTop: "8px",
-};
-
-const preStyle: React.CSSProperties = {
-  marginTop: "12px",
-  backgroundColor: "#0b5fff0f",
-  padding: "12px",
-  borderRadius: "6px",
-  fontSize: "13px",
-  color: "#0b5fff",
-};

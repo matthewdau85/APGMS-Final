@@ -44,6 +44,13 @@ type AccountWithTransfers = {
   transfers: { amount: Decimal }[];
 };
 
+const decimalToCents = (value: Decimal | number): number => {
+  const numeric = value instanceof Decimal ? Number(value) : value;
+  return Math.round(numeric * 100);
+};
+
+const centsToDollars = (cents: number): number => cents / 100;
+
 const runTransaction = async <T>(
   prisma: PrismaClient,
   fn: (tx: PrismaClient) => Promise<T>,
@@ -234,17 +241,17 @@ export async function generateDesignatedAccountReconciliationArtifact(
 
   const movements: DesignatedMovement[] = accounts.map(
     (account: AccountWithTransfers) => {
-      const inflow = account.transfers.reduce(
+      const inflowCents = account.transfers.reduce(
         (acc: number, transfer: { amount: Decimal }) =>
-          acc + Number(transfer.amount),
+          acc + decimalToCents(transfer.amount),
         0,
       );
 
       return {
         accountId: account.id,
         type: account.type,
-        balance: Number(account.balance),
-        inflow24h: Number(inflow.toFixed(2)),
+        balance: centsToDollars(decimalToCents(account.balance)),
+        inflow24h: centsToDollars(inflowCents),
         transferCount24h: account.transfers.length,
       };
     },

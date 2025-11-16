@@ -34,6 +34,13 @@ import { registerRiskRoutes } from "./routes/risk.js";
 import { registerDemoRoutes } from "./routes/demo.js";
 import { registerComplianceProxy } from "./routes/compliance-proxy.js";
 import { registerComplianceMonitorRoutes } from "./routes/compliance-monitor.js";
+import { registerOnboardingRoutes } from "./routes/onboarding.js";
+import { configurePIIProviders } from "./lib/pii.js";
+import {
+  createAuditLogger,
+  createKeyManagementService,
+  createSaltProvider,
+} from "./security/providers.js";
 
 // ---- keep your other domain code (types, helpers, shapes) exactly as you had ----
 // (omitted here for brevity - unchanged from your last working content)
@@ -43,10 +50,22 @@ type BuildServerOptions = {
   connectorDeps?: ConnectorRoutesDeps;
 };
 
+async function initializePiiProviders(app: FastifyInstance): Promise<void> {
+  const [kms, saltProvider] = await Promise.all([
+    createKeyManagementService(),
+    createSaltProvider(),
+  ]);
+  const auditLogger = createAuditLogger(prisma);
+  configurePIIProviders({ kms, saltProvider, auditLogger });
+  app.log.info("pii_providers_initialized");
+}
+
 export async function buildServer(options: BuildServerOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: true });
 
   installHttpMetrics(app);
+
+  await initializePiiProviders(app);
 
   const allowedOrigins = new Set(config.cors.allowedOrigins);
 
@@ -212,6 +231,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
 
   await registerAuthRoutes(app);
   await registerRegulatorAuthRoutes(app);
+  await registerOnboardingRoutes(app);
 
   await app.register(async (secureScope) => {
     secureScope.addHook("onRequest", authGuard);
