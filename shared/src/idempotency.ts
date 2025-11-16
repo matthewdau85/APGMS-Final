@@ -1,6 +1,6 @@
 // shared/src/idempotency.ts
 import type { PrismaClient } from "@prisma/client";
-import { badRequest, conflict } from "./errors.js";
+import { catalogError } from "./errors/catalog.js";
 import { createHash } from "node:crypto";
 
 type Ctx = {
@@ -35,7 +35,7 @@ export async function withIdempotency<T extends HandlerResult>(
     where: { orgId_key: { orgId: ctx.orgId, key } },
     select: { id: true, key: true, orgId: true, firstSeenAt: true },
   });
-  if (existing) throw conflict("idempotent_replay", "Request already processed");
+  if (existing) throw catalogError("platform.idempotency_conflict");
 
   await ctx.prisma.idempotencyKey.create({
     data: {
@@ -73,7 +73,7 @@ function normalizeKey(rawKey: unknown, ctx: Ctx): string {
     return `payload:${derivePayloadDigest(ctx)}`;
   }
 
-  throw badRequest("missing_idempotency_key", "Idempotency-Key header or request payload is required");
+  throw catalogError("platform.idempotency_key_missing");
 }
 
 function derivePayloadDigest(ctx: Ctx): string {

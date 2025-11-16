@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "shared/**/*.ts",
+    "services/**/*.ts",
+    "worker/**/*.ts",
+    "apps/**/*.ts",
+    "packages/**/*.ts",
+    "webapp/**/*.ts",
+    "scripts/**/*.ts",
+    "tools/**/*.ts"
+  ]
+}
