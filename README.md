@@ -71,11 +71,20 @@ All mutating REST endpoints now require an `Idempotency-Key` header. Replays wit
 
 ---
 
+## Canonical error codes
+
+Errors surfaced to clients follow the shared taxonomy documented in [`docs/error-taxonomy.md`](./docs/error-taxonomy.md). Each code specifies the owning domain, HTTP status, severity, retryability and remediation guidance. Use the `catalogError` helper from `@apgms/shared` (or the [`scripts/print-error-catalog.ts`](./scripts/print-error-catalog.ts) utility) to keep dashboards, alerts and runbooks aligned with the catalog.
+
+---
+
 ## Quality & Security Gates (local mirrors of CI)
 
 Run these before pushing. They match the CI jobs and "blockers".
 
 ```bash
+# Linters (TypeScript + Markdown)
+pnpm lint
+
 # Type safety
 pnpm -r typecheck
 

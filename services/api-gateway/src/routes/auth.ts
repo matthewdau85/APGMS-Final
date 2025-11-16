@@ -30,6 +30,7 @@ import {
   notFound,
   conflict,
   badRequest,
+  catalogError,
 } from "@apgms/shared";
 import { parseWithSchema } from "../lib/validation.js";
 import type {
@@ -114,7 +115,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       const userId = claims?.sub as string | undefined;
 
       if (!userId) {
-        throw unauthorized("unauthorized", "Missing user context");
+        throw catalogError("auth.missing_user_context");
       }
 
       const user = await prisma.user.findUnique({
@@ -163,7 +164,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       const userId = claims?.sub as string | undefined;
 
       if (!userId) {
-        throw unauthorized("unauthorized", "Missing user context");
+        throw catalogError("auth.missing_user_context");
       }
 
       const user = await prisma.user.findUnique({
@@ -223,7 +224,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       const userId = claims?.sub as string | undefined;
 
       if (!userId) {
-        throw unauthorized("unauthorized", "Missing user context");
+        throw catalogError("auth.missing_user_context");
       }
 
       const user = await prisma.user.findUnique({
@@ -240,12 +241,12 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       cleanupPendingTotp();
       const pending = pendingTotpEnrollments.get(user.id);
       if (!pending) {
-        throw conflict("totp_enrollment_missing", "No pending TOTP enrollment");
+        throw catalogError("auth.mfa.totp.enrollment_missing");
       }
 
       const trimmed = body.token.replace(/\s+/g, "");
       if (!verifyTotpToken(pending.secret, trimmed)) {
-        throw unauthorized("totp_invalid", "Invalid TOTP token");
+        throw catalogError("auth.mfa.totp.invalid_token");
       }
 
       await upsertTotpCredential(user.id, pending.secret, pending.codesHashed);
@@ -285,7 +286,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       const userId = claims?.sub as string | undefined;
 
       if (!userId) {
-        throw unauthorized("unauthorized", "Missing user context");
+        throw catalogError("auth.missing_user_context");
       }
 
       const body = parseWithSchema(MfaStepUpBodySchema, request.body);
@@ -327,7 +328,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       const userId = claims?.sub as string | undefined;
 
       if (!userId) {
-        throw unauthorized("unauthorized", "Missing user context");
+        throw catalogError("auth.missing_user_context");
       }
 
       const user = await prisma.user.findUnique({
@@ -372,7 +373,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       const userId = claims?.sub as string | undefined;
 
       if (!userId) {
-        throw unauthorized("unauthorized", "Missing user context");
+        throw catalogError("auth.missing_user_context");
       }
 
       const user = await prisma.user.findUnique({
@@ -387,12 +388,12 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       const body = parseWithSchema(PasskeyRegistrationBodySchema, request.body);
       const registrationResponse = (body.credential ?? body.response) as RegistrationResponseJSON;
       if (!registrationResponse) {
-        throw badRequest("invalid_body", "registration response is required");
+        throw catalogError("auth.mfa.passkey.registration_missing_response");
       }
 
       const verification = await verifyPasskeyRegistration(user.id, registrationResponse);
       if (!verification.verified || !verification.registrationInfo) {
-        throw unauthorized("passkey_invalid", "Registration verification failed");
+        throw catalogError("auth.mfa.passkey.registration_failed");
       }
 
       const credential = verification.registrationInfo.credential;
@@ -437,7 +438,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       const userId = claims?.sub as string | undefined;
 
       if (!userId) {
-        throw unauthorized("unauthorized", "Missing user context");
+        throw catalogError("auth.missing_user_context");
       }
 
       const user = await prisma.user.findUnique({
@@ -455,7 +456,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
         .filter((id): id is string => Boolean(id));
 
       if (allowCredentialIds.length === 0) {
-        throw notFound("passkey_not_configured", "No passkey credentials available");
+        throw catalogError("auth.mfa.passkey.not_configured");
       }
 
       const options = await createAuthenticationOptions({
@@ -484,7 +485,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       const userId = claims?.sub as string | undefined;
 
       if (!userId) {
-        throw unauthorized("unauthorized", "Missing user context");
+        throw catalogError("auth.missing_user_context");
       }
 
       const user = await prisma.user.findUnique({
@@ -499,7 +500,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       const body = parseWithSchema(PasskeyVerifyBodySchema, request.body);
       const assertionResponse = (body.credential ?? body.response) as AuthenticationResponseJSON;
       if (!assertionResponse) {
-        throw badRequest("invalid_body", "authentication response is required");
+        throw catalogError("auth.mfa.passkey.authentication_missing_response");
       }
 
       const credentialId = assertionResponse.id;
@@ -514,7 +515,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
         credentialRecord.userId !== user.id ||
         credentialRecord.status !== "active"
       ) {
-        throw notFound("passkey_not_found", "Passkey not registered");
+        throw catalogError("auth.mfa.passkey.not_found");
       }
 
       const decoded = await decodePasskeyCredential(credentialRecord);
@@ -530,7 +531,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
         webauthnCredential,
       );
       if (!verification.verified) {
-        throw unauthorized("passkey_invalid", "Authentication failed");
+        throw catalogError("auth.mfa.passkey.authentication_failed");
       }
 
       await updatePasskeyCounter(credentialId!, verification.authenticationInfo.newCounter);
@@ -562,7 +563,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       const claims: any = (request as any).user;
       const userId = claims?.sub as string | undefined;
       if (!userId) {
-        throw unauthorized("unauthorized", "Missing user context");
+        throw catalogError("auth.missing_user_context");
       }
 
       clearVerification(userId);

@@ -5,7 +5,7 @@ import crypto from "node:crypto";
 import { context, trace } from "@opentelemetry/api";
 import "dotenv/config.js";
 
-import { AppError, badRequest, conflict, forbidden, notFound, unauthorized } from "@apgms/shared";
+import { AppError, badRequest, catalogError, conflict, forbidden, notFound, unauthorized } from "@apgms/shared";
 import { config } from "./config.js";
 
 import rateLimit from "./plugins/rate-limit.js";
@@ -101,7 +101,17 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof AppError) {
       const appError = error as AppError;
-      reply.status(appError.status).send({ error: { code: appError.code, message: appError.message, fields: appError.fields } });
+      const payload: Record<string, unknown> = {
+        code: appError.code,
+        message: appError.message,
+      };
+      if (appError.fields) {
+        payload.fields = appError.fields;
+      }
+      if (appError.metadata) {
+        payload.metadata = appError.metadata;
+      }
+      reply.status(appError.status).send({ error: payload });
       return;
     }
     if ((error as any)?.validation) {

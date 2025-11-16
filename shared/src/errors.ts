@@ -1,21 +1,36 @@
-import { ZodError, ZodIssue } from "zod";
+import type { ZodError, ZodIssue } from "zod";
 
 export type FieldError = {
   path: string;
   message: string;
 };
 
+export type AppErrorMetadata = Record<string, unknown> & {
+  severity?: string;
+  retryable?: boolean;
+  domain?: string;
+  remediation?: string;
+};
+
 export class AppError extends Error {
   readonly status: number;
   readonly code: string;
   readonly fields?: FieldError[];
+  readonly metadata?: AppErrorMetadata;
 
-  constructor(status: number, code: string, message: string, fields?: FieldError[]) {
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    fields?: FieldError[],
+    metadata?: AppErrorMetadata,
+  ) {
     super(message);
     this.name = "AppError";
     this.status = status;
     this.code = code;
     this.fields = fields;
+    this.metadata = metadata;
   }
 }
 
@@ -30,7 +45,8 @@ export const createError = (
   code: string,
   message: string,
   fields?: FieldError[],
-): AppError => new AppError(status, code, message, fields);
+  metadata?: AppErrorMetadata,
+): AppError => new AppError(status, code, message, fields, metadata);
 
 export const badRequest = (code: string, message: string, fields?: FieldError[]): AppError =>
   createError(400, code, message, fields);
