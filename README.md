@@ -100,6 +100,16 @@ pnpm -w exec prisma migrate status
 git grep -n '<<<<<<<\|=======\|>>>>>>>' -- ':!*.lock' || true
 ```
 
+## Repository maintenance
+
+To keep every local branch aligned with its upstream remote, run the helper script below from a clean working tree:
+
+```bash
+./scripts/update-all-branches.sh
+```
+
+The script fetches remotes, iterates over each local branch, and fast-forwards it when possible before returning to your original branch. Resolve divergent branches manually when the script reports a failure.
+
 ---
 
 ## Accessibility & Performance
