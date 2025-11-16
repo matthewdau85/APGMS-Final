@@ -1,0 +1,12 @@
+{
+  "version": "2025-02-01T00:00:00.000Z",
+  "latencyQuantiles": {
+    "baseline": 16.5,
+    "warning": 26.6,
+    "breach": 30.35
+  },
+  "averageLagDays": 6.5,
+  "autoCoverage": 0.583,
+  "features": ["reportLagDays", "missingEvidence", "manualTouches"],
+  "driftWindowDays": 21
+}
