@@ -34,6 +34,7 @@ import { registerRiskRoutes } from "./routes/risk.js";
 import { registerDemoRoutes } from "./routes/demo.js";
 import { registerComplianceProxy } from "./routes/compliance-proxy.js";
 import { registerComplianceMonitorRoutes } from "./routes/compliance-monitor.js";
+import { registerOnboardingRoutes } from "./routes/onboarding.js";
 
 // ---- keep your other domain code (types, helpers, shapes) exactly as you had ----
 // (omitted here for brevity - unchanged from your last working content)
@@ -215,7 +216,44 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
 
   await app.register(async (secureScope) => {
     secureScope.addHook("onRequest", authGuard);
+    secureScope.addHook("preHandler", async (request, reply) => {
+      const user = request.user;
+      if (!user) {
+        return;
+      }
+
+      const path = request.raw.url ?? "";
+      if (path.startsWith("/onboarding")) {
+        return;
+      }
+
+      const org = await prisma.org.findUnique({
+        where: { id: user.orgId },
+        select: { onboardingComplete: true },
+      });
+
+      if (!org) {
+        reply.code(404).send({
+          error: {
+            code: "org_missing",
+            message: "Organisation not found",
+          },
+        });
+        return reply;
+      }
+
+      if (!org.onboardingComplete) {
+        reply.code(403).send({
+          error: {
+            code: "onboarding_required",
+            message: "Onboarding must be completed before using APGMS.",
+          },
+        });
+        return reply;
+      }
+    });
     const bankLinesPlugin = options.bankLinesPlugin ?? registerBankLinesRoutes;
+    await secureScope.register(registerOnboardingRoutes);
     await secureScope.register(bankLinesPlugin);
     await secureScope.register(registerAdminDataRoutes);
     await secureScope.register(registerTaxRoutes);
