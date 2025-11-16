@@ -44,6 +44,7 @@ export class DesignatedAccountOrchestrator {
   async createAccount(
     input: CreateDesignatedAccountInput,
   ): Promise<DesignatedAccount> {
+    const requiresDepositOnly = this.payToService.requiresDepositOnly(input.bank);
     const account: DesignatedAccount = {
       id: randomUUID(),
       orgId: input.orgId,
@@ -51,8 +52,7 @@ export class DesignatedAccountOrchestrator {
       bsb: input.bsb,
       accountNumber: input.accountNumber,
       obligation: input.obligation,
-      depositOnly:
-        input.depositOnly ?? this.payToService.requiresDepositOnly(input.bank),
+      depositOnly: requiresDepositOnly || input.depositOnly === true,
       metadata: input.metadata,
     };
 

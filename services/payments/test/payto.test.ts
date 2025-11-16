@@ -45,6 +45,7 @@ describe('DesignatedAccountOrchestrator', () => {
       bsb: '123-456',
       accountNumber: '12345678',
       obligation: 'GST',
+      depositOnly: false,
     });
 
     expect(account.depositOnly).toBe(true);
