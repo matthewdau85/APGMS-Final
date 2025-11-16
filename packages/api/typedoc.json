@@ -1,0 +1,9 @@
+{
+  "entryPoints": ["src/index.ts"],
+  "out": "docs/reference",
+  "plugin": [],
+  "readme": "none",
+  "categorizeByGroup": true,
+  "excludePrivate": true,
+  "tsconfig": "tsconfig.json"
+}
