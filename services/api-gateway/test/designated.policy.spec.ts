@@ -8,7 +8,10 @@ import {
   applyDesignatedAccountTransfer,
   generateDesignatedAccountReconciliationArtifact,
 } from "@apgms/domain-policy";
-import { createBankingProvider } from "../../../providers/banking/index.js";
+import {
+  createBankingProvider,
+  createConfiguredBankingProvider,
+} from "../../../providers/banking/index.js";
 
 type DesignatedAccountState = {
   id: string;
@@ -293,6 +296,52 @@ test("banking provider enforces per-adapter write cap", async () => {
 test("createBankingProvider defaults to mock for unknown adapters", () => {
   const provider = createBankingProvider("new-provider");
   assert.equal(provider.id, "mock");
+});
+
+test("createConfiguredBankingProvider exposes NAB and ANZ adapters", () => {
+  const nab = createConfiguredBankingProvider({ id: "nab" });
+  const anz = createConfiguredBankingProvider({ id: "anz" });
+
+  assert.equal(nab.id, "nab");
+  assert.equal(anz.id, "anz");
+  assert.ok(nab.capabilities.maxWriteCents > 0);
+  assert.ok(anz.capabilities.maxReadTransactions > 0);
+});
+
+test("configured capabilities override provider defaults", async () => {
+  const { prisma, state } = createInMemoryPrisma();
+
+  state.designatedAccounts.push({
+    id: "acct-override",
+    orgId: "org-override",
+    type: "PAYGW",
+    balance: new Prisma.Decimal(0),
+    updatedAt: new Date(),
+  });
+
+  const provider = createConfiguredBankingProvider({
+    id: "nab",
+    capabilities: { maxWriteCents: 10_000 },
+  });
+
+  const context = {
+    prisma,
+    orgId: "org-override",
+    actorId: "system",
+    auditLogger: async (entry: any) => {
+      await prisma.auditLog.create({ data: entry });
+    },
+  };
+
+  await assert.rejects(
+    () =>
+      provider.creditDesignatedAccount(context, {
+        accountId: "acct-override",
+        amount: 11_000,
+        source: "PAYROLL_CAPTURE",
+      }),
+    (error: unknown) => error instanceof AppError && error.code === "banking_write_cap_exceeded",
+  );
 });
 
 test("designated accounts block debit attempts and raise alerts", async () => {

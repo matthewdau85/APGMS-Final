@@ -63,6 +63,15 @@ curl -sf http://localhost:3000/ready
 curl -sf http://localhost:3000/metrics
 ```
 
+## Setup guides
+
+- [Real app deployment](docs/setup/real-app.md) — full stack with real/sandbox
+  banking providers.
+- [Prototype / demo](docs/setup/prototype.md) — lightweight mock-provider setup
+  with seeded data.
+- [Stakeholder connection tutorial](docs/setup/stakeholder-connections.md) —
+  walks external partners through the regulator APIs.
+
 ---
 
 ## API Idempotency

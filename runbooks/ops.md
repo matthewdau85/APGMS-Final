@@ -42,6 +42,23 @@
 ## Regulator Access
 - Only the regulator auth/session bootstrap is wired today. Evidence catalogue, monitoring snapshots, and bank summary routes remain TODO; direct auditors to the compliance backlog for progress before promising those controls.
 
+## Banking provider configuration & capabilities
+Set the provider knobs **before** onboarding pilots so the ledger enforces the
+correct limits:
+
+| Provider | `BANKING_PROVIDER` | `maxReadTransactions` | `maxWriteCents` | Notes |
+| --- | --- | --- | --- | --- |
+| NAB | `nab` | 1,000 | 5,000,000 | Aligns with NAB’s 50k AUD per-transfer sandbox ceiling. |
+| ANZ | `anz` | 800 | 4,000,000 | Keeps requests under ANZ sandbox throttles. |
+| Mock | `mock` | 200 | 1,000,000 | Safe defaults for demos and CI. |
+
+Override the caps via `BANKING_MAX_READ_TRANSACTIONS` and
+`BANKING_MAX_WRITE_CENTS`. Update `DESIGNATED_BANKING_URL`,
+`DESIGNATED_BANKING_TOKEN`, and `DESIGNATED_BANKING_CERT_FINGERPRINT`
+whenever a partner issues new sandbox credentials, then log the change in
+`artifacts/compliance/partner-info.json`. See `docs/payments.md` for per-bank
+onboarding steps.
+
 - **Compliance Monitoring & Designated Accounts**
 - Payroll/POS ingestion now channels data into `PayrollContribution` and `PosTransaction` via `/ingest/payroll` and `/ingest/pos` (use Idempotency-Key headers). The nightly worker applies these rows to the `PAYGW_BUFFER`/`GST_BUFFER` ledgers and validates balances using `ensureDesignatedAccountCoverage` (`shared/src/ledger/designated-account.ts`), raising `DESIGNATED_FUNDS_SHORTFALL` alerts when requirements exceed available funds.
 - `/compliance/precheck`, `/compliance/status`, `/compliance/pending`, and `/compliance/reminders` expose readiness, buffer snapshots, pending contributions, and guidance for remediation. Use these endpoints to re-ingest missing batches, rerun the reconciliation job, and capture the proof in the audit log before notifying the business or the ATO.
