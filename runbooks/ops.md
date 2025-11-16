@@ -57,3 +57,5 @@
 - Log the heuristic you use for `forecastObligations`/`computeTierStatus` so regulators can understand the predictive engine even if it’s just historical averages; store the tuning notes in `artifacts/compliance/`.
 - **Stakeholder Connection**
 - Follow `docs/runbooks/stakeholder-connect.md` for the first-run checklist: populate `DESIGNATED_BANKING_*` plus `DSP_PRODUCT_ID`, run through the pilot steps, and ship the generated `artifacts/compliance/partner-info.json` + pilot report to your external partner/regulator. Update this located doc when the partner URL, certificate, or DSP product changes so future deployments know what to document.
+- **Tier Escalation Scheduling**
+- Run `/compliance/tier-check` on a schedule (suggested: once per day or every 6h leading up to BAS lodgment). Log the cron command in your ops tracker and ensure `artifacts/compliance/tier-state/<org>.json` plus the `TIER_ESCALATION` alert exist after each run. Use the tier and forecast data to trigger downstream warnings (e.g., sending Slack/webhook notifications outside this code) before any BAS deadline slips.

@@ -22,7 +22,7 @@ import {
   precheckSchema,
 } from "../schemas/designated-ingest.js";
 import { complianceTransferSchema } from "../schemas/compliance-transfer.js";
-import { forecastObligations, computeTierStatus } from "@apgms/shared/ledger/predictive.js";
+import { forecastObligations, computeTierStatus, type ForecastResult } from "@apgms/shared/ledger/predictive.js";
 import { applyDesignatedAccountTransfer } from "@apgms/domain-policy";
 import { z } from "zod";
 import fs from "node:fs";
@@ -33,9 +33,92 @@ const REMEDIATION_GUIDANCE =
 
 const complianceArtifactDir = path.join(process.cwd(), "artifacts", "compliance");
 const partnerInfoFile = path.join(complianceArtifactDir, "partner-info.json");
+const tierStateDir = path.join(complianceArtifactDir, "tier-state");
 
 function ensureArtifactDir(): void {
   fs.mkdirSync(complianceArtifactDir, { recursive: true });
+}
+
+function ensureTierDir(): void {
+  ensureArtifactDir();
+  fs.mkdirSync(tierStateDir, { recursive: true });
+}
+
+function readTierState(orgId: string) {
+  const file = path.join(tierStateDir, `${orgId}.json`);
+  if (!fs.existsSync(file)) {
+    return null;
+  }
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8")) as {
+      tierStatus: Record<string, TierStatus>;
+      updatedAt: string;
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeTierState(orgId: string, tierStatus: Record<string, TierStatus>) {
+  ensureTierDir();
+  const file = path.join(tierStateDir, `${orgId}.json`);
+  fs.writeFileSync(
+    file,
+    JSON.stringify({ tierStatus, updatedAt: new Date().toISOString() }, null, 2),
+  );
+}
+
+async function issueTierEscalationAlert(
+  orgId: string,
+  forecast: ForecastResult,
+  tierStatus: Record<string, TierStatus>,
+  req: FastifyRequest,
+) {
+  const previous = readTierState(orgId);
+  const escalateNow = Object.values(tierStatus).some((tier) => tier === "escalate");
+  const previouslyEscalated = previous
+    ? Object.values(previous.tierStatus).some((tier) => tier === "escalate")
+    : false;
+  if (!escalateNow || previouslyEscalated) {
+    writeTierState(orgId, tierStatus);
+    return null;
+  }
+
+  const alert = await prisma.alert.create({
+    data: {
+      orgId,
+      type: "TIER_ESCALATION",
+      severity: "HIGH",
+      message: `Tier escalation (${Object.entries(tierStatus)
+        .map(([key, value]) => `${key.toUpperCase()}=${value}`)
+        .join(", ")})`,
+      metadata: {
+        forecast,
+        tierStatus,
+      },
+    },
+  });
+
+  writeTierState(orgId, tierStatus);
+
+  logSecurityEvent(
+    req.log,
+    buildSecurityLogEntry(
+      {
+        event: "tier.escalation",
+        orgId,
+        principal: (req.user as any)?.sub ?? "system",
+        metadata: {
+          alertId: alert.id,
+          forecast,
+          tierStatus,
+        },
+      },
+      buildSecurityContextFromRequest(req),
+    ),
+  );
+
+  return alert;
 }
 
 function logPartnerMetadata(): Record<string, unknown> | null {
@@ -495,10 +578,12 @@ export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) =
       ),
     };
 
-    const partnerStatus = readPartnerMetadata() ?? {
-      url: process.env.DESIGNATED_BANKING_URL ?? null,
-      productId: process.env.DSP_PRODUCT_ID ?? null,
-    };
+    const partnerStatus =
+      readPartnerMetadata() ?? {
+        url: process.env.DESIGNATED_BANKING_URL ?? null,
+        productId: process.env.DSP_PRODUCT_ID ?? null,
+      };
+    const escalationAlert = await issueTierEscalationAlert(orgId, forecast, tierStatuses, req);
     reply.send({
       accounts: accounts.map((account) => ({
         type: account.type,
@@ -520,7 +605,42 @@ export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) =
       remediation:
         pending.length > 0 ? REMEDIATION_GUIDANCE : "Buffers are healthy and ready for BAS.",
       partnerStatus,
+      escalationAlertId: escalationAlert?.id ?? null,
     });
+  });
+
+  app.post("/compliance/tier-check", async (req, reply) => {
+    const orgs = await prisma.org.findMany({ select: { id: true } });
+    const results = [];
+    for (const { id } of orgs) {
+      const forecast = await forecastObligations(prisma, id);
+      const accounts = await Promise.all(
+        (["PAYGW_BUFFER", "GST_BUFFER"] as const).map(async (type) => {
+          const snapshot = await reconcileAccountSnapshot(prisma, id, type);
+          return snapshot;
+        }),
+      );
+      const tierStatuses = {
+        paygw: computeTierStatus(
+          accounts.find((entry) => entry.account.type === "PAYGW_BUFFER")?.balance ?? 0,
+          forecast.paygwForecast,
+          forecast.paygwForecast * 0.1,
+        ),
+        gst: computeTierStatus(
+          accounts.find((entry) => entry.account.type === "GST_BUFFER")?.balance ?? 0,
+          forecast.gstForecast,
+          forecast.gstForecast * 0.1,
+        ),
+      };
+      const alert = await issueTierEscalationAlert(id, forecast, tierStatuses, req);
+      results.push({
+        orgId: id,
+        tierStatus: tierStatuses,
+        forecast,
+        escalationAlertId: alert?.id ?? null,
+      });
+    }
+    reply.send({ results });
   });
 
   app.post("/compliance/alerts/:id/resolve", async (req, reply) => {
