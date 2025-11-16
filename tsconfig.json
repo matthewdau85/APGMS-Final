@@ -17,7 +17,10 @@
                                                                   "shared/dist/index"
                                                               ],
                                           "@apgms/domain-policy": [
-                                                                  "domain/policy/dist/designated-accounts"
+                                                                  "packages/domain-policy/src/index"
+                                                              ],
+                                          "@apgms/domain-policy/*": [
+                                                                  "packages/domain-policy/src/*"
                                                               ]
                                       },
                             "types":  [

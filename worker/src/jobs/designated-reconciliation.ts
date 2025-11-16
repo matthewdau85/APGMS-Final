@@ -2,7 +2,7 @@ import { prisma } from "@apgms/shared/db.js";
 
 import {
   generateDesignatedAccountReconciliationArtifact,
-} from "../../../domain/policy/designated-accounts.js";
+} from "@apgms/domain-policy";
 
 const SYSTEM_ACTOR = "system";
 

@@ -9,7 +9,7 @@ The controls added in Phase 4.5 cover three pillars:
   surface so we can register new institutions without touching downstream code.
 
 - **One-way policy engine**  
-  The domain policy (`domain/policy/designated-accounts.ts`) only permits credits
+  The domain policy (`packages/domain-policy/src/designated-accounts.ts`) only permits credits
   from whitelisted capture sources: `PAYROLL_CAPTURE`, `GST_CAPTURE`, or
   `BAS_ESCROW`. Any debit attempt is rejected, logged, and automatically produces
   a HIGH severity `DESIGNATED_WITHDRAWAL_ATTEMPT` alert for regulator review.
