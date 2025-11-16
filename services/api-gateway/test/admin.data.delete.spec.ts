@@ -6,7 +6,7 @@ import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 
 import {
   registerAdminDataRoutes,
-  type SecurityLogPayload,
+  type SecurityLogEntry,
 } from "../src/routes/admin.data";
 import { adminDataDeleteResponseSchema } from "../src/schemas/admin.data";
 import type { Principal } from "../src/lib/auth";
@@ -34,7 +34,7 @@ describe("POST /admin/data/delete", () => {
       count: async (_args: any) => 0,
     },
   };
-  let securityLogs: SecurityLogPayload[] = [];
+  let securityLogs: SecurityLogEntry[] = [];
   let authenticateImpl: AuthenticateFn;
 
   beforeEach(async () => {
@@ -50,6 +50,7 @@ describe("POST /admin/data/delete", () => {
       orgId: defaultPayload.orgId,
       roles: ["admin"],
       token: "token",
+      mfaEnabled: true,
     });
 
     prismaStub.user.findFirst = async () => null;
@@ -59,8 +60,12 @@ describe("POST /admin/data/delete", () => {
 
     await registerAdminDataRoutes(app, {
       prisma: prismaStub as any,
-      authenticate: async (req, reply, roles) => authenticateImpl(req, reply, roles),
-      secLog: async (payload) => {
+      authenticate: async (
+        req: FastifyRequest,
+        reply: FastifyReply,
+        roles: ReadonlyArray<string>,
+      ) => authenticateImpl(req, reply, roles),
+      secLog: async (payload: SecurityLogEntry) => {
         securityLogs.push(payload);
       },
     });
@@ -91,6 +96,7 @@ describe("POST /admin/data/delete", () => {
     const response = await app.inject({
       method: "POST",
       url: "/admin/data/delete",
+      headers: { "x-correlation-id": "delete-anonymized" },
       payload: defaultPayload,
     });
 
@@ -133,6 +139,7 @@ describe("POST /admin/data/delete", () => {
       orgId: defaultPayload.orgId,
       roles: ["admin"],
       token: "token",
+      mfaEnabled: true,
     });
 
     const response = await app.inject({
@@ -154,6 +161,7 @@ describe("POST /admin/data/delete", () => {
       orgId: defaultPayload.orgId,
       roles: ["admin"],
       token: "token",
+      mfaEnabled: true,
     });
 
     prismaStub.user.findFirst = async () => null;
@@ -177,6 +185,7 @@ describe("POST /admin/data/delete", () => {
       orgId: defaultPayload.orgId,
       roles: ["admin"],
       token: "token",
+      mfaEnabled: true,
     });
 
     const user: PrismaUser = {
@@ -236,14 +245,17 @@ describe("POST /admin/data/delete", () => {
     assert.match(updateArgs.data.email, /^deleted\+[a-f0-9]{12}@example.com$/);
     assert.match(updateArgs.data.password, /^\$argon2id\$/);
 
-    const lastLog = securityLogs[securityLogs.length - 1] ?? null;
-    assert.deepEqual(lastLog, {
-      event: "data_delete",
-      orgId: defaultPayload.orgId,
-      principal: "admin-1",
-      subjectUserId: user.id,
-      mode: "anonymized",
-    });
+    const logEntry = securityLogs[securityLogs.length - 1];
+    assert.equal(logEntry?.event, "data_delete");
+    assert.equal(logEntry?.mode, "anonymized");
+    assert.equal(logEntry?.orgId, defaultPayload.orgId);
+    assert.equal(logEntry?.principal, "admin-1");
+    assert.equal(logEntry?.subjectUserId, user.id);
+    assert.equal(logEntry?.subjectEmail, "[REDACTED:EMAIL]");
+    if (logEntry?.correlationId) {
+      assert.equal(logEntry.correlationId, "delete-anonymized");
+    }
+    assert.ok(logEntry?.occurredAt);
   });
 
   it("hard deletes user when no constraint risk", async () => {
@@ -273,6 +285,7 @@ describe("POST /admin/data/delete", () => {
     const response = await app.inject({
       method: "POST",
       url: "/admin/data/delete",
+      headers: { "x-correlation-id": "delete-hard" },
       payload: defaultPayload,
     });
 
@@ -285,14 +298,15 @@ describe("POST /admin/data/delete", () => {
     assert.equal(updateCalled, false);
     assert.deepEqual(deleteArgs, { where: { id: user.id } });
 
-    const lastLog = securityLogs[securityLogs.length - 1] ?? null;
-    assert.deepEqual(lastLog, {
-      event: "data_delete",
-      orgId: defaultPayload.orgId,
-      principal: "principal",
-      subjectUserId: user.id,
-      mode: "deleted",
-    });
+    const logEntry = securityLogs[securityLogs.length - 1];
+    assert.equal(logEntry?.event, "data_delete");
+    assert.equal(logEntry?.mode, "deleted");
+    assert.equal(logEntry?.subjectUserId, user.id);
+    assert.equal(logEntry?.subjectEmail, "[REDACTED:EMAIL]");
+    if (logEntry?.correlationId) {
+      assert.equal(logEntry.correlationId, "delete-hard");
+    }
+    assert.ok(logEntry?.occurredAt);
   });
 });
 

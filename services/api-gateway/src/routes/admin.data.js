@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { adminDataDeleteRequestSchema, subjectDataExportRequestSchema, subjectDataExportResponseSchema, } from "../schemas/admin.data";
+import { logSecurityEvent, buildSecurityContextFromRequest, buildSecurityLogEntry, } from "@apgms/shared/security-log.js";
 import { hashPassword } from "@apgms/shared";
 import { authenticateRequest, } from "../lib/auth";
 const PASSWORD_PLACEHOLDER = "__deleted__";
@@ -10,9 +11,17 @@ async function buildDefaultPrisma() {
 export async function registerAdminDataRoutes(app, deps = {}) {
     const prisma = deps.prisma ?? (await buildDefaultPrisma());
     const authenticate = deps.authenticate ?? ((req, reply, roles) => authenticateRequest(app, req, reply, roles));
+    const requirePrincipal = async (req, reply, roles) => {
+        const principal = await authenticate(req, reply, roles);
+        if (!principal) {
+            return null;
+        }
+        req.user = principal;
+        return principal;
+    };
     const secLog = deps.secLog ??
-        (async (payload) => {
-            app.log.info({ security: payload }, "security_event");
+        ((entry) => {
+            logSecurityEvent(app.log, entry);
         });
     const hash = deps.hash ?? hashPassword;
     const logAuditEvent = async (payload) => {
@@ -32,8 +41,16 @@ export async function registerAdminDataRoutes(app, deps = {}) {
             });
         }
     };
+    app.get("/admin/data", async (req, reply) => {
+        const principal = await requirePrincipal(req, reply, []);
+        if (!principal) {
+            return;
+        }
+        reply.send({ items: [] });
+    });
+
     app.post("/admin/data/delete", async (req, reply) => {
-        const principal = await authenticate(req, reply, ["admin"]);
+        const principal = await requirePrincipal(req, reply, ["admin"]);
         if (!principal) {
             return;
         }
@@ -59,6 +76,7 @@ export async function registerAdminDataRoutes(app, deps = {}) {
             where: { orgId: payload.orgId },
         });
         const occurredAt = new Date().toISOString();
+        const secContext = buildSecurityContextFromRequest(req);
         if (referencedLines > 0) {
             const anonymizedEmail = anonymizeEmail(targetUser.email, targetUser.id);
             const hashedPlaceholder = await hash(PASSWORD_PLACEHOLDER);
@@ -70,13 +88,19 @@ export async function registerAdminDataRoutes(app, deps = {}) {
                 },
             });
             if (secLog) {
-                await secLog({
-                    event: "data_delete",
-                    orgId: payload.orgId,
-                    principal: principal.id,
-                    subjectUserId: targetUser.id,
-                    mode: "anonymized",
-                });
+                const entry = buildSecurityLogEntry(
+                    {
+                        event: "data_delete",
+                        orgId: payload.orgId,
+                        principal: principal.id,
+                        subjectUserId: targetUser.id,
+                        subjectEmail: payload.email,
+                        mode: "anonymized",
+                        occurredAt,
+                    },
+                    secContext,
+                );
+                await secLog(entry);
             }
             app.metrics?.recordSecurityEvent("data_delete");
             await logAuditEvent({
@@ -97,13 +121,19 @@ export async function registerAdminDataRoutes(app, deps = {}) {
         }
         await prisma.user.delete({ where: { id: targetUser.id } });
         if (secLog) {
-            await secLog({
-                event: "data_delete",
-                orgId: payload.orgId,
-                principal: principal.id,
-                subjectUserId: targetUser.id,
-                mode: "deleted",
-            });
+            const entry = buildSecurityLogEntry(
+                {
+                    event: "data_delete",
+                    orgId: payload.orgId,
+                    principal: principal.id,
+                    subjectUserId: targetUser.id,
+                    subjectEmail: payload.email,
+                    mode: "deleted",
+                    occurredAt,
+                },
+                secContext,
+            );
+            await secLog(entry);
         }
         app.metrics?.recordSecurityEvent("data_delete");
         await logAuditEvent({
@@ -129,10 +159,18 @@ const adminDataRoutes = async (app) => {
     }
     const authenticate = app.adminDataAuth ??
         ((req, reply, roles) => authenticateRequest(app, req, reply, roles));
+    const requirePrincipalForExport = async (request, reply, roles) => {
+        const principal = await authenticate(request, reply, roles);
+        if (!principal) {
+            return null;
+        }
+        request.user = principal;
+        return principal;
+    };
     const secLog = app.secLog;
     const auditLog = app.auditLog;
     app.post("/admin/data/export", async (request, reply) => {
-        const principal = await authenticate(request, reply, ["admin"]);
+        const principal = await requirePrincipalForExport(request, reply, ["admin"]);
         if (!principal) {
             return;
         }
@@ -173,12 +211,18 @@ const adminDataRoutes = async (app) => {
             });
         }
         if (secLog) {
-            await secLog({
-                event: "data_export",
-                orgId: payload.orgId,
-                principal: principal.id,
-                subjectEmail: payload.email,
-            });
+            const context = buildSecurityContextFromRequest(request);
+            const entry = buildSecurityLogEntry(
+                {
+                    event: "data_export",
+                    orgId: payload.orgId,
+                    principal: principal.id,
+                    subjectEmail: payload.email,
+                    occurredAt: exportedAt,
+                },
+                context,
+            );
+            await secLog(entry);
         }
         app.metrics?.recordSecurityEvent("data_export");
         await logAuditForDb(db, auditLog, {

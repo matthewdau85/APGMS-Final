@@ -39,6 +39,10 @@ describe("security headers", () => {
     );
     assert.equal(response.headers["x-content-type-options"], "nosniff");
     assert.equal(response.headers["x-frame-options"], "DENY");
+    assert.equal(
+      response.headers["strict-transport-security"],
+      "max-age=15552000; includeSubDomains; preload",
+    );
   });
 
   it("rejects disallowed origins with 403", async () => {

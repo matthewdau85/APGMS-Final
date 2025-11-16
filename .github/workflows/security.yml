@@ -53,3 +53,7 @@ jobs:
           ignore-unfixed: true
       - name: Prisma drift check
         run: pnpm --filter @apgms/shared exec prisma migrate status --schema prisma/schema.prisma
+      - name: Header + Auth smoke tests
+        run: |
+          pnpm --filter @apgms/api-gateway exec tsx ./test/security.headers.spec.ts
+          pnpm --filter @apgms/api-gateway exec tsx ./test/auth.guard.spec.ts

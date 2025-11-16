@@ -1,6 +1,7 @@
 // shared/src/idempotency.ts
 import type { PrismaClient } from "@prisma/client";
-import { conflict } from "./errors.js";
+import { badRequest, conflict } from "./errors.js";
+import { createHash } from "node:crypto";
 
 type Ctx = {
   prisma: PrismaClient;
@@ -28,10 +29,7 @@ export async function withIdempotency<T extends HandlerResult>(
     request?.headers?.["Idempotency-Key"] ??
     request?.headers?.["IDEMPOTENCY-KEY"];
 
-  const key =
-    typeof rawKey === "string" && rawKey.trim()
-      ? rawKey.trim()
-      : `auto:${cryptoSafe()}`;
+  const key = normalizeKey(rawKey, ctx);
 
   const existing = await ctx.prisma.idempotencyKey.findUnique({
     where: { orgId_key: { orgId: ctx.orgId, key } },
@@ -65,9 +63,36 @@ export async function withIdempotency<T extends HandlerResult>(
   return result;
 }
 
-function cryptoSafe(): string {
-  return (
-    Math.random().toString(36).slice(2, 10) +
-    Math.random().toString(36).slice(2, 10)
-  );
+function normalizeKey(rawKey: unknown, ctx: Ctx): string {
+  const headerKey = typeof rawKey === "string" ? rawKey.trim() : "";
+  if (headerKey.length > 0) {
+    return headerKey;
+  }
+
+  if (ctx.requestPayload !== undefined) {
+    return `payload:${derivePayloadDigest(ctx)}`;
+  }
+
+  throw badRequest("missing_idempotency_key", "Idempotency-Key header or request payload is required");
+}
+
+function derivePayloadDigest(ctx: Ctx): string {
+  const resource = ctx.resource ?? "";
+  const payloadString = safeStringify(ctx.requestPayload);
+  const digestInput = `${ctx.orgId ?? ""}:${resource}:${payloadString}`;
+  return createHash("sha256").update(digestInput).digest("hex");
+}
+
+function safeStringify(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (value === undefined) {
+    return "";
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
 }

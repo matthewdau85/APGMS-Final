@@ -177,6 +177,7 @@ test("200 returns expected export bundle", async () => {
   const response = await app.inject({
     method: "POST",
     url: "/admin/data/export",
+    headers: { "x-correlation-id": "export-1" },
     payload: { orgId: "org-123", email: "subject@example.com" },
   });
 
@@ -198,12 +199,13 @@ test("200 returns expected export bundle", async () => {
     },
   });
   assert.equal(secLogCalls.length, 1);
-  assert.deepEqual(secLogCalls[0], {
-    event: "data_export",
-    orgId: "org-123",
-    principal: "admin-1",
-    subjectEmail: "subject@example.com",
-  });
+  const logEntry = secLogCalls[0] as { event: string; orgId: string; principal: string; subjectEmail: string; correlationId?: string; occurredAt?: string };
+  assert.equal(logEntry.event, "data_export");
+  assert.equal(logEntry.orgId, "org-123");
+  assert.equal(logEntry.principal, "admin-1");
+  assert.equal(logEntry.subjectEmail, "[REDACTED:EMAIL]");
+  assert.equal(logEntry.correlationId, "export-1");
+  assert.ok(typeof logEntry.occurredAt === "string");
 
   await app.close();
 });

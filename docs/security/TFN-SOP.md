@@ -7,6 +7,7 @@
 ## Access Controls
 - Only users with admin role and matching orgId can request decrypt operations; JWT authentication and anomaly counters enforce rate limits (services/api-gateway/src/app.ts:73).
 - Every decrypt/export request triggers an audit log entry and Prometheus security event for downstream alerting (services/api-gateway/src/app.ts:160).
+- Admin delete/export flows also emit sanitized `security_event` log entries enriched with `correlationId` so you can trace them through `docs/runbooks/admin-controls.md` before matching against the audit log hash.
 
 ## Key Rotation Procedure
 1. Run `pnpm security:rotate-keys --write-env .env` to generate new JWT/PII key material (dry-run prints to stdout).
@@ -19,4 +20,3 @@
 
 ## Review
 - SOP reviewed quarterly or after any schema changes to TFN-bearing tables (shared/prisma/schema.prisma:33).
-

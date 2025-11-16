@@ -23,6 +23,7 @@
 ## V7: Error Handling and Logging
 - A central error handler maps domain errors to structured JSON without leaking stack traces, and warnings/errors are logged with trace IDs when available (`services/api-gateway/src/app.ts`).
 - `recordAuditLog` persists actor/action metadata for auth, regulator, and security-sensitive flows, supporting tamper-resistant evidence trails (`services/api-gateway/src/lib/audit.ts`).
+- `shared/src/security-log.ts` builds redacted `SecurityLogEntry` records, attaches correlation IDs from `x-correlation-id`/Fastify `request.id`, and the admin routes call `logSecurityEvent` so `security_event` entries include the same fields as the audit log chain (`services/api-gateway/src/routes/admin.data.js`).
 
 ## V10: Malicious Input Handling
 - Public routes such as `/bank-lines` validate payloads with Zod schemas and return consistent 4xx responses when validation fails (`services/api-gateway/src/routes/bank-lines.ts`).

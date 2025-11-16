@@ -12,7 +12,12 @@ import { config } from "../config.js";
 
 const CHALLENGE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-type ChallengeRecord = { challenge: string; expiresAt: number };
+type ChallengeRecord = {
+  userId: string;
+  challenge: string;
+  expiresAt: number;
+  allowedCredentialIds?: Set<string>;
+};
 
 const registrationChallenges = new Map<string, ChallengeRecord>();
 const authenticationChallenges = new Map<string, ChallengeRecord>();
@@ -26,6 +31,38 @@ function cleanup(store: Map<string, ChallengeRecord>): void {
       store.delete(key);
     }
   }
+}
+
+function base64UrlToBase64(value: string): string {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padding = (4 - (normalized.length % 4)) % 4;
+  return normalized + "=".repeat(padding);
+}
+
+function extractChallengeFromClientData(
+  clientDataJSON: string | ArrayBuffer | Buffer | null | undefined,
+): string | null {
+  if (!clientDataJSON) {
+    return null;
+  }
+  let raw: string;
+  if (typeof clientDataJSON === "string") {
+    raw = clientDataJSON;
+  } else if (ArrayBuffer.isView(clientDataJSON)) {
+    raw = Buffer.from(clientDataJSON.buffer).toString("base64");
+  } else {
+    raw = Buffer.from(clientDataJSON).toString("base64");
+  }
+  try {
+    const decoded = Buffer.from(base64UrlToBase64(raw), "base64").toString("utf8");
+    const parsed = JSON.parse(decoded);
+    if (typeof parsed.challenge === "string") {
+      return parsed.challenge;
+    }
+  } catch {
+    // fall through
+  }
+  return null;
 }
 
 export async function createRegistrationOptions(options: {
@@ -50,7 +87,8 @@ export async function createRegistrationOptions(options: {
     },
   });
 
-  registrationChallenges.set(options.userId, {
+  registrationChallenges.set(registrationOptions.challenge, {
+    userId: options.userId,
     challenge: registrationOptions.challenge,
     expiresAt: now() + CHALLENGE_TTL_MS,
   });
@@ -62,11 +100,15 @@ export async function verifyPasskeyRegistration(
   userId: string,
   response: RegistrationResponseJSON,
 ) {
-  const challenge = registrationChallenges.get(userId);
-  if (!challenge) {
+  const challengeKey = extractChallengeFromClientData(response.response.clientDataJSON);
+  if (!challengeKey) {
     throw new Error("registration_challenge_missing");
   }
-  registrationChallenges.delete(userId);
+  const challenge = registrationChallenges.get(challengeKey);
+  if (!challenge || challenge.userId !== userId) {
+    throw new Error("registration_challenge_missing");
+  }
+  registrationChallenges.delete(challengeKey);
 
   return verifyRegistrationResponse({
     response,
@@ -89,9 +131,11 @@ export async function createAuthenticationOptions(options: {
     allowCredentials: options.allowCredentialIds.map((id) => ({ id })),
   });
 
-  authenticationChallenges.set(options.userId, {
+  authenticationChallenges.set(authenticationOptions.challenge, {
+    userId: options.userId,
     challenge: authenticationOptions.challenge,
     expiresAt: now() + CHALLENGE_TTL_MS,
+    allowedCredentialIds: new Set(options.allowCredentialIds),
   });
 
   return authenticationOptions;
@@ -102,11 +146,19 @@ export async function verifyPasskeyAuthentication(
   response: AuthenticationResponseJSON,
   credential: WebAuthnCredential,
 ) {
-  const challenge = authenticationChallenges.get(userId);
-  if (!challenge) {
+  const challengeKey = extractChallengeFromClientData(response.response.clientDataJSON);
+  if (!challengeKey) {
     throw new Error("authentication_challenge_missing");
   }
-  authenticationChallenges.delete(userId);
+  const challenge = authenticationChallenges.get(challengeKey);
+  if (!challenge || challenge.userId !== userId) {
+    throw new Error("authentication_challenge_missing");
+  }
+  authenticationChallenges.delete(challengeKey);
+
+  if (challenge.allowedCredentialIds && !challenge.allowedCredentialIds.has(credential.id)) {
+    throw new Error("authentication_credential_mismatch");
+  }
 
   return verifyAuthenticationResponse({
     response,
