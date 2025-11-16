@@ -57,19 +57,20 @@ export default function OnboardingWizard() {
 
   async function handleValidateAbnTfn() {
     setError(null);
-    if (!abn.trim() || !tfn.trim()) {
+    const normalizedAbn = abn.trim();
+    const normalizedTfn = tfn.trim();
+    if (!normalizedAbn || !normalizedTfn) {
       setError("ABN and TFN are required.");
       return;
     }
     setLoading(true);
     try {
-      const res = await fetch(
-        `/onboarding/validate?abn=${encodeURIComponent(abn)}&tfn=${encodeURIComponent(tfn)}`,
-        {
-          method: "GET",
-          credentials: "include",
-        },
-      );
+      const res = await fetch("/onboarding/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ abn: normalizedAbn, tfn: normalizedTfn }),
+      });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error?.message || "Failed to validate ABN/TFN");
@@ -88,9 +89,11 @@ export default function OnboardingWizard() {
     setError(null);
     setLoading(true);
     try {
+      const normalizedAbn = abn.trim();
+      const normalizedTfn = tfn.trim();
       const payload: SetupPayload = {
-        abn,
-        tfn,
+        abn: normalizedAbn,
+        tfn: normalizedTfn,
         bankProvider,
         schedule,
         accounts: {},

@@ -27,8 +27,8 @@ interface OnboardingSetupBody {
 const VALID_SCHEDULES = new Set<Schedule>(["TRANSACTION", "DAILY", "WEEKLY"]);
 
 export async function registerOnboardingRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/onboarding/validate", async (request, reply) => {
-    const { abn, tfn } = request.query as { abn?: string; tfn?: string };
+  app.post("/onboarding/validate", async (request, reply) => {
+    const { abn, tfn } = request.body as { abn?: string; tfn?: string };
     if (!abn || !tfn) {
       const e = ERRORS.INVALID_INPUT;
       reply.code(e.status).send({ error: e });
@@ -77,6 +77,22 @@ export async function registerOnboardingRoutes(app: FastifyInstance): Promise<vo
       request.log.warn({ err: error }, "unsupported_bank_provider");
       const e = ERRORS.INVALID_INPUT;
       reply.code(e.status).send({ error: { ...e, message: "Unsupported bank provider" } });
+      return;
+    }
+
+    let validation;
+    try {
+      validation = await validateAbnTfn(body.abn, body.tfn);
+    } catch (error) {
+      request.log.error({ err: error }, "abn_tfn_validation_failed_setup");
+      const e = ERRORS.EXTERNAL_SERVICE_ERROR;
+      reply.code(e.status).send({ error: e });
+      return;
+    }
+
+    if (!validation.valid) {
+      const e = ERRORS.ABN_TFN_VALIDATION_FAILED;
+      reply.code(e.status).send({ error: e });
       return;
     }
 
