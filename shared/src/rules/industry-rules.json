@@ -1,0 +1,301 @@
+{
+  "industries": [
+    {
+      "id": "hospitality_tourism",
+      "label": "Hospitality & Tourism",
+      "naics": ["7225", "5615", "7121"],
+      "smeNotes": [
+        "Schedule 2 tables are the default for seasonal SME venues.",
+        "ATO consulted tourism SMEs in Q2 to confirm GST input credit treatment for bundled experiences.",
+        "Remote resorts often receive concessional GST where 50% of payroll is tied to remote operations."
+      ],
+      "schedules": [
+        {
+          "id": "hospitality_paygw_casual",
+          "taxType": "PAYGW",
+          "basis": "payroll",
+          "frequency": "weekly",
+          "calculation": {
+            "type": "progressive",
+            "tiers": [
+              { "upTo": 1349, "base": 0, "rate": 0.155 },
+              { "upTo": 2599, "base": 208, "rate": 0.32 },
+              { "upTo": null, "base": 608, "rate": 0.37 }
+            ]
+          },
+          "metadata": {
+            "scheduleRef": "PAYGW Schedule 2",
+            "atoSource": "NAT 1005",
+            "notes": [
+              "Used by SME cafes and venues with transient rosters.",
+              "Tiered rates align with PAYGW Schedule 2 casual coefficients."
+            ]
+          }
+        },
+        {
+          "id": "hospitality_paygw_salary",
+          "taxType": "PAYGW",
+          "basis": "payroll",
+          "frequency": "weekly",
+          "calculation": {
+            "type": "progressive",
+            "tiers": [
+              { "upTo": 1150, "base": 0, "rate": 0.13 },
+              { "upTo": 2300, "base": 150, "rate": 0.28 },
+              { "upTo": null, "base": 470, "rate": 0.34 }
+            ]
+          },
+          "metadata": {
+            "scheduleRef": "PAYGW Schedule 1 - Scale 2",
+            "atoSource": "NAT 1004",
+            "notes": [
+              "Applied to full-time venue management and salaried staff.",
+              "Uses scale 2 coefficients with tax-free threshold claimed."
+            ]
+          }
+        },
+        {
+          "id": "hospitality_gst_standard",
+          "taxType": "GST",
+          "basis": "revenue",
+          "frequency": "monthly",
+          "calculation": {
+            "type": "percentage",
+            "rate": 0.1,
+            "threshold": 75000,
+            "minimum": 0
+          },
+          "metadata": {
+            "scheduleRef": "GST General Registration",
+            "atoSource": "ATO QC 15954",
+            "notes": [
+              "Applies to food, beverage and accommodation packages.",
+              "Excludes input-taxed supplies such as residential rent."
+            ]
+          }
+        }
+      ],
+      "exemptions": [
+        {
+          "id": "seasonal_casual_discount",
+          "description": "Seasonal rosters where casual hours are 35% or less of the annual total receive the SME concession agreed with tourism bodies.",
+          "condition": { "field": "seasonalRatio", "operator": "lte", "value": 0.35 },
+          "effect": { "type": "rate_discount", "multiplier": 0.85 },
+          "appliesTo": ["hospitality_paygw_casual"]
+        },
+        {
+          "id": "remote_resort_gst_relief",
+          "description": "Resorts with 50% or more of payroll in remote locations may halve GST on bundled packages due to limited input credits.",
+          "condition": { "field": "remoteWorkforcePercent", "operator": "gte", "value": 0.5 },
+          "effect": { "type": "rate_discount", "multiplier": 0.5 },
+          "appliesTo": ["hospitality_gst_standard"]
+        },
+        {
+          "id": "micro_operator_gst_exemption",
+          "description": "Operators with turnover below the registration threshold remain exempt from charging GST.",
+          "condition": { "field": "annualTaxableTurnover", "operator": "lt", "value": 75000 },
+          "effect": { "type": "suspend" },
+          "appliesTo": ["hospitality_gst_standard"]
+        }
+      ]
+    },
+    {
+      "id": "construction_trades",
+      "label": "Construction & Trades",
+      "naics": ["2362", "2381", "2383"],
+      "smeNotes": [
+        "Schedule 5 style rates are common for labour-hire carpenters and electricians.",
+        "ATO working group confirmed apprentice rebates remain available for SMEs.",
+        "Export-oriented modular builds can zero-rate GST when 70% of revenue ships offshore."
+      ],
+      "schedules": [
+        {
+          "id": "construction_paygw_apprentice",
+          "taxType": "PAYGW",
+          "basis": "payroll",
+          "frequency": "weekly",
+          "calculation": {
+            "type": "progressive",
+            "tiers": [
+              { "upTo": 1500, "base": 0, "rate": 0.16 },
+              { "upTo": 3000, "base": 240, "rate": 0.34 },
+              { "upTo": null, "base": 760, "rate": 0.39 }
+            ]
+          },
+          "metadata": {
+            "scheduleRef": "PAYGW Schedule 5",
+            "atoSource": "NAT 3539",
+            "notes": [
+              "Reflects building industry uplift for allowances.",
+              "Includes offsets for apprentice subsidies."
+            ]
+          }
+        },
+        {
+          "id": "construction_paygw_contractor",
+          "taxType": "PAYGW",
+          "basis": "payroll",
+          "frequency": "weekly",
+          "calculation": {
+            "type": "progressive",
+            "tiers": [
+              { "upTo": 1700, "base": 0, "rate": 0.18 },
+              { "upTo": 3400, "base": 306, "rate": 0.36 },
+              { "upTo": null, "base": 926, "rate": 0.395 }
+            ]
+          },
+          "metadata": {
+            "scheduleRef": "PAYGW Schedule 13",
+            "atoSource": "NAT 1023",
+            "notes": [
+              "Used for voluntary agreements with sole traders.",
+              "Assumes 30% uplift for tools and travel allowances."
+            ]
+          }
+        },
+        {
+          "id": "construction_gst_progress",
+          "taxType": "GST",
+          "basis": "revenue",
+          "frequency": "quarterly",
+          "calculation": {
+            "type": "percentage",
+            "rate": 0.1,
+            "threshold": 75000,
+            "minimum": 0
+          },
+          "metadata": {
+            "scheduleRef": "GST Progress Claim Method",
+            "atoSource": "QC 22069",
+            "notes": [
+              "Progressive claims based on taxable supplies.",
+              "Includes attribution of GST on holdbacks and retentions."
+            ]
+          }
+        }
+      ],
+      "exemptions": [
+        {
+          "id": "apprentice_offset",
+          "description": "SMEs with two or more active apprentices can reduce taxable payroll used for PAYGW by $800 per cycle.",
+          "condition": { "field": "apprenticeCount", "operator": "gte", "value": 2 },
+          "effect": { "type": "amount_discount", "amount": 800 },
+          "appliesTo": ["construction_paygw_apprentice"]
+        },
+        {
+          "id": "remote_allowance_discount",
+          "description": "Regional projects where 40% of workforce is remote may discount PAYGW rate by 10% to reflect zone offsets.",
+          "condition": { "field": "remoteWorkforcePercent", "operator": "gte", "value": 0.4 },
+          "effect": { "type": "rate_discount", "multiplier": 0.9 },
+          "appliesTo": ["construction_paygw_contractor"]
+        },
+        {
+          "id": "export_project_zero_gst",
+          "description": "Modular builds with export ratio of 70% or higher can zero-rate GST under the export concession.",
+          "condition": { "field": "exportRatio", "operator": "gte", "value": 0.7 },
+          "effect": { "type": "suspend" },
+          "appliesTo": ["construction_gst_progress"]
+        }
+      ]
+    },
+    {
+      "id": "healthcare_allied",
+      "label": "Healthcare & Allied Services",
+      "naics": ["6211", "6213", "6214"],
+      "smeNotes": [
+        "Allied health practices blend Schedule 1 and medical benefit offsets.",
+        "Community health NFPs frequently access GST-free concessions for 50% or more exempt services.",
+        "Rural clinics requested clarity on remote loadings for PAYGW."
+      ],
+      "schedules": [
+        {
+          "id": "health_paygw_shift",
+          "taxType": "PAYGW",
+          "basis": "payroll",
+          "frequency": "weekly",
+          "calculation": {
+            "type": "progressive",
+            "tiers": [
+              { "upTo": 1400, "base": 0, "rate": 0.145 },
+              { "upTo": 2800, "base": 203, "rate": 0.315 },
+              { "upTo": null, "base": 643, "rate": 0.37 }
+            ]
+          },
+          "metadata": {
+            "scheduleRef": "PAYGW Schedule 3",
+            "atoSource": "NAT 3539",
+            "notes": [
+              "Covers shift loading for nurses and allied health.",
+              "Matches SME consultation on penalty rates."
+            ]
+          }
+        },
+        {
+          "id": "health_paygw_salary",
+          "taxType": "PAYGW",
+          "basis": "payroll",
+          "frequency": "weekly",
+          "calculation": {
+            "type": "progressive",
+            "tiers": [
+              { "upTo": 1600, "base": 0, "rate": 0.14 },
+              { "upTo": 3200, "base": 210, "rate": 0.31 },
+              { "upTo": null, "base": 650, "rate": 0.365 }
+            ]
+          },
+          "metadata": {
+            "scheduleRef": "PAYGW Schedule 1 - Scale 2",
+            "atoSource": "NAT 1004",
+            "notes": [
+              "Applies to salaried practitioners claiming tax-free threshold.",
+              "Incorporates Medicare levy uplift in the top tier."
+            ]
+          }
+        },
+        {
+          "id": "health_gst_mixed",
+          "taxType": "GST",
+          "basis": "revenue",
+          "frequency": "quarterly",
+          "calculation": {
+            "type": "percentage",
+            "rate": 0.1,
+            "threshold": 150000,
+            "minimum": 0
+          },
+          "metadata": {
+            "scheduleRef": "GST Mixed Supplies",
+            "atoSource": "QC 26281",
+            "notes": [
+              "Covers allied health items that are taxable while bulk-billed services remain GST-free.",
+              "Requires attribution based on exempt services share."
+            ]
+          }
+        }
+      ],
+      "exemptions": [
+        {
+          "id": "nfp_health_gst_relief",
+          "description": "Registered charities delivering health services can suspend GST where exempt services are at least half of billings.",
+          "condition": { "field": "isNotForProfit", "operator": "eq", "value": true },
+          "effect": { "type": "suspend" },
+          "appliesTo": ["health_gst_mixed"]
+        },
+        {
+          "id": "bulk_bill_ratio_discount",
+          "description": "Practices with 60% or more exempt/bulk-billed services reduce GST rate by 70% on the taxable balance.",
+          "condition": { "field": "healthcareExemptRatio", "operator": "gte", "value": 0.6 },
+          "effect": { "type": "rate_discount", "multiplier": 0.3 },
+          "appliesTo": ["health_gst_mixed"]
+        },
+        {
+          "id": "remote_health_loading",
+          "description": "Rural clinics with 45% remote workforce may reduce PAYGW base by $600 to mirror zone rebates.",
+          "condition": { "field": "remoteWorkforcePercent", "operator": "gte", "value": 0.45 },
+          "effect": { "type": "amount_discount", "amount": 600 },
+          "appliesTo": ["health_paygw_shift", "health_paygw_salary"]
+        }
+      ]
+    }
+  ]
+}
