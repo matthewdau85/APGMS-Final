@@ -15,6 +15,7 @@ import RegulatorLayout from "./RegulatorLayout";
 import RegulatorOverviewPage from "./RegulatorOverviewPage";
 import RegulatorEvidencePage from "./RegulatorEvidencePage";
 import RegulatorMonitoringPage from "./RegulatorMonitoringPage";
+import OnboardingWizard from "./pages/OnboardingWizard";
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
           <Route path="monitoring" element={<RegulatorMonitoringPage />} />
         </Route>
         <Route element={<ProtectedLayout />}>
+          <Route path="/onboarding" element={<OnboardingWizard />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/feeds" element={<FeedsPage />} />
           <Route path="/alerts" element={<AlertsPage />} />

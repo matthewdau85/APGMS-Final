@@ -169,7 +169,7 @@ export async function reconcileAccountSnapshot(
   account: DesignatedAccount;
   balance: number;
   updatedAt: Date;
-#  locked: boolean;
+  locked: boolean;
 }> {
   const account = await getDesignatedAccountByType(prisma, orgId, type);
   return {

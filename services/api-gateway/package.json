@@ -11,7 +11,10 @@
   "dependencies": {
     "@apgms/connectors": "workspace:*",
     "@apgms/domain-policy": "workspace:*",
+    "@apgms/forecasting": "workspace:*",
+    "@apgms/payments": "workspace:*",
     "@apgms/shared": "workspace:*",
+    "@aws-sdk/client-secrets-manager": "^3.744.0",
     "@fastify/helmet": "^13.0.2",
     "@fastify/rate-limit": "^10.3.0",
     "@opentelemetry/api": "^1.9.0",

@@ -34,6 +34,8 @@ import { registerRiskRoutes } from "./routes/risk.js";
 import { registerDemoRoutes } from "./routes/demo.js";
 import { registerComplianceProxy } from "./routes/compliance-proxy.js";
 import { registerComplianceMonitorRoutes } from "./routes/compliance-monitor.js";
+import { registerOnboardingRoutes } from "./routes/onboarding.js";
+import { registerForecastRoutes } from "./routes/forecast.js";
 
 // ---- keep your other domain code (types, helpers, shapes) exactly as you had ----
 // (omitted here for brevity - unchanged from your last working content)
@@ -228,6 +230,8 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
     await secureScope.register(registerRiskRoutes);
     await secureScope.register(registerDemoRoutes);
     await secureScope.register(registerComplianceMonitorRoutes);
+    await secureScope.register(registerOnboardingRoutes);
+    await secureScope.register(registerForecastRoutes);
     await registerComplianceProxy(app);
     await secureScope.register(async (connectorScope) => {
       registerConnectorRoutes(connectorScope, options.connectorDeps);
