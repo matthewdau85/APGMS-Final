@@ -32,7 +32,7 @@
         "k6:smoke": "pnpm exec k6 run k6/smoke.js",
         "smoke:regulator": "node scripts/regulator-smoke.mjs",
         "lint:markdown": "pnpm exec markdownlint **/*.md",
-    "lint:ts": "pnpm exec eslint --ext .ts,.tsx,.mts,.cts --max-warnings 0 shared/src/errors.ts shared/src/errors/catalog.ts shared/src/idempotency.ts shared/test/error-catalog.test.ts scripts/print-error-catalog.ts",
+    "lint:ts": "pnpm exec eslint --ext .ts,.tsx,.mts,.cts --max-warnings 0 shared/src/errors.ts shared/src/errors/catalog.ts shared/src/idempotency.ts shared/test/error-catalog.test.ts shared/test/app-error.test.ts scripts/print-error-catalog.ts",
         "compliance:evidence": "node scripts/collect-evidence.mjs",
         "security:rotate-keys": "node scripts/rotate-pii-keys.mjs",
         "backup:evidence-pack": "tsx scripts/export-evidence-pack.ts"

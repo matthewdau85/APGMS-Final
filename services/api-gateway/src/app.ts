@@ -1,11 +1,27 @@
-import Fastify, { type FastifyInstance, type FastifyPluginAsync, type FastifyRequest } from "fastify";
+import Fastify, {
+  type FastifyInstance,
+  type FastifyPluginAsync,
+  type FastifyReply,
+  type FastifyRequest,
+  type FastifySchemaValidationError,
+} from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import crypto from "node:crypto";
 import { context, trace } from "@opentelemetry/api";
 import "dotenv/config.js";
 
-import { AppError, badRequest, catalogError, conflict, forbidden, notFound, unauthorized } from "@apgms/shared";
+import {
+  AppError,
+  badRequest,
+  catalogError,
+  conflict,
+  forbidden,
+  notFound,
+  serializeAppError,
+  type FieldError,
+  unauthorized,
+} from "@apgms/shared";
 import { config } from "./config.js";
 
 import rateLimit from "./plugins/rate-limit.js";
@@ -41,6 +57,27 @@ import { registerComplianceMonitorRoutes } from "./routes/compliance-monitor.js"
 type BuildServerOptions = {
   bankLinesPlugin?: FastifyPluginAsync;
   connectorDeps?: ConnectorRoutesDeps;
+};
+
+const normalizeInstancePath = (path: string): string => path.replace(/^\//, "").replace(/\//g, ".");
+
+const toFieldErrors = (
+  validationErrors: readonly FastifySchemaValidationError[] | undefined,
+): FieldError[] => {
+  if (!validationErrors || validationErrors.length === 0) {
+    return [];
+  }
+  return validationErrors.map((issue) => {
+    const normalizedPath = issue.instancePath ? normalizeInstancePath(issue.instancePath) : "body";
+    return {
+      path: normalizedPath.length > 0 ? normalizedPath : "body",
+      message: issue.message ?? "Invalid value",
+    } satisfies FieldError;
+  });
+};
+
+const sendAppError = (reply: FastifyReply, error: AppError): void => {
+  reply.status(error.status).send({ error: serializeAppError(error) });
 };
 
 export async function buildServer(options: BuildServerOptions = {}): Promise<FastifyInstance> {
@@ -100,30 +137,30 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Fas
 
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof AppError) {
-      const appError = error as AppError;
-      const payload: Record<string, unknown> = {
-        code: appError.code,
-        message: appError.message,
-      };
-      if (appError.fields) {
-        payload.fields = appError.fields;
-      }
-      if (appError.metadata) {
-        payload.metadata = appError.metadata;
-      }
-      reply.status(appError.status).send({ error: payload });
+      sendAppError(reply, error);
       return;
     }
-    if ((error as any)?.validation) {
-      reply.status(400).send({ error: { code: "invalid_body", message: "Validation failed" } });
+    if ((error as { validation?: FastifySchemaValidationError[] }).validation) {
+      const validationErrors = toFieldErrors((error as { validation: FastifySchemaValidationError[] }).validation);
+      const cataloged = catalogError("platform.invalid_body", {
+        message: "Validation failed",
+        fields: validationErrors.length > 0 ? validationErrors : undefined,
+      });
+      sendAppError(reply, cataloged);
       return;
     }
-    if ((error as any)?.code === "FST_CORS_FORBIDDEN_ORIGIN") {
-      reply.status(403).send({ error: { code: "cors_forbidden", message: (error as Error).message ?? "Origin not allowed" } });
+    if ((error as { code?: string }).code === "FST_CORS_FORBIDDEN_ORIGIN") {
+      const corsError = catalogError("platform.cors_forbidden", {
+        message: (error as Error).message ?? "Origin not allowed",
+      });
+      sendAppError(reply, corsError);
       return;
     }
-    request.log.error({ err: error }, "Unhandled error");
-    reply.status(500).send({ error: { code: "internal_error", message: "Internal server error" } });
+    request.log.error({ err: error }, "unhandled_error");
+    const fallback = catalogError("platform.internal_error", {
+      message: "Internal server error",
+    });
+    sendAppError(reply, fallback);
   });
 
   await app.register(rateLimit);

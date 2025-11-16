@@ -23,14 +23,32 @@ export type CanonicalErrorCode = keyof typeof ERROR_CATALOG;
 export type ErrorCatalog = typeof ERROR_CATALOG;
 
 export const ERROR_CATALOG = {
-  "auth.invalid_body": {
-    code: "auth.invalid_body",
-    domain: "auth",
+  "platform.invalid_body": {
+    code: "platform.invalid_body",
+    domain: "platform",
     httpStatus: 400,
     retryable: false,
     severity: "error",
     description: "The request body failed validation.",
     remediation: "Double-check required fields and schema definitions before retrying.",
+  },
+  "platform.cors_forbidden": {
+    code: "platform.cors_forbidden",
+    domain: "platform",
+    httpStatus: 403,
+    retryable: false,
+    severity: "warning",
+    description: "The origin is not allowed to call this endpoint.",
+    remediation: "Register the origin in the CORS allow list before retrying.",
+  },
+  "platform.internal_error": {
+    code: "platform.internal_error",
+    domain: "platform",
+    httpStatus: 500,
+    retryable: true,
+    severity: "critical",
+    description: "The platform encountered an unexpected error.",
+    remediation: "Check logs and traces to identify the root cause before retrying.",
   },
   "auth.missing_user_context": {
     code: "auth.missing_user_context",

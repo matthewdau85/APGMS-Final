@@ -48,6 +48,27 @@ export const createError = (
   metadata?: AppErrorMetadata,
 ): AppError => new AppError(status, code, message, fields, metadata);
 
+export type SerializedAppError = {
+  code: string;
+  message: string;
+  fields?: FieldError[];
+  metadata?: AppErrorMetadata;
+};
+
+export const serializeAppError = (error: AppError): SerializedAppError => {
+  const payload: SerializedAppError = {
+    code: error.code,
+    message: error.message,
+  };
+  if (error.fields && error.fields.length > 0) {
+    payload.fields = error.fields;
+  }
+  if (error.metadata && Object.keys(error.metadata).length > 0) {
+    payload.metadata = error.metadata;
+  }
+  return payload;
+};
+
 export const badRequest = (code: string, message: string, fields?: FieldError[]): AppError =>
   createError(400, code, message, fields);
 

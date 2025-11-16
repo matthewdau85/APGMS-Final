@@ -4,7 +4,9 @@ The error catalog provides a single source of truth for machine-readable error c
 
 | Code | Domain | HTTP Status | Severity | Retryable | Description | Remediation |
 | --- | --- | --- | --- | --- | --- | --- |
-| `auth.invalid_body` | auth | 400 | error | false | The request body failed validation. | Double-check required fields and schema definitions before retrying. |
+| `platform.invalid_body` | platform | 400 | error | false | The request body failed validation. | Double-check required fields and schema definitions before retrying. |
+| `platform.cors_forbidden` | platform | 403 | warning | false | The origin is not allowed to call this endpoint. | Register the origin in the CORS allow list before retrying. |
+| `platform.internal_error` | platform | 500 | critical | true | The platform encountered an unexpected error. | Check logs and traces to identify the root cause before retrying. |
 | `auth.missing_user_context` | auth | 401 | warning | true | Authentication context is missing or expired. | Prompt the user to sign in again to refresh their session. |
 | `auth.mfa.totp.enrollment_missing` | auth | 409 | warning | false | TOTP enrollment has not been started for this user. | Restart the enrollment flow from `/auth/mfa/totp/begin`. |
 | `auth.mfa.totp.invalid_token` | auth | 401 | warning | true | The submitted TOTP code is invalid or expired. | Ask the user to regenerate a TOTP code and re-enter it. |
