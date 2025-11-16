@@ -1,0 +1,92 @@
+openapi: 3.0.3
+info:
+  title: APGMS Onboarding API
+  version: 0.1.0
+  description: |
+    API surface area supporting payroll/POS onboarding flows. The schema mirrors
+    the Fastify routes implemented in `src/routes/onboarding.ts` and is used to
+    generate SDKs plus customer-facing docs.
+servers:
+  - url: https://api.apgms.local/v1
+paths:
+  /migrations:
+    post:
+      summary: Kick off a migration or dry run
+      tags: [Migrations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMigrationRequest'
+      responses:
+        '202':
+          description: Migration accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MigrationResponse'
+  /webhooks:
+    post:
+      summary: Register a webhook endpoint
+      tags: [Webhooks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookRegistration'
+      responses:
+        '201':
+          description: Webhook created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+components:
+  schemas:
+    CreateMigrationRequest:
+      type: object
+      required: [orgId, sourceSystem, targetLedger]
+      properties:
+        orgId:
+          type: string
+          format: uuid
+        sourceSystem:
+          type: string
+          enum: [gusto, adp, paychex, square, toast]
+        targetLedger:
+          type: string
+          enum: [netsuite, quickbooks, sage-intacct]
+        dryRun:
+          type: boolean
+          default: false
+    MigrationResponse:
+      type: object
+      required: [migrationId, status, startedAt]
+      properties:
+        migrationId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, running, completed, failed]
+        startedAt:
+          type: string
+          format: date-time
+    WebhookRegistration:
+      type: object
+      required: [url, events]
+      properties:
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            enum: [migration.started, migration.completed, migration.failed]
