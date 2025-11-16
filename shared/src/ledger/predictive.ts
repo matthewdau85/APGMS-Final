@@ -81,3 +81,86 @@ export function computeTierStatus(balance: number, forecast: number, margin = 0)
   }
   return "escalate";
 }
+
+export type CalibrationSample = {
+  actualPaygw: number;
+  forecastPaygw: number;
+  actualGst: number;
+  forecastGst: number;
+};
+
+export type CalibrationResult = {
+  bias: {
+    paygw: number;
+    gst: number;
+  };
+  mape: {
+    paygw: number;
+    gst: number;
+  };
+  recommendedMargin: number;
+  recommendedAlpha: number;
+};
+
+export function calibrateForecastEngine(
+  samples: CalibrationSample[],
+): CalibrationResult {
+  if (samples.length === 0) {
+    return {
+      bias: { paygw: 0, gst: 0 },
+      mape: { paygw: 0, gst: 0 },
+      recommendedMargin: 0,
+      recommendedAlpha: DEFAULT_ALPHA,
+    };
+  }
+
+  let biasPaygw = 0;
+  let biasGst = 0;
+  let mapePaygw = 0;
+  let mapeGst = 0;
+
+  for (const sample of samples) {
+    biasPaygw += sample.actualPaygw - sample.forecastPaygw;
+    biasGst += sample.actualGst - sample.forecastGst;
+
+    mapePaygw += Math.abs(sample.actualPaygw - sample.forecastPaygw) /
+      Math.max(1, Math.abs(sample.actualPaygw));
+    mapeGst += Math.abs(sample.actualGst - sample.forecastGst) /
+      Math.max(1, Math.abs(sample.actualGst));
+  }
+
+  biasPaygw /= samples.length;
+  biasGst /= samples.length;
+  mapePaygw /= samples.length;
+  mapeGst /= samples.length;
+
+  const recommendedMargin = Math.round(
+    Math.max(Math.abs(biasPaygw), Math.abs(biasGst)) * (1 + (mapePaygw + mapeGst) / 2),
+  );
+
+  let recommendedAlpha = DEFAULT_ALPHA;
+  const avgMape = (mapePaygw + mapeGst) / 2;
+  if (avgMape > 0.25) {
+    recommendedAlpha = 0.4;
+  } else if (avgMape < 0.1) {
+    recommendedAlpha = 0.75;
+  }
+
+  return {
+    bias: { paygw: biasPaygw, gst: biasGst },
+    mape: { paygw: mapePaygw, gst: mapeGst },
+    recommendedMargin,
+    recommendedAlpha,
+  };
+}
+
+export function applyCalibration(
+  forecast: ForecastResult,
+  calibration: CalibrationResult,
+): ForecastResult {
+  return {
+    ...forecast,
+    paygwForecast: forecast.paygwForecast + calibration.bias.paygw,
+    gstForecast: forecast.gstForecast + calibration.bias.gst,
+  };
+}

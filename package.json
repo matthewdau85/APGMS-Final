@@ -34,7 +34,10 @@
     "lint:markdown": "pnpm exec markdownlint **/*.md",
     "compliance:evidence": "node scripts/collect-evidence.mjs",
     "security:rotate-keys": "node scripts/rotate-pii-keys.mjs",
-        "backup:evidence-pack": "tsx scripts/export-evidence-pack.ts"
+        "backup:evidence-pack": "tsx scripts/export-evidence-pack.ts",
+        "setup:wizard": "tsx scripts/setup-designated-account-wizard.ts",
+        "pilot:seed": "tsx scripts/pilot-data-seeder.ts",
+        "secrets:vault-sync": "tsx scripts/vault-sync.ts"
     },
     "devDependencies": {
         "@axe-core/playwright": "^4.9.2",
