@@ -51,7 +51,7 @@ BANKING_MAX_WRITE_CENTS=5000000
 pnpm i --frozen-lockfile
 pnpm -r build
 docker compose up -d
-pnpm -w exec prisma migrate deploy
+pnpm db:deploy              # helper runs Prisma from @apgms/shared
 pnpm --filter @apgms/api-gateway dev   # API on :3000
 ```
 

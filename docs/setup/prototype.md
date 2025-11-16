@@ -11,7 +11,8 @@ Use this guide to spin up the lightweight mock environment that demonstrates PAY
 ## 2. Start local infrastructure
 
 1. Launch the default services with `docker compose up -d`. This starts Postgres, Redis, the tax-engine stub, the API gateway, worker, and the Vite webapp exactly as defined in `docker-compose.yml`.
-2. Apply database migrations: `pnpm -w exec prisma migrate deploy`.
+2. Apply database migrations: `pnpm db:deploy`. This workspace-level helper proxies to `@apgms/shared`, which bundles Prisma and
+   owns the schema file.
 3. (Optional) Reset the database by removing the `apgms-final_pgdata` Docker volume when you need a clean slate.
 
 ## 3. Seed demo data
