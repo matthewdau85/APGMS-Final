@@ -64,6 +64,8 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  apps/api: {}
+
   apps/phase1-demo:
     dependencies:
       '@apgms/ledger':
@@ -195,6 +197,18 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+
+  services/payments:
+    dependencies:
+      '@apgms/domain-policy':
+        specifier: workspace:*
+        version: link:../../packages/domain-policy
+      '@apgms/shared':
+        specifier: workspace:*
+        version: link:../../shared
+      '@prisma/client':
+        specifier: ^6.17.1
+        version: 6.17.1(prisma@6.17.1(typescript@5.9.3))(typescript@5.9.3)
 
   shared:
     dependencies:

@@ -1,4 +1,5 @@
-import { AppError, safeLogAttributes } from "@apgms/shared";
+import { AppError } from "../../shared/src/errors.js";
+import { safeLogAttributes } from "../../shared/src/logging.js";
 
 import {
   applyDesignatedAccountTransfer,
