@@ -27,6 +27,7 @@ export * from "./ledger/one-way-account.js";
 export * from "./ledger/integration-events.js";
 export * from "./ledger/discrepancies.js";
 export * from "./ledger/obligations.js";
+export * from "./ledger/predictive.js";
 export * from "./analytics/anomaly.js";
 export * from "./ledger/bas.js";
 export * from "./ledger/transfers.js";

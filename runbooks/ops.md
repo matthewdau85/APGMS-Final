@@ -52,3 +52,6 @@
 - **Partnering & Pilots**
 - After you select a banking partner/adaptor, configure `DESIGNATED_BANKING_URL`/`DESIGNATED_BANKING_TOKEN` (or call `configureBankingAdapter`) so the ledger queries the sandbox endpoint. Record the partner’s API spec, certificate chain, and test accounts in `artifacts/compliance/`.
 - Log the DSP Product ID, OSF questionnaire ID, and AUSTRAC/ASIC/AFSL path within the compliance dashboard and runbook. Run pilots by feeding payroll/POS batches through `/ingest/*`, calling `/compliance/precheck`, and capturing alert resolution evidence via `/compliance/status` + `/compliance/alerts/:id/resolve`. Document each pilot organisation, payload trace, precheck response, and resolution timeline for audit reviewers.
+- **Innovation Signals**
+- `/compliance/status` adds `forecast` and `tierStatus` so you can treat the forecasted obligations as “virtual balances” and trigger warnings when the tier drops to `escalate`. Surface these signals on your dashboard/alerting playbooks to flag unusual shortfalls before BAS lodgment.
+- Log the heuristic you use for `forecastObligations`/`computeTierStatus` so regulators can understand the predictive engine even if it’s just historical averages; store the tuning notes in `artifacts/compliance/`.

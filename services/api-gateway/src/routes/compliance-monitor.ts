@@ -19,6 +19,7 @@ import {
   contributionSchema,
   precheckSchema,
 } from "../schemas/designated-ingest.js";
+import { forecastObligations, computeTierStatus } from "@apgms/shared/ledger/predictive.js";
 import { z } from "zod";
 
 const REMEDIATION_GUIDANCE =
@@ -143,6 +144,7 @@ export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) =
     }
 
     const summary = await summarizeContributions(prisma, orgId);
+    const forecast = await forecastObligations(prisma, orgId);
     const result: Record<string, unknown> = {
       orgId,
       cycleId: latest.id,
@@ -152,6 +154,11 @@ export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) =
       gstSecured: summary.gstSecured,
       cycleStart: latest.periodStart,
       cycleEnd: latest.periodEnd,
+      forecast,
+      tierStatus: {
+        paygw: computeTierStatus(summary.paygwSecured, forecast.paygwForecast),
+        gst: computeTierStatus(summary.gstSecured, forecast.gstForecast),
+      },
     };
 
     try {
@@ -188,6 +195,8 @@ export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) =
       return;
     }
 
+    const forecast = await forecastObligations(prisma, orgId);
+
     const accountPromises = (["PAYGW_BUFFER", "GST_BUFFER"] as const).map(
       async (type) => {
         try {
@@ -218,6 +227,19 @@ export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) =
     const summary = await summarizeContributions(prisma, orgId);
     const pending = await fetchPendingContributions(orgId);
 
+    const tierStatuses = {
+      paygw: computeTierStatus(
+        accounts.find((entry) => entry.type === "PAYGW_BUFFER")?.balance ?? 0,
+        forecast.paygwForecast,
+        forecast.paygwForecast * 0.1,
+      ),
+      gst: computeTierStatus(
+        accounts.find((entry) => entry.type === "GST_BUFFER")?.balance ?? 0,
+        forecast.gstForecast,
+        forecast.gstForecast * 0.1,
+      ),
+    };
+
     reply.send({
       accounts: accounts.map((account) => ({
         type: account.type,
@@ -233,6 +255,8 @@ export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) =
         severity: alert.severity,
         since: alert.createdAt,
       })),
+      forecast,
+      tierStatus: tierStatuses,
       remediation:
         pending.length > 0 ? REMEDIATION_GUIDANCE : "Buffers are healthy and ready for BAS.",
     });
