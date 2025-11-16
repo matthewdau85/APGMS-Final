@@ -20,3 +20,4 @@ Record every administrator mutation (delete/export) with a correlated, redacted 
 
 ## Review
 - Include this runbook in quarterly compliance reviews alongside the `designated accounts governance` runbook so executives can see that both admin and automated processes are fully traceable.
+- **Monitoring hooks:** Ship the `security_event` log stream (Fastify `logSecurityEvent`) plus the `apgms_http_requests_total{route="/admin/*"}` metrics into your SIEM/Prometheus stack. Tag the resulting dashboard URL in `docs/dsp-osf/evidence-index.md` once the pipeline is live so OSF auditors can self-serve the evidence trail.
