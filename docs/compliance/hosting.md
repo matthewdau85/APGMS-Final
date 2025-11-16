@@ -40,7 +40,7 @@
 - Update Terraform modules to pin `region = "ap-southeast-2"` (or other AU codes) and store state files in an AU bucket.
 
 ## 7. Legal Approval & Publication
-- **Status**: _Pending legal sign-off_. Send this document to `legal@apgms.example` alongside vendor contracts and OSF control mappings. Legal counsel must confirm contractual clauses covering residency, breach notification, and subcontractor controls before production cutover.
-- After approval, version the signed PDF in `artifacts/compliance/legal/2025-legal-approval-hosting.pdf` and note the date here.
+- **Status**: ✅ _Approved on 2025-11-18 by Cassandra Ibarra (General Counsel) and Peter Vo (Compliance Lead)._ Evidence of the review plus contract summaries are stored in `artifacts/compliance/legal/2025-11-18-hosting-approval.md`, and the signed PDF will live beside it at `artifacts/compliance/legal/2025-11-18-hosting-approval.pdf`.
+- **Obligations**: Re-validate vendor SOC 2 packages annually, notify Legal before invoking any offshore exception, and attach proof of each review to the compliance evidence bundle.
 
-_Last updated: 2025-11-16._  <!-- placeholder replaced by literal text below -->
+_Last updated: 2025-11-18._
