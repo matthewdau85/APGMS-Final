@@ -83,12 +83,25 @@ export default function LoginPage() {
           (dev@example.com / admin123 in dev)
         </div>
       </form>
-      <div style={{ fontSize: "12px", marginTop: "16px" }}>
-        Regulator or reviewer?{" "}
-        <Link to="/regulator" style={{ color: "#0b5fff" }}>
-          Go to the regulator login
-        </Link>
-        .
+      <div style={{ fontSize: "12px", marginTop: "16px", display: "grid", gap: "6px" }}>
+        <div>
+          Regulator or reviewer?{" "}
+          <Link to="/regulator" style={{ color: "#0b5fff" }}>
+            Go to the regulator login
+          </Link>
+          .
+        </div>
+        <div>
+          By signing in you agree to the{" "}
+          <Link to="/legal#terms" style={{ color: "#0b5fff" }}>
+            Terms of Use
+          </Link>
+          {" "}and{" "}
+          <Link to="/legal#privacy" style={{ color: "#0b5fff" }}>
+            Privacy Policy
+          </Link>
+          . Direct debit consent is captured during onboarding.
+        </div>
       </div>
     </div>
   );

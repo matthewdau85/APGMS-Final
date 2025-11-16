@@ -8,6 +8,7 @@ const navItems: Array<{ to: string; label: string }> = [
   { to: "/alerts", label: "Alerts" },
   { to: "/bas", label: "BAS Lodgment" },
   { to: "/compliance", label: "Compliance" },
+  { to: "/onboarding", label: "Onboarding" },
   { to: "/demo", label: "Demo mode" },
   { to: "/security", label: "Security / Access" },
 ];
