@@ -29,6 +29,7 @@
     "a11y": "pnpm exec playwright test --grep \"@a11y\"",
     "migrate:status": "pnpm --filter @apgms/shared exec prisma migrate status",
     "verify:no-conflicts": "node scripts/verify-no-conflicts.mjs",
+    "git:update-branches": "node scripts/update-all-branches.mjs",
     "k6:smoke": "pnpm exec k6 run k6/smoke.js",
     "smoke:regulator": "node scripts/regulator-smoke.mjs",
     "lint:markdown": "pnpm exec markdownlint **/*.md",
