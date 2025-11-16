@@ -36,8 +36,10 @@ The default `docker-compose.yml` file shows the minimum services that must exist
 2. Publish container images (or use `docker compose build`) for the API gateway, worker, and webapp.
 3. Provision databases and apply schema migrations from the repository root:
    ```bash
-   pnpm -w exec prisma migrate deploy
+   pnpm db:deploy
    ```
+   This script targets the `@apgms/shared` workspace (where Prisma and `prisma/schema.prisma` live) so the CLI resolves the
+   correct schema and bundled Prisma binary even though the root workspace itself is Prisma-free.
 4. Set the runtime environment (env vars, secret manager bindings, TLS certificates) on your orchestrator and launch the services. Use `pnpm --filter @apgms/api-gateway start` and the equivalent `start` scripts for other packages inside your containers to ensure they run the compiled `dist` output.
 5. Register cron jobs for reconciliation, discrepancy detection, or other worker-only tasks by reusing the worker command shown in `docker-compose.yml` (`pnpm --filter worker exec tsx src/index.ts`).
 
