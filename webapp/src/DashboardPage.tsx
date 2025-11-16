@@ -4,12 +4,28 @@ import {
   fetchCurrentObligations,
   createBankLine,
   fetchDesignatedAccounts,
+  fetchVirtualBalance,
+  fetchTaxPrediction,
+  fetchAlerts,
 } from "./api";
 import { getToken } from "./auth";
+
+import type { SubscriptionTier } from "./api";
 
 type Obligations = Awaited<ReturnType<typeof fetchCurrentObligations>>;
 type BankLine = Awaited<ReturnType<typeof fetchBankLines>>["lines"][number];
 type DesignatedAccounts = Awaited<ReturnType<typeof fetchDesignatedAccounts>>;
+type VirtualBalance = Awaited<ReturnType<typeof fetchVirtualBalance>>;
+type PredictionEnvelope = Awaited<ReturnType<typeof fetchTaxPrediction>>;
+type AlertRecord = Awaited<ReturnType<typeof fetchAlerts>>["alerts"][number];
+
+type DerivedAlert = {
+  id: string;
+  message: string;
+  severity: "LOW" | "MEDIUM" | "HIGH";
+  source: "derived" | "system";
+  createdAt?: string;
+};
 
 const currencyFormatter = new Intl.NumberFormat("en-AU", {
   style: "currency",
@@ -17,15 +33,25 @@ const currencyFormatter = new Intl.NumberFormat("en-AU", {
   minimumFractionDigits: 2,
 });
 
+const percentFormatter = new Intl.NumberFormat("en-AU", {
+  style: "percent",
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
+
 export default function DashboardPage() {
   const token = getToken();
   const [obligations, setObligations] = useState<Obligations | null>(null);
   const [bankLines, setBankLines] = useState<BankLine[]>([]);
   const [designated, setDesignated] = useState<DesignatedAccounts | null>(null);
+  const [virtualBalance, setVirtualBalance] = useState<VirtualBalance | null>(null);
+  const [prediction, setPrediction] = useState<PredictionEnvelope | null>(null);
+  const [alerts, setAlerts] = useState<AlertRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [designatedError, setDesignatedError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [tier, setTier] = useState<SubscriptionTier | null>(null);
   const [formState, setFormState] = useState({
     date: "2025-10-20T00:00:00.000Z",
     amount: "123.45",
@@ -37,33 +63,59 @@ export default function DashboardPage() {
     if (!token) {
       return;
     }
+    let cancelled = false;
 
     (async () => {
       setLoading(true);
       try {
-        const [obligationsResponse, bankLinesResponse] = await Promise.all([
-          fetchCurrentObligations(token),
-          fetchBankLines(token),
-        ]);
+        const [obligationsResponse, bankLinesResponse, balanceResponse, predictionResponse, alertsResponse] =
+          await Promise.all([
+            fetchCurrentObligations(token),
+            fetchBankLines(token),
+            fetchVirtualBalance(token),
+            fetchTaxPrediction(token, 45),
+            fetchAlerts(token),
+          ]);
+        if (cancelled) {
+          return;
+        }
         setObligations(obligationsResponse);
         setBankLines(bankLinesResponse.lines);
+        setVirtualBalance(balanceResponse);
+        setPrediction(predictionResponse);
+        setAlerts(alertsResponse.alerts);
+        setTier(predictionResponse.tier);
+        setError(null);
       } catch (err) {
         console.error(err);
-        setError("Unable to load dashboard data");
-        setLoading(false);
+        if (!cancelled) {
+          setError("Unable to load dashboard data");
+          setLoading(false);
+        }
         return;
       }
 
       try {
         const designatedResponse = await fetchDesignatedAccounts(token);
-        setDesignated(designatedResponse);
-        setDesignatedError(null);
+        if (!cancelled) {
+          setDesignated(designatedResponse);
+          setDesignatedError(null);
+        }
       } catch (designatedErr) {
         console.error(designatedErr);
-        setDesignatedError("Unable to load designated account balances");
+        if (!cancelled) {
+          setDesignatedError("Unable to load designated account balances");
+        }
       }
-      setLoading(false);
+
+      if (!cancelled) {
+        setLoading(false);
+      }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
   const paygwGap = useMemo(() => {
@@ -83,19 +135,63 @@ export default function DashboardPage() {
 
   const paygwDesignatedAccount = useMemo(
     () =>
-      designated?.accounts.find(
-        (account) => account.type.toUpperCase() === "PAYGW"
-      ) ?? null,
-    [designated]
+      designated?.accounts.find((account) => account.type.toUpperCase() === "PAYGW") ?? null,
+    [designated],
   );
 
   const gstDesignatedAccount = useMemo(
     () =>
-      designated?.accounts.find(
-        (account) => account.type.toUpperCase() === "GST"
-      ) ?? null,
-    [designated]
+      designated?.accounts.find((account) => account.type.toUpperCase() === "GST") ?? null,
+    [designated],
   );
+
+  const derivedAlerts = useMemo<DerivedAlert[]>(() => {
+    const collection: DerivedAlert[] = [];
+    if (virtualBalance) {
+      if (virtualBalance.discretionaryBalance < 0) {
+        collection.push({
+          id: "derived-negative-discretionary",
+          message: "Discretionary cash is negative. Investigate buffer transfers immediately.",
+          severity: "HIGH",
+          source: "derived",
+        });
+      } else if (virtualBalance.discretionaryBalance < virtualBalance.taxReserved * 0.2) {
+        collection.push({
+          id: "derived-low-discretionary",
+          message: "Discretionary cash is trending low versus reserved tax funds.",
+          severity: "MEDIUM",
+          source: "derived",
+        });
+      }
+    }
+    if (obligations?.nextBasDue) {
+      const dueDate = new Date(obligations.nextBasDue);
+      const daysUntil = Math.max(0, Math.ceil((dueDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+      if (daysUntil <= 14) {
+        collection.push({
+          id: "derived-bas-window",
+          message: `BAS lodgment window closes in ${daysUntil} days`,
+          severity: daysUntil <= 5 ? "HIGH" : "MEDIUM",
+          source: "derived",
+          createdAt: dueDate.toISOString(),
+        });
+      }
+    }
+    return collection;
+  }, [virtualBalance, obligations]);
+
+  const alertCards = useMemo(() => {
+    const systemAlerts: DerivedAlert[] = alerts
+      .filter((alert) => !alert.resolved)
+      .map((alert) => ({
+        id: alert.id,
+        message: alert.message,
+        severity: alert.severity?.toUpperCase() === "HIGH" ? "HIGH" : "MEDIUM",
+        source: "system",
+        createdAt: alert.createdAt,
+      }));
+    return [...derivedAlerts, ...systemAlerts].slice(0, 5);
+  }, [alerts, derivedAlerts]);
 
   async function handleCreateLine(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -131,6 +227,40 @@ export default function DashboardPage() {
 
       {obligations && !error && (
         <>
+          {virtualBalance && (
+            <section style={virtualBalanceSectionStyle}>
+              <div style={virtualBalanceHeaderStyle}>
+                <div>
+                  <h2 style={designatedTitleStyle}>Virtual Balance</h2>
+                  <p style={designatedSubtitleStyle}>
+                    Actual cash vs. tax reserved funds derived from GST/PAYGW evidence. Tier: {tier ?? "Monitor"}
+                  </p>
+                </div>
+              </div>
+              <div style={virtualBalanceGridStyle}>
+                <VirtualBalanceMetric
+                  label="Actual cash on hand"
+                  value={virtualBalance.actualBalance}
+                  description="Sum of PAYGW and GST designated ledgers"
+                  testId="balance-actual"
+                />
+                <VirtualBalanceMetric
+                  label="Tax reserved"
+                  value={virtualBalance.taxReserved}
+                  description="GST collected + PAYGW withheld"
+                  testId="balance-tax"
+                />
+                <VirtualBalanceMetric
+                  label="Discretionary cash"
+                  value={virtualBalance.discretionaryBalance}
+                  description="Funds safe to deploy after tax reserves"
+                  emphasize={virtualBalance.discretionaryBalance < 0}
+                  testId="balance-discretionary"
+                />
+              </div>
+            </section>
+          )}
+
           <section style={summaryGridStyle}>
             <ObligationSummary
               title="PAYGW"
@@ -148,13 +278,57 @@ export default function DashboardPage() {
             />
             <div style={nextBasCardStyle}>
               <span style={infoLabelStyle}>Next BAS Due</span>
-              <div style={nextBasValueStyle}>
-                {nextBasDueDisplay}
-              </div>
+              <div style={nextBasValueStyle}>{nextBasDueDisplay}</div>
               <p style={nextBasDescriptionStyle}>
                 APGMS blocks the ATO transfer if the holding accounts are short so you can remediate early.
               </p>
             </div>
+          </section>
+
+          {prediction && (
+            <section style={predictionCardStyle}>
+              <div>
+                <h2 style={designatedTitleStyle}>45-day BAS forecast</h2>
+                <p style={designatedSubtitleStyle}>
+                  Rolling 3-month averages projected forward. Confidence is derived from recent volatility.
+                </p>
+              </div>
+              <div style={predictionStatsRowStyle}>
+                <PredictionStat label="GST estimate" value={prediction.prediction.gstEstimate} />
+                <PredictionStat label="PAYGW estimate" value={prediction.prediction.paygwEstimate} />
+                <div style={predictionConfidenceStyle}>
+                  <dt style={metricLabelStyle}>Confidence</dt>
+                  <dd style={metricValueStyle}>{percentFormatter.format(prediction.prediction.confidence)}</dd>
+                </div>
+              </div>
+            </section>
+          )}
+
+          <section style={alertCenterStyle}>
+            <div>
+              <h2 style={designatedTitleStyle}>Alert center</h2>
+              <p style={designatedSubtitleStyle}>
+                Early warnings for discretionary cash and BAS deadlines. Live alerts originate from auto-policy checks.
+              </p>
+            </div>
+            {alertCards.length === 0 ? (
+              <div style={infoTextStyle}>All clear — no outstanding alerts.</div>
+            ) : (
+              <ul style={alertListStyle}>
+                {alertCards.map((alert) => (
+                  <li key={alert.id} style={alertItemStyle}>
+                    <span style={severityBadgeStyle(alert.severity)}>{alert.severity}</span>
+                    <div>
+                      <div style={alertMessageStyle}>{alert.message}</div>
+                      <div style={designatedCaptionStyle}>
+                        {alert.source === "system" ? "Escalation" : "Derived"}
+                        {alert.createdAt ? ` • ${new Date(alert.createdAt).toLocaleString()}` : null}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
           {(designated || designatedError) && (
@@ -191,11 +365,7 @@ export default function DashboardPage() {
               <div>
                 <h2 style={ledgerTitleStyle}>Bank Ledger Evidence</h2>
                 <p style={ledgerSubtitleStyle}>
-                  Every protected withdrawal or capture is audited. Shortfall right now:{" "}
-                  <strong>
-                    {currencyFormatter.format(paygwGap + gstGap)} total
-                  </strong>
-                  .
+                  Every protected withdrawal or capture is audited. Shortfall right now: <strong>{currencyFormatter.format(paygwGap + gstGap)} total</strong>.
                 </p>
               </div>
             </div>
@@ -224,9 +394,7 @@ export default function DashboardPage() {
                 </tbody>
               </table>
               {bankLines.length === 0 && (
-                <div style={{ ...infoTextStyle, padding: "12px 0" }}>
-                  No ledger activity recorded yet.
-                </div>
+                <div style={{ ...infoTextStyle, padding: "12px 0" }}>No ledger activity recorded yet.</div>
               )}
             </div>
 
@@ -237,9 +405,7 @@ export default function DashboardPage() {
                   <input
                     style={formInputStyle}
                     value={formState.date}
-                    onChange={(e) =>
-                      setFormState((prev) => ({ ...prev, date: e.target.value }))
-                    }
+                    onChange={(e) => setFormState((prev) => ({ ...prev, date: e.target.value }))}
                   />
                 </label>
                 <label style={formLabelStyle}>
@@ -247,9 +413,7 @@ export default function DashboardPage() {
                   <input
                     style={formInputStyle}
                     value={formState.amount}
-                    onChange={(e) =>
-                      setFormState((prev) => ({ ...prev, amount: e.target.value }))
-                    }
+                    onChange={(e) => setFormState((prev) => ({ ...prev, amount: e.target.value }))}
                   />
                 </label>
                 <label style={formLabelStyle}>
@@ -257,9 +421,7 @@ export default function DashboardPage() {
                   <input
                     style={formInputStyle}
                     value={formState.payee}
-                    onChange={(e) =>
-                      setFormState((prev) => ({ ...prev, payee: e.target.value }))
-                    }
+                    onChange={(e) => setFormState((prev) => ({ ...prev, payee: e.target.value }))}
                   />
                 </label>
                 <label style={formLabelStyle}>
@@ -267,9 +429,7 @@ export default function DashboardPage() {
                   <input
                     style={formInputStyle}
                     value={formState.desc}
-                    onChange={(e) =>
-                      setFormState((prev) => ({ ...prev, desc: e.target.value }))
-                    }
+                    onChange={(e) => setFormState((prev) => ({ ...prev, desc: e.target.value }))}
                   />
                 </label>
               </div>
@@ -281,6 +441,46 @@ export default function DashboardPage() {
           </section>
         </>
       )}
+    </div>
+  );
+}
+
+function VirtualBalanceMetric({
+  label,
+  value,
+  description,
+  emphasize,
+  testId,
+}: {
+  label: string;
+  value: number;
+  description: string;
+  emphasize?: boolean;
+  testId: string;
+}) {
+  return (
+    <div style={virtualMetricStyle}>
+      <span style={infoLabelStyle}>{label}</span>
+      <div
+        data-testid={testId}
+        style={{
+          fontSize: "32px",
+          fontWeight: 700,
+          color: emphasize ? "#b91c1c" : "#111827",
+        }}
+      >
+        {currencyFormatter.format(value)}
+      </div>
+      <p style={designatedCaptionStyle}>{description}</p>
+    </div>
+  );
+}
+
+function PredictionStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div style={predictionStatStyle}>
+      <dt style={metricLabelStyle}>{label}</dt>
+      <dd style={metricValueStyle}>{currencyFormatter.format(value)}</dd>
     </div>
   );
 }
@@ -300,10 +500,10 @@ function DesignatedAccountCard({
     account === null
       ? "Not provisioned"
       : shortfall <= 0
-      ? "Sufficient"
-      : `Shortfall ${currencyFormatter.format(shortfall)}`;
+        ? "Sufficient"
+        : `Shortfall ${currencyFormatter.format(shortfall)}`;
   const palette = designatedStatusPalette(
-    account === null ? "missing" : shortfall <= 0 ? "ready" : "short"
+    account === null ? "missing" : shortfall <= 0 ? "ready" : "short",
   );
   return (
     <div style={designatedCardStyle}>
@@ -320,9 +520,7 @@ function DesignatedAccountCard({
         </span>
       </div>
       <div style={designatedBalanceStyle}>{currencyFormatter.format(balance)}</div>
-      <div style={designatedCaptionStyle}>
-        Required this BAS: {currencyFormatter.format(required)}
-      </div>
+      <div style={designatedCaptionStyle}>Required this BAS: {currencyFormatter.format(required)}</div>
       <div>
         <div style={designatedTransfersTitleStyle}>Last transfers</div>
         {account && account.transfers.length > 0 ? (
@@ -338,9 +536,7 @@ function DesignatedAccountCard({
           </ul>
         ) : (
           <div style={infoTextStyle}>
-            {account
-              ? "No transfers recorded yet."
-              : "Account has not been provisioned in this demo."}
+            {account ? "No transfers recorded yet." : "Account has not been provisioned in this demo."}
           </div>
         )}
       </div>
@@ -400,54 +596,41 @@ function Metric({ label, value, emphasize }: { label: string; value: number; emp
   );
 }
 
-function statusPalette(status: string) {
-  switch (status.toUpperCase()) {
-    case "READY":
-      return { background: "rgba(16, 185, 129, 0.12)", text: "#047857" };
-    case "SHORTFALL":
-      return { background: "rgba(239, 68, 68, 0.12)", text: "#b91c1c" };
-    default:
-      return { background: "rgba(251, 191, 36, 0.18)", text: "#92400e" };
-  }
-}
-
-function designatedStatusPalette(
-  state: "ready" | "short" | "missing"
-): { background: string; text: string } {
-  if (state === "ready") {
-    return { background: "rgba(16, 185, 129, 0.12)", text: "#047857" };
-  }
-  if (state === "short") {
-    return { background: "rgba(239, 68, 68, 0.12)", text: "#b91c1c" };
-  }
-  return { background: "rgba(148, 163, 184, 0.18)", text: "#334155" };
-}
-
 const pageTitleStyle: React.CSSProperties = {
-  fontSize: "26px",
+  fontSize: "32px",
   fontWeight: 700,
-  marginBottom: "8px",
+  margin: 0,
+  color: "#0f172a",
 };
 
 const pageSubtitleStyle: React.CSSProperties = {
-  color: "#4b5563",
-  margin: 0,
+  fontSize: "16px",
+  color: "#475569",
+  marginTop: "8px",
+};
+
+const infoTextStyle: React.CSSProperties = {
   fontSize: "14px",
-  maxWidth: "680px",
+  color: "#475569",
+};
+
+const errorTextStyle: React.CSSProperties = {
+  ...infoTextStyle,
+  color: "#b91c1c",
 };
 
 const summaryGridStyle: React.CSSProperties = {
   display: "grid",
-  gap: "16px",
   gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+  gap: "24px",
 };
 
 const obligationCardStyle: React.CSSProperties = {
-  backgroundColor: "#ffffff",
-  borderRadius: "12px",
+  backgroundColor: "#fff",
+  borderRadius: "16px",
   padding: "20px",
+  boxShadow: "0 10px 30px rgba(15, 23, 42, 0.08)",
   border: "1px solid #e2e8f0",
-  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.08)",
 };
 
 const obligationHeaderStyle: React.CSSProperties = {
@@ -458,271 +641,327 @@ const obligationHeaderStyle: React.CSSProperties = {
 };
 
 const obligationTitleStyle: React.CSSProperties = {
-  margin: 0,
   fontSize: "18px",
-  fontWeight: 600,
+  margin: 0,
 };
 
 const metricsListStyle: React.CSSProperties = {
-  margin: 0,
-  padding: 0,
   display: "grid",
-  gap: "8px",
+  gap: "12px",
+  margin: 0,
 };
 
 const metricRowStyle: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
-  alignItems: "baseline",
 };
 
 const metricLabelStyle: React.CSSProperties = {
-  fontSize: "12px",
-  letterSpacing: "0.06em",
-  textTransform: "uppercase",
-  color: "#6b7280",
+  fontSize: "14px",
+  color: "#94a3b8",
 };
 
 const metricValueStyle: React.CSSProperties = {
-  fontSize: "16px",
+  fontSize: "18px",
   fontWeight: 600,
-  color: "#111827",
+  color: "#0f172a",
 };
 
 const nextBasCardStyle: React.CSSProperties = {
-  backgroundColor: "#0b5fff",
-  color: "#ffffff",
-  borderRadius: "12px",
-  padding: "20px",
-  display: "grid",
-  gap: "8px",
+  ...obligationCardStyle,
+  display: "flex",
+  flexDirection: "column",
+  gap: "12px",
 };
 
 const infoLabelStyle: React.CSSProperties = {
   fontSize: "12px",
   textTransform: "uppercase",
-  letterSpacing: "0.08em",
-  opacity: 0.85,
+  letterSpacing: "0.05em",
+  color: "#94a3b8",
 };
 
 const nextBasValueStyle: React.CSSProperties = {
-  fontSize: "18px",
-  fontWeight: 600,
+  fontSize: "24px",
+  fontWeight: 700,
 };
 
 const nextBasDescriptionStyle: React.CSSProperties = {
-  fontSize: "13px",
+  color: "#475569",
   margin: 0,
-  opacity: 0.85,
-  lineHeight: 1.5,
 };
 
 const designatedSectionStyle: React.CSSProperties = {
-  backgroundColor: "#ffffff",
-  borderRadius: "12px",
-  border: "1px solid #e2e8f0",
-  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.08)",
+  backgroundColor: "#fff",
+  borderRadius: "16px",
   padding: "24px",
-  display: "grid",
-  gap: "16px",
+  border: "1px solid #e2e8f0",
 };
 
 const designatedHeaderStyle: React.CSSProperties = {
-  display: "grid",
-  gap: "4px",
+  marginBottom: "20px",
 };
 
 const designatedTitleStyle: React.CSSProperties = {
-  margin: 0,
   fontSize: "20px",
-  fontWeight: 600,
+  margin: 0,
 };
 
 const designatedSubtitleStyle: React.CSSProperties = {
-  margin: 0,
-  fontSize: "14px",
-  color: "#4b5563",
-  maxWidth: "640px",
+  marginTop: "8px",
+  color: "#475569",
 };
 
 const designatedGridStyle: React.CSSProperties = {
   display: "grid",
-  gap: "16px",
-  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+  gap: "20px",
 };
 
 const designatedCardStyle: React.CSSProperties = {
-  backgroundColor: "#f8fafc",
+  border: "1px solid #e2e8f0",
   borderRadius: "12px",
   padding: "20px",
-  border: "1px solid #dbeafe",
-  display: "grid",
-  gap: "16px",
 };
 
 const designatedCardHeaderStyle: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  gap: "12px",
+  marginBottom: "12px",
 };
 
 const designatedCardTitleStyle: React.CSSProperties = {
   margin: 0,
-  fontSize: "16px",
-  fontWeight: 600,
 };
 
 const designationStatusChipBase: React.CSSProperties = {
-  padding: "4px 12px",
-  borderRadius: "999px",
   fontSize: "12px",
   fontWeight: 600,
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
+  padding: "4px 10px",
+  borderRadius: "999px",
 };
 
 const designatedBalanceStyle: React.CSSProperties = {
-  fontSize: "24px",
+  fontSize: "28px",
   fontWeight: 700,
-  color: "#0f172a",
 };
 
 const designatedCaptionStyle: React.CSSProperties = {
-  fontSize: "13px",
-  color: "#475569",
+  fontSize: "14px",
+  color: "#64748b",
 };
 
 const designatedTransfersTitleStyle: React.CSSProperties = {
-  fontSize: "13px",
   fontWeight: 600,
-  textTransform: "uppercase",
-  letterSpacing: "0.08em",
-  color: "#64748b",
-  marginBottom: "8px",
+  marginTop: "12px",
 };
 
 const designatedTransfersListStyle: React.CSSProperties = {
   listStyle: "none",
-  margin: 0,
   padding: 0,
+  margin: 0,
   display: "grid",
-  gap: "10px",
+  gap: "8px",
 };
 
 const designatedTransferItemStyle: React.CSSProperties = {
-  backgroundColor: "#ffffff",
-  borderRadius: "10px",
-  padding: "12px",
   border: "1px solid #e2e8f0",
-  display: "grid",
-  gap: "4px",
+  borderRadius: "8px",
+  padding: "8px",
 };
 
 const designatedTransferMetaStyle: React.CSSProperties = {
   fontSize: "12px",
-  color: "#6b7280",
+  color: "#94a3b8",
 };
 
 const ledgerCardStyle: React.CSSProperties = {
-  backgroundColor: "#ffffff",
-  borderRadius: "12px",
+  backgroundColor: "#fff",
+  borderRadius: "16px",
   padding: "24px",
   border: "1px solid #e2e8f0",
-  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.08)",
   display: "grid",
-  gap: "20px",
+  gap: "16px",
 };
 
 const ledgerHeaderStyle: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
-  alignItems: "flex-start",
-  flexWrap: "wrap",
-  gap: "12px",
+  alignItems: "center",
 };
 
 const ledgerTitleStyle: React.CSSProperties = {
-  margin: 0,
   fontSize: "20px",
-  fontWeight: 600,
+  margin: 0,
 };
 
 const ledgerSubtitleStyle: React.CSSProperties = {
-  margin: "6px 0 0 0",
-  color: "#4b5563",
-  fontSize: "14px",
-  maxWidth: "560px",
-  lineHeight: 1.5,
+  marginTop: "8px",
+  color: "#475569",
 };
 
 const tableStyle: React.CSSProperties = {
-  borderCollapse: "collapse",
   width: "100%",
-  minWidth: "640px",
+  borderCollapse: "collapse",
 };
 
 const thStyle: React.CSSProperties = {
   textAlign: "left",
-  padding: "10px 12px",
-  fontSize: "12px",
+  padding: "10px",
+  borderBottom: "1px solid #e2e8f0",
+  fontSize: "14px",
   textTransform: "uppercase",
-  letterSpacing: "0.06em",
-  color: "#6b7280",
-  borderBottom: "1px solid #e5e7eb",
+  letterSpacing: "0.05em",
 };
 
 const tdStyle: React.CSSProperties = {
-  padding: "12px",
-  fontSize: "14px",
+  padding: "10px",
   borderBottom: "1px solid #f1f5f9",
-  color: "#111827",
+  fontSize: "14px",
 };
 
 const ledgerFormStyle: React.CSSProperties = {
   borderTop: "1px solid #e2e8f0",
-  paddingTop: "20px",
+  paddingTop: "16px",
   display: "grid",
-  gap: "16px",
+  gap: "12px",
 };
 
 const formGridStyle: React.CSSProperties = {
   display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
   gap: "12px",
-  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
 };
 
 const formLabelStyle: React.CSSProperties = {
   display: "grid",
-  gap: "6px",
+  gap: "4px",
   fontSize: "13px",
-  color: "#1f2937",
+  color: "#475569",
 };
 
 const formInputStyle: React.CSSProperties = {
-  padding: "10px",
-  fontSize: "14px",
-  borderRadius: "6px",
   border: "1px solid #cbd5f5",
+  borderRadius: "6px",
+  padding: "8px",
 };
 
 const submitButtonStyle: React.CSSProperties = {
-  justifySelf: "flex-start",
-  backgroundColor: "#111827",
-  color: "#ffffff",
+  justifySelf: "start",
+  backgroundColor: "#0b5fff",
   border: "none",
-  borderRadius: "6px",
+  color: "#fff",
   padding: "10px 16px",
-  fontSize: "14px",
+  borderRadius: "8px",
   cursor: "pointer",
 };
 
-const infoTextStyle: React.CSSProperties = {
-  fontSize: "14px",
-  color: "#6b7280",
+const virtualBalanceSectionStyle: React.CSSProperties = {
+  backgroundColor: "#fff",
+  borderRadius: "16px",
+  padding: "24px",
+  border: "1px solid #e2e8f0",
+  display: "grid",
+  gap: "16px",
 };
 
-const errorTextStyle: React.CSSProperties = {
-  fontSize: "14px",
-  color: "#b91c1c",
+const virtualBalanceHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+};
+
+const virtualBalanceGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: "16px",
+};
+
+const virtualMetricStyle: React.CSSProperties = {
+  border: "1px solid #e2e8f0",
+  borderRadius: "12px",
+  padding: "16px",
+  background: "linear-gradient(135deg, #f8fafc, #eef2ff)",
+};
+
+const predictionCardStyle: React.CSSProperties = {
+  ...virtualBalanceSectionStyle,
+};
+
+const predictionStatsRowStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gap: "16px",
+};
+
+const predictionStatStyle: React.CSSProperties = {
+  border: "1px solid #e2e8f0",
+  borderRadius: "12px",
+  padding: "16px",
+};
+
+const predictionConfidenceStyle: React.CSSProperties = {
+  ...predictionStatStyle,
+};
+
+const alertCenterStyle: React.CSSProperties = {
+  ...virtualBalanceSectionStyle,
+};
+
+const alertListStyle: React.CSSProperties = {
+  listStyle: "none",
+  padding: 0,
+  margin: 0,
+  display: "grid",
+  gap: "12px",
+};
+
+const alertItemStyle: React.CSSProperties = {
+  border: "1px solid #e2e8f0",
+  borderRadius: "10px",
+  padding: "12px",
+  display: "flex",
+  gap: "12px",
+  alignItems: "flex-start",
+};
+
+const alertMessageStyle: React.CSSProperties = {
+  fontWeight: 600,
+  color: "#111827",
+};
+
+function severityBadgeStyle(level: DerivedAlert["severity"]): React.CSSProperties {
+  const palette = {
+    HIGH: { background: "#fee2e2", color: "#b91c1c" },
+    MEDIUM: { background: "#fef3c7", color: "#b45309" },
+    LOW: { background: "#dcfce7", color: "#166534" },
+  } as const;
+  return {
+    alignSelf: "center",
+    padding: "4px 10px",
+    borderRadius: "999px",
+    fontSize: "12px",
+    fontWeight: 600,
+    backgroundColor: palette[level].background,
+    color: palette[level].color,
+  };
+}
+
+const statusPalette = (status: string) => {
+  if (status.toUpperCase() === "READY") {
+    return { background: "#dcfce7", text: "#166534" };
+  }
+  return { background: "#fee2e2", text: "#b91c1c" };
+};
+
+const designatedStatusPalette = (status: "ready" | "short" | "missing") => {
+  switch (status) {
+    case "ready":
+      return { background: "#dcfce7", text: "#166534" };
+    case "missing":
+      return { background: "#e2e8f0", text: "#475569" };
+    default:
+      return { background: "#fee2e2", text: "#b91c1c" };
+  }
 };

@@ -7,6 +7,9 @@ import { prisma } from "../db.js";
 import { requireOrgContext } from "../utils/orgScope.js";
 import { withIdempotency } from "../lib/idempotency.js";
 import { recordCriticalAuditLog } from "../lib/audit.js";
+import { TierManager } from "../services/tier-manager.js";
+
+const tierManager = new TierManager(prisma);
 
 const TransferRequestSchema = z.object({
   instructionId: z.string().min(1),
@@ -25,6 +28,13 @@ export async function registerTransferRoutes(app: FastifyInstance) {
 
     const ctx = requireOrgContext(request, reply);
     if (!ctx) return;
+
+    const tier = await tierManager.getTier(ctx.orgId);
+    if (!tierManager.canAutomateTransfers(tier)) {
+      metrics.transferExecutionTotal.inc({ status: "failed" });
+      reply.code(403).send({ error: "tier_restricted", tier });
+      return;
+    }
 
     try {
       await withIdempotency(

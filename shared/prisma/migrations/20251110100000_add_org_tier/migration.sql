@@ -1,0 +1,2 @@
+ALTER TABLE "Organization" ADD COLUMN "tier" TEXT NOT NULL DEFAULT 'Monitor';
+ALTER TABLE "Org" ADD COLUMN "tier" TEXT NOT NULL DEFAULT 'Monitor';

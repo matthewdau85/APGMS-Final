@@ -8,6 +8,7 @@ import {
   evaluateDesignatedAccountPolicy,
   normalizeTransferSource,
   type DesignatedTransferSource,
+  computeVirtualBalance,
 } from "@apgms/shared/ledger";
 
 export type AuditLogger = (entry: {
@@ -312,4 +313,60 @@ export async function generateDesignatedAccountReconciliationArtifact(
     artifactId: artifact.id,
     sha256,
   };
+}
+
+export async function preBasCheck(
+  context: PolicyContext,
+  orgId: string,
+  dueDate: Date,
+): Promise<boolean> {
+  const referenceDate = Number.isNaN(dueDate.getTime()) ? new Date() : dueDate;
+  const snapshot = await computeVirtualBalance(orgId, referenceDate, context.prisma);
+  const shortfall = snapshot.taxReserved - snapshot.actualBalance;
+
+  if (shortfall <= 0) {
+    return true;
+  }
+
+  const existing = await context.prisma.alert.findFirst({
+    where: {
+      orgId,
+      type: "DESIGNATED_BAS_SHORTFALL",
+      resolvedAt: null,
+    },
+  });
+
+  const message = `Designated accounts are short by ${shortfall.toFixed(2)} ahead of BAS due ${referenceDate.toISOString()}`;
+
+  if (existing) {
+    await context.prisma.alert.update({
+      where: { id: existing.id },
+      data: {
+        message,
+        severity: "HIGH",
+        metadata: {
+          ...(existing.metadata ?? {}),
+          required: snapshot.taxReserved,
+          available: snapshot.actualBalance,
+          dueDate: referenceDate.toISOString(),
+        },
+      },
+    });
+  } else {
+    await context.prisma.alert.create({
+      data: {
+        orgId,
+        type: "DESIGNATED_BAS_SHORTFALL",
+        severity: "HIGH",
+        message,
+        metadata: {
+          required: snapshot.taxReserved,
+          available: snapshot.actualBalance,
+          dueDate: referenceDate.toISOString(),
+        },
+      },
+    });
+  }
+
+  return false;
 }

@@ -134,6 +134,7 @@ model Organization {
   id          String            @id @default(uuid()) @db.Uuid
   name        String
   createdAt   DateTime          @default(now())
+  tier        String            @default("Monitor")
 
   accounts    Account[]
   journals    Journal[]
@@ -332,6 +333,7 @@ model Org {
   name       String
   createdAt  DateTime       @default(now())
   deletedAt  DateTime?
+  tier       String         @default("Monitor")
 
   users      User[]
   oneWayAccounts OneWayAccount[]

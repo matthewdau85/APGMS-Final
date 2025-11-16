@@ -10,6 +10,11 @@ import {
 import { metrics } from "../observability/metrics.js";
 import { assertOrgAccess } from "../utils/orgScope.js";
 import { recordCriticalAuditLog } from "../lib/audit.js";
+import { prisma } from "../db.js";
+import { TierManager } from "../services/tier-manager.js";
+import { preBasCheck } from "@apgms/domain-policy";
+
+const tierManager = new TierManager(prisma);
 
 const TAX_TYPES: Array<{ key: string; label: string }> = [
   { key: "PAYGW", label: "PAYGW obligations" },
@@ -49,6 +54,25 @@ export async function registerBasRoutes(
       if (!orgId) return;
 
       const basCycleId = String(request.query.basCycleId ?? "manual");
+      const targetCycle = request.query.basCycleId
+        ? await prisma.basCycle.findUnique({ where: { id: request.query.basCycleId } })
+        : await prisma.basCycle.findFirst({
+            where: { orgId },
+            orderBy: { periodEnd: "desc" },
+          });
+      const dueDate = targetCycle?.periodEnd ?? new Date();
+
+      const precheckPassed = await preBasCheck({ prisma }, orgId, dueDate);
+      if (!precheckPassed) {
+        reply
+          .code(409)
+          .send({ error: { code: "bas_shortfall", dueDate: dueDate.toISOString() } });
+        return;
+      }
+
+      const tier = await tierManager.getTier(orgId);
+      const canAutomateTransfers = tierManager.canAutomateTransfers(tier);
+
       const lodgment = await recordBasLodgment({
         orgId,
         initiatedBy: request.body?.initiatedBy,
@@ -76,7 +100,7 @@ export async function registerBasRoutes(
         }
       }
 
-      if (overallStatus === "success") {
+      if (overallStatus === "success" && canAutomateTransfers) {
         for (const type of TAX_TYPES) {
           const entry = verification[type.key];
 
@@ -132,6 +156,8 @@ export async function registerBasRoutes(
         lodgmentId: lodgment.id,
         status: overallStatus,
         verification,
+        tier,
+        autoTransfersQueued: overallStatus === "success" ? canAutomateTransfers : false,
       });
     },
   );
