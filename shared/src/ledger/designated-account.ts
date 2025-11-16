@@ -1,8 +1,19 @@
-import type { PrismaClient, DesignatedAccount } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
+
+type DecimalLike = number | string | { toString(): string };
+
+type DesignatedAccount = {
+  id: string;
+  orgId: string;
+  type: string;
+  balance: DecimalLike;
+  locked: boolean;
+  lockedAt: Date | null;
+  updatedAt: Date;
+};
 import { conflict } from "../errors.js";
 import { applyDesignatedAccountTransfer } from "@apgms/domain-policy";
-
-export type DesignatedAccountType = "PAYGW_BUFFER" | "GST_BUFFER";
+import type { DesignatedAccountType } from "./types.js";
 
 const ALLOWED_TYPES: DesignatedAccountType[] = ["PAYGW_BUFFER", "GST_BUFFER"];
 
@@ -31,11 +42,13 @@ class PartnerBankingAdapter implements BankingAdapter {
   constructor(private url: string, private token?: string) {}
 
   private headers(): Record<string, string> {
-    const auth = this.token ? { Authorization: `Bearer ${this.token}` } : {};
-    return {
+    const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      ...auth,
     };
+    if (this.token) {
+      headers.Authorization = `Bearer ${this.token}`;
+    }
+    return headers;
   }
 
   private accountEndpoint(account: DesignatedAccount) {
@@ -169,7 +182,7 @@ export async function reconcileAccountSnapshot(
   account: DesignatedAccount;
   balance: number;
   updatedAt: Date;
-#  locked: boolean;
+  locked: boolean;
 }> {
   const account = await getDesignatedAccountByType(prisma, orgId, type);
   return {

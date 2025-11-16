@@ -1,6 +1,6 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import type { PrismaClient } from "@prisma/client";
-import { withIdempotency } from "../idempotency.js";
+import { withIdempotency, type HandlerResult } from "../idempotency.js";
 import { getDesignatedAccountByType } from "./designated-account.js";
 import { applyDesignatedAccountTransfer, type AuditLogger } from "@apgms/domain-policy";
 
@@ -40,7 +40,7 @@ export async function recordPayrollContribution(params: {
       resource: "payrollContribution",
     },
     async ({ idempotencyKey }) => {
-      await params.prisma.payrollContribution.create({
+      const record = await params.prisma.payrollContribution.create({
         data: {
           orgId: params.orgId,
           amount: new Decimal(params.amount),
@@ -50,6 +50,7 @@ export async function recordPayrollContribution(params: {
           idempotencyKey,
         },
       });
+      return buildIdempotencyResult("payrollContribution", record.id);
     },
   );
 }
@@ -80,7 +81,7 @@ export async function recordPosTransaction(params: {
       resource: "posTransaction",
     },
     async ({ idempotencyKey }) => {
-      await params.prisma.posTransaction.create({
+      const record = await params.prisma.posTransaction.create({
         data: {
           orgId: params.orgId,
           amount: new Decimal(params.amount),
@@ -90,6 +91,7 @@ export async function recordPosTransaction(params: {
           idempotencyKey,
         },
       });
+      return buildIdempotencyResult("posTransaction", record.id);
     },
   );
 }
@@ -193,6 +195,14 @@ async function applyContribution(
           },
         });
   await update;
+}
+
+function buildIdempotencyResult(resource: string, resourceId: string): HandlerResult {
+  return {
+    statusCode: 201,
+    resource,
+    resourceId,
+  };
 }
 
 export async function summarizeContributions(prisma: PrismaClient, orgId: string) {

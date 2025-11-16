@@ -355,6 +355,8 @@ model Org {
   // payroll backrefs
   employees  Employee[]
   payRuns    PayRun[]
+  payrollContributions PayrollContribution[]
+  posTransactions      PosTransaction[]
 }
 
 model User {
