@@ -4,6 +4,13 @@ The following backlog breaks down the remaining work to reach roughly 85% readin
 
 ## A. Setup Wizard & Onboarding Flow
 
+**Primary owners:** WebApp squad (apps/webapp, services/onboarding)
+
+**Related code paths to review before kicking off:**
+- `webapp/src/routes/onboarding/**/*` for existing welcome flow scaffolding.
+- `services/onboarding/*` for REST handlers that will back the wizard.
+- `packages/payments-api/src/designatedAccount.ts` for the one-way account APIs that need to be orchestrated.
+
 | Task | Description & Rationale | Acceptance Criteria |
 | --- | --- | --- |
 | **A1. Build a multi-step setup wizard in the web app** | Implement a guided onboarding flow that: (1) collects organisation details (name, ABN, TFN), (2) verifies ABN/TFN via an ATO/ABR lookup API, (3) retrieves registered tax obligations (PAYGI, PAYGW, GST) and (4) enforces setup of one-way accounts for each obligation. | Wizard enforces completion of all steps. ABN/TFN lookup uses a stub or sandboxed API. If obligations include PAYGW and GST, the wizard surfaces mandatory fields. Form validation ensures required fields are populated. |
@@ -14,6 +21,13 @@ The following backlog breaks down the remaining work to reach roughly 85% readin
 
 ## B. Core Functionality & PayTo Enforcement
 
+**Primary owners:** Payments platform squad (packages/payments-*, services/payments)
+
+**Key integration surfaces:**
+- `packages/payments-api/src/payto` (new) for the `PayToService` interface and sandbox adapters.
+- `services/organisations/handlers.ts` for the automatic designated account provisioning logic.
+- `worker/reconciliation/*` for the PAYGI report expansion.
+
 | Task | Description & Rationale | Acceptance Criteria |
 | --- | --- | --- |
 | **B1. Implement PayTo agreements** | Design a `PayToService` interface in the payments package with methods to create and verify mandates. Integrate with a selected bank or a sandbox PayTo API. | `createPayToMandate` returns a mandate ID and status. The designated account API stores the mandate reference. The API prevents withdrawals unless a mandate is active. |
@@ -21,6 +35,13 @@ The following backlog breaks down the remaining work to reach roughly 85% readin
 | **B3. Update reconciliation logic to include PAYGI** | Extend `generateDesignatedAccountReconciliationArtifact` to include PAYGI balances and inflows. Adjust the totals calculation to sum PAYGI separately (PAYGW, GST and PAYGI). | Reconciliation summary output includes PAYGI totals. Tests ensure the totals for PAYGI, PAYGW and GST add up correctly. |
 
 ## C. Security & Compliance Enhancements
+
+**Primary owners:** Security & SRE squad (infra/secrets, services/shared/config)
+
+**Artifacts / references:**
+- `infra/terraform` for vault/secret manager configuration files.
+- `runbooks/security.md` and `docs/compliance/*` for OSF/STP evidence capture.
+- `packages/common-http/src/retry.ts` for the shared retry helpers that can be wrapped in the circuit breaker implementation.
 
 | Task | Description & Rationale | Acceptance Criteria |
 | --- | --- | --- |
@@ -30,12 +51,25 @@ The following backlog breaks down the remaining work to reach roughly 85% readin
 
 ## D. Forecasting & Innovation
 
+**Primary owners:** Data & Forecasting squad (services/forecasting, worker/forecasting)
+
+**Implementation tips:**
+- `services/forecasting/src/model.ts` currently exports the EWMA baseline – extend it with calibration inputs.
+- `apps/api/src/routes/forecast.ts` should expose the `/forecast` endpoint once the service layer is updated.
+
 | Task | Description & Rationale | Acceptance Criteria |
 | --- | --- | --- |
 | **D1. Implement basic ML calibration** | Use synthetic or pilot data to calibrate the existing EWMA/regression model, producing more realistic forecasts. Expose an API endpoint `/forecast` returning predicted PAYGI, PAYGW, GST obligations and their tiers. | Endpoint returns non-zero forecasts with ±20% accuracy on sample data. Unit tests verify output structure. |
 | **D2. Add configuration for alert thresholds** | Allow organisations to configure the percentage shortfall that triggers a tier escalation alert. This lets users tune sensitivity to forecast errors. | Organisations can set a numeric threshold (default 10%). Alerts respect this threshold. Tests verify that lower thresholds increase alerts. |
 
 ## E. Documentation & Onboarding Material
+
+**Primary owners:** Developer Experience squad (docs/, runbooks/, webapp content team)
+
+**Documentation cross-links to keep updated:**
+- `runbooks/README.md` index, so the new setup wizard doc is discoverable.
+- `docs/environments/*` so the real/prototype guides appear alongside the existing quickstarts.
+- `webapp/public/privacy.html` to surface the ABN/TFN statement through the UI.
 
 | Task | Description & Rationale | Acceptance Criteria |
 | --- | --- | --- |
