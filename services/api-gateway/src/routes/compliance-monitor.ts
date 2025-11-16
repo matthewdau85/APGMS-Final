@@ -8,6 +8,7 @@ import {
 import {
   ensureDesignatedAccountCoverage,
   reconcileAccountSnapshot,
+  releaseAccountLock,
 } from "@apgms/shared/ledger/designated-account.js";
 import {
   logSecurityEvent,
@@ -217,18 +218,20 @@ export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) =
     };
 
     try {
-      await ensureDesignatedAccountCoverage(
+      const paygwAccount = await ensureDesignatedAccountCoverage(
         prisma,
         orgId,
         "PAYGW_BUFFER",
         Number(latest.paygwRequired),
       );
-      await ensureDesignatedAccountCoverage(
+      const gstAccount = await ensureDesignatedAccountCoverage(
         prisma,
         orgId,
         "GST_BUFFER",
         Number(latest.gstRequired),
       );
+      await releaseAccountLock(prisma, paygwAccount.id);
+      await releaseAccountLock(prisma, gstAccount.id);
       reply.send({ ...result, status: "ready" });
     } catch (error) {
       const pending = await fetchPendingContributions(orgId);
@@ -408,6 +411,7 @@ export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) =
         type: account.type,
         balance: account.balance,
         updatedAt: account.updatedAt,
+        locked: account.locked,
         error: account.error,
       })),
       contributions: summary,

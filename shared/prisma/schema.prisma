@@ -426,6 +426,8 @@ model DesignatedAccount {
   orgId     String
   type      String
   balance   Decimal  @default(0)
+  locked    Boolean  @default(false)
+  lockedAt  DateTime?
   updatedAt DateTime @default(now())
 
   transfers DesignatedTransfer[]

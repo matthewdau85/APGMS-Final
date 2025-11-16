@@ -126,12 +126,39 @@ export async function ensureDesignatedAccountCoverage(
       },
     });
     await currentAdapter.blockTransfer?.(account, shortfall);
+    await markAccountLocked(prisma, account.id);
     throw conflict(
       "designated_insufficient_funds",
       `Designated ${type} account balance ${balance.toFixed(2)} does not cover requirement ${requiredAmount.toFixed(2)}`,
     );
   }
   return account;
+}
+
+export async function releaseAccountLock(
+  prisma: PrismaClient,
+  accountId: string,
+): Promise<void> {
+  await prisma.designatedAccount.update({
+    where: { id: accountId },
+    data: {
+      locked: false,
+      lockedAt: null,
+    },
+  });
+}
+
+export async function markAccountLocked(
+  prisma: PrismaClient,
+  accountId: string,
+): Promise<void> {
+  await prisma.designatedAccount.update({
+    where: { id: accountId },
+    data: {
+      locked: true,
+      lockedAt: new Date(),
+    },
+  });
 }
 
 export async function reconcileAccountSnapshot(
@@ -142,11 +169,13 @@ export async function reconcileAccountSnapshot(
   account: DesignatedAccount;
   balance: number;
   updatedAt: Date;
+#  locked: boolean;
 }> {
   const account = await getDesignatedAccountByType(prisma, orgId, type);
   return {
     account,
     balance: Number(account.balance),
     updatedAt: account.updatedAt,
+    locked: account.locked,
   };
 }

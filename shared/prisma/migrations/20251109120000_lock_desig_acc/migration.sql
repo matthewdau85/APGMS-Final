@@ -1,0 +1,2 @@
+ALTER TABLE "DesignatedAccount" ADD COLUMN "locked" BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE "DesignatedAccount" ADD COLUMN "lockedAt" TIMESTAMP;
