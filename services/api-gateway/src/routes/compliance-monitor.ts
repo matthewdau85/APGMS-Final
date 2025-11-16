@@ -237,6 +237,67 @@ export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) =
         pending.length > 0 ? REMEDIATION_GUIDANCE : "Buffers are healthy and ready for BAS.",
     });
   });
+
+  app.post("/compliance/alerts/:id/resolve", async (req, reply) => {
+    const alertId = (req.params as { id: string }).id;
+    const principal = (req.user as any)?.sub ?? "system";
+    const alert = await prisma.alert.findUnique({ where: { id: alertId } });
+    if (!alert) {
+      reply.code(404).send({ error: "alert_not_found" });
+      return;
+    }
+
+    await prisma.alert.update({
+      where: { id: alertId },
+      data: {
+        resolvedAt: new Date(),
+        metadata: {
+          ...(alert.metadata ?? {}),
+          resolvedBy: principal,
+          resolvedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    const entry = buildSecurityLogEntry(
+      {
+        event: "designated.alert.resolved",
+        orgId: alert.orgId,
+        principal,
+        metadata: {
+          alertId,
+          message: alert.message,
+        },
+      },
+      buildSecurityContextFromRequest(req),
+    );
+    logSecurityEvent(app.log, entry);
+
+    reply.send({ status: "resolved", alertId });
+  });
+
+  app.get("/compliance/reminders", async (req, reply) => {
+    const orgId = resolveOrgId(req);
+    if (!orgId) {
+      reply.code(400).send({ error: "org_missing" });
+      return;
+    }
+
+    const cycles = await prisma.basCycle.findMany({
+      where: { orgId, lodgedAt: null },
+      orderBy: { periodEnd: "asc" },
+      take: 3,
+    });
+    const now = Date.now();
+    reply.send(
+      cycles.map((cycle) => ({
+        cycleId: cycle.id,
+        dueInMs: cycle.periodEnd.getTime() - now,
+        dueInDays: Math.max(0, Math.ceil((cycle.periodEnd.getTime() - now) / (1000 * 60 * 60 * 24))),
+        status: cycle.paymentPlanRequests.length > 0 ? "payment_plan" : "pending",
+      })),
+    );
+  });
 };
 
 export default registerComplianceMonitorRoutes;

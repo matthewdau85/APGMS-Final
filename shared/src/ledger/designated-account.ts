@@ -52,11 +52,17 @@ export async function getDesignatedAccountByType(
   return account;
 }
 
+export interface CoverageContext {
+  cycleId?: string;
+  description?: string;
+}
+
 export async function ensureDesignatedAccountCoverage(
   prisma: PrismaClient,
   orgId: string,
   type: DesignatedAccountType,
   requiredAmount: number,
+  context?: CoverageContext,
 ): Promise<DesignatedAccount> {
   const account = await getDesignatedAccountByType(prisma, orgId, type);
   const balance = await currentAdapter.getBalance(account);
@@ -68,6 +74,12 @@ export async function ensureDesignatedAccountCoverage(
         type: "DESIGNATED_FUNDS_SHORTFALL",
         severity: "HIGH",
         message: `Designated ${type} account is short by ${shortfall.toFixed(2)}`,
+        metadata: {
+          requiredAmount,
+          balance,
+          cycleId: context?.cycleId ?? null,
+          description: context?.description ?? null,
+        },
       },
     });
     await currentAdapter.blockTransfer?.(account, shortfall);
