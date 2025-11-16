@@ -9,6 +9,7 @@ import {
 import {
   applyPendingContributions,
   summarizeContributions,
+  type SecuringSchedule,
 } from "@apgms/shared/ledger/ingest.js";
 import {
   DesignatedAccountType,
@@ -35,7 +36,7 @@ async function recordAuditLog(entry: {
 
 export async function runNightlyDesignatedAccountReconciliation(): Promise<void> {
   const organisations = await prisma.org.findMany({
-    select: { id: true },
+    select: { id: true, securingSchedule: true },
   });
   const runStart = Date.now();
   let processed = 0;
@@ -56,6 +57,7 @@ export async function runNightlyDesignatedAccountReconciliation(): Promise<void>
         orgId: org.id,
         actorId: SYSTEM_ACTOR,
         auditLogger: recordAuditLog,
+        securingSchedule: (org.securingSchedule as SecuringSchedule) ?? "weekly",
       });
 
       const totals = await summarizeContributions(prisma, org.id);

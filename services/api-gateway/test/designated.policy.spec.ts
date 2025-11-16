@@ -295,6 +295,19 @@ test("createBankingProvider defaults to mock for unknown adapters", () => {
   assert.equal(provider.id, "mock");
 });
 
+test("createBankingProvider supports the NAB adapter", () => {
+  const provider = createBankingProvider("nab", {
+    nab: {
+      client: {
+        async creditDesignatedAccount() {
+          return { reference: "unit", status: "accepted" } as const;
+        },
+      } as any,
+    },
+  });
+  assert.equal(provider.id, "nab");
+});
+
 test("designated accounts block debit attempts and raise alerts", async () => {
   const { prisma, state } = createInMemoryPrisma();
 

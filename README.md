@@ -35,9 +35,12 @@ WEBAUTHN_ORIGIN=http://localhost:5173
 REGULATOR_ACCESS_CODE=regulator-dev-code
 REGULATOR_JWT_AUDIENCE=urn:apgms:regulator
 REGULATOR_SESSION_TTL_MINUTES=60
-BANKING_PROVIDER=mock
+BANKING_PROVIDER_ID=mock
 BANKING_MAX_READ_TRANSACTIONS=1000
 BANKING_MAX_WRITE_CENTS=5000000
+NAB_API_BASE_URL=https://sandbox.api.nab.com.au/payments
+NAB_CLIENT_ID=apgms-dev
+NAB_CLIENT_SECRET=dev-secret
 ```
 
 > KMS dev keys: store JSON key material under `artifacts/kms/` (git-ignored). The directory is tracked via `.gitkeep`.

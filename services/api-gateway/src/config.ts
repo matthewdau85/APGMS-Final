@@ -43,6 +43,11 @@ export interface AppConfig {
     readonly providerId: string;
     readonly maxReadTransactions: number;
     readonly maxWriteCents: number;
+    readonly nab: {
+      readonly baseUrl: string;
+      readonly clientId: string;
+      readonly clientSecret: string;
+    };
   };
   readonly redis?: {
     readonly url: string;
@@ -318,8 +323,9 @@ export function loadConfig(): AppConfig {
     "WEBAUTHN_ORIGIN",
   );
 
-  const bankingProvider =
-    process.env.BANKING_PROVIDER?.trim().toLowerCase() ?? "mock";
+  const rawBankingProvider =
+    process.env.BANKING_PROVIDER_ID ?? process.env.BANKING_PROVIDER ?? "mock";
+  const bankingProvider = rawBankingProvider.trim().toLowerCase();
   const bankingMaxRead = parseIntegerEnv(
     "BANKING_MAX_READ_TRANSACTIONS",
     1000,
@@ -328,6 +334,13 @@ export function loadConfig(): AppConfig {
     "BANKING_MAX_WRITE_CENTS",
     5_000_000,
   );
+  const nabBaseUrlRaw = process.env.NAB_API_BASE_URL?.trim();
+  const nabBaseUrl =
+    nabBaseUrlRaw && nabBaseUrlRaw.length > 0
+      ? ensureUrl(nabBaseUrlRaw, "NAB_API_BASE_URL")
+      : "https://sandbox.api.nab.com.au/payments";
+  const nabClientId = process.env.NAB_CLIENT_ID?.trim() ?? "";
+  const nabClientSecret = process.env.NAB_CLIENT_SECRET?.trim() ?? "";
 
   const corsAllowedOrigins = splitOrigins(
     envDefault("CORS_ALLOWED_ORIGINS", "http://localhost:5173"),
@@ -390,6 +403,11 @@ export function loadConfig(): AppConfig {
       providerId: bankingProvider.length > 0 ? bankingProvider : "mock",
       maxReadTransactions: bankingMaxRead,
       maxWriteCents: bankingMaxWrite,
+      nab: {
+        baseUrl: nabBaseUrl,
+        clientId: nabClientId,
+        clientSecret: nabClientSecret,
+      },
     },
     redis,
     nats,

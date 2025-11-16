@@ -4,6 +4,23 @@ import { withIdempotency } from "../idempotency.js";
 import { getDesignatedAccountByType } from "./designated-account.js";
 import { applyDesignatedAccountTransfer, type AuditLogger } from "@apgms/domain-policy";
 
+export type SecuringSchedule = "daily" | "weekly";
+const DEFAULT_SCHEDULE: SecuringSchedule = "weekly";
+
+export type PendingContributionRecord = {
+  id: string;
+  amount: Decimal;
+  createdAt: Date;
+  source: string;
+};
+
+export type AggregatedContributionBatch = {
+  batchStart: Date;
+  totalAmount: Decimal;
+  source: string;
+  contributionIds: string[];
+};
+
 export type ContributionSource = "payroll_system" | "pos_system";
 
 const PAYROLL_SOURCE: ContributionSource = "payroll_system";
@@ -94,12 +111,63 @@ export async function recordPosTransaction(params: {
   );
 }
 
+function startOfUtcDay(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+function startOfUtcWeek(date: Date): Date {
+  const start = startOfUtcDay(date);
+  const day = start.getUTCDay();
+  const diff = day === 0 ? -6 : 1 - day; // Monday start
+  start.setUTCDate(start.getUTCDate() + diff);
+  return startOfUtcDay(start);
+}
+
+export function aggregatePendingContributionBatches(
+  entries: PendingContributionRecord[],
+  schedule: SecuringSchedule,
+  now: Date = new Date(),
+): AggregatedContributionBatch[] {
+  const boundary =
+    schedule === "daily" ? startOfUtcDay(now) : startOfUtcWeek(now);
+  const batches = new Map<string, AggregatedContributionBatch>();
+
+  for (const entry of entries) {
+    const bucketStart =
+      schedule === "daily"
+        ? startOfUtcDay(entry.createdAt)
+        : startOfUtcWeek(entry.createdAt);
+    if (bucketStart >= boundary) {
+      continue;
+    }
+    const key = `${entry.source}:${bucketStart.toISOString()}`;
+    const existing = batches.get(key);
+    if (existing) {
+      existing.totalAmount = existing.totalAmount.add(entry.amount);
+      existing.contributionIds.push(entry.id);
+    } else {
+      batches.set(key, {
+        batchStart: bucketStart,
+        totalAmount: new Decimal(entry.amount),
+        source: entry.source,
+        contributionIds: [entry.id],
+      });
+    }
+  }
+
+  return Array.from(batches.values()).sort(
+    (a, b) => a.batchStart.getTime() - b.batchStart.getTime(),
+  );
+}
+
 export async function applyPendingContributions(params: {
   prisma: PrismaClient;
   orgId: string;
   actorId?: string;
   auditLogger?: AuditLogger;
+  securingSchedule?: SecuringSchedule;
 }): Promise<ContributionResult> {
+  const schedule = params.securingSchedule ?? DEFAULT_SCHEDULE;
   const pendingPayroll = await params.prisma.payrollContribution.findMany({
     where: { orgId: params.orgId, appliedAt: null },
     orderBy: { createdAt: "asc" },
@@ -109,31 +177,59 @@ export async function applyPendingContributions(params: {
     orderBy: { createdAt: "asc" },
   });
 
-  const context = { prisma: params.prisma, auditLogger: params.auditLogger };
+  const payrollBatches = aggregatePendingContributionBatches(
+    pendingPayroll.map((entry) => ({
+      id: entry.id,
+      amount: entry.amount,
+      createdAt: entry.createdAt,
+      source: entry.source,
+    })),
+    schedule,
+  );
+  const posBatches = aggregatePendingContributionBatches(
+    pendingPos.map((entry) => ({
+      id: entry.id,
+      amount: entry.amount,
+      createdAt: entry.createdAt,
+      source: entry.source,
+    })),
+    schedule,
+  );
 
-  for (const contribution of pendingPayroll) {
-    await applyContribution(contribution, {
+  const context = { prisma: params.prisma, auditLogger: params.auditLogger };
+  const actorId = params.actorId ?? "system";
+  let payrollApplied = 0;
+  let posApplied = 0;
+
+  for (const batch of payrollBatches) {
+    const applied = await applyAggregatedContribution(batch, {
       orgId: params.orgId,
       accountType: "PAYGW_BUFFER",
-      actorId: params.actorId ?? contribution.actorId ?? "system",
+      actorId,
       context,
       table: "payroll",
     });
+    if (applied) {
+      payrollApplied += batch.contributionIds.length;
+    }
   }
 
-  for (const contribution of pendingPos) {
-    await applyContribution(contribution, {
+  for (const batch of posBatches) {
+    const applied = await applyAggregatedContribution(batch, {
       orgId: params.orgId,
       accountType: "GST_BUFFER",
-      actorId: params.actorId ?? contribution.actorId ?? "system",
+      actorId,
       context,
       table: "pos",
     });
+    if (applied) {
+      posApplied += batch.contributionIds.length;
+    }
   }
 
   return {
-    payrollApplied: pendingPayroll.length,
-    posApplied: pendingPos.length,
+    payrollApplied,
+    posApplied,
   };
 }
 
@@ -148,20 +244,19 @@ type ApplyContributionContext = {
   table: "payroll" | "pos";
 };
 
-async function applyContribution(
-  contribution: {
-    id: string;
-    amount: Decimal;
-    source: string;
-    idempotencyKey?: string | null;
-  },
+async function applyAggregatedContribution(
+  batch: AggregatedContributionBatch,
   params: ApplyContributionContext,
-): Promise<void> {
+): Promise<boolean> {
+  if (batch.totalAmount.isZero()) {
+    return false;
+  }
   const account = await getDesignatedAccountByType(
     params.context.prisma,
     params.orgId,
     params.accountType,
   );
+  const amount = Number(batch.totalAmount.toString());
   const transfer = await applyDesignatedAccountTransfer(
     {
       prisma: params.context.prisma,
@@ -170,29 +265,32 @@ async function applyContribution(
     {
       orgId: params.orgId,
       accountId: account.id,
-      amount: Number(contribution.amount),
-      source: contribution.source,
+      amount,
+      source: batch.source,
       actorId: params.actorId,
     },
   );
 
-  const update =
-    params.table === "payroll"
-      ? params.context.prisma.payrollContribution.update({
-          where: { id: contribution.id },
-          data: {
-            appliedAt: new Date(),
-            transferId: transfer.transferId,
-          },
-        })
-      : params.context.prisma.posTransaction.update({
-          where: { id: contribution.id },
-          data: {
-            appliedAt: new Date(),
-            transferId: transfer.transferId,
-          },
-        });
-  await update;
+  const appliedAt = new Date();
+  if (params.table === "payroll") {
+    await params.context.prisma.payrollContribution.updateMany({
+      where: { id: { in: batch.contributionIds } },
+      data: {
+        appliedAt,
+        transferId: transfer.transferId,
+      },
+    });
+  } else {
+    await params.context.prisma.posTransaction.updateMany({
+      where: { id: { in: batch.contributionIds } },
+      data: {
+        appliedAt,
+        transferId: transfer.transferId,
+      },
+    });
+  }
+
+  return true;
 }
 
 export async function summarizeContributions(prisma: PrismaClient, orgId: string) {
