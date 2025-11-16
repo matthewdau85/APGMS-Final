@@ -26,7 +26,7 @@ async function main() {
   const org = await prisma.org.upsert({
     where: { id: "demo-org" },
     update: {},
-    create: { id: "demo-org", name: "Demo Org" },
+    create: { id: "demo-org", name: "Demo Org", tier: "Monitor" },
   });
 
   const hashedPassword = await hashPassword("password123");

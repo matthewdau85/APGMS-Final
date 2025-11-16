@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "outDir": "./.ts-jest",
+    "paths": {
+      "@apgms/shared": ["shared/src/index.ts"],
+      "@apgms/shared/*": ["shared/src/*"],
+      "@apgms/domain-policy": ["packages/domain-policy/src/index.ts"]
+    }
+  }
+}

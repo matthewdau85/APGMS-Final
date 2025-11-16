@@ -137,7 +137,7 @@ async function ensureOrganization(orgId: string): Promise<void> {
   await prisma.organization.upsert({
     where: { id: orgId },
     update: {},
-    create: { id: orgId, name: "APGMS Demo Org" },
+    create: { id: orgId, name: "APGMS Demo Org", tier: "Monitor" },
   });
 }
 

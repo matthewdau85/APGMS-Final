@@ -10,6 +10,7 @@ const navItems: Array<{ to: string; label: string }> = [
   { to: "/compliance", label: "Compliance" },
   { to: "/demo", label: "Demo mode" },
   { to: "/security", label: "Security / Access" },
+  { to: "/settings", label: "Settings" },
 ];
 
 export default function ProtectedLayout() {

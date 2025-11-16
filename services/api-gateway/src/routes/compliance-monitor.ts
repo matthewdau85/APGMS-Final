@@ -1,4 +1,9 @@
-import { type FastifyInstance, type FastifyPluginAsync, type FastifyRequest } from "fastify";
+import {
+  type FastifyInstance,
+  type FastifyPluginAsync,
+  type FastifyRequest,
+  type FastifyReply,
+} from "fastify";
 import { parseWithSchema } from "../lib/validation.js";
 import {
   recordPayrollContribution,
@@ -22,11 +27,18 @@ import {
   precheckSchema,
 } from "../schemas/designated-ingest.js";
 import { complianceTransferSchema } from "../schemas/compliance-transfer.js";
-import { forecastObligations, computeTierStatus, type ForecastResult } from "@apgms/shared/ledger/predictive.js";
+import {
+  forecastObligations,
+  computeTierStatus,
+  type ForecastResult,
+} from "@apgms/shared/ledger/predictive.js";
+import { computeVirtualBalance } from "@apgms/shared/ledger/virtual-balance.js";
+import { predictTaxObligations } from "@apgms/shared/predict.js";
 import { applyDesignatedAccountTransfer } from "@apgms/domain-policy";
 import { z } from "zod";
 import fs from "node:fs";
 import path from "node:path";
+import { TierManager } from "../services/tier-manager.js";
 
 const REMEDIATION_GUIDANCE =
   "Re-ingest missing payroll/POS batches, rerun the reconciliation job, and capture the remediation evidence before BAS lodgment.";
@@ -34,6 +46,116 @@ const REMEDIATION_GUIDANCE =
 const complianceArtifactDir = path.join(process.cwd(), "artifacts", "compliance");
 const partnerInfoFile = path.join(complianceArtifactDir, "partner-info.json");
 const tierStateDir = path.join(complianceArtifactDir, "tier-state");
+const tierManager = new TierManager(prisma);
+
+type AlertRecord = Awaited<ReturnType<typeof prisma.alert.findMany>>[number];
+
+const alertResolutionSchema = z.object({
+  note: z.string().min(1),
+  mfaCode: z.string().optional(),
+});
+
+function serializeAlert(alert: AlertRecord) {
+  return {
+    id: alert.id,
+    type: alert.type,
+    severity: alert.severity,
+    message: alert.message,
+    createdAt: alert.createdAt.toISOString(),
+    resolvedAt: alert.resolvedAt?.toISOString() ?? null,
+    resolved: Boolean(alert.resolvedAt),
+    resolutionNote: alert.resolutionNote ?? null,
+  };
+}
+
+async function requirePredictionTier(
+  orgId: string,
+  reply: FastifyReply,
+) {
+  const tier = await tierManager.getTier(orgId);
+  if (!tierManager.canAccessPredictions(tier)) {
+    reply
+      .code(403)
+      .send({ error: "tier_restricted", tier });
+    return null;
+  }
+  return tier;
+}
+
+async function requireAutoTransferTier(orgId: string, reply: FastifyReply) {
+  const tier = await tierManager.getTier(orgId);
+  if (!tierManager.canAutomateTransfers(tier)) {
+    reply
+      .code(403)
+      .send({ error: "tier_restricted", tier });
+    return null;
+  }
+  return tier;
+}
+
+async function resolveAlertRecord(
+  params: {
+    alertId: string;
+    orgId?: string;
+    note: string;
+    request: FastifyRequest;
+    reply: FastifyReply;
+    mfaCode?: string;
+  },
+): Promise<AlertRecord | null> {
+  const alert = await prisma.alert.findUnique({ where: { id: params.alertId } });
+  if (!alert) {
+    params.reply.code(404).send({ error: "alert_not_found" });
+    return null;
+  }
+  if (params.orgId && alert.orgId !== params.orgId) {
+    params.reply.code(403).send({ error: "forbidden_alert" });
+    return null;
+  }
+
+  const requiresMfa =
+    alert.severity?.toUpperCase() === "HIGH" && Boolean((params.request.user as any)?.mfaEnabled);
+  if (requiresMfa) {
+    if (!params.mfaCode) {
+      params.reply.code(401).send({ error: { code: "mfa_required" } });
+      return null;
+    }
+    const expected = process.env.ALERT_RESOLUTION_MFA_CODE?.trim() ?? "000000";
+    if (params.mfaCode !== expected) {
+      params.reply.code(401).send({ error: { code: "mfa_invalid" } });
+      return null;
+    }
+  }
+
+  const principal = (params.request.user as any)?.sub ?? "system";
+  const updated = await prisma.alert.update({
+    where: { id: alert.id },
+    data: {
+      resolvedAt: new Date(),
+      resolutionNote: params.note,
+      metadata: {
+        ...(alert.metadata ?? {}),
+        resolvedBy: principal,
+        resolvedAt: new Date().toISOString(),
+      },
+    },
+  });
+
+  logSecurityEvent(
+    params.request.log,
+    buildSecurityLogEntry(
+      {
+        event: "designated.alert.resolved",
+        orgId: alert.orgId,
+        principal,
+        metadata: { alertId: alert.id, message: alert.message },
+      },
+      buildSecurityContextFromRequest(params.request),
+    ),
+  );
+
+  return updated;
+}
 
 function ensureArtifactDir(): void {
   fs.mkdirSync(complianceArtifactDir, { recursive: true });
@@ -318,6 +440,158 @@ export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) =
     reply.code(202).send({ status: "queued" });
   });
 
+  app.get("/org/obligations/current", async (req, reply) => {
+    const orgId = resolveOrgId(req);
+    if (!orgId) {
+      reply.code(401).send({ error: "org_missing" });
+      return;
+    }
+
+    const [latestCycle, summary] = await Promise.all([
+      prisma.basCycle.findFirst({
+        where: { orgId },
+        orderBy: { periodEnd: "desc" },
+      }),
+      summarizeContributions(prisma, orgId),
+    ]);
+
+    const paygwRequired = Number(latestCycle?.paygwRequired ?? 0);
+    const gstRequired = Number(latestCycle?.gstRequired ?? 0);
+    const paygwSecured = summary.paygwSecured;
+    const gstSecured = summary.gstSecured;
+
+    const payload = {
+      basCycleId: latestCycle?.id ?? null,
+      basPeriodStart: latestCycle?.periodStart?.toISOString() ?? null,
+      basPeriodEnd: latestCycle?.periodEnd?.toISOString() ?? null,
+      nextBasDue: latestCycle?.periodEnd?.toISOString() ?? null,
+      paygw: {
+        required: paygwRequired,
+        secured: paygwSecured,
+        shortfall: Math.max(0, paygwRequired - paygwSecured),
+        status: paygwSecured >= paygwRequired ? "READY" : "SHORTFALL",
+      },
+      gst: {
+        required: gstRequired,
+        secured: gstSecured,
+        shortfall: Math.max(0, gstRequired - gstSecured),
+        status: gstSecured >= gstRequired ? "READY" : "SHORTFALL",
+      },
+    };
+
+    reply.send(payload);
+  });
+
+  app.get("/org/designated-accounts", async (req, reply) => {
+    const orgId = resolveOrgId(req);
+    if (!orgId) {
+      reply.code(401).send({ error: "org_missing" });
+      return;
+    }
+
+    const accounts = await prisma.designatedAccount.findMany({
+      where: { orgId },
+      include: {
+        transfers: {
+          orderBy: { createdAt: "desc" },
+          take: 5,
+        },
+      },
+    });
+
+    const totals = accounts.reduce(
+      (acc, account) => {
+        const balance = Number(account.balance ?? 0);
+        if (account.type === "PAYGW_BUFFER") {
+          acc.paygw += balance;
+        } else if (account.type === "GST_BUFFER") {
+          acc.gst += balance;
+        }
+        return acc;
+      },
+      { paygw: 0, gst: 0 },
+    );
+
+    reply.send({
+      totals,
+      accounts: accounts.map((account) => ({
+        id: account.id,
+        type: account.type.replace("_BUFFER", ""),
+        balance: Number(account.balance ?? 0),
+        updatedAt: account.updatedAt.toISOString(),
+        transfers: account.transfers.map((transfer) => ({
+          id: transfer.id,
+          amount: Number(transfer.amount ?? 0),
+          source: transfer.source,
+          createdAt: transfer.createdAt.toISOString(),
+        })),
+      })),
+    });
+  });
+
+  app.get("/org/virtual-balance", async (req, reply) => {
+    const orgId = resolveOrgId(req);
+    if (!orgId) {
+      reply.code(401).send({ error: "org_missing" });
+      return;
+    }
+    const balance = await computeVirtualBalance(orgId);
+    reply.send(balance);
+  });
+
+  app.get("/org/prediction", async (req, reply) => {
+    const orgId = resolveOrgId(req);
+    if (!orgId) {
+      reply.code(401).send({ error: "org_missing" });
+      return;
+    }
+    const tier = await requirePredictionTier(orgId, reply);
+    if (!tier) {
+      return;
+    }
+    const requested = Number((req.query as { daysAhead?: string }).daysAhead ?? 30);
+    const normalized = Number.isFinite(requested) && requested > 0 ? requested : 30;
+    const result = await predictTaxObligations(orgId, normalized);
+    reply.send({ tier, daysAhead: Math.floor(normalized), prediction: result });
+  });
+
+  app.get("/alerts", async (req, reply) => {
+    const orgId = resolveOrgId(req);
+    if (!orgId) {
+      reply.code(401).send({ error: "org_missing" });
+      return;
+    }
+
+    const alerts = await prisma.alert.findMany({
+      where: { orgId },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    });
+    reply.send({ alerts: alerts.map(serializeAlert) });
+  });
+
+  app.post("/alerts/:id/resolve", async (req, reply) => {
+    const orgId = resolveOrgId(req);
+    if (!orgId) {
+      reply.code(401).send({ error: "org_missing" });
+      return;
+    }
+    const { id } = req.params as { id: string };
+    const payload = parseWithSchema(alertResolutionSchema, req.body);
+    const alert = await resolveAlertRecord({
+      alertId: id,
+      orgId,
+      note: payload.note,
+      mfaCode: payload.mfaCode,
+      request: req,
+      reply,
+    });
+    if (!alert) {
+      return;
+    }
+    reply.send({ alert: serializeAlert(alert) });
+  });
+
   app.get("/compliance/pending", async (req, reply) => {
     const orgId = resolveOrgId(req);
     if (!orgId) {
@@ -402,6 +676,11 @@ export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) =
     const orgId = body.orgId ?? resolveOrgId(req);
     if (!orgId) {
       reply.code(400).send({ error: "org_missing" });
+      return;
+    }
+
+    const tier = await requireAutoTransferTier(orgId, reply);
+    if (!tier) {
       return;
     }
 
@@ -644,41 +923,19 @@ export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) =
   });
 
   app.post("/compliance/alerts/:id/resolve", async (req, reply) => {
-    const alertId = (req.params as { id: string }).id;
-    const principal = (req.user as any)?.sub ?? "system";
-    const alert = await prisma.alert.findUnique({ where: { id: alertId } });
+    const { id } = req.params as { id: string };
+    const payload = parseWithSchema(alertResolutionSchema, req.body);
+    const alert = await resolveAlertRecord({
+      alertId: id,
+      note: payload.note,
+      mfaCode: payload.mfaCode,
+      request: req,
+      reply,
+    });
     if (!alert) {
-      reply.code(404).send({ error: "alert_not_found" });
       return;
     }
-
-    await prisma.alert.update({
-      where: { id: alertId },
-      data: {
-        resolvedAt: new Date(),
-        metadata: {
-          ...(alert.metadata ?? {}),
-          resolvedBy: principal,
-          resolvedAt: new Date().toISOString(),
-        },
-      },
-    });
-
-    const entry = buildSecurityLogEntry(
-      {
-        event: "designated.alert.resolved",
-        orgId: alert.orgId,
-        principal,
-        metadata: {
-          alertId,
-          message: alert.message,
-        },
-      },
-      buildSecurityContextFromRequest(req),
-    );
-    logSecurityEvent(app.log, entry);
-
-    reply.send({ status: "resolved", alertId });
+    reply.send({ alert: serializeAlert(alert) });
   });
 
   app.get("/compliance/reminders", async (req, reply) => {

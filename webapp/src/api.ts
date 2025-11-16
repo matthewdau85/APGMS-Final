@@ -21,6 +21,8 @@ export type ApiSession = {
   };
 };
 
+export type SubscriptionTier = "Monitor" | "Reserve" | "Automate";
+
 export async function login(email: string, password: string) {
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: "POST",
@@ -119,8 +121,8 @@ export async function fetchCurrentObligations(token: string) {
   if (!res.ok) throw new Error("failed_obligations");
   return res.json() as Promise<{
     basCycleId: string | null;
-    basPeriodStart: string;
-    basPeriodEnd: string;
+    basPeriodStart: string | null;
+    basPeriodEnd: string | null;
     paygw: {
       required: number;
       secured: number;
@@ -186,6 +188,34 @@ export async function fetchAlerts(token: string) {
       resolvedAt: string | null;
       resolutionNote: string | null;
     }>;
+  }>;
+}
+
+export async function fetchVirtualBalance(token: string) {
+  const res = await fetch(`${API_BASE}/org/virtual-balance`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error("failed_virtual_balance");
+  return res.json() as Promise<{
+    actualBalance: number;
+    taxReserved: number;
+    discretionaryBalance: number;
+  }>;
+}
+
+export async function fetchTaxPrediction(token: string, daysAhead = 30) {
+  const res = await fetch(`${API_BASE}/org/prediction?daysAhead=${encodeURIComponent(daysAhead)}`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error("failed_prediction");
+  return res.json() as Promise<{
+    tier: SubscriptionTier;
+    daysAhead: number;
+    prediction: {
+      gstEstimate: number;
+      paygwEstimate: number;
+      confidence: number;
+    };
   }>;
 }
 
@@ -341,7 +371,25 @@ export async function fetchDesignatedAccounts(token: string) {
         createdAt: string;
       }>;
     }>;
-  }>;
+    }>;
+}
+
+export async function fetchTier(token: string) {
+  const res = await fetch(`${API_BASE}/tier`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error("failed_tier_fetch");
+  return res.json() as Promise<{ tier: SubscriptionTier }>;
+}
+
+export async function updateTier(token: string, tier: SubscriptionTier) {
+  const res = await fetch(`${API_BASE}/tier`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ tier }),
+  });
+  if (!res.ok) throw new Error("failed_tier_update");
+  return res.json() as Promise<{ tier: SubscriptionTier }>;
 }
 
 export async function fetchPaymentPlanRequest(
