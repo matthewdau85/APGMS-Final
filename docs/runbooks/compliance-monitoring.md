@@ -18,11 +18,15 @@ This runbook notes the safeguards that surround the designated one-way accounts,
 
 ## Dashboard Signals
 - Surface the following cards on the compliance dashboard:
-  * Pending contributions (count per org, last ingestion timestamp, ingestion source).
-  * Alerts (shortfall and violation IDs, severity, outstanding actions).
+  * Pending contributions (count per org, last ingestion timestamp, ingestion source). Use `/compliance/status` and `/compliance/pending` to populate these views.
+  * Alerts (shortfall and violation IDs, severity, outstanding actions) pulled from the `DESIGNATED_FUNDS_SHORTFALL` alerts recorded by `ensureDesignatedAccountCoverage`.
   * Penalties/Remissions (status, documentation links, next expected BAS).
   * Payment-plan discussions (current status, ratio of outstanding obligations to buffer balance).
 - Link each card to the relevant audit log entries produced by the enforced `applyDesignatedAccountTransfer`/`logSecurityEvent` pipeline so you can arm security/compliance teams with evidence during reviews.
+
+## Phase 1 Callouts
+- The compliance monitor API exposes `/ingest/payroll`, `/ingest/pos`, `/compliance/precheck`, `/compliance/pending`, and `/compliance/status`. Use these endpoints to feed payroll/POS webhooks (include Idempotency-Key headers), validate balances before BAS lodgment, and surface pending contributions plus remediation hints.
+- The `configureBankingAdapter` hook in `shared/src/ledger/designated-account.ts` lets you swap in a sandbox ADI/banking partner adapter later. For now the Prisma adapter reports deposit-only balances and logs shortfalls; document when you replace it with a real banking integration (include adapter name, endpoint, and required certificates in `status/` or `artifacts/compliance/`).
 
 ## Regulatory Path & DSP Readiness
 - Track the ATO DSP application (OSF questionnaire, product registration, STP/BAS entitlement) in parallel with this code work. Log the submitted product ID, scope of services, and the readiness checklist inside this runbook so audits can see the progress. Document whether you plan to act as a software-only adviser (no fund movement) or to layer onto a licensed banking partner or restricted ADI.

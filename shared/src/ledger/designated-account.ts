@@ -17,14 +17,21 @@ export interface BankingAdapter {
   blockTransfer?(account: DesignatedAccount, shortfall: number): Promise<void>;
 }
 
-export class PrismaBankingAdapter implements BankingAdapter {
+class PrismaBankingAdapter implements BankingAdapter {
   async getBalance(account: DesignatedAccount): Promise<number> {
     return Number(account.balance);
   }
 
   async blockTransfer(account: DesignatedAccount, shortfall: number): Promise<void> {
-    await account; // no-op for now; placeholder for future alerts
+    await account; // no-op for now; placeholder for future alerts/sandbox plan
   }
+}
+
+let currentAdapter: BankingAdapter = new PrismaBankingAdapter();
+
+/** Configure the adapter that simulates the banking partner. Swap this for a sandbox/ADI connector later. */
+export function configureBankingAdapter(adapter: BankingAdapter): void {
+  currentAdapter = adapter;
 }
 
 export async function getDesignatedAccountByType(
@@ -50,10 +57,9 @@ export async function ensureDesignatedAccountCoverage(
   orgId: string,
   type: DesignatedAccountType,
   requiredAmount: number,
-  adapter: BankingAdapter = new PrismaBankingAdapter(),
 ): Promise<DesignatedAccount> {
   const account = await getDesignatedAccountByType(prisma, orgId, type);
-  const balance = await adapter.getBalance(account);
+  const balance = await currentAdapter.getBalance(account);
   const shortfall = requiredAmount - balance;
   if (shortfall > 0) {
     await prisma.alert.create({
@@ -64,7 +70,7 @@ export async function ensureDesignatedAccountCoverage(
         message: `Designated ${type} account is short by ${shortfall.toFixed(2)}`,
       },
     });
-    await adapter.blockTransfer?.(account, shortfall);
+    await currentAdapter.blockTransfer?.(account, shortfall);
     throw conflict(
       "designated_insufficient_funds",
       `Designated ${type} account balance ${balance.toFixed(2)} does not cover requirement ${requiredAmount.toFixed(2)}`,
