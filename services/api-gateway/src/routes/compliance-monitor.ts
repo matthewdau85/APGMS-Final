@@ -22,11 +22,17 @@ import {
   precheckSchema,
 } from "../schemas/designated-ingest.js";
 import { complianceTransferSchema } from "../schemas/compliance-transfer.js";
-import { forecastObligations, computeTierStatus, type ForecastResult } from "@apgms/shared/ledger/predictive.js";
+import { forecastObligations, computeTierStatus, type ForecastResult, type TierStatus } from "@apgms/shared/ledger/predictive.js";
 import { applyDesignatedAccountTransfer } from "@apgms/domain-policy";
 import { z } from "zod";
 import fs from "node:fs";
 import path from "node:path";
+import {
+  getScheduleMetadata,
+  recordScheduleRun,
+  resolveTierMargin,
+  shouldRunTierCheck,
+} from "../lib/tier-config.js";
 
 const REMEDIATION_GUIDANCE =
   "Re-ingest missing payroll/POS batches, rerun the reconciliation job, and capture the remediation evidence before BAS lodgment.";
@@ -180,6 +186,13 @@ async function buildPilotReport(payload: {
   };
   fs.writeFileSync(file, JSON.stringify(base, null, 2));
 }
+
+const tierCheckSchema = z
+  .object({
+    force: z.boolean().optional(),
+    orgIds: z.array(z.string()).optional(),
+  })
+  .default({});
 function contributionLog(
   app: FastifyInstance,
   req: FastifyRequest,
@@ -565,16 +578,17 @@ export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) =
     const summary = await summarizeContributions(prisma, orgId);
     const pending = await fetchPendingContributions(orgId);
 
+    const marginPercent = resolveTierMargin();
     const tierStatuses = {
       paygw: computeTierStatus(
         accounts.find((entry) => entry.type === "PAYGW_BUFFER")?.balance ?? 0,
         forecast.paygwForecast,
-        forecast.paygwForecast * 0.1,
+        forecast.paygwForecast * marginPercent,
       ),
       gst: computeTierStatus(
         accounts.find((entry) => entry.type === "GST_BUFFER")?.balance ?? 0,
         forecast.gstForecast,
-        forecast.gstForecast * 0.1,
+        forecast.gstForecast * marginPercent,
       ),
     };
 
@@ -606,13 +620,30 @@ export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) =
         pending.length > 0 ? REMEDIATION_GUIDANCE : "Buffers are healthy and ready for BAS.",
       partnerStatus,
       escalationAlertId: escalationAlert?.id ?? null,
+      alertSchedule: getScheduleMetadata(orgId),
     });
   });
 
   app.post("/compliance/tier-check", async (req, reply) => {
+    const input = parseWithSchema(req.body ?? {}, tierCheckSchema);
     const orgs = await prisma.org.findMany({ select: { id: true } });
-    const results = [];
-    for (const { id } of orgs) {
+    const requestedOrgIds = input.orgIds && input.orgIds.length > 0 ? new Set(input.orgIds) : null;
+    const targetOrgs = requestedOrgIds ? orgs.filter((org) => requestedOrgIds.has(org.id)) : orgs;
+    const results: Array<{
+      orgId: string;
+      skipped?: boolean;
+      reason?: string;
+      tierStatus?: Record<string, TierStatus>;
+      forecast?: ForecastResult;
+      escalationAlertId?: string | null;
+      schedule: ReturnType<typeof getScheduleMetadata>;
+    }> = [];
+    for (const { id } of targetOrgs) {
+      const decision = shouldRunTierCheck(id, input.force ?? false);
+      if (!decision.run) {
+        results.push({ orgId: id, skipped: true, reason: decision.reason, schedule: decision.schedule });
+        continue;
+      }
       const forecast = await forecastObligations(prisma, id);
       const accounts = await Promise.all(
         (["PAYGW_BUFFER", "GST_BUFFER"] as const).map(async (type) => {
@@ -620,24 +651,27 @@ export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) =
           return snapshot;
         }),
       );
+      const marginPercent = resolveTierMargin();
       const tierStatuses = {
         paygw: computeTierStatus(
           accounts.find((entry) => entry.account.type === "PAYGW_BUFFER")?.balance ?? 0,
           forecast.paygwForecast,
-          forecast.paygwForecast * 0.1,
+          forecast.paygwForecast * marginPercent,
         ),
         gst: computeTierStatus(
           accounts.find((entry) => entry.account.type === "GST_BUFFER")?.balance ?? 0,
           forecast.gstForecast,
-          forecast.gstForecast * 0.1,
+          forecast.gstForecast * marginPercent,
         ),
       };
       const alert = await issueTierEscalationAlert(id, forecast, tierStatuses, req);
+      const schedule = recordScheduleRun(id);
       results.push({
         orgId: id,
         tierStatus: tierStatuses,
         forecast,
         escalationAlertId: alert?.id ?? null,
+        schedule,
       });
     }
     reply.send({ results });

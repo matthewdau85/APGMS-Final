@@ -1,0 +1,269 @@
+{
+  "generatedAt": "2025-11-16T11:38:44.956Z",
+  "dataset": {
+    "generatedAt": "2024-10-01T00:00:00.000Z",
+    "description": "Synthetic pilot BAS cycles derived from payroll/POS fixtures. Values are in AUD dollars for PAYGW and GST obligations.",
+    "orgCount": 4,
+    "path": "data/pilot/analytics/pilot-cycles.json"
+  },
+  "metrics": {
+    "ewma": {
+      "paygw": {
+        "mae": 1370.873220998924,
+        "rmse": 1551.99948405522,
+        "mape": 0.07130652071822464,
+        "coverage": 0
+      },
+      "gst": {
+        "mae": 517.2776248657344,
+        "rmse": 575.579452915937,
+        "mape": 0.044465566236974965,
+        "coverage": 0
+      }
+    },
+    "regression": {
+      "paygw": {
+        "mae": 87.82142857142799,
+        "rmse": 112.87985756944347,
+        "mape": 0.005058010328148593,
+        "coverage": 0
+      },
+      "gst": {
+        "mae": 160.46428571428555,
+        "rmse": 192.19618219147716,
+        "mape": 0.013610751561081925,
+        "coverage": 0
+      }
+    }
+  },
+  "reports": [
+    {
+      "orgId": "pilot-cafe",
+      "name": "Harborview Cafe",
+      "industry": "Hospitality",
+      "paygw": {
+        "actual": 18200,
+        "historyCount": 6,
+        "confidence": {
+          "lower": 14473.304838219588,
+          "upper": 17305.622390566667,
+          "standardDeviation": 1769.8297940762552,
+          "sampleSize": 6
+        },
+        "models": {
+          "ewma": {
+            "prediction": 15889.463614393128,
+            "error": -2310.5363856068725,
+            "absError": 2310.5363856068725,
+            "mape": 0.12695254865971828,
+            "withinConfidence": false
+          },
+          "regression": {
+            "prediction": 17992.428571428572,
+            "error": -207.57142857142753,
+            "absError": 207.57142857142753,
+            "mape": 0.011405023547880633,
+            "withinConfidence": false
+          }
+        }
+      },
+      "gst": {
+        "actual": 9500,
+        "historyCount": 6,
+        "confidence": {
+          "lower": 8549.691164831958,
+          "upper": 9084.66705213904,
+          "standardDeviation": 334.2902930089356,
+          "sampleSize": 6
+        },
+        "models": {
+          "ewma": {
+            "prediction": 8817.1791084855,
+            "error": -682.8208915145005,
+            "absError": 682.8208915145005,
+            "mape": 0.07187588331731584,
+            "withinConfidence": false
+          },
+          "regression": {
+            "prediction": 9275.714285714286,
+            "error": -224.28571428571377,
+            "absError": 224.28571428571377,
+            "mape": 0.023609022556390923,
+            "withinConfidence": false
+          }
+        }
+      }
+    },
+    {
+      "orgId": "pilot-fabrication",
+      "name": "Metro Fabrication",
+      "industry": "Manufacturing",
+      "paygw": {
+        "actual": 24500,
+        "historyCount": 6,
+        "confidence": {
+          "lower": 22763.07410530231,
+          "upper": 24196.243832399094,
+          "standardDeviation": 895.5445270895244,
+          "sampleSize": 6
+        },
+        "models": {
+          "ewma": {
+            "prediction": 23479.6589688507,
+            "error": -1020.3410311492989,
+            "absError": 1020.3410311492989,
+            "mape": 0.041646572699971386,
+            "withinConfidence": false
+          },
+          "regression": {
+            "prediction": 24565.714285714286,
+            "error": 65.71428571428623,
+            "absError": 65.71428571428623,
+            "mape": 0.0026822157434402546,
+            "withinConfidence": false
+          }
+        }
+      },
+      "gst": {
+        "actual": 16320,
+        "historyCount": 6,
+        "confidence": {
+          "lower": 15460.104164933015,
+          "upper": 16069.52795107129,
+          "standardDeviation": 380.81053906984596,
+          "sampleSize": 6
+        },
+        "models": {
+          "ewma": {
+            "prediction": 15764.816058002152,
+            "error": -555.1839419978478,
+            "absError": 555.1839419978478,
+            "mape": 0.03401862389692695,
+            "withinConfidence": false
+          },
+          "regression": {
+            "prediction": 16202.857142857143,
+            "error": -117.14285714285688,
+            "absError": 117.14285714285688,
+            "mape": 0.007177871148459368,
+            "withinConfidence": false
+          }
+        }
+      }
+    },
+    {
+      "orgId": "pilot-digital",
+      "name": "Signal Digital",
+      "industry": "Professional Services",
+      "paygw": {
+        "actual": 10810,
+        "historyCount": 6,
+        "confidence": {
+          "lower": 10184.787521448796,
+          "upper": 10652.45737651039,
+          "standardDeviation": 292.23278392404916,
+          "sampleSize": 6
+        },
+        "models": {
+          "ewma": {
+            "prediction": 10418.622448979593,
+            "error": -391.3775510204068,
+            "absError": 391.3775510204068,
+            "mape": 0.03620513885480174,
+            "withinConfidence": false
+          },
+          "regression": {
+            "prediction": 10754.857142857143,
+            "error": -55.14285714285688,
+            "absError": 55.14285714285688,
+            "mape": 0.0051010968679793605,
+            "withinConfidence": false
+          }
+        }
+      },
+      "gst": {
+        "actual": 5650,
+        "historyCount": 6,
+        "confidence": {
+          "lower": 5496.5811035282,
+          "upper": 5613.1329136576205,
+          "standardDeviation": 72.82971005480294,
+          "sampleSize": 6
+        },
+        "models": {
+          "ewma": {
+            "prediction": 5554.8570085929105,
+            "error": -95.14299140708954,
+            "absError": 95.14299140708954,
+            "mape": 0.016839467505679565,
+            "withinConfidence": false
+          },
+          "regression": {
+            "prediction": 5638.714285714285,
+            "error": -11.285714285714675,
+            "absError": 11.285714285714675,
+            "mape": 0.001997471554993748,
+            "withinConfidence": false
+          }
+        }
+      }
+    },
+    {
+      "orgId": "pilot-contractor",
+      "name": "Trident Contractors",
+      "industry": "Construction",
+      "paygw": {
+        "actual": 21900,
+        "historyCount": 6,
+        "confidence": {
+          "lower": 18989.00678614384,
+          "upper": 21288.517381417925,
+          "standardDeviation": 1436.894800139059,
+          "sampleSize": 6
+        },
+        "models": {
+          "ewma": {
+            "prediction": 20138.762083780883,
+            "error": -1761.2379162191173,
+            "absError": 1761.2379162191173,
+            "mape": 0.08042182265840718,
+            "withinConfidence": false
+          },
+          "regression": {
+            "prediction": 21922.85714285714,
+            "error": 22.857142857141298,
+            "absError": 22.857142857141298,
+            "mape": 0.0010437051532941233,
+            "withinConfidence": false
+          }
+        }
+      },
+      "gst": {
+        "actual": 13350,
+        "historyCount": 6,
+        "confidence": {
+          "lower": 12344.324581144252,
+          "upper": 12883.750069768748,
+          "standardDeviation": 337.0707146381404,
+          "sampleSize": 6
+        },
+        "models": {
+          "ewma": {
+            "prediction": 12614.0373254565,
+            "error": -735.9626745434998,
+            "absError": 735.9626745434998,
+            "mape": 0.055128290227977515,
+            "withinConfidence": false
+          },
+          "regression": {
+            "prediction": 13060.857142857143,
+            "error": -289.1428571428569,
+            "absError": 289.1428571428569,
+            "mape": 0.02165864098448366,
+            "withinConfidence": false
+          }
+        }
+      }
+    }
+  ]
+}

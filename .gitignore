@@ -23,6 +23,8 @@ build/
 # Generated artifacts
 coverage/
 artifacts/
+!artifacts/analytics/
+!artifacts/analytics/*.json
 
 # Scripts dropping locally
 gate.ps1
