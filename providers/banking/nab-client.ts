@@ -39,6 +39,20 @@ function sanitizeBaseUrl(value: string): string {
   return normalized;
 }
 
+const VALID_STATUSES: ReadonlySet<NabCreditResponse["status"]> = new Set([
+  "accepted",
+  "queued",
+  "failed",
+]);
+
+function normalizeStatus(value: unknown): NabCreditResponse["status"] {
+  if (typeof value === "string" && VALID_STATUSES.has(value as NabCreditResponse["status"])) {
+    return value as NabCreditResponse["status"];
+  }
+
+  return "queued";
+}
+
 export class NabClient {
   private readonly baseUrl: string;
   private readonly clientId: string;
@@ -96,15 +110,9 @@ export class NabClient {
       );
     }
 
-    const parsedStatus = typeof parsed?.status === "string" ? parsed.status : undefined;
-    const status: NabCreditResponse["status"] =
-      parsedStatus === "accepted" || parsedStatus === "queued" || parsedStatus === "failed"
-        ? parsedStatus
-        : "queued";
-
     return {
       reference: String(parsed?.reference ?? parsed?.id ?? request.reference),
-      status,
+      status: normalizeStatus(parsed?.status),
     };
   }
 }
