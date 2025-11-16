@@ -151,6 +151,18 @@ curl -sSf http://localhost:3000/metrics -o "$OUT/metrics.prom" || true
 
 ---
 
+## ATO DSP Registration
+
+* **Product ID:** `DSP-PRD-8742`
+* **Application package:** `runbooks/compliance/ato-dsp-registration.md` (submission log, liaison feedback, evidence links).
+* **OSF / STP evidence:** indexed under `docs/dsp-osf/evidence-index.md` with source artifacts inside `artifacts/compliance/`.
+* **Security bundle:** `artifacts/compliance/security-bundle-20250301.md` (ASVS, TFN SOP, incident response references).
+* **Status updates:** add follow-up actions + monitoring outputs to `status/README.md` after each quarterly review.
+
+Share the product ID with regulators, banking partners, and Customer Success decks. Reference this section in onboarding materials so new teams can locate the latest evidence quickly.
+
+---
+
 ## Pushing your changes
 
 ```bash
@@ -159,3 +171,15 @@ git add -A
 git commit -m "docs(readme): align local workflow with 5.2 compliance gates"
 git push -u origin hardening/compliance-5-2
 ```
+
+### Branch hygiene expectations
+
+Regulators routinely ask for a provable audit trail of the documentation updates above. To keep the repository audit-ready:
+
+1. Run `git status -sb` and identify every unstaged file.
+2. Stage the change (`git add .` for bulk updates or `git add <path>` when isolating a single artifact).
+3. Commit with a descriptive message that matches the evidence being added ("docs(osf): attach Feb questionnaire" instead of a generic "update docs").
+4. Push the commit to the canonical branch (`git push origin main`).
+5. If feature branches mirror compliance artefacts, push them as well (`git push --all origin`) so every branch stays updated.
+
+Repeat the stage/commit/push loop for each logical change until `git status` reports a clean working tree.
