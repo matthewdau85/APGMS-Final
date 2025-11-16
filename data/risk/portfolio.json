@@ -1,0 +1,14 @@
+[
+  {"orgId": "risk-sample-01", "taxType": "PAYGW", "anomalyScore": 0.11, "exposure": 210000, "recentIncidents": 1, "signalToNoise": 1.8},
+  {"orgId": "risk-sample-02", "taxType": "PAYGI", "anomalyScore": 0.18, "exposure": 195000, "recentIncidents": 0, "signalToNoise": 1.4},
+  {"orgId": "risk-sample-03", "taxType": "GST",   "anomalyScore": 0.24, "exposure": 160000, "recentIncidents": 0, "signalToNoise": 1.1},
+  {"orgId": "risk-sample-04", "taxType": "PAYGW", "anomalyScore": 0.33, "exposure": 175000, "recentIncidents": 1, "signalToNoise": 1.2},
+  {"orgId": "risk-sample-05", "taxType": "PAYGI", "anomalyScore": 0.37, "exposure": 220000, "recentIncidents": 2, "signalToNoise": 1.3},
+  {"orgId": "risk-sample-06", "taxType": "GST",   "anomalyScore": 0.42, "exposure": 230000, "recentIncidents": 1, "signalToNoise": 1.0},
+  {"orgId": "risk-sample-07", "taxType": "PAYGW", "anomalyScore": 0.55, "exposure": 260000, "recentIncidents": 2, "signalToNoise": 0.9},
+  {"orgId": "risk-sample-08", "taxType": "PAYGI", "anomalyScore": 0.61, "exposure": 240000, "recentIncidents": 1, "signalToNoise": 1.1},
+  {"orgId": "risk-sample-09", "taxType": "GST",   "anomalyScore": 0.74, "exposure": 280000, "recentIncidents": 3, "signalToNoise": 0.8},
+  {"orgId": "risk-sample-10", "taxType": "PAYGW", "anomalyScore": 0.82, "exposure": 300000, "recentIncidents": 2, "signalToNoise": 0.7},
+  {"orgId": "risk-sample-11", "taxType": "PAYGI", "anomalyScore": 0.91, "exposure": 310000, "recentIncidents": 3, "signalToNoise": 0.6},
+  {"orgId": "risk-sample-12", "taxType": "GST",   "anomalyScore": 1.05, "exposure": 325000, "recentIncidents": 4, "signalToNoise": 0.5}
+]

@@ -683,3 +683,14 @@ model IntegrationEvent {
   @@index([orgId, taxType])
   @@index([taxType])
 }
+
+model ModelCalibration {
+  id         String   @id @default(cuid())
+  domain     String
+  name       String
+  version    String
+  parameters Json
+  createdAt  DateTime @default(now())
+
+  @@index([domain, name])
+}

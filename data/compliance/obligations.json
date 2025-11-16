@@ -1,0 +1,14 @@
+[
+  {"orgId": "compliance-sample-01", "taxType": "PAYGW", "reportLagDays": 1,  "missingEvidence": 0, "manualTouches": 1},
+  {"orgId": "compliance-sample-02", "taxType": "PAYGW", "reportLagDays": 2,  "missingEvidence": 1, "manualTouches": 1},
+  {"orgId": "compliance-sample-03", "taxType": "GST",   "reportLagDays": 3,  "missingEvidence": 0, "manualTouches": 0},
+  {"orgId": "compliance-sample-04", "taxType": "PAYGI", "reportLagDays": 5,  "missingEvidence": 2, "manualTouches": 1},
+  {"orgId": "compliance-sample-05", "taxType": "PAYGW", "reportLagDays": 7,  "missingEvidence": 2, "manualTouches": 2},
+  {"orgId": "compliance-sample-06", "taxType": "GST",   "reportLagDays": 10, "missingEvidence": 3, "manualTouches": 3},
+  {"orgId": "compliance-sample-07", "taxType": "PAYGI", "reportLagDays": 6,  "missingEvidence": 1, "manualTouches": 1},
+  {"orgId": "compliance-sample-08", "taxType": "PAYGW", "reportLagDays": 8,  "missingEvidence": 2, "manualTouches": 1},
+  {"orgId": "compliance-sample-09", "taxType": "GST",   "reportLagDays": 12, "missingEvidence": 3, "manualTouches": 4},
+  {"orgId": "compliance-sample-10", "taxType": "PAYGI", "reportLagDays": 4,  "missingEvidence": 1, "manualTouches": 1},
+  {"orgId": "compliance-sample-11", "taxType": "PAYGW", "reportLagDays": 9,  "missingEvidence": 2, "manualTouches": 2},
+  {"orgId": "compliance-sample-12", "taxType": "GST",   "reportLagDays": 11, "missingEvidence": 3, "manualTouches": 3}
+]
