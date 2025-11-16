@@ -45,6 +45,12 @@ enum AlertStatus {
   CLOSED
 }
 
+enum Schedule {
+  TRANSACTION
+  DAILY
+  WEEKLY
+}
+
 // =========================
 // Payroll domain
 // =========================
@@ -209,6 +215,18 @@ model BalanceSnapshot {
   @@unique([orgId, accountId, asOfSeq])
 }
 
+model ObligationHistory {
+  id          String   @id @default(cuid())
+  orgId       String   @db.Uuid
+  type        String
+  date        DateTime
+  amountCents Int
+
+  org Org @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, type, date])
+}
+
 model EventEnvelope {
   id            String   @id
   orgId         String   @db.Uuid
@@ -332,6 +350,12 @@ model Org {
   name       String
   createdAt  DateTime       @default(now())
   deletedAt  DateTime?
+  abn        String?        @unique
+  tfn        String?
+  paygwSchedule Schedule    @default(DAILY)
+  gstSchedule  Schedule    @default(DAILY)
+  paygiSchedule Schedule   @default(DAILY)
+  shortfallThreshold Int?
 
   users      User[]
   oneWayAccounts OneWayAccount[]
@@ -351,6 +375,9 @@ model Org {
   paymentPlanRequests PaymentPlanRequest[]
   regulatorSessions RegulatorSession[]
   monitoringSnapshots MonitoringSnapshot[]
+  payrollContributions PayrollContribution[]
+  posTransactions PosTransaction[]
+  obligationHistory ObligationHistory[]
 
   // payroll backrefs
   employees  Employee[]
@@ -425,6 +452,8 @@ model DesignatedAccount {
   org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
   orgId     String
   type      String
+  externalAccountId String?
+  mandateId String?
   balance   Decimal  @default(0)
   locked    Boolean  @default(false)
   lockedAt  DateTime?
@@ -433,6 +462,7 @@ model DesignatedAccount {
   transfers DesignatedTransfer[]
 
   @@index([orgId, type])
+  @@unique([orgId, type])
 }
 
 model DesignatedTransfer {

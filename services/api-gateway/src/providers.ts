@@ -2,6 +2,10 @@
 import type { FastifyBaseLogger } from "fastify";
 import { createClient, type RedisClientType } from "redis";
 import { connect, type ConnectionOptions, type NatsConnection } from "nats";
+import { CbaPayToService } from "@apgms/payments/providers/cba";
+import { NabPayToService } from "@apgms/payments/providers/nab";
+import { AnzPayToService } from "@apgms/payments/providers/anz";
+import { PayToService } from "@apgms/payments/payto";
 import { config } from "./config.js";
 
 // Accept any-augmented redis client variants
@@ -79,5 +83,18 @@ export async function closeProviders(
         logger.error({ err: closeError }, "nats_close_failed");
       }
     }
+  }
+}
+
+export function createPayToProvider(bank: string): PayToService {
+  switch (bank) {
+    case "cba":
+      return new CbaPayToService();
+    case "nab":
+      return new NabPayToService();
+    case "anz":
+      return new AnzPayToService();
+    default:
+      throw new Error(`Unsupported banking provider: ${bank}`);
   }
 }

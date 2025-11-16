@@ -1,0 +1,36 @@
+{
+  "name": "@apgms/payments",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./payto": {
+      "types": "./dist/payto.d.ts",
+      "default": "./dist/payto.js"
+    },
+    "./providers/cba": {
+      "types": "./dist/providers/cba.d.ts",
+      "default": "./dist/providers/cba.js"
+    },
+    "./providers/nab": {
+      "types": "./dist/providers/nab.d.ts",
+      "default": "./dist/providers/nab.js"
+    },
+    "./providers/anz": {
+      "types": "./dist/providers/anz.d.ts",
+      "default": "./dist/providers/anz.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "axios": "^1.7.7"
+  }
+}
