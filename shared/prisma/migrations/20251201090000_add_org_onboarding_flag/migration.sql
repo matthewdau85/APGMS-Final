@@ -1,11 +1,9 @@
 ALTER TABLE "Organization"
-ADD COLUMN IF NOT EXISTS "onboardingComplete" BOOLEAN NOT NULL DEFAULT FALSE;
-UPDATE "Organization"
-SET "onboardingComplete" = TRUE
-WHERE "onboardingComplete" = FALSE;
+ADD COLUMN IF NOT EXISTS "onboardingComplete" BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE "Organization"
+ALTER COLUMN "onboardingComplete" SET DEFAULT FALSE;
 
 ALTER TABLE "Org"
-ADD COLUMN IF NOT EXISTS "onboardingComplete" BOOLEAN NOT NULL DEFAULT FALSE;
-UPDATE "Org"
-SET "onboardingComplete" = TRUE
-WHERE "onboardingComplete" = FALSE;
+ADD COLUMN IF NOT EXISTS "onboardingComplete" BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE "Org"
+ALTER COLUMN "onboardingComplete" SET DEFAULT FALSE;
