@@ -11,19 +11,19 @@
                             "baseUrl":  ".",
                             "paths":  {
                                           "@apgms/shared/*":  [
-                                                                  "shared/dist/*"
+                                                                  "shared/src/*"
                                                               ],
                                           "@apgms/shared":  [
-                                                                  "shared/dist/index"
+                                                                  "shared/src/index"
                                                               ],
                                           "@apgms/domain-policy": [
-                                                                  "packages/domain-policy/dist/index"
+                                                                  "packages/domain-policy/src/index"
                                                               ],
                                           "@apgms/banking": [
-                                                                  "services/banking/dist/index"
+                                                                  "services/banking/src/index"
                                                               ],
                                           "@apgms/banking/*": [
-                                                                  "services/banking/dist/*"
+                                                                  "services/banking/src/*"
                                                               ]
                                       },
                             "types":  [

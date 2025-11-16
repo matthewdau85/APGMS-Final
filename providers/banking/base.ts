@@ -1,4 +1,5 @@
-import { AppError, safeLogAttributes } from "@apgms/shared";
+import { AppError } from "@apgms/shared/errors";
+import { safeLogAttributes } from "@apgms/shared/logging";
 
 import {
   applyDesignatedAccountTransfer,

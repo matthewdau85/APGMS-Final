@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { Decimal } from "@prisma/client/runtime/library";
 import type { PrismaClient } from "@prisma/client";
 
-import { conflict, notFound } from "@apgms/shared";
+import { conflict, notFound } from "@apgms/shared/errors";
 import {
   evaluateDesignatedAccountPolicy,
   normalizeTransferSource,

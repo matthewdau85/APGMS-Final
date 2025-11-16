@@ -1,4 +1,4 @@
-import { safeLogAttributes } from "@apgms/shared";
+import { safeLogAttributes } from "@apgms/shared/logging";
 
 import { BaseBankingProvider } from "./base.js";
 import type {
