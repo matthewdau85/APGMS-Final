@@ -6,7 +6,10 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
+    "prepare:deps": "pnpm --filter @apgms/shared build && pnpm --filter @apgms/ledger build && pnpm --filter @apgms/ingestion-nats build",
+    "predev": "pnpm run prepare:deps",
     "dev": "tsx src/index.ts",
+    "prebuild": "pnpm run prepare:deps && pnpm exec prisma generate --schema ../../shared/prisma/schema.prisma",
     "build": "tsc -p tsconfig.json",
     "generate:evidence": "tsx scripts/generate-evidence.ts",
     "generate:stp": "tsx scripts/generate-stp.ts"

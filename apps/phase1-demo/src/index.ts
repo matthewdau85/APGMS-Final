@@ -10,9 +10,8 @@ import { z } from "zod";
 import { applyDesignatedAccountTransfer } from "@apgms/domain-policy";
 import { startNatsIngestionConsumer } from "@apgms/ingestion-nats";
 import { JournalWriter } from "@apgms/ledger";
-import { computeTierStatus, exponentialMovingAverage } from "@apgms/shared/ledger/predictive";
 import type { BusEnvelope } from "@apgms/shared";
-import { NatsBus } from "@apgms/shared";
+import { NatsBus, computeTierStatus, exponentialMovingAverage } from "@apgms/shared";
 import {
   fetchAccountBalance,
   generateDemoReconciliationArtifact,
@@ -332,7 +331,7 @@ async function recordDesignatedTransfer(account: DesignatedAccount, amountDollar
   await applyDesignatedAccountTransfer(
     {
       prisma,
-      auditLogger: (entry) => writeAuditLog(entry),
+      auditLogger: (entry: Parameters<typeof writeAuditLog>[0]) => writeAuditLog(entry),
     },
     {
       orgId: account.orgId,

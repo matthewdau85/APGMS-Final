@@ -16,6 +16,7 @@
     "@prisma/client": "^6.17.1"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "clean-dist": "node ./scripts/clean-dist.js",
+    "build": "pnpm run clean-dist && tsc -p tsconfig.json"
   }
 }

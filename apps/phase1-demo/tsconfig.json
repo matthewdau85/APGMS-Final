@@ -2,21 +2,21 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src",
+    "baseUrl": ".",
     "module": "ESNext",
     "moduleResolution": "Node",
     "paths": {
-      "@apgms/shared": ["shared/src/index"],
-      "@apgms/shared/*": ["shared/src/*"],
-      "@apgms/ledger": ["packages/ledger/src/index"],
-      "@apgms/ledger/*": ["packages/ledger/src/*"],
-      "@apgms/domain-policy": ["packages/domain-policy/src/index"],
-      "@apgms/domain-policy/*": ["packages/domain-policy/src/*"],
-      "@apgms/ingestion-nats": ["packages/ingestion-nats/src/index"],
-      "@apgms/ingestion-nats/*": ["packages/ingestion-nats/src/*"]
+      "@apgms/shared": ["../../shared/dist/index"],
+      "@apgms/shared/*": ["../../shared/dist/*"],
+      "@apgms/ledger": ["../../packages/ledger/dist/index"],
+      "@apgms/ledger/*": ["../../packages/ledger/dist/*"],
+      "@apgms/domain-policy": ["../../packages/domain-policy/dist/index"],
+      "@apgms/domain-policy/*": ["../../packages/domain-policy/dist/*"],
+      "@apgms/ingestion-nats": ["../../packages/ingestion-nats/dist/index"],
+      "@apgms/ingestion-nats/*": ["../../packages/ingestion-nats/dist/*"]
     }
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.d.ts"],
   "exclude": ["dist"]
 }
 
