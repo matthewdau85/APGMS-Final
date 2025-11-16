@@ -1,0 +1,100 @@
+{
+  "specification": "ATO-STP-PHASE-2",
+  "version": "2.0.0",
+  "metadata": {
+    "generatedAt": "2024-11-01T05:00:00Z"
+  },
+  "transmission": {
+    "id": "RUN-2024-11-01-TX",
+    "payerAbn": "12345678901",
+    "branchNumber": "001",
+    "softwareId": "A0000000000001"
+  },
+  "payer": {
+    "abn": "12345678901",
+    "branchNumber": "001",
+    "contactName": "April Lister",
+    "phone": "+61 2 9999 0000",
+    "softwareId": "A0000000000001",
+    "transmissionId": "RUN-2024-11-01-TX"
+  },
+  "payRun": {
+    "id": "RUN-2024-11-01",
+    "periodStart": "2024-10-01",
+    "periodEnd": "2024-10-31",
+    "paymentDate": "2024-11-01",
+    "totals": {
+      "gross": 10390,
+      "taxWithheld": 1870,
+      "superannuationGuarantee": 1224
+    },
+    "bas": {
+      "gstOnSales": 15000,
+      "gstOnPurchases": 7000,
+      "paygWithholding": 1870,
+      "paygInstalment": 1200,
+      "reportingPeriod": "2024-10-01/2024-10-31"
+    },
+    "events": [
+      {
+        "payrollId": "EMP-001",
+        "taxFileNumber": "123456782",
+        "givenName": "Theo",
+        "familyName": "Nguyen",
+        "dateOfBirth": "1992-04-12",
+        "residentialAddress": {
+          "line1": "12 Market St",
+          "suburb": "Sydney",
+          "state": "NSW",
+          "postcode": "2000",
+          "countryCode": "AUS"
+        },
+        "income": {
+          "taxableGross": 5390,
+          "taxWithheld": 960,
+          "superannuationGuarantee": 624,
+          "allowances": [
+            {
+              "code": "DUT",
+              "description": "Duty travel",
+              "amount": 120
+            }
+          ],
+          "deductions": [
+            {
+              "code": "SAL",
+              "description": "Salary sacrifice",
+              "amount": 250
+            }
+          ]
+        }
+      },
+      {
+        "payrollId": "EMP-002",
+        "taxFileNumber": "321654987",
+        "givenName": "Priya",
+        "familyName": "Singh",
+        "dateOfBirth": "1986-09-03",
+        "residentialAddress": {
+          "line1": "8 Bourke St",
+          "suburb": "Melbourne",
+          "state": "VIC",
+          "postcode": "3000",
+          "countryCode": "AUS"
+        },
+        "income": {
+          "taxableGross": 5000,
+          "taxWithheld": 910,
+          "superannuationGuarantee": 600,
+          "allowances": [
+            {
+              "code": "CAR",
+              "description": "Car",
+              "amount": 200
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

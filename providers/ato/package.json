@@ -1,0 +1,17 @@
+{
+  "name": "@apgms/ato",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "pnpm exec jest --config ../../jest.config.js --runTestsByPath ../../providers/ato/tests/atoClients.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "zod": "^4.1.12"
+  }
+}

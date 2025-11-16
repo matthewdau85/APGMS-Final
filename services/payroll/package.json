@@ -1,0 +1,19 @@
+{
+  "name": "@apgms/payroll",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "pnpm exec jest --config ../../jest.config.js --runTestsByPath ../../services/payroll/tests/stp.conformance.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "zod": "^4.1.12"
+  }
+}

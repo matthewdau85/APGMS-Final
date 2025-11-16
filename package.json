@@ -5,6 +5,7 @@
     "version": "0.1.0",
     "workspaces": [
         "services/*",
+        "providers/*",
         "webapp",
         "shared",
         "worker",

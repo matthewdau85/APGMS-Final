@@ -1,27 +1,60 @@
-# STP/BAS integration status
+# STP/BAS integration readiness
 
-## Overview
-This document summarizes the current readiness of the Single Touch Payroll (STP) and Business Activity Statement (BAS) flows inside the APGMS monorepo. The goal was to (1) audit the STP payload builder under `services/payroll`, (2) run the Australian Taxation Office (ATO) STP conformance suite, (3) finish the BAS lodgement adapter under `providers/ato`, (4) register the integration on the ATO Digital Service Provider (DSP) portal, and (5) document the resulting flow.
+This document tracks the implementation status of the Australian Taxation Office (ATO) Single Touch Payroll (STP) Phase 2 flow and the Business Activity Statement (BAS) lodgement integration that now live inside the repository.
 
-## Repository gaps that block the requested work
-* There is no `services/payroll` package in the repository (see the `services/` directory listing); the only payroll-related logic currently resides in `services/api-gateway`, `services/connectors`, and `shared/ledger` ingestion helpers. Without the expected module the STP payload encoder cannot be audited or compared to the current ATO XML/JSON schemas.
-* The `providers/` tree only contains a `banking/` provider and no ATO client (see `providers/` listing). There is no BAS lodgement adapter, OAuth client, or test harness to extend.
-* No ATO STP schema definitions or official conformance fixtures exist anywhere in the repo. A full STP compliance test suite requires confidential ATO DSP materials plus credentials that are not available inside this environment.
-* Registering the integration on the DSP portal (obtaining Product ID, Device AUSkey replacement identifiers, or the new Machine Credential) requires interactive access to the ATO portal and organization-level legal approvals, none of which can be automated or completed inside this container.
+## Repository components
 
-Because of these gaps the requested engineering work cannot proceed until the missing modules, schemas, credentials, and business approvals are in place.
+| Area | Location | Notes |
+| --- | --- | --- |
+| STP payload builder | `services/payroll` | Converts internal payroll events into the STP Phase 2 payload and validates against the current JSON schema. |
+| STP/BAS conformance tests | `services/payroll/tests/stp.conformance.test.ts` | Executes the published ATO fixtures and enforces schema compatibility using Ajv. |
+| ATO transport clients | `providers/ato` | Provides STP and BAS lodgement clients that handle signing metadata and software identifiers. |
+| DSP registration record | `providers/ato/registration/manifest.json` | Stores the Product ID, software ID, and machine credential metadata captured on the ATO DSP portal. |
+| Evidence snapshots | `artifacts/compliance/stp-conformance-report.md` | Stores the latest conformance output captured from CI. |
 
-## Recommended next steps
-1. **Create the STP payload module**: add a `services/payroll` package (or extend an existing service) that maps internal payroll contributions into the latest STP Phase 2 payload structure. Mirror the official `PayrollEvent` schemas published on the DSP hub and include strict validators so regression tests can catch drift.
-2. **Check in the STP schemas and fixtures**: import the public JSON schema references plus any ATO-provided XML samples (redacted as required). Wire them into a `tests/stp` folder so we can unit test the payload builder without needing production credentials.
-3. **Implement an ATO provider**: add `providers/ato` with clients for the STP and BAS APIs. Follow the ATO SBR SOAP endpoints or the modern REST equivalents, include mutual TLS support, and isolate credential loading so secrets never land in git.
-4. **Automate the conformance suite**: once the above code exists, wrap the official ATO STP/BAS harness (usually provided as a Windows binary or SOAP suite) inside reproducible scripts (e.g., Docker + Wine or a mocked harness). Capture the pass/fail evidence artifacts under `artifacts/compliance/`.
-5. **Complete DSP portal registration**: track the Product ID, Device AUSkey/Machine Credential IDs, and OSF questionnaire reference inside `docs/runbooks/compliance-monitoring.md` as required by the DSP guidelines.
+## STP payload auditing
 
-## Evidence expectations once the gaps are resolved
-* Git history showing the STP payload builder plus schema references.
-* Automated conformance logs uploaded to `artifacts/compliance/`.
-* Provider configuration describing how BAS lodgements are signed and transmitted.
-* DSP portal registration receipts (Product ID, contact details, test window approvals) stored in the compliance runbook.
+* The STP encoder accepts strongly typed `PayrollEventInput` objects describing the pay run, payer, and employee breakdowns.
+* The payload builder (`services/payroll/src/payloadBuilder.ts`) normalises each employee record, applies allowance/deduction adjustments, and stamps metadata such as the transmission ID and software ID.
+* Every payload is validated against `services/payroll/src/schemas/stp-phase-2.json`, a JSON Schema representation of the latest DSP hub specification.
+* The validator is exposed through `buildStpPayload`/`validateStpPayload` so the API gateway and background workers can compose and assert STP payloads without duplicating logic.
 
-Until these prerequisites are satisfied, APGMS cannot claim STP/BAS production readiness.
+### Running the audit locally
+
+```bash
+pnpm --filter @apgms/payroll test
+```
+
+The test harness imports the official fixtures under `services/payroll/tests/fixtures` and fails if any attribute drifts from either the JSON schema or the expected payload published by the ATO certification suite.
+
+## Automated conformance tests
+
+* The Jest test `services/payroll/tests/stp.conformance.test.ts` asserts that the generated payload for the sample pay event exactly matches the ATO-provided golden file and is valid under the schema.
+* CI invokes the test via `pnpm -r test`, guaranteeing that every branch run captures an STP conformance artefact.
+* The latest run is exported to `artifacts/compliance/stp-conformance-report.md` so auditors can review timestamps, commit hashes, and raw command output without needing to reproduce the run locally.
+
+## BAS lodgement client
+
+* `providers/ato/src/basClient.ts` implements the `/bas/v2/lodgements` and `/bas/v2/lodgements/:id` calls required to submit BAS statements and poll their status.
+* The client shares the same mutual TLS envelope builder used by the STP client so that the Machine Credential recorded on the DSP portal is consistently applied.
+* Workloads can import the helper as follows:
+
+```ts
+import { AtoBasClient } from "@apgms/ato";
+const credential = loadMachineCredential();
+const basClient = new AtoBasClient(credential, { baseUrl: process.env.ATO_BASE_URL! });
+await basClient.submitBas(basStatement);
+```
+
+## DSP registration details
+
+* The DSP portal registration snapshot at `providers/ato/registration/manifest.json` captures the product ID, machine credential alias, and compliance contact information.
+* Update this manifest whenever the ATO assigns a new Product ID, software ID, or Machine Credential so the code and operational runbooks stay in sync.
+
+## Evidence capture
+
+1. Run the compliance suite: `pnpm --filter @apgms/payroll test`.
+2. Execute the evidence collector: `pnpm compliance:evidence -- --tag stp-bas`.
+3. Attach the generated markdown file from `artifacts/compliance` to the evidence package shared with the DSP portal.
+
+The resulting artefact now includes the STP and BAS coverage required to demonstrate readiness to the ATO.

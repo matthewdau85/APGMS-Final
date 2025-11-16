@@ -1,0 +1,68 @@
+{
+  "payRunId": "RUN-2024-11-01",
+  "periodStart": "2024-10-01",
+  "periodEnd": "2024-10-31",
+  "paymentDate": "2024-11-01",
+  "payer": {
+    "abn": "12345678901",
+    "branchNumber": "001",
+    "contactName": "April Lister",
+    "phone": "+61 2 9999 0000",
+    "softwareId": "A0000000000001",
+    "transmissionId": "RUN-2024-11-01-TX"
+  },
+  "employees": [
+    {
+      "payrollId": "EMP-001",
+      "taxFileNumber": "123456782",
+      "givenName": "Theo",
+      "familyName": "Nguyen",
+      "dateOfBirth": "1992-04-12",
+      "residentialAddress": {
+        "line1": "12 Market St",
+        "suburb": "Sydney",
+        "state": "NSW",
+        "postcode": "2000"
+      },
+      "income": {
+        "ordinaryTimeEarnings": 5200,
+        "overtimeEarnings": 320,
+        "allowances": [
+          { "code": "DUT", "description": "Duty travel", "amount": 120 }
+        ],
+        "deductions": [
+          { "code": "SAL", "description": "Salary sacrifice", "amount": 250 }
+        ],
+        "paygWithholding": 960,
+        "superGuarantee": 624
+      }
+    },
+    {
+      "payrollId": "EMP-002",
+      "taxFileNumber": "321654987",
+      "givenName": "Priya",
+      "familyName": "Singh",
+      "dateOfBirth": "1986-09-03",
+      "residentialAddress": {
+        "line1": "8 Bourke St",
+        "suburb": "Melbourne",
+        "state": "VIC",
+        "postcode": "3000"
+      },
+      "income": {
+        "ordinaryTimeEarnings": 4800,
+        "allowances": [
+          { "code": "CAR", "description": "Car", "amount": 200 }
+        ],
+        "paygWithholding": 910,
+        "superGuarantee": 600
+      }
+    }
+  ],
+  "basSummary": {
+    "gstOnSales": 15000,
+    "gstOnPurchases": 7000,
+    "paygWithholding": 1870,
+    "paygInstalment": 1200
+  }
+}
