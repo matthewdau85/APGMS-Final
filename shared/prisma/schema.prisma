@@ -350,7 +350,9 @@ model Org {
   designatedTransfers DesignatedTransfer[]
   paymentPlanRequests PaymentPlanRequest[]
   regulatorSessions RegulatorSession[]
-  monitoringSnapshots MonitoringSnapshot[]
+    monitoringSnapshots MonitoringSnapshot[]
+    payrollContributions PayrollContribution[]
+    posTransactions PosTransaction[]
 
   // payroll backrefs
   employees  Employee[]

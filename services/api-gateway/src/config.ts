@@ -3,6 +3,23 @@ import { Buffer } from "node:buffer";
 import { URL } from "node:url";
 import { z } from "zod";
 
+import { hydrateEnvFromSecretManager } from "./lib/secret-hydrator.js";
+
+const SECRET_ENV_VARS = [
+  "DATABASE_URL",
+  "SHADOW_DATABASE_URL",
+  "AUTH_JWKS",
+  "AUTH_DEV_SECRET",
+  "REGULATOR_ACCESS_CODE",
+  "ENCRYPTION_MASTER_KEY",
+  "REDIS_URL",
+  "NATS_URL",
+  "NATS_TOKEN",
+  "NATS_PASSWORD",
+];
+
+await hydrateEnvFromSecretManager(SECRET_ENV_VARS);
+
 export interface AppConfig {
   readonly databaseUrl: string;
   readonly shadowDatabaseUrl?: string;

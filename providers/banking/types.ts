@@ -5,7 +5,7 @@ import type {
   ApplyDesignatedTransferInput,
 } from "@apgms/domain-policy";
 
-export type BankingProviderId = "nab" | "anz" | "mock";
+export type BankingProviderId = "nab" | "anz" | "cba" | "wbc" | "mock";
 
 export type BankingProviderCapabilities = {
   maxReadTransactions: number;

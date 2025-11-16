@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@apgms/shared/*": [
+        "shared/src/*",
+        "shared/dist/*"
+      ],
+      "@apgms/shared": [
+        "shared/src/index",
+        "shared/dist/index"
+      ],
+      "@apgms/domain-policy": [
+        "packages/domain-policy/src/index",
+        "packages/domain-policy/dist/index"
+      ]
+    }
+  }
+}

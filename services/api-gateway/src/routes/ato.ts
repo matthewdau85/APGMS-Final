@@ -1,4 +1,7 @@
+import crypto from "node:crypto";
+
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { z } from "zod";
 
 import {
   analyzeIntegrationAnomaly,
@@ -8,6 +11,7 @@ import {
   listPaymentPlans,
 } from "@apgms/shared";
 import { metrics } from "../observability/metrics.js";
+import { prisma } from "../db.js";
 
 async function buildCompliancePayload(
   orgId: string,
@@ -117,4 +121,84 @@ export async function registerAtoRoutes(
       }
     },
   );
+
+  const stpSchema = z.object({
+    orgId: z.string().min(1),
+    payRunId: z.string().min(1),
+  });
+
+  app.post("/ato/stp/report", async (request, reply) => {
+    const params = stpSchema.parse(request.body ?? {});
+
+    const payRun = await prisma.payRun.findUnique({
+      where: { id: params.payRunId },
+      include: { payslips: true },
+    });
+
+    if (!payRun || payRun.orgId !== params.orgId) {
+      reply.code(404).send({ error: "pay_run_not_found" });
+      return;
+    }
+
+    const employees = payRun.payslips.map((payslip) => ({
+      employeeId: payslip.employeeId,
+      gross: payslip.grossPay.toString(),
+      paygw: payslip.paygWithheld.toString(),
+      super: payslip.superAccrued.toString(),
+    }));
+
+    const basePayload = {
+      version: "STP2.0",
+      orgId: params.orgId,
+      payRun: {
+        id: payRun.id,
+        paymentDate: payRun.paymentDate,
+        period: { start: payRun.periodStart, end: payRun.periodEnd },
+      },
+      employees,
+    };
+
+    const signature = crypto
+      .createHash("sha256")
+      .update(JSON.stringify(basePayload))
+      .digest("hex");
+
+    const payload = { ...basePayload, signature };
+
+    const endpoint = process.env.ATO_STP_ENDPOINT;
+    try {
+      let responseBody: Record<string, unknown> = {};
+      if (endpoint) {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        responseBody = {
+          status: response.status,
+          text: await response.text(),
+        };
+      }
+
+      await logGovernmentSubmission({
+        orgId: params.orgId,
+        method: "/ato/stp/report",
+        payload,
+        response: responseBody,
+        status: "sent",
+      });
+      metrics.stpReportsTotal.inc({ status: "sent" });
+      reply.send({ ok: true, payload, response: responseBody });
+    } catch (error) {
+      await logGovernmentSubmission({
+        orgId: params.orgId,
+        method: "/ato/stp/report",
+        payload,
+        response: { error: String(error) },
+        status: "failed",
+      });
+      metrics.stpReportsTotal.inc({ status: "failed" });
+      reply.code(500).send({ error: "stp_submission_failed" });
+    }
+  });
 }

@@ -107,6 +107,12 @@ const atoReportsTotal = new Counter({
   labelNames: ['status'] as const,
 });
 
+const stpReportsTotal = new Counter({
+  name: 'apgms_stp_reports_total',
+  help: 'Single Touch Payroll payloads submitted',
+  labelNames: ['status'] as const,
+});
+
 const riskEventsTotal = new Counter({
   name: 'apgms_risk_events_total',
   help: 'Risk events recorded',
@@ -130,6 +136,7 @@ export const metrics = {
   transferExecutionTotal,
   paymentPlanRequestsTotal,
   atoReportsTotal,
+  stpReportsTotal,
   riskEventsTotal,
 
   async observeJob<T>(job: string, fn: () => Promise<T>): Promise<T> {

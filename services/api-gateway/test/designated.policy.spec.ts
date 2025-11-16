@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { Prisma } from "@prisma/client";
+import { Decimal } from "@prisma/client/runtime/library";
 
 import { AppError } from "@apgms/shared";
 import {
@@ -14,7 +14,7 @@ type DesignatedAccountState = {
   id: string;
   orgId: string;
   type: string;
-  balance: Prisma.Decimal;
+  balance: Decimal;
   updatedAt: Date;
 };
 
@@ -22,7 +22,7 @@ type DesignatedTransferState = {
   id: string;
   orgId: string;
   accountId: string;
-  amount: Prisma.Decimal;
+  amount: Decimal;
   source: string;
   createdAt: Date;
 };
@@ -224,7 +224,7 @@ test("mock banking provider credit exercises the shared policy surface", async (
     id: "acct-paygw",
     orgId: "org-1",
     type: "PAYGW",
-    balance: new Prisma.Decimal(0),
+    balance: new Decimal(0),
     updatedAt: new Date(),
   });
 
@@ -262,7 +262,7 @@ test("banking provider enforces per-adapter write cap", async () => {
     id: "acct-paygw",
     orgId: "org-1",
     type: "PAYGW",
-    balance: new Prisma.Decimal(0),
+    balance: new Decimal(0),
     updatedAt: new Date(),
   });
 
@@ -295,6 +295,14 @@ test("createBankingProvider defaults to mock for unknown adapters", () => {
   assert.equal(provider.id, "mock");
 });
 
+test("createBankingProvider exposes real bank adapters", () => {
+  const cba = createBankingProvider("cba");
+  const wbc = createBankingProvider("wbc");
+  assert.equal(cba.id, "cba");
+  assert.equal(wbc.id, "wbc");
+  assert.ok(wbc.capabilities.maxWriteCents > cba.capabilities.maxWriteCents);
+});
+
 test("designated accounts block debit attempts and raise alerts", async () => {
   const { prisma, state } = createInMemoryPrisma();
 
@@ -302,7 +310,7 @@ test("designated accounts block debit attempts and raise alerts", async () => {
     id: "acct-paygw",
     orgId: "org-1",
     type: "PAYGW",
-    balance: new Prisma.Decimal(12000),
+    balance: new Decimal(12000),
     updatedAt: new Date(),
   });
 
@@ -338,7 +346,7 @@ test("deposit-only violations keep the documented message", async () => {
     id: "acct-paygw",
     orgId: "org-1",
     type: "PAYGW",
-    balance: new Prisma.Decimal(500),
+    balance: new Decimal(500),
     updatedAt: new Date(),
   });
 
@@ -375,7 +383,7 @@ test("untrusted sources raise alerts with metadata", async () => {
     id: "acct-paygw",
     orgId: "org-1",
     type: "PAYGW",
-    balance: new Prisma.Decimal(100),
+    balance: new Decimal(100),
     updatedAt: new Date(),
   });
 
@@ -422,14 +430,14 @@ test("designated account reconciliation emits evidence artefact", async () => {
       id: "acct-paygw",
       orgId: "org-1",
       type: "PAYGW",
-      balance: new Prisma.Decimal(0),
+      balance: new Decimal(0),
       updatedAt: new Date(),
     },
     {
       id: "acct-gst",
       orgId: "org-1",
       type: "GST",
-      balance: new Prisma.Decimal(0),
+      balance: new Decimal(0),
       updatedAt: new Date(),
     },
   );
