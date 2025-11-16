@@ -90,6 +90,9 @@ export class DesignatedAccountOrchestrator {
         `Transfers are blocked until the PayTo mandate is active for ${accountId}.`,
       );
     }
+    if (direction === 'WITHDRAW' && account.depositOnly) {
+      throw new Error(`${account.bank} designated accounts are deposit-only.`);
+    }
     return this.payToService.transfer(account, amount, direction);
   }
 
