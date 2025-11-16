@@ -2,6 +2,8 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "paths": {
+      "@apgms/domain-policy": ["./tests/stubs/domain-policy.ts"],
+      "@apgms/domain-policy/*": ["./tests/stubs/domain-policy.ts"],
       "@prisma/client": ["./tests/stubs/prisma-client.ts"],
       "@prisma/client/*": ["./tests/stubs/prisma-client.ts"]
     }
