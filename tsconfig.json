@@ -18,6 +18,12 @@
                                                               ],
                                           "@apgms/domain-policy": [
                                                                   "packages/domain-policy/dist/index"
+                                                              ],
+                                          "@apgms/banking": [
+                                                                  "services/banking/dist/index"
+                                                              ],
+                                          "@apgms/banking/*": [
+                                                                  "services/banking/dist/*"
                                                               ]
                                       },
                             "types":  [

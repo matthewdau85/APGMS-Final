@@ -1,6 +1,10 @@
 import type { PrismaClient, DesignatedAccount } from "@prisma/client";
 import { conflict } from "../errors.js";
 import { applyDesignatedAccountTransfer } from "@apgms/domain-policy";
+import {
+  configureBankingAdapter as setBankingAdapter,
+  getBankingAdapter,
+} from "@apgms/banking";
 
 export type DesignatedAccountType = "PAYGW_BUFFER" | "GST_BUFFER";
 
@@ -12,70 +16,7 @@ function assertTaxType(type: string): asserts type is DesignatedAccountType {
   }
 }
 
-export interface BankingAdapter {
-  getBalance(account: DesignatedAccount): Promise<number>;
-  blockTransfer?(account: DesignatedAccount, shortfall: number): Promise<void>;
-}
-
-class PrismaBankingAdapter implements BankingAdapter {
-  async getBalance(account: DesignatedAccount): Promise<number> {
-    return Number(account.balance);
-  }
-
-  async blockTransfer(account: DesignatedAccount, shortfall: number): Promise<void> {
-    await account; // no-op for now; placeholder for future alerts/sandbox plan
-  }
-}
-
-class PartnerBankingAdapter implements BankingAdapter {
-  constructor(private url: string, private token?: string) {}
-
-  private headers(): Record<string, string> {
-    const auth = this.token ? { Authorization: `Bearer ${this.token}` } : {};
-    return {
-      "Content-Type": "application/json",
-      ...auth,
-    };
-  }
-
-  private accountEndpoint(account: DesignatedAccount) {
-    return `${this.url.replace(/\/$/, "")}/accounts/${account.id}`;
-  }
-
-  async getBalance(account: DesignatedAccount): Promise<number> {
-    const res = await fetch(`${this.accountEndpoint(account)}/balance`, {
-      headers: this.headers(),
-    });
-    if (!res.ok) {
-      throw new Error(`Partner adapter balance fetch failed: ${res.status}`);
-    }
-    const payload = await res.json();
-    return Number(payload.balance ?? 0);
-  }
-
-  async blockTransfer(account: DesignatedAccount, shortfall: number): Promise<void> {
-    await fetch(`${this.accountEndpoint(account)}/lock`, {
-      method: "POST",
-      headers: this.headers(),
-      body: JSON.stringify({ shortfall }),
-    });
-  }
-}
-
-let currentAdapter: BankingAdapter;
-
-const partnerUrl = process.env.DESIGNATED_BANKING_URL?.trim();
-const partnerToken = process.env.DESIGNATED_BANKING_TOKEN?.trim();
-if (partnerUrl && partnerUrl.length > 0) {
-  currentAdapter = new PartnerBankingAdapter(partnerUrl, partnerToken);
-} else {
-  currentAdapter = new PrismaBankingAdapter();
-}
-
-/** Configure the adapter that simulates the banking partner. Swap this for a sandbox/ADI connector later. */
-export function configureBankingAdapter(adapter: BankingAdapter): void {
-  currentAdapter = adapter;
-}
+export { setBankingAdapter as configureBankingAdapter };
 
 export async function getDesignatedAccountByType(
   prisma: PrismaClient,
@@ -108,7 +49,7 @@ export async function ensureDesignatedAccountCoverage(
   context?: CoverageContext,
 ): Promise<DesignatedAccount> {
   const account = await getDesignatedAccountByType(prisma, orgId, type);
-  const balance = await currentAdapter.getBalance(account);
+  const balance = await getBankingAdapter().getBalance(account);
   const shortfall = requiredAmount - balance;
   if (shortfall > 0) {
     await prisma.alert.create({
@@ -125,7 +66,7 @@ export async function ensureDesignatedAccountCoverage(
         },
       },
     });
-    await currentAdapter.blockTransfer?.(account, shortfall);
+    await getBankingAdapter().blockTransfer?.(account, shortfall);
     await markAccountLocked(prisma, account.id);
     throw conflict(
       "designated_insufficient_funds",

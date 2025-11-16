@@ -1,0 +1,116 @@
+import { safeLogAttributes } from "@apgms/shared";
+
+import { BaseBankingProvider } from "./base.js";
+import type {
+  BankingProviderCapabilities,
+  BankingProviderContext,
+  CreditDesignatedAccountInput,
+} from "./types.js";
+
+type SandboxDependencies = {
+  fetchImpl?: typeof fetch;
+};
+
+const defaultDependencies: SandboxDependencies = {
+  fetchImpl: typeof fetch === "function" ? fetch : undefined,
+};
+
+const CAPABILITIES: BankingProviderCapabilities = {
+  maxReadTransactions: 950,
+  maxWriteCents: 4_500_000,
+};
+
+type SandboxConfig = {
+  baseUrl: string;
+  token?: string;
+};
+
+function sanitizeBaseUrl(value: string): string {
+  return value.replace(/\/$/, "");
+}
+
+function withLeadingSlash(path: string): string {
+  return path.startsWith("/") ? path : `/${path}`;
+}
+
+export class WestpacBankingProvider extends BaseBankingProvider {
+  private readonly config: SandboxConfig;
+  private readonly dependencies: SandboxDependencies;
+
+  constructor(
+    config: SandboxConfig = {
+      baseUrl:
+        process.env.WESTPAC_SANDBOX_URL?.trim() ??
+        "https://sandbox.api.westpac.com.au/designated",
+      token: process.env.WESTPAC_SANDBOX_TOKEN?.trim(),
+    },
+    dependencies: SandboxDependencies = defaultDependencies,
+  ) {
+    super("westpac", CAPABILITIES);
+    this.config = config;
+    this.dependencies = dependencies;
+  }
+
+  private async postToSandbox(path: string, payload: Record<string, unknown>) {
+    const fetchImpl = this.dependencies.fetchImpl;
+    if (!fetchImpl) return;
+
+    const baseUrl = sanitizeBaseUrl(this.config.baseUrl);
+    const url = `${baseUrl}${withLeadingSlash(path)}`;
+    try {
+      const res = await fetchImpl(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(this.config.token
+            ? { Authorization: `Bearer ${this.config.token}` }
+            : {}),
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        console.warn(
+          "banking-provider: sandbox_notification_failed",
+          safeLogAttributes({
+            providerId: this.id,
+            url,
+            status: res.status,
+          }),
+        );
+      }
+    } catch (error) {
+      console.warn(
+        "banking-provider: sandbox_notification_failed",
+        safeLogAttributes({
+          providerId: this.id,
+          url,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+  }
+
+  override async creditDesignatedAccount(
+    context: BankingProviderContext,
+    input: CreditDesignatedAccountInput,
+  ) {
+    await this.postToSandbox("/credits", {
+      orgId: context.orgId,
+      actorId: context.actorId,
+      accountId: input.accountId,
+      amount: input.amount,
+      source: input.source,
+    });
+
+    const result = await super.creditDesignatedAccount(context, input);
+
+    await this.postToSandbox("/reconciliations", {
+      transferId: result.transferId,
+      orgId: context.orgId,
+      accountId: input.accountId,
+      amount: input.amount,
+    });
+
+    return result;
+  }
+}
