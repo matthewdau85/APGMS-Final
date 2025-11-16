@@ -151,6 +151,20 @@ curl -sSf http://localhost:3000/metrics -o "$OUT/metrics.prom" || true
 
 ---
 
+## Updating local branches
+
+Use the helper script to fast-forward every branch that tracks a remote ref. It performs a
+`git fetch --all --prune` first and then updates each branch via `git fetch --update-head-ok`:
+
+```bash
+pnpm git:update-branches
+```
+
+Branches without an upstream are skipped, and the script prints a summary so you can review
+any failures before retrying.
+
+---
+
 ## Pushing your changes
 
 ```bash
