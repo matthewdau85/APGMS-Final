@@ -1,5 +1,12 @@
 import type { PrismaClient } from "@prisma/client";
 
+type DecimalLike = number | string | { toString(): string };
+
+type BasCycleRecord = {
+  paygwRequired: DecimalLike;
+  gstRequired: DecimalLike;
+};
+
 export type ForecastResult = {
   paygwForecast: number;
   gstForecast: number;
@@ -18,11 +25,11 @@ export async function forecastObligations(
   lookback = 6,
   alpha = DEFAULT_ALPHA,
 ): Promise<ForecastResult> {
-  const cycles = await prisma.basCycle.findMany({
+  const cycles = (await prisma.basCycle.findMany({
     where: { orgId },
     orderBy: { periodEnd: "desc" },
     take: lookback,
-  });
+  })) as BasCycleRecord[];
   const count = cycles.length;
   if (count === 0) {
     return { paygwForecast: 0, gstForecast: 0, baselineCycles: 0, trend: { paygwDelta: 0, gstDelta: 0 } };
@@ -43,8 +50,12 @@ export async function forecastObligations(
   const gstForecast = weightSum ? weightedGst / weightSum : 0;
 
   const xMean = (1 + count) / 2;
-  const yPaygwMean = cycles.reduce((sum, cycle) => sum + Number(cycle.paygwRequired), 0) / count;
-  const yGstMean = cycles.reduce((sum, cycle) => sum + Number(cycle.gstRequired), 0) / count;
+  const yPaygwMean =
+    cycles.reduce((sum: number, cycle: BasCycleRecord) => sum + Number(cycle.paygwRequired), 0) /
+    count;
+  const yGstMean =
+    cycles.reduce((sum: number, cycle: BasCycleRecord) => sum + Number(cycle.gstRequired), 0) /
+    count;
 
   let numeratorPaygw = 0;
   let numeratorGst = 0;

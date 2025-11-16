@@ -1,8 +1,10 @@
 import type { PayPeriod } from "../tax/index.js";
 
-export type TaxObligation = "PAYGW" | "GST";
+import type { TaxObligation } from "../ledger/one-way-account.js";
 
-export interface RuleIndustryCatalog {
+export type { TaxObligation };
+
+export interface IndustryRuleCatalog {
   readonly industries: readonly IndustryRuleProfile[];
 }
 

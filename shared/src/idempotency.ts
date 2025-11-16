@@ -11,7 +11,7 @@ type Ctx = {
   resource?: string | null;
 };
 
-type HandlerResult = {
+export type HandlerResult = {
   statusCode: number;
   resource?: string | null;
   resourceId?: string | null;

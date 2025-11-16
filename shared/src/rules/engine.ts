@@ -14,7 +14,7 @@ import {
   type RuleSchedule,
 } from "./types.js";
 
-const DEFAULT_CATALOG: IndustryRuleCatalog = catalog;
+const DEFAULT_CATALOG = catalog as unknown as IndustryRuleCatalog;
 
 export class IndustryRuleEngine {
   private readonly catalog: IndustryRuleCatalog;
@@ -23,7 +23,7 @@ export class IndustryRuleEngine {
   constructor(data: IndustryRuleCatalog = DEFAULT_CATALOG) {
     this.catalog = data;
     this.profilesById = new Map(
-      this.catalog.industries.map((industry) => [industry.id, industry]),
+      this.catalog.industries.map((industry: IndustryRuleProfile) => [industry.id, industry]),
     );
   }
 
@@ -205,7 +205,8 @@ export class IndustryRuleEngine {
     condition: RuleCondition,
     context: RuleEvaluationContext,
   ): boolean {
-    const value = (context as Record<string, unknown>)[condition.field];
+    const field = condition.field;
+    const value = context[field];
     switch (condition.operator) {
       case "gte":
         return typeof value === "number" && typeof condition.value === "number"
