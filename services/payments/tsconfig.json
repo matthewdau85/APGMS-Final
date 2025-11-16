@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": "../../",
+    "outDir": "dist",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "paths": {
+      "@apgms/shared": ["../../shared/src/index.ts"],
+      "@apgms/shared/*": ["../../shared/src/*"],
+      "@apgms/domain-policy": ["../../packages/domain-policy/src/index.ts"],
+      "@apgms/domain-policy/*": ["../../packages/domain-policy/src/*"]
+    }
+  },
+  "include": ["src/**/*", "../../types/**/*.d.ts"]
+}

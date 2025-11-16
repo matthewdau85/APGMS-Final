@@ -1,0 +1,15 @@
+{
+  "name": "@apgms/payments",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "pnpm exec tsx --tsconfig ../../tsconfig.tests.json ../../tests/services/payments/run-all.ts"
+  },
+  "dependencies": {
+    "@apgms/domain-policy": "workspace:*",
+    "@apgms/shared": "workspace:*",
+    "@prisma/client": "^6.17.1"
+  }
+}

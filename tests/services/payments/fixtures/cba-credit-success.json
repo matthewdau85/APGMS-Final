@@ -1,0 +1,24 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/orgs/org-123/accounts/acct-789/credits",
+    "headers": {
+      "content-type": "application/json",
+      "authorization": "Bearer sandbox-key"
+    },
+    "body": {
+      "amount": 1250000,
+      "reference": "PAYROLL_BATCH_2025-01-01",
+      "actorId": "actor-42"
+    }
+  },
+  "response": {
+    "status": 202,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "transferId": "cba-evt-123"
+    }
+  }
+}
