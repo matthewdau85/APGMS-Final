@@ -22,7 +22,9 @@ build/
 
 # Generated artifacts
 coverage/
-artifacts/
+artifacts/*
+!artifacts/compliance/
+!artifacts/compliance/**
 
 # Scripts dropping locally
 gate.ps1

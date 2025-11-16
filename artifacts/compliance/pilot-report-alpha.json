@@ -1,0 +1,34 @@
+{
+  "timestamp": "2025-02-05T08:00:00.000Z",
+  "orgId": "org-pilot",
+  "pilot": "alpha",
+  "transfers": [
+    {
+      "type": "PAYGW",
+      "amount": 9200.5,
+      "transferId": "transfer-alpha-paygw",
+      "accountId": "acct-paygw"
+    },
+    {
+      "type": "GST",
+      "amount": 4800.25,
+      "transferId": "transfer-alpha-gst",
+      "accountId": "acct-gst"
+    }
+  ],
+  "alerts": [
+    {
+      "id": "alert-alpha-1",
+      "message": "Designated PAYGW account is short by 1500",
+      "severity": "HIGH",
+      "resolvedAt": "2025-02-05T09:00:00.000Z"
+    }
+  ],
+  "reminders": [
+    {
+      "id": "cycle-jan-q3",
+      "due": "2025-03-31T00:00:00.000Z",
+      "status": "pending"
+    }
+  ]
+}

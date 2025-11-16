@@ -1,0 +1,14 @@
+{
+  "productId": "DSP-TEST-9001",
+  "questionnaireVersion": "OSF-2025-01",
+  "submittedAt": "2025-01-15T09:30:00.000Z",
+  "reviewer": "Casey Auditor",
+  "attachments": [
+    {
+      "name": "dsp-osf-questionnaire.pdf",
+      "description": "ATO OSF export uploaded to SharePoint",
+      "checksum": "c9919d9b7d410bc15713a124b3ea8d3dd07de414977fe4c8abfb515a271f3fb9"
+    }
+  ],
+  "notes": "Filed via DSP portal; waiting for registration confirmation"
+}
