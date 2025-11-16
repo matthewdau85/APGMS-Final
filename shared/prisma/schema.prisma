@@ -349,6 +349,7 @@ model Org {
   designatedAccounts DesignatedAccount[]
   designatedTransfers DesignatedTransfer[]
   paymentPlanRequests PaymentPlanRequest[]
+  forecastSnapshots ForecastSnapshot[]
   regulatorSessions RegulatorSession[]
   monitoringSnapshots MonitoringSnapshot[]
 
@@ -462,6 +463,20 @@ model PaymentPlanRequest {
 
   @@index([orgId, basCycleId])
   @@index([orgId, status])
+}
+
+model ForecastSnapshot {
+  id            String   @id @default(cuid())
+  org           Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId         String
+  snapshotDate  DateTime @default(now())
+  paygwForecast Decimal  @db.Decimal(14, 2) @default("0")
+  gstForecast   Decimal  @db.Decimal(14, 2) @default("0")
+  method        String
+  metadataJson  Json?
+  createdAt     DateTime @default(now())
+
+  @@index([orgId, snapshotDate])
 }
 
 model BankLine {

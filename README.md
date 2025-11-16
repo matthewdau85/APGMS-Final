@@ -159,3 +159,12 @@ git add -A
 git commit -m "docs(readme): align local workflow with 5.2 compliance gates"
 git push -u origin hardening/compliance-5-2
 ```
+
+---
+
+## Feature matrix
+
+| Capability | Status |
+| --- | --- |
+| Payment plan requests & approvals | ✅ `/payment-plans` page with RTK Query + `/payment-plans` API (Fastify) |
+| Forecasting snapshots | ✅ `/forecasting/snapshots` API + `/payment-plans` chart visualisation |

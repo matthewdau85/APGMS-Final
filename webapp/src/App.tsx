@@ -7,6 +7,7 @@ import FeedsPage from "./FeedsPage";
 import AlertsPage from "./AlertsPage";
 import BasPage from "./BasPage";
 import CompliancePage from "./CompliancePage";
+import PaymentPlansPage from "./pages/PaymentPlansPage";
 import SecurityPage from "./SecurityPage";
 import DemoPage from "./DemoPage";
 import ProtectedLayout from "./ProtectedLayout";
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="/feeds" element={<FeedsPage />} />
           <Route path="/alerts" element={<AlertsPage />} />
           <Route path="/bas" element={<BasPage />} />
+          <Route path="/payment-plans" element={<PaymentPlansPage />} />
           <Route path="/compliance" element={<CompliancePage />} />
           <Route path="/demo" element={<DemoPage />} />
           <Route path="/security" element={<SecurityPage />} />
