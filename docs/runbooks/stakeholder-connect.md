@@ -13,6 +13,8 @@ This guide shows how to wire the APGMS prototype to an external banking/ATO stak
    * Issue pilot workloads: POST payroll/POS payloads to `/ingest/payroll` and `/ingest/pos` with unique `Idempotency-Key` headers.
    * Execute `/compliance/precheck`, resolve any alerts through `/compliance/alerts/:id/resolve`, and finally POST to `/compliance/transfer`.
    * After the transfer, a pilot report (`artifacts/compliance/pilot-report-<timestamp>.json`) captures transfers, reminders, and alerts; send this file to your stakeholder for evidence.
+   * Hit `/compliance/pilot-status` to confirm the two most recent pilots show the transfers, reminders, alert resolutions, partner connection status, and DSP product ID. Share that JSON (or the rendered dashboard) with stakeholders so they can trace the E2E flow without digging into the filesystem.
+   * Run `/compliance/reconciliation` once the partner posts a confirmation and drop the payload into the same evidence pack. This report includes the DesignatedTransfer totals, BasCycle requirements, and the partner confirmation pulled from `artifacts/compliance/partner-confirmations.json`.
 
 ## Production run (stakeholder-ready deployment)
 
@@ -29,3 +31,5 @@ This guide shows how to wire the APGMS prototype to an external banking/ATO stak
 
 - Keep each pilot’s JSON output and partner metadata file inside `artifacts/compliance/`; auditors can use them to verify that the vertical slice (ingest → ledger → precheck → transfer → alert) actually produced a transfer ID.
 - Document any change to the partner URL/token or DSP product ID in this file and the OPS runbook so future runs continue to operate under the correct legal composite.
+- Forward the tier escalation webhook (`TIER_ESCALATION_WEBHOOK_URL`) to the stakeholder’s Slack/email. When `/compliance/tier-check` sees a tier flip to `escalate` it fires an alert with the evidence path (`artifacts/compliance/tier-history/`) so the partner can acknowledge the condition and track the remediation timeline.
+- Capture partner webhook callbacks by pointing them to `/compliance/partner-webhook`. Include the shared secret via `PARTNER_WEBHOOK_TOKEN` and remind the partner that headers are logged (sans token) inside `artifacts/compliance/partner-webhook-events.jsonl` for audit.

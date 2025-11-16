@@ -1,0 +1,24 @@
+{
+  "dsp": {
+    "productId": "DSP-TEST-9001",
+    "osfQuestionnaire": "artifacts/compliance/dsp-osf-registration.json",
+    "status": "submitted",
+    "reviewer": "ATO Digital Service Office",
+    "submittedAt": "2025-01-15T09:30:00.000Z"
+  },
+  "austrac": {
+    "enrolment": "pending",
+    "nextAction": "Provide AUSTRAC KYC controls evidence",
+    "owner": "Risk & Compliance"
+  },
+  "asic": {
+    "afsl": "not_required_for_pilot",
+    "notes": "Banking partner holds AFSL; confirm before production",
+    "owner": "Legal"
+  },
+  "partnerContract": {
+    "status": "sandbox_signed",
+    "reference": "TPG-SANDBOX-AGR-2025",
+    "expiresAt": "2025-12-31T00:00:00.000Z"
+  }
+}

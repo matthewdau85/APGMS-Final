@@ -22,11 +22,17 @@ import {
   precheckSchema,
 } from "../schemas/designated-ingest.js";
 import { complianceTransferSchema } from "../schemas/compliance-transfer.js";
-import { forecastObligations, computeTierStatus, type ForecastResult } from "@apgms/shared/ledger/predictive.js";
+import {
+  forecastObligations,
+  computeTierStatus,
+  type ForecastResult,
+  type TierStatus,
+} from "@apgms/shared/ledger/predictive.js";
 import { applyDesignatedAccountTransfer } from "@apgms/domain-policy";
 import { z } from "zod";
 import fs from "node:fs";
 import path from "node:path";
+import { requireRecentVerification } from "../security/mfa.js";
 
 const REMEDIATION_GUIDANCE =
   "Re-ingest missing payroll/POS batches, rerun the reconciliation job, and capture the remediation evidence before BAS lodgment.";
@@ -34,6 +40,11 @@ const REMEDIATION_GUIDANCE =
 const complianceArtifactDir = path.join(process.cwd(), "artifacts", "compliance");
 const partnerInfoFile = path.join(complianceArtifactDir, "partner-info.json");
 const tierStateDir = path.join(complianceArtifactDir, "tier-state");
+const tierSnapshotDir = path.join(tierStateDir, "snapshots");
+const tierHistoryDir = path.join(complianceArtifactDir, "tier-history");
+const tierWebhookLogFile = path.join(complianceArtifactDir, "tier-webhook-log.jsonl");
+const partnerWebhookLogFile = path.join(complianceArtifactDir, "partner-webhook-events.jsonl");
+const partnerConfirmationFile = path.join(complianceArtifactDir, "partner-confirmations.json");
 
 function ensureArtifactDir(): void {
   fs.mkdirSync(complianceArtifactDir, { recursive: true });
@@ -42,6 +53,149 @@ function ensureArtifactDir(): void {
 function ensureTierDir(): void {
   ensureArtifactDir();
   fs.mkdirSync(tierStateDir, { recursive: true });
+}
+
+function ensureTierSnapshotDir(): void {
+  ensureTierDir();
+  fs.mkdirSync(tierSnapshotDir, { recursive: true });
+}
+
+function ensureTierHistoryDir(): void {
+  ensureArtifactDir();
+  fs.mkdirSync(tierHistoryDir, { recursive: true });
+}
+
+function appendJsonLine(file: string, payload: Record<string, unknown>): void {
+  ensureArtifactDir();
+  fs.appendFileSync(file, `${JSON.stringify(payload)}\n`);
+}
+
+function recordTierEvidence(
+  orgId: string,
+  tierStatus: Record<string, TierStatus>,
+  forecast: ForecastResult,
+  req: FastifyRequest,
+): void {
+  const timestamp = Date.now();
+  const snapshot = {
+    orgId,
+    tierStatus,
+    forecast,
+    diagnostics: forecast.diagnostics,
+    recordedAt: new Date(timestamp).toISOString(),
+    source: req.routeOptions?.url ?? req.raw.url ?? "unknown",
+  };
+  ensureTierSnapshotDir();
+  fs.writeFileSync(
+    path.join(tierSnapshotDir, `${timestamp}-${orgId}.json`),
+    JSON.stringify(snapshot, null, 2),
+  );
+  ensureTierHistoryDir();
+  fs.writeFileSync(
+    path.join(tierHistoryDir, `${timestamp}-${orgId}.json`),
+    JSON.stringify(snapshot, null, 2),
+  );
+}
+
+function readPartnerConfirmations(orgId?: string): Array<Record<string, any>> {
+  if (!fs.existsSync(partnerConfirmationFile)) {
+    return [];
+  }
+  try {
+    const payload = JSON.parse(fs.readFileSync(partnerConfirmationFile, "utf8")) as {
+      confirmations?: Array<Record<string, unknown>>;
+    };
+    const confirmations = Array.isArray(payload.confirmations) ? payload.confirmations : [];
+    if (!orgId) {
+      return confirmations;
+    }
+    return confirmations.filter((entry) => entry.orgId === orgId);
+  } catch {
+    return [];
+  }
+}
+
+function readPilotReports(orgId?: string, limit = 10): Array<Record<string, any> & { file: string }> {
+  ensureArtifactDir();
+  const files = fs
+    .readdirSync(complianceArtifactDir)
+    .filter((name) => name.startsWith("pilot-report") && name.endsWith(".json"))
+    .sort();
+  const selected = files.slice(-limit);
+  const reports = selected
+    .map((file) => {
+      try {
+        const payload = JSON.parse(
+          fs.readFileSync(path.join(complianceArtifactDir, file), "utf8"),
+        ) as Record<string, unknown>;
+        return { file, ...payload };
+      } catch {
+        return null;
+      }
+    })
+    .filter((entry): entry is Record<string, unknown> & { file: string } => Boolean(entry));
+  if (!orgId) {
+    return reports;
+  }
+  return reports.filter((entry) => entry.orgId === orgId);
+}
+
+function sanitizeHeaders(headers: FastifyRequest["headers"]) {
+  const safe: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers ?? {})) {
+    if (typeof value !== "string") continue;
+    const lower = key.toLowerCase();
+    if (lower === "authorization" || lower === "x-partner-token") {
+      safe[key] = "***redacted***";
+      continue;
+    }
+    safe[key] = value;
+  }
+  return safe;
+}
+
+async function dispatchTierEscalationWebhook(params: {
+  orgId: string;
+  alertId: string;
+  tierStatus: Record<string, TierStatus>;
+  forecast: ForecastResult;
+}): Promise<void> {
+  const url = process.env.TIER_ESCALATION_WEBHOOK_URL?.trim();
+  if (!url) {
+    return;
+  }
+  const token = process.env.TIER_ESCALATION_WEBHOOK_TOKEN?.trim();
+  const body = {
+    alertId: params.alertId,
+    orgId: params.orgId,
+    tierStatus: params.tierStatus,
+    forecast: params.forecast,
+    recordedAt: new Date().toISOString(),
+  };
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) {
+    headers["X-Tier-Webhook-Token"] = token;
+  }
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+    appendJsonLine(tierWebhookLogFile, {
+      timestamp: new Date().toISOString(),
+      url,
+      status: response.status,
+      orgId: params.orgId,
+    });
+  } catch (error) {
+    appendJsonLine(tierWebhookLogFile, {
+      timestamp: new Date().toISOString(),
+      url,
+      error: error instanceof Error ? error.message : "webhook_failed",
+      orgId: params.orgId,
+    });
+  }
 }
 
 function readTierState(orgId: string) {
@@ -74,6 +228,7 @@ async function issueTierEscalationAlert(
   tierStatus: Record<string, TierStatus>,
   req: FastifyRequest,
 ) {
+  recordTierEvidence(orgId, tierStatus, forecast, req);
   const previous = readTierState(orgId);
   const escalateNow = Object.values(tierStatus).some((tier) => tier === "escalate");
   const previouslyEscalated = previous
@@ -117,6 +272,13 @@ async function issueTierEscalationAlert(
       buildSecurityContextFromRequest(req),
     ),
   );
+
+  await dispatchTierEscalationWebhook({
+    alertId: alert.id,
+    orgId,
+    tierStatus,
+    forecast,
+  });
 
   return alert;
 }
@@ -405,6 +567,21 @@ export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) =
       return;
     }
 
+    const principalId = (req.user as any)?.sub as string | undefined;
+    if (!principalId) {
+      reply.code(401).send({ error: "principal_missing" });
+      return;
+    }
+
+    if (!requireRecentVerification(principalId)) {
+      reply.code(403).send({
+        error: "mfa_required",
+        message:
+          "Step-up MFA verification is required before initiating compliance transfers. Use /auth/mfa/step-up and retry within 10 minutes.",
+      });
+      return;
+    }
+
     if (body.paygwAmount <= 0 && body.gstAmount <= 0) {
       reply.code(400).send({ error: "no_transfer_amount" });
       return;
@@ -425,7 +602,7 @@ export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) =
     };
 
     const transfers: TransferRecord[] = [];
-    const principal = (req.user as any)?.sub ?? "system";
+    const principal = principalId;
 
     if (body.paygwAmount > 0) {
       const account = await ensureDesignatedAccountCoverage(
@@ -609,6 +786,110 @@ export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) =
     });
   });
 
+  app.get("/compliance/pilot-status", async (req, reply) => {
+    const orgId = resolveOrgId(req);
+    if (!orgId) {
+      reply.code(400).send({ error: "org_missing" });
+      return;
+    }
+    const partnerStatus =
+      readPartnerMetadata() ?? {
+        url: process.env.DESIGNATED_BANKING_URL ?? null,
+        productId: process.env.DSP_PRODUCT_ID ?? null,
+      };
+    const pilots = readPilotReports(orgId, 10).map((entry) => ({
+      file: entry.file,
+      orgId: entry.orgId,
+      timestamp: entry.timestamp,
+      transfers: entry.transfers,
+      alerts: entry.alerts,
+      reminders: entry.reminders,
+      pilot: entry.pilot ?? null,
+    }));
+    reply.send({
+      orgId,
+      pilots,
+      pilotCount: pilots.length,
+      partnerStatus,
+      dspProductId: partnerStatus?.productId ?? process.env.DSP_PRODUCT_ID ?? null,
+    });
+  });
+
+  app.get("/compliance/reconciliation", async (req, reply) => {
+    const orgId = resolveOrgId(req);
+    if (!orgId) {
+      reply.code(400).send({ error: "org_missing" });
+      return;
+    }
+    const [latestCycle, transfers] = await Promise.all([
+      prisma.basCycle.findFirst({
+        where: { orgId },
+        orderBy: { periodEnd: "desc" },
+      }),
+      prisma.designatedTransfer.findMany({
+        where: { orgId },
+        include: { account: true },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+      }),
+    ]);
+
+    const totals = transfers.reduce(
+      (acc, transfer) => {
+        const type = transfer.account.type;
+        if (type === "PAYGW_BUFFER") {
+          acc.paygw += Number(transfer.amount);
+        } else if (type === "GST_BUFFER") {
+          acc.gst += Number(transfer.amount);
+        }
+        return acc;
+      },
+      { paygw: 0, gst: 0 },
+    );
+
+    const cycleDetails = latestCycle
+      ? {
+          id: latestCycle.id,
+          periodStart: latestCycle.periodStart,
+          periodEnd: latestCycle.periodEnd,
+          status: latestCycle.overallStatus,
+          paygwRequired: Number(latestCycle.paygwRequired),
+          gstRequired: Number(latestCycle.gstRequired),
+        }
+      : null;
+
+    const confirmations = readPartnerConfirmations(orgId);
+    const cycleConfirmation = cycleDetails
+      ? confirmations.find((entry) => entry.cycleId === cycleDetails.id)
+      : null;
+
+    const partnerVariance = cycleDetails && cycleConfirmation
+      ? {
+          paygw:
+            Number(cycleConfirmation.paygwConfirmed ?? 0) -
+            cycleDetails.paygwRequired,
+          gst:
+            Number(cycleConfirmation.gstConfirmed ?? 0) -
+            cycleDetails.gstRequired,
+        }
+      : null;
+
+    reply.send({
+      orgId,
+      basCycle: cycleDetails,
+      designatedTransferTotals: totals,
+      variances:
+        cycleDetails
+          ? {
+              paygw: totals.paygw - cycleDetails.paygwRequired,
+              gst: totals.gst - cycleDetails.gstRequired,
+            }
+          : null,
+      partnerConfirmations: confirmations,
+      partnerVariance,
+    });
+  });
+
   app.post("/compliance/tier-check", async (req, reply) => {
     const orgs = await prisma.org.findMany({ select: { id: true } });
     const results = [];
@@ -641,6 +922,38 @@ export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) =
       });
     }
     reply.send({ results });
+  });
+
+  app.post("/compliance/partner-webhook", async (req, reply) => {
+    const token = process.env.PARTNER_WEBHOOK_TOKEN?.trim();
+    const provided = (req.headers["x-partner-token"] ?? "").toString();
+    if (token && provided !== token) {
+      reply.code(401).send({ error: "unauthorized" });
+      return;
+    }
+    const payload = typeof req.body === "object" ? req.body : { raw: req.body };
+    appendJsonLine(partnerWebhookLogFile, {
+      timestamp: new Date().toISOString(),
+      headers: sanitizeHeaders(req.headers),
+      payload,
+      ip: req.ip,
+    });
+    logSecurityEvent(
+      app.log,
+      buildSecurityLogEntry(
+        {
+          event: "partner.webhook.received",
+          orgId: (req.user as any)?.orgId ?? "partner",
+          principal: (req.headers["x-partner-id"] as string) ?? "partner-webhook",
+          metadata: {
+            headers: sanitizeHeaders(req.headers),
+            hasSignature: Boolean(provided),
+          },
+        },
+        buildSecurityContextFromRequest(req),
+      ),
+    );
+    reply.send({ status: "logged" });
   });
 
   app.post("/compliance/alerts/:id/resolve", async (req, reply) => {

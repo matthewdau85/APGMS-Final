@@ -1,5 +1,17 @@
 import type { PrismaClient } from "@prisma/client";
 
+export type ForecastDiagnostics = {
+  ewmaAlpha: number;
+  paygwMean: number;
+  gstMean: number;
+  paygwStdDev: number;
+  gstStdDev: number;
+  anomalyUpperBound: {
+    paygw: number;
+    gst: number;
+  };
+};
+
 export type ForecastResult = {
   paygwForecast: number;
   gstForecast: number;
@@ -8,6 +20,7 @@ export type ForecastResult = {
     paygwDelta: number;
     gstDelta: number;
   };
+  diagnostics: ForecastDiagnostics;
 };
 
 const DEFAULT_ALPHA = 0.6;
@@ -25,7 +38,20 @@ export async function forecastObligations(
   });
   const count = cycles.length;
   if (count === 0) {
-    return { paygwForecast: 0, gstForecast: 0, baselineCycles: 0, trend: { paygwDelta: 0, gstDelta: 0 } };
+    return {
+      paygwForecast: 0,
+      gstForecast: 0,
+      baselineCycles: 0,
+      trend: { paygwDelta: 0, gstDelta: 0 },
+      diagnostics: {
+        ewmaAlpha: alpha,
+        paygwMean: 0,
+        gstMean: 0,
+        paygwStdDev: 0,
+        gstStdDev: 0,
+        anomalyUpperBound: { paygw: 0, gst: 0 },
+      },
+    };
   }
 
   let weightedPaygw = 0;
@@ -45,6 +71,12 @@ export async function forecastObligations(
   const xMean = (1 + count) / 2;
   const yPaygwMean = cycles.reduce((sum, cycle) => sum + Number(cycle.paygwRequired), 0) / count;
   const yGstMean = cycles.reduce((sum, cycle) => sum + Number(cycle.gstRequired), 0) / count;
+
+  const paygwValues = cycles.map((cycle) => Number(cycle.paygwRequired));
+  const gstValues = cycles.map((cycle) => Number(cycle.gstRequired));
+
+  const paygwStdDev = standardDeviation(paygwValues, yPaygwMean);
+  const gstStdDev = standardDeviation(gstValues, yGstMean);
 
   let numeratorPaygw = 0;
   let numeratorGst = 0;
@@ -67,6 +99,17 @@ export async function forecastObligations(
       paygwDelta: deltaPaygw,
       gstDelta: deltaGst,
     },
+    diagnostics: {
+      ewmaAlpha: alpha,
+      paygwMean: yPaygwMean,
+      gstMean: yGstMean,
+      paygwStdDev,
+      gstStdDev,
+      anomalyUpperBound: {
+        paygw: yPaygwMean + paygwStdDev * 2,
+        gst: yGstMean + gstStdDev * 2,
+      },
+    },
   };
 }
 
@@ -80,4 +123,12 @@ export function computeTierStatus(balance: number, forecast: number, margin = 0)
     return "automate";
   }
   return "escalate";
+}
+
+function standardDeviation(values: number[], mean: number): number {
+  if (values.length === 0) {
+    return 0;
+  }
+  const variance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / values.length;
+  return Math.sqrt(variance);
 }

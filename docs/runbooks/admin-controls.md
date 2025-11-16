@@ -20,3 +20,14 @@ Record every administrator mutation (delete/export) with a correlated, redacted 
 
 ## Review
 - Include this runbook in quarterly compliance reviews alongside the `designated accounts governance` runbook so executives can see that both admin and automated processes are fully traceable.
+
+## Regulatory Readiness Checklist
+- [ ] **DSP OSF questionnaire filed** – store the export metadata in `artifacts/compliance/dsp-osf-registration.json` (includes product ID, reviewer, checksum) and link that file from `artifacts/compliance/regulatory-status.json`. Update this runbook with the submission date and reviewer.
+- [ ] **AUSTRAC enrolment** – capture the current status (`pending`, `submitted`, or `approved`) plus the next action owner inside `artifacts/compliance/regulatory-status.json.austrac`. Reference that entry here so auditors can trace the evidence trail.
+- [ ] **ASIC/AFSL posture** – log whether the sandbox relies on the partner’s licence or requires a standalone AFSL in the same JSON (`asic` section). Note who in Legal owns the next action and when the licence review is due.
+- [ ] **Partner contract status** – keep the `partnerContract` block in `artifacts/compliance/regulatory-status.json` updated with the sandbox agreement reference and expiry. Confirm that the `partner-info.json` timestamp matches the credentials loaded into production.
+- [ ] **Pilot evidence** – verify that at least two pilot JSON files exist in `artifacts/compliance/` and that `/compliance/pilot-status` returns those pilots plus the DSP product ID before a regulator review.
+
+## Partner & DSP Metadata
+- The `artifacts/compliance/partner-info.json` file is rewritten whenever `/compliance/transfer` runs with `DESIGNATED_BANKING_URL`/`DESIGNATED_BANKING_TOKEN` configured. Before each release, attach that JSON to the regulator evidence pack so reviewers can see the exact URL, DSP product ID, and certificate fingerprint in use.
+- Keep the `artifacts/compliance/regulatory-status.json` document in sync with real submissions (DSP OSF reference, AUSTRAC state, ASIC/AFSL notes). When anything changes, update this runbook with the new product ID and link to the JSON so the checklist above can be audited end-to-end.

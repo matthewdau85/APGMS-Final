@@ -1,0 +1,27 @@
+{
+  "timestamp": "2025-02-20T10:15:00.000Z",
+  "orgId": "org-pilot",
+  "pilot": "beta",
+  "transfers": [
+    {
+      "type": "PAYGW",
+      "amount": 9400.0,
+      "transferId": "transfer-beta-paygw",
+      "accountId": "acct-paygw"
+    },
+    {
+      "type": "GST",
+      "amount": 5100.0,
+      "transferId": "transfer-beta-gst",
+      "accountId": "acct-gst"
+    }
+  ],
+  "alerts": [],
+  "reminders": [
+    {
+      "id": "cycle-apr-q4",
+      "due": "2025-06-30T00:00:00.000Z",
+      "status": "payment_plan"
+    }
+  ]
+}

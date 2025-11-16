@@ -1,0 +1,20 @@
+{
+  "confirmations": [
+    {
+      "orgId": "org-pilot",
+      "cycleId": "cycle-jan-q3",
+      "paygwConfirmed": 18500.5,
+      "gstConfirmed": 9600.25,
+      "reference": "DSP-TPG-REF-001",
+      "confirmedAt": "2025-03-15T01:45:00.000Z"
+    },
+    {
+      "orgId": "org-pilot",
+      "cycleId": "cycle-apr-q4",
+      "paygwConfirmed": 17200.0,
+      "gstConfirmed": 8800.0,
+      "reference": "DSP-TPG-REF-002",
+      "confirmedAt": "2025-06-15T02:00:00.000Z"
+    }
+  ]
+}

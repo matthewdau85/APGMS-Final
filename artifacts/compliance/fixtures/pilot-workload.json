@@ -1,0 +1,50 @@
+{
+  "orgId": "org-pilot",
+  "basCycle": {
+    "id": "cycle-jan-q3",
+    "periodStart": "2025-01-01T00:00:00.000Z",
+    "periodEnd": "2025-03-31T00:00:00.000Z",
+    "paygwRequired": 18500.5,
+    "gstRequired": 9600.25
+  },
+  "payroll": [
+    {
+      "id": "payroll-001",
+      "amount": 8200.75,
+      "actorId": "ops-analyst",
+      "payload": {
+        "batch": "payroll-week-1",
+        "employees": 14
+      }
+    },
+    {
+      "id": "payroll-002",
+      "amount": 9100.25,
+      "actorId": "ops-analyst",
+      "payload": {
+        "batch": "payroll-week-2",
+        "employees": 15
+      }
+    }
+  ],
+  "pos": [
+    {
+      "id": "pos-001",
+      "amount": 4200.1,
+      "actorId": "pos-sync",
+      "payload": {
+        "register": "front-counter",
+        "gross": 46200.45
+      }
+    },
+    {
+      "id": "pos-002",
+      "amount": 5100.15,
+      "actorId": "pos-sync",
+      "payload": {
+        "register": "online-store",
+        "gross": 55890.12
+      }
+    }
+  ]
+}
