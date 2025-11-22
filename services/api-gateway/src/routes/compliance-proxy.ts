@@ -1,36 +1,24 @@
-import { type FastifyPluginAsync, type FastifyRequest, type FastifyReply } from "fastify";
+import { type FastifyPluginAsync } from "fastify";
+import { z } from "zod";
 
+import { authGuard } from "../auth.js";
 import { prisma } from "../db.js";
+import { parseWithSchema } from "../lib/validation.js";
 
 const formatPeriod = (start: Date, end: Date): string =>
   `${start.toISOString().slice(0, 10)}-${end.toISOString().slice(0, 10)}`;
 
 const toNumber = (value: unknown): number => (typeof value === "number" ? value : Number(value ?? 0));
 
-const ensureToken = (req: FastifyRequest, reply: FastifyReply) => {
-  const token = process.env.APGMS_API_TOKEN;
-  const header = (req.headers.authorization ?? "").toString().replace(/^Bearer\s+/i, "");
-  if (!token || header !== token) {
-    reply.code(401).send({ error: "unauthorized" });
-    return false;
-  }
-  return true;
-};
-
-const getOrgId = () => process.env.APGMS_ORG_ID ?? "dev-org";
-
 export const registerComplianceProxy: FastifyPluginAsync = async (app) => {
-  app.get("/compliance/report", async (req, reply) => {
-    if (!ensureToken(req, reply)) return;
-    const orgId = getOrgId();
+  app.get("/compliance/report", { preHandler: [authGuard] }, async (req, reply) => {
+    const orgId = (req.user as any)?.orgId;
+    if (!orgId) {
+      reply.code(401).send({ error: "unauthorized" });
+      return;
+    }
 
-    const [
-      basCycles,
-      paymentPlans,
-      openHighSeverity,
-      resolvedThisQuarter,
-      designatedAccounts,
-    ] = await Promise.all([
+    const [basCycles, paymentPlans, openHighSeverity, resolvedThisQuarter, designatedAccounts] = await Promise.all([
       prisma.basCycle.findMany({
         where: { orgId },
         orderBy: { periodStart: "desc" },
@@ -55,7 +43,7 @@ export const registerComplianceProxy: FastifyPluginAsync = async (app) => {
       period: formatPeriod(cycle.periodStart, cycle.periodEnd),
       lodgedAt: cycle.lodgedAt?.toISOString() ?? null,
       status: cycle.overallStatus,
-      notes: `PAYGW ${toNumber(cycle.paygwSecured)} / ${toNumber(cycle.paygwRequired)} · GST ${toNumber(
+      notes: `PAYGW ${toNumber(cycle.paygwSecured)} / ${toNumber(cycle.paygwRequired)} | GST ${toNumber(
         cycle.gstSecured,
       )} / ${toNumber(cycle.gstRequired)}`,
     }));
@@ -92,9 +80,26 @@ export const registerComplianceProxy: FastifyPluginAsync = async (app) => {
     });
   });
 
-  app.get("/admin/export/:orgId", async (req, reply) => {
-    if (!ensureToken(req, reply)) return;
-    const orgId = (req.params as { orgId: string }).orgId;
+  app.get("/admin/export/:orgId", { preHandler: [authGuard] }, async (req, reply) => {
+    const principalOrgId = (req.user as any)?.orgId;
+    if (!principalOrgId) {
+      reply.code(401).send({ error: "unauthorized" });
+      return;
+    }
+
+    const paramsSchema = z.object({ orgId: z.string().min(1) });
+    const parsed = parseWithSchema(paramsSchema, req.params ?? {});
+    if (!parsed.success) {
+      reply.code(400).send({ error: { code: "invalid_params", details: parsed.error.flatten() } });
+      return;
+    }
+
+    const orgId = parsed.data.orgId;
+    if (orgId !== principalOrgId) {
+      reply.code(403).send({ error: "forbidden" });
+      return;
+    }
+
     const org = await prisma.org.findUnique({ where: { id: orgId } });
     const userRecord =
       (
@@ -133,9 +138,12 @@ export const registerComplianceProxy: FastifyPluginAsync = async (app) => {
     });
   });
 
-  app.post("/compliance/evidence", async (req, reply) => {
-    if (!ensureToken(req, reply)) return;
-    const orgId = getOrgId();
+  app.post("/compliance/evidence", { preHandler: [authGuard] }, async (req, reply) => {
+    const orgId = (req.user as any)?.orgId;
+    if (!orgId) {
+      reply.code(401).send({ error: "unauthorized" });
+      return;
+    }
     const artifact = await prisma.evidenceArtifact.create({
       data: {
         orgId,
@@ -148,10 +156,16 @@ export const registerComplianceProxy: FastifyPluginAsync = async (app) => {
     reply.send({ artifact: { id: artifact.id } });
   });
 
-  app.get("/compliance/evidence/:artifactId", async (req, reply) => {
-    if (!ensureToken(req, reply)) return;
+  app.get("/compliance/evidence/:artifactId", { preHandler: [authGuard] }, async (req, reply) => {
+    const artifactParamsSchema = z.object({ artifactId: z.string().min(1) });
+    const parsed = parseWithSchema(artifactParamsSchema, req.params ?? {});
+    if (!parsed.success) {
+      reply.code(400).send({ error: { code: "invalid_params", details: parsed.error.flatten() } });
+      return;
+    }
+
     const artifact = await prisma.evidenceArtifact.findUnique({
-      where: { id: (req.params as { artifactId: string }).artifactId },
+      where: { id: parsed.data.artifactId },
     });
     if (!artifact) {
       reply.code(404).send({ error: "artifact_not_found" });
