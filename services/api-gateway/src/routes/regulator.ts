@@ -1,9 +1,11 @@
 import type { Decimal, JsonValue } from "@prisma/client/runtime/library.js";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { PrismaClient } from "@prisma/client";
+import { z } from "zod";
 
 import { prisma } from "../db.js";
 import { recordAuditLog } from "../lib/audit.js";
+import { parseWithSchema } from "../lib/validation.js";
 
 type RegulatorRequest = FastifyRequest & {
   user?: { orgId?: string; sub?: string };
@@ -173,10 +175,22 @@ export async function registerRegulatorRoutes(app: FastifyInstance, deps: Regula
 
   app.get("/monitoring/snapshots", async (request: RegulatorRequest) => {
     const orgId = ensureOrgId(request);
-    const limitParam = Number((request.query as { limit?: string | number }).limit ?? 5);
-    const limit = Number.isFinite(limitParam)
-      ? Math.min(Math.max(Math.trunc(limitParam), 1), MAX_SNAPSHOTS)
-      : 5;
+
+    const querySchema = z.object({
+      limit: z
+        .union([z.string(), z.number()])
+        .transform((val) => Number(val))
+        .pipe(z.number().int().min(1).max(MAX_SNAPSHOTS))
+        .optional()
+        .default(5),
+    });
+    const parsed = parseWithSchema(querySchema, request.query ?? {});
+    if (!parsed.success) {
+      return {
+        error: { code: "invalid_query", details: parsed.error.flatten() },
+      };
+    }
+    const limit = parsed.data.limit;
 
     const snapshots = await db.monitoringSnapshot.findMany({
       where: { orgId },
@@ -219,8 +233,15 @@ export async function registerRegulatorRoutes(app: FastifyInstance, deps: Regula
 
   app.get("/evidence/:artifactId", async (request: RegulatorRequest, reply) => {
     const orgId = ensureOrgId(request);
+    const paramsSchema = z.object({ artifactId: z.string().min(1) });
+    const parsed = parseWithSchema(paramsSchema, request.params ?? {});
+    if (!parsed.success) {
+      reply.code(400).send({ error: { code: "invalid_params", details: parsed.error.flatten() } });
+      return;
+    }
+
     const artifact = await db.evidenceArtifact.findUnique({
-      where: { id: (request.params as { artifactId: string }).artifactId },
+      where: { id: parsed.data.artifactId },
     });
     if (!artifact || artifact.orgId !== orgId) {
       reply.code(404).send({ error: "artifact_not_found" });
