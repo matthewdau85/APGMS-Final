@@ -1,5 +1,6 @@
 **/node_modules
 **/dist
+!services/api-gateway/dist
 **/.next
 **/.turbo
 **/.vite

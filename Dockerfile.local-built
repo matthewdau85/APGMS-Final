@@ -1,0 +1,16 @@
+FROM node:20
+
+WORKDIR /app
+
+# Copy the monorepo lockfile and root package.json (for metadata)
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+
+# Copy pre-built code and node_modules from host into the container
+COPY shared ./shared
+COPY packages/domain-policy ./packages/domain-policy
+COPY services/api-gateway ./services/api-gateway
+COPY node_modules ./node_modules
+
+WORKDIR /app/services/api-gateway
+
+CMD ["node", "dist/index.js"]

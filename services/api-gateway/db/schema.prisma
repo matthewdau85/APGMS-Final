@@ -1,0 +1,61 @@
+// services/api-gateway/db/schema.prisma
+
+// services/api-gateway/db/schema.prisma
+datasource db {
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Schedule {
+  MONTHLY
+  QUARTERLY
+}
+
+model Organization {
+  id        String @id @default(cuid())
+  abn       String @unique
+  legalName String
+
+  // Who created this organisation record (onboarding user)
+  createdByUserId String?
+
+  // Schedule + shortfall threshold for secured tax buffers
+  schedule              Schedule @default(QUARTERLY)
+  shortfallThresholdBps Int      @default(500)
+
+  designatedAccounts DesignatedAccount[]
+  obligationHistory  ObligationHistory[]
+}
+
+model DesignatedAccount {
+  id          String @id @default(cuid())
+  orgId       String
+  type        String
+  provider    String
+  mandateId   String?
+  displayName String?
+
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  // One designated account per org + tax type
+  @@unique([orgId, type], name: "orgId_type")
+}
+
+model ObligationHistory {
+  id        String   @id @default(cuid())
+  orgId     String
+  type      String   // "GST" | "PAYGW" | "PAYGI"
+  period    String   // "YYYY-MM" or "YYYY-Qn"
+  cents     Int
+  source    String   // "import", "statement", "manual"
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@index([orgId, type, period])
+}

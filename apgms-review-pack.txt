@@ -1,0 +1,2920 @@
+﻿===== FILE: .\services\api-gateway\package.json =====
+
+{
+  "name": "@apgms/api-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:generate": "prisma generate"
+  },
+  "prisma": {
+    "schema": "db/schema.prisma"
+  },
+  "dependencies": {
+    "@apgms/connectors": "workspace:*",
+    "@apgms/domain-policy": "workspace:*",
+    "@apgms/shared": "workspace:*",
+    "@fastify/helmet": "^13.0.2",
+    "@fastify/rate-limit": "^10.3.0",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.50.0",
+    "@opentelemetry/resources": "^1.23.0",
+    "@opentelemetry/sdk-node": "^0.50.0",
+    "@opentelemetry/semantic-conventions": "^1.23.0",
+    "@prisma/client": "^6.17.1",
+    "@simplewebauthn/server": "^13.2.2",
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^17.2.3",
+    "fastify-plugin": "^5.1.0",
+    "jose": "^6.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "prom-client": "^15.1.3",
+    "redis": "^5.9.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^3.0.0",
+    "@types/jsonwebtoken": "^9.0.10",
+    "prisma": "6.17.1"
+  }
+}
+
+
+===== FILE: .\services\api-gateway\src\app.ts =====
+
+import Fastify, {
+  type FastifyInstance,
+  type FastifyPluginAsync,
+} from "fastify";
+import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
+import { context, trace } from "@opentelemetry/api";
+import "dotenv/config.js";
+
+import {
+  AppError,
+  badRequest,
+  conflict,
+  forbidden,
+  notFound,
+  unauthorized,
+} from "@apgms/shared";
+import { config } from "./config.js";
+
+import rateLimit from "./plugins/rate-limit.js";
+import { authGuard, createAuthGuard, REGULATOR_AUDIENCE } from "./auth.js";
+import { registerAuthRoutes } from "./routes/auth.js";
+import { registerRegulatorAuthRoutes } from "./routes/regulator-auth.js";
+import { registerRegulatorRoutes } from "./routes/regulator.js";
+import { registerAdminDataRoutes } from "./routes/admin.data.js";
+import { registerBankLinesRoutes } from "./routes/bank-lines.js";
+import { registerTaxRoutes } from "./routes/tax.js";
+import { registerOnboardingRoutes } from "./routes/onboarding.js";
+import {
+  registerConnectorRoutes,
+  type ConnectorRoutesDeps,
+} from "./routes/connectors.js";
+import { prisma } from "./db.js";
+import { parseWithSchema } from "./lib/validation.js";
+import { registerBasRoutes } from "./routes/bas.js";
+import { registerTransferRoutes } from "./routes/transfers.js";
+import { registerIntegrationEventRoutes } from "./routes/integration-events.js";
+import {
+  verifyChallenge,
+  requireRecentVerification,
+  type VerifyChallengeResult,
+} from "./security/mfa.js";
+import { recordAuditLog } from "./lib/audit.js";
+import { ensureRegulatorSessionActive } from "./lib/regulator-session.js";
+import {
+  metrics,
+  installHttpMetrics,
+  registerMetricsRoute,
+} from "./observability/metrics.js";
+import { closeProviders, initProviders } from "./providers.js";
+import { registerPaymentPlanRoutes } from "./routes/payment-plans.js";
+import { registerAtoRoutes } from "./routes/ato.js";
+import { registerMonitoringRoutes } from "./routes/monitoring.js";
+import { registerRiskRoutes } from "./routes/risk.js";
+import { registerDemoRoutes } from "./routes/demo.js";
+import { registerComplianceProxy } from "./routes/compliance-proxy.js";
+import { registerComplianceMonitorRoutes } from "./routes/compliance-monitor.js";
+import { registerForecastRoutes } from "./routes/forecast.js";
+
+type BuildServerOptions = {
+  bankLinesPlugin?: FastifyPluginAsync;
+  connectorDeps?: ConnectorRoutesDeps;
+};
+
+export async function buildServer(
+  options: BuildServerOptions = {},
+): Promise<FastifyInstance> {
+  const app = Fastify({ logger: true });
+
+  installHttpMetrics(app);
+
+  const allowedOrigins = new Set(config.cors.allowedOrigins);
+
+  const providers = await initProviders(app.log);
+  (app as any).providers = providers;
+  app.addHook("onClose", async () => {
+    await closeProviders(providers, app.log);
+  });
+
+  const drainingState = { value: false };
+  (app as any).isDraining = () => drainingState.value;
+  (app as any).setDraining = (v: boolean) => {
+    drainingState.value = v;
+  };
+
+  app.addHook("onRequest", (request, reply, done) => {
+    const span = trace.getSpan(context.active());
+    if (span) {
+      const traceId = span.spanContext().traceId;
+      if (traceId) {
+        request.log = request.log.child({ traceId });
+        reply.log = reply.log.child({ traceId });
+      }
+    }
+
+    const route = request.routeOptions?.url ?? request.raw.url ?? "unknown";
+    const timer = metrics.httpRequestDuration.startTimer({
+      method: request.method,
+      route,
+    });
+    (reply as any).__metrics = { timer, method: request.method, route };
+    done();
+  });
+
+  app.addHook("onResponse", (request, reply, done) => {
+    const metricState = (reply as any).__metrics ?? {};
+    const route =
+      metricState.route ?? request.routeOptions?.url ?? request.raw.url ?? "unknown";
+    const method = metricState.method ?? request.method;
+    const status = String(reply.statusCode);
+
+    try {
+      metrics.httpRequestTotal.labels(method, route, status).inc();
+      if (typeof metricState.timer === "function") {
+        metricState.timer({ status });
+      } else {
+        const end = metrics.httpRequestDuration.startTimer({ method, route });
+        end({ status });
+      }
+    } catch (error) {
+      request.log.warn({ err: error }, "failed_to_record_http_metrics");
+    } finally {
+      (reply as any).__metrics = undefined;
+    }
+    done();
+  });
+
+  app.setErrorHandler((error, request, reply) => {
+    if (error instanceof AppError) {
+      const appError = error as AppError;
+      reply.status(appError.status).send({
+        error: {
+          code: appError.code,
+          message: appError.message,
+          fields: appError.fields,
+        },
+      });
+      return;
+    }
+    if ((error as any)?.validation) {
+      reply.status(400).send({
+        error: { code: "invalid_body", message: "Validation failed" },
+      });
+      return;
+    }
+    if ((error as any)?.code === "FST_CORS_FORBIDDEN_ORIGIN") {
+      reply.status(403).send({
+        error: {
+          code: "cors_forbidden",
+          message: (error as Error).message ?? "Origin not allowed",
+        },
+      });
+      return;
+    }
+    request.log.error({ err: error }, "Unhandled error");
+    reply
+      .status(500)
+      .send({ error: { code: "internal_error", message: "Internal server error" } });
+  });
+
+  await app.register(rateLimit);
+  await app.register(helmet, {
+    hidePoweredBy: true,
+    frameguard: { action: "deny" },
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        baseUri: ["'self'"],
+        connectSrc: ["'self'"],
+        scriptSrc: [
+          "'self'",
+          "'sha256-+Ul8C6HpBvEV0hgFekKPKiEh0Ug3SIn50SjA+iyTNHo='",
+        ],
+        styleSrc: ["'self'"],
+        imgSrc: ["'self'", "data:"],
+        objectSrc: ["'none'"],
+        frameAncestors: ["'none'"],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "same-site" },
+    dnsPrefetchControl: { allow: false },
+    referrerPolicy: { policy: "no-referrer" },
+    xssFilter: true,
+    hsts: {
+      maxAge: 15_552_000,
+      includeSubDomains: true,
+      preload: true,
+    },
+  });
+
+  await app.register(cors, {
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, false);
+      if (allowedOrigins.has(origin)) return cb(null, true);
+      const error = new Error(`Origin ${origin} is not allowed`);
+      cb(
+        Object.assign(error, {
+          code: "FST_CORS_FORBIDDEN_ORIGIN",
+          statusCode: 403,
+        }),
+        false,
+      );
+    },
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key"],
+    exposedHeaders: ["Idempotent-Replay"],
+  });
+
+  app.get("/health", async () => ({ ok: true, service: "api-gateway" }));
+
+  app.get("/ready", async (_request, reply) => {
+    if ((app as any).isDraining?.() === true) {
+      reply.code(503).send({ ok: false, draining: true });
+      return;
+    }
+
+    const providerState = (app as any).providers ?? {};
+    const results: {
+      db: boolean;
+      redis: boolean | null;
+      nats: boolean | null;
+    } = {
+      db: false,
+      redis: providerState.redis ? false : null,
+      nats: providerState.nats ? false : null,
+    };
+
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      results.db = true;
+    } catch (error) {
+      app.log.error({ err: error }, "readiness_db_check_failed");
+      results.db = false;
+    }
+
+    if (providerState.redis) {
+      try {
+        await providerState.redis.ping();
+        results.redis = true;
+      } catch (error) {
+        results.redis = false;
+        app.log.error({ err: error }, "readiness_redis_ping_failed");
+      }
+    }
+
+    if (providerState.nats) {
+      try {
+        await providerState.nats.flush();
+        results.nats = true;
+      } catch (error) {
+        results.nats = false;
+        app.log.error({ err: error }, "readiness_nats_flush_failed");
+      }
+    }
+
+    const healthy =
+      results.db && results.redis !== false && results.nats !== false;
+    if (!healthy) {
+      reply.code(503).send({ ok: false, components: results });
+      return;
+    }
+
+    reply.send({ ok: true, components: results });
+  });
+
+  registerMetricsRoute(app);
+
+  await registerAuthRoutes(app);
+  await registerRegulatorAuthRoutes(app);
+
+  // All customer/admin routes under auth guard
+  await app.register(async (secureScope) => {
+    secureScope.addHook("onRequest", authGuard);
+
+    const bankLinesPlugin = options.bankLinesPlugin ?? registerBankLinesRoutes;
+    await secureScope.register(bankLinesPlugin);
+    await secureScope.register(registerAdminDataRoutes);
+    await secureScope.register(registerTaxRoutes);
+    await secureScope.register(registerIntegrationEventRoutes);
+    await secureScope.register(registerBasRoutes);
+    await secureScope.register(registerTransferRoutes);
+    await secureScope.register(registerPaymentPlanRoutes);
+    await secureScope.register(registerAtoRoutes);
+    await secureScope.register(registerMonitoringRoutes);
+    await secureScope.register(registerRiskRoutes);
+    await secureScope.register(registerDemoRoutes);
+    await secureScope.register(registerComplianceMonitorRoutes);
+
+    // NEW â€“ onboarding + forecast inside authenticated scope
+    await secureScope.register(registerOnboardingRoutes);
+    await secureScope.register(registerForecastRoutes);
+
+    // compliance proxy mounts onto root app, not secureScope
+    await registerComplianceProxy(app);
+
+    await secureScope.register(async (connectorScope) => {
+      registerConnectorRoutes(connectorScope, options.connectorDeps);
+    });
+  });
+
+  const regulatorAuthGuard = createAuthGuard(REGULATOR_AUDIENCE, {
+    validate: async (principal, request) => {
+      const sessionId = (principal.sessionId ?? principal.id) as
+        | string
+        | undefined;
+      if (!sessionId) throw new Error("regulator_session_missing");
+      const session = await ensureRegulatorSessionActive(sessionId);
+      (request as any).regulatorSession = session;
+    },
+  });
+
+  app.register(
+    async (regScope) => {
+      regScope.addHook("onRequest", regulatorAuthGuard);
+      await registerRegulatorRoutes(regScope);
+    },
+    { prefix: "/regulator" },
+  );
+
+  return app;
+}
+
+===== FILE: .\services\api-gateway\src\config.ts =====
+
+// services/api-gateway/src/config.ts
+import { Buffer } from "node:buffer";
+import { URL } from "node:url";
+import { z } from "zod";
+
+export interface AppConfig {
+  readonly databaseUrl: string;
+  readonly shadowDatabaseUrl?: string;
+  readonly rateLimit: {
+    readonly max: number;
+    readonly window: string;
+  };
+  readonly security: {
+    readonly authFailureThreshold: number;
+    readonly kmsKeysetLoaded?: boolean;
+    readonly requireHttps: boolean;
+  };
+  readonly cors: {
+    readonly allowedOrigins: string[];
+  };
+  readonly taxEngineUrl: string;
+
+  // auth bits we actually use at runtime (these were in env before)
+  readonly auth: {
+    readonly audience: string;
+    readonly issuer: string;
+    readonly devSecret: string;
+  };
+  readonly regulator: {
+    readonly accessCode: string;
+    readonly jwtAudience: string;
+    readonly sessionTtlMinutes: number;
+  };
+  readonly encryption: {
+    readonly masterKey: Buffer;
+  };
+  readonly webauthn: {
+    readonly rpId: string;
+    readonly rpName: string;
+    readonly origin: string;
+  };
+  readonly banking: {
+    readonly providerId: string;
+    readonly maxReadTransactions: number;
+    readonly maxWriteCents: number;
+  };
+  readonly redis?: {
+    readonly url: string;
+  };
+  readonly nats?: {
+    readonly url: string;
+    readonly token?: string;
+    readonly username?: string;
+    readonly password?: string;
+  };
+}
+
+const base64Regex = /^[A-Za-z0-9+/=]+$/;
+
+const jwksKeySchema = z.object({
+  kid: z.string().min(1),
+  alg: z.string().min(1),
+});
+
+const envString = (name: string): string => {
+  const value = process.env[name];
+  if (!value || value.trim().length === 0) {
+    throw new Error(`${name} is required`);
+  }
+  return value.trim();
+};
+
+const envDefault = (name: string, fallback: string): string => {
+  const value = process.env[name];
+  if (!value || value.trim().length === 0) {
+    return fallback;
+  }
+  return value.trim();
+};
+
+const parseIntegerEnv = (name: string, fallback: number): number => {
+  const raw = process.env[name];
+  if (!raw || raw.trim().length === 0) {
+    return fallback;
+  }
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`${name} must be a positive integer`);
+  }
+  return parsed;
+};
+
+const ensureUrl = (value: string, name: string): string => {
+  try {
+    // eslint-disable-next-line no-new
+    new URL(value);
+    return value;
+  } catch {
+    throw new Error(`${name} must be a valid URL`);
+  }
+};
+
+const ensureMasterKey = (raw: string): Buffer => {
+  if (!base64Regex.test(raw)) {
+    throw new Error("ENCRYPTION_MASTER_KEY must be base64 encoded");
+  }
+  const key = Buffer.from(raw, "base64");
+  if (key.length !== 32) {
+    throw new Error("ENCRYPTION_MASTER_KEY must decode to 32 bytes");
+  }
+  return key;
+};
+
+const parseJson = <T>(value: string, name: string): T => {
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    throw new Error(`${name} must contain valid JSON`);
+  }
+};
+
+const ensureJwksConfigured = (raw: string): void => {
+  const parsed = parseJson<{ keys?: unknown }>(raw, "AUTH_JWKS");
+  const schema = z
+    .object({
+      keys: z.array(jwksKeySchema).min(1),
+    })
+    .safeParse(parsed);
+  if (!schema.success) {
+    throw new Error(
+      `AUTH_JWKS must contain at least one key with kid/alg: ${schema.error.message}`,
+    );
+  }
+};
+
+const ensureKeyMaterial = (
+  value: string,
+  name: string,
+): Array<{ kid: string; material: string }> => {
+  const parsed = parseJson<Array<{ kid?: unknown; material?: unknown }>>(
+    value,
+    name,
+  );
+  const schema = z
+    .array(
+      z.object({
+        kid: z.string().min(1),
+        material: z
+          .string()
+          .regex(base64Regex, "expected base64 material")
+          .refine(
+            (material) => Buffer.from(material, "base64").length === 32,
+            {
+              message: "material must decode to 32 bytes",
+            },
+          ),
+      }),
+    )
+    .min(1);
+
+  const result = schema.safeParse(parsed);
+  if (!result.success) {
+    throw new Error(`${name} invalid: ${result.error.message}`);
+  }
+  return result.data;
+};
+
+const ensureSaltMaterial = (
+  value: string,
+  name: string,
+): Array<{ sid: string; secret: string }> => {
+  const parsed = parseJson<Array<{ sid?: unknown; secret?: unknown }>>(
+    value,
+    name,
+  );
+  const schema = z
+    .array(
+      z.object({
+        sid: z.string().min(1),
+        secret: z
+          .string()
+          .regex(base64Regex, "expected base64 secret")
+          .refine(
+            (secret) => Buffer.from(secret, "base64").length === 32,
+            {
+              message: "secret must decode to 32 bytes",
+            },
+          ),
+      }),
+    )
+    .min(1);
+
+  const result = schema.safeParse(parsed);
+  if (!result.success) {
+    throw new Error(`${name} invalid: ${result.error.message}`);
+  }
+  return result.data;
+};
+
+const splitOrigins = (raw: string | undefined): string[] => {
+  if (!raw) {
+    return [];
+  }
+  return raw
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+};
+
+// This builds a config object from process.env with validation.
+export function loadConfig(): AppConfig {
+  // DB URLs
+  const databaseUrl = ensureUrl(
+    envString("DATABASE_URL"),
+    "DATABASE_URL",
+  );
+
+  const shadowDatabaseUrlRaw = process.env.SHADOW_DATABASE_URL;
+  const shadowDatabaseUrl =
+    shadowDatabaseUrlRaw && shadowDatabaseUrlRaw.trim().length > 0
+      ? ensureUrl(
+          shadowDatabaseUrlRaw.trim(),
+          "SHADOW_DATABASE_URL",
+        )
+      : undefined;
+
+  // auth inputs must exist / be sane
+  const audience =
+    envDefault("AUTH_AUDIENCE", "http://localhost:3000");
+  const issuer = envDefault(
+    "AUTH_ISSUER",
+    "https://auth.localhost",
+  );
+  const devSecret = envDefault(
+    "AUTH_DEV_SECRET",
+    "local-dev-secret",
+  );
+
+  const jwksRaw = envDefault(
+    "AUTH_JWKS",
+    JSON.stringify({ keys: [{ kid: "local-dev", alg: "RS256" }] }),
+  );
+  ensureJwksConfigured(jwksRaw);
+
+  // encryption/key material must exist / be sane
+  const keySet = ensureKeyMaterial(
+    envString("PII_KEYS"),
+    "PII_KEYS",
+  );
+  const activeKid = envString("PII_ACTIVE_KEY");
+  if (!keySet.some((entry) => entry.kid === activeKid)) {
+    throw new Error(
+      `PII_ACTIVE_KEY ${activeKid} does not exist in PII_KEYS`,
+    );
+  }
+
+  const saltSet = ensureSaltMaterial(
+    envString("PII_SALTS"),
+    "PII_SALTS",
+  );
+  const activeSid = envString("PII_ACTIVE_SALT");
+  if (!saltSet.some((entry) => entry.sid === activeSid)) {
+    throw new Error(
+      `PII_ACTIVE_SALT ${activeSid} does not exist in PII_SALTS`,
+    );
+  }
+
+  const masterKey = ensureMasterKey(envString("ENCRYPTION_MASTER_KEY"));
+
+  // if we reached here, PII is valid
+  const kmsKeysetLoaded = true;
+  const requireHttps = process.env.REQUIRE_TLS === "true";
+
+  // rate limit config
+  const rateLimitMax = parseIntegerEnv(
+    "API_RATE_LIMIT_MAX",
+    60,
+  );
+  const rateLimitWindow = (
+    process.env.API_RATE_LIMIT_WINDOW ?? "1 minute"
+  ).trim();
+  if (rateLimitWindow.length === 0) {
+    throw new Error(
+      "API_RATE_LIMIT_WINDOW must not be empty",
+    );
+  }
+
+  // auth brute force threshold
+  const authFailureThreshold = parseIntegerEnv(
+    "AUTH_FAILURE_THRESHOLD",
+    5,
+  );
+
+  // tax-engine URL
+  const taxEngineUrl = ensureUrl(
+    process.env.TAX_ENGINE_URL?.trim() &&
+      process.env.TAX_ENGINE_URL.trim().length > 0
+      ? process.env.TAX_ENGINE_URL.trim()
+      : "http://tax-engine:8000",
+    "TAX_ENGINE_URL",
+  );
+
+  const regulatorAccessCode = envString("REGULATOR_ACCESS_CODE");
+  const regulatorAudience =
+    process.env.REGULATOR_JWT_AUDIENCE &&
+    process.env.REGULATOR_JWT_AUDIENCE.trim().length > 0
+      ? process.env.REGULATOR_JWT_AUDIENCE.trim()
+      : "urn:apgms:regulator";
+  const regulatorSessionTtl = parseIntegerEnv(
+    "REGULATOR_SESSION_TTL_MINUTES",
+    60,
+  );
+
+  const webauthnRpId = process.env.WEBAUTHN_RP_ID?.trim() ?? "localhost";
+  const webauthnRpName = process.env.WEBAUTHN_RP_NAME?.trim() ?? "APGMS Admin";
+  const webauthnOrigin = ensureUrl(
+    process.env.WEBAUTHN_ORIGIN?.trim() ?? "http://localhost:5173",
+    "WEBAUTHN_ORIGIN",
+  );
+
+  const bankingProvider =
+    process.env.BANKING_PROVIDER?.trim().toLowerCase() ?? "mock";
+  const bankingMaxRead = parseIntegerEnv(
+    "BANKING_MAX_READ_TRANSACTIONS",
+    1000,
+  );
+  const bankingMaxWrite = parseIntegerEnv(
+    "BANKING_MAX_WRITE_CENTS",
+    5_000_000,
+  );
+
+  const corsAllowedOrigins = splitOrigins(
+    envDefault("CORS_ALLOWED_ORIGINS", "http://localhost:5173"),
+  );
+
+  const redisUrlRaw = process.env.REDIS_URL?.trim();
+  const redis =
+    redisUrlRaw && redisUrlRaw.length > 0
+      ? {
+          url: ensureUrl(redisUrlRaw, "REDIS_URL"),
+        }
+      : undefined;
+
+  const natsUrlRaw = process.env.NATS_URL?.trim();
+  const nats =
+    natsUrlRaw && natsUrlRaw.length > 0
+      ? {
+          url: ensureUrl(natsUrlRaw, "NATS_URL"),
+          token: process.env.NATS_TOKEN?.trim() || undefined,
+          username: process.env.NATS_USERNAME?.trim() || undefined,
+          password: process.env.NATS_PASSWORD?.trim() || undefined,
+        }
+      : undefined;
+
+  return {
+    databaseUrl,
+    shadowDatabaseUrl,
+    rateLimit: {
+      max: rateLimitMax,
+      window: rateLimitWindow,
+    },
+    security: {
+      authFailureThreshold,
+      kmsKeysetLoaded,
+      requireHttps,
+    },
+    cors: {
+      allowedOrigins: corsAllowedOrigins,
+    },
+    taxEngineUrl,
+    auth: {
+      audience,
+      issuer,
+      devSecret,
+    },
+    regulator: {
+      accessCode: regulatorAccessCode,
+      jwtAudience: regulatorAudience,
+      sessionTtlMinutes: regulatorSessionTtl,
+    },
+    encryption: {
+      masterKey,
+    },
+    webauthn: {
+      rpId: webauthnRpId,
+      rpName: webauthnRpName,
+      origin: webauthnOrigin,
+    },
+    banking: {
+      providerId: bankingProvider.length > 0 ? bankingProvider : "mock",
+      maxReadTransactions: bankingMaxRead,
+      maxWriteCents: bankingMaxWrite,
+    },
+    redis,
+    nats,
+  };
+}
+
+// 🔥 THIS is what app.ts imports
+export const config: AppConfig = loadConfig();
+
+
+===== FILE: .\services\api-gateway\src\routes\onboarding.ts =====
+
+import type { FastifyInstance } from "fastify";
+import { badRequest } from "@apgms/shared";
+import { prisma } from "../db.js";
+import { withRetry } from "../lib/retry.js";
+import { validateAbnTfn } from "../lib/ato.js";
+import {
+  createPayToMandate,
+  type PayToCreateMandateInput,
+} from "../services/payto.js";
+import type { TaxObligationType } from "../services/abr-stub.js";
+
+type ValidateBody = {
+  abn?: string;
+  tfn?: string;
+};
+
+type SetupPayload = {
+  abn: string;
+  legalName: string;
+  schedule: "MONTHLY" | "QUARTERLY";
+  shortfallThresholdBps: number;
+  bankCode: "cba" | "nab" | "anz";
+  account: {
+    bsb: string;
+    accountNumber: string;
+    accountName: string;
+  };
+  obligations: TaxObligationType[];
+};
+
+export async function registerOnboardingRoutes(app: FastifyInstance) {
+  // POST /onboarding/validate â€“ ABN/TFN lookup
+  app.post<{ Body: ValidateBody }>(
+    "/onboarding/validate",
+    async (req, reply) => {
+      const { abn, tfn } = req.body;
+      if (!abn && !tfn) {
+        throw badRequest(
+          "onboarding_missing_identifier",
+          "ABN or TFN must be supplied",
+        );
+      }
+
+      const result = await withRetry(() => validateAbnTfn(abn, tfn), {
+        maxAttempts: 3,
+      });
+
+      return reply.code(200).send(result);
+    },
+  );
+
+  // POST /onboarding/setup â€“ create org + designated accounts + PayTo
+  app.post<{ Body: SetupPayload }>(
+    "/onboarding/setup",
+    async (req, reply) => {
+      const {
+        abn,
+        legalName,
+        schedule,
+        shortfallThresholdBps,
+        bankCode,
+        account,
+        obligations,
+      } = req.body;
+
+      if (!abn || !legalName) {
+        throw badRequest(
+          "onboarding_missing_fields",
+          "ABN and legalName are required",
+        );
+      }
+
+      if (!obligations || obligations.length === 0) {
+        throw badRequest(
+          "onboarding_missing_obligations",
+          "At least one obligation must be selected",
+        );
+      }
+
+      // Minimal upsert to avoid schema assumptions â€“ we know "abn" is unique.
+      const org = await prisma.organization.upsert({
+        where: { abn },
+        update: {},
+        create: { abn },
+      });
+
+      const accountRef = `${account.bsb}/${account.accountNumber}`;
+      const paytoInput: PayToCreateMandateInput = {
+        orgId: org.id,
+        bsb: account.bsb,
+        accountNumber: account.accountNumber,
+        accountName: account.accountName || legalName,
+      };
+
+      // Create one set of designated accounts + PayTo for each obligation
+      for (const obligation of obligations) {
+        const designated = await prisma.designatedAccount.create({
+          data: {
+            orgId: org.id,
+            type: obligation, // "GST" | "PAYGW" | "PAYGI"
+            externalAccountId: accountRef,
+          },
+        });
+
+        const mandate = await createPayToMandate(bankCode, paytoInput);
+
+        await prisma.designatedAccount.update({
+          where: { id: designated.id },
+          data: { mandateId: mandate.mandateId },
+        });
+      }
+
+      // Shortfall threshold + schedule can be wired into the risk engine later.
+      // For now they're accepted and can be persisted via a future migration.
+
+      return reply.code(201).send({
+        ok: true,
+        orgId: org.id,
+        schedule,
+        shortfallThresholdBps,
+      });
+    },
+  );
+}
+
+===== FILE: .\services\api-gateway\src\routes\forecast.ts =====
+
+import type { FastifyInstance, FastifyPluginAsync } from "fastify";
+import { badRequest } from "@apgms/shared";
+import { prisma } from "../db.js";
+import { ewmaForecast } from "../services/forecasting.js";
+
+export const registerForecastRoutes: FastifyPluginAsync = async (
+  app: FastifyInstance,
+) => {
+  app.get<{
+    Querystring: { orgId: string; type: "GST" | "PAYGW" | "PAYGI" };
+  }>("/forecast/obligations", async (request, reply) => {
+    const { orgId, type } = request.query;
+
+    if (!orgId || !type) {
+      throw badRequest(
+        "forecast_missing_params",
+        "orgId and type are required",
+      );
+    }
+
+    const history = await prisma.obligationHistory.findMany({
+      where: { orgId, type },
+      orderBy: { period: "asc" },
+      take: 36, // up to last 3 years if monthly
+    });
+
+    if (!history.length) {
+      return reply.code(200).send({
+        orgId,
+        type,
+        history: [],
+        forecast: [],
+      });
+    }
+
+    const samples = history.map((h) => ({
+      period: h.period,
+      cents: h.cents,
+    }));
+
+    const forecast = ewmaForecast(samples, 4, {
+      alpha: 0.4,
+      volatilityMultiplier: 1.96,
+    });
+
+    return reply.code(200).send({
+      orgId,
+      type,
+      history: samples,
+      forecast,
+    });
+  });
+};
+
+
+===== FILE: .\services\api-gateway\src\routes\compliance-monitor.ts =====
+
+import { type FastifyInstance, type FastifyPluginAsync, type FastifyRequest } from "fastify";
+import { parseWithSchema } from "../lib/validation.js";
+import {
+  recordPayrollContribution,
+  recordPosTransaction,
+  summarizeContributions,
+} from "@apgms/shared/ledger/ingest.js";
+import {
+  ensureDesignatedAccountCoverage,
+  reconcileAccountSnapshot,
+  releaseAccountLock,
+} from "@apgms/shared/ledger/designated-account.js";
+import {
+  logSecurityEvent,
+  buildSecurityContextFromRequest,
+  buildSecurityLogEntry,
+} from "@apgms/shared/security-log.js";
+import { recordAuditLog } from "../lib/audit.js";
+import { prisma } from "../db.js";
+import {
+  contributionSchema,
+  precheckSchema,
+} from "../schemas/designated-ingest.js";
+import { complianceTransferSchema } from "../schemas/compliance-transfer.js";
+import { forecastObligations, computeTierStatus, type ForecastResult } from "@apgms/shared/ledger/predictive.js";
+import { applyDesignatedAccountTransfer } from "@apgms/domain-policy";
+import { z } from "zod";
+import fs from "node:fs";
+import path from "node:path";
+import { requireRecentVerification } from "../security/mfa.js";
+
+const REMEDIATION_GUIDANCE =
+  "Re-ingest missing payroll/POS batches, rerun the reconciliation job, and capture the remediation evidence before BAS lodgment.";
+
+const complianceArtifactDir = path.join(process.cwd(), "artifacts", "compliance");
+const partnerInfoFile = path.join(complianceArtifactDir, "partner-info.json");
+const tierStateDir = path.join(complianceArtifactDir, "tier-state");
+
+function ensureArtifactDir(): void {
+  fs.mkdirSync(complianceArtifactDir, { recursive: true });
+}
+
+function ensureTierDir(): void {
+  ensureArtifactDir();
+  fs.mkdirSync(tierStateDir, { recursive: true });
+}
+
+function readTierState(orgId: string) {
+  const file = path.join(tierStateDir, `${orgId}.json`);
+  if (!fs.existsSync(file)) {
+    return null;
+  }
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8")) as {
+      tierStatus: Record<string, TierStatus>;
+      updatedAt: string;
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeTierState(orgId: string, tierStatus: Record<string, TierStatus>) {
+  ensureTierDir();
+  const file = path.join(tierStateDir, `${orgId}.json`);
+  fs.writeFileSync(
+    file,
+    JSON.stringify({ tierStatus, updatedAt: new Date().toISOString() }, null, 2),
+  );
+}
+
+async function issueTierEscalationAlert(
+  orgId: string,
+  forecast: ForecastResult,
+  tierStatus: Record<string, TierStatus>,
+  req: FastifyRequest,
+) {
+  const previous = readTierState(orgId);
+  const escalateNow = Object.values(tierStatus).some((tier) => tier === "escalate");
+  const previouslyEscalated = previous
+    ? Object.values(previous.tierStatus).some((tier) => tier === "escalate")
+    : false;
+  if (!escalateNow || previouslyEscalated) {
+    writeTierState(orgId, tierStatus);
+    return null;
+  }
+
+  const alert = await prisma.alert.create({
+    data: {
+      orgId,
+      type: "TIER_ESCALATION",
+      severity: "HIGH",
+      message: `Tier escalation (${Object.entries(tierStatus)
+        .map(([key, value]) => `${key.toUpperCase()}=${value}`)
+        .join(", ")})`,
+      metadata: {
+        forecast,
+        tierStatus,
+      },
+    },
+  });
+
+  writeTierState(orgId, tierStatus);
+
+  logSecurityEvent(
+    req.log,
+    buildSecurityLogEntry(
+      {
+        event: "tier.escalation",
+        orgId,
+        principal: (req.user as any)?.sub ?? "system",
+        metadata: {
+          alertId: alert.id,
+          forecast,
+          tierStatus,
+        },
+      },
+      buildSecurityContextFromRequest(req),
+    ),
+  );
+
+  return alert;
+}
+
+function logPartnerMetadata(): Record<string, unknown> | null {
+  const partnerUrl = process.env.DESIGNATED_BANKING_URL?.trim();
+  if (!partnerUrl) {
+    return null;
+  }
+  ensureArtifactDir();
+  const productId = process.env.DSP_PRODUCT_ID?.trim() ?? null;
+  const fingerprint = process.env.DESIGNATED_BANKING_CERT_FINGERPRINT?.trim() ?? null;
+  const entry = {
+    timestamp: new Date().toISOString(),
+    partnerUrl,
+    productId,
+    fingerprint,
+  };
+  fs.writeFileSync(partnerInfoFile, JSON.stringify(entry, null, 2));
+  return entry;
+}
+
+function readPartnerMetadata(): Record<string, unknown> | null {
+  if (!fs.existsSync(partnerInfoFile)) {
+    return null;
+  }
+  try {
+    const text = fs.readFileSync(partnerInfoFile, "utf8");
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+async function buildPilotReport(payload: {
+  orgId: string;
+  transfers: TransferRecord[];
+  alerts: Awaited<ReturnType<typeof prisma.alert.findMany>>;
+  reminderCycles: Awaited<ReturnType<typeof prisma.basCycle.findMany>>;
+}) {
+  ensureArtifactDir();
+  const file = path.join(
+    complianceArtifactDir,
+    `pilot-report-${Date.now()}.json`,
+  );
+  const base = {
+    timestamp: new Date().toISOString(),
+    orgId: payload.orgId,
+    transfers: payload.transfers,
+    alerts: payload.alerts.map((alert) => ({
+      id: alert.id,
+      message: alert.message,
+      severity: alert.severity,
+      resolvedAt: alert.resolvedAt,
+    })),
+    reminders: payload.reminderCycles.map((cycle) => ({
+      id: cycle.id,
+      due: cycle.periodEnd.toISOString(),
+      status: cycle.paymentPlanRequests.length > 0 ? "payment_plan" : "pending",
+    })),
+  };
+  fs.writeFileSync(file, JSON.stringify(base, null, 2));
+}
+function contributionLog(
+  app: FastifyInstance,
+  req: FastifyRequest,
+  payload: z.infer<typeof contributionSchema>,
+  source: "payroll" | "pos",
+): void {
+  const context = buildSecurityContextFromRequest(req);
+  const entry = buildSecurityLogEntry(
+    {
+      event: "designated.ingest",
+      orgId: payload.orgId,
+      principal: (req.user as any)?.sub ?? "system",
+      metadata: {
+        amount: payload.amount,
+        source,
+        payload: payload.payload,
+        idempotencyKey: req.headers["idempotency-key"] as string | undefined,
+      },
+    },
+    context,
+  );
+  logSecurityEvent(app.log, entry);
+}
+
+function resolveOrgId(req: FastifyRequest): string | undefined {
+  return (req.user as any)?.orgId ?? undefined;
+}
+
+async function fetchPendingContributions(orgId: string) {
+  const [payroll, pos] = await Promise.all([
+    prisma.payrollContribution.findMany({
+      where: { orgId, appliedAt: null },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.posTransaction.findMany({
+      where: { orgId, appliedAt: null },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
+  return [
+    ...payroll.map((entry) => ({
+      id: entry.id,
+      amount: Number(entry.amount),
+      source: entry.source,
+      type: "PAYGW",
+      createdAt: entry.createdAt,
+    })),
+    ...pos.map((entry) => ({
+      id: entry.id,
+      amount: Number(entry.amount),
+      source: entry.source,
+      type: "GST",
+      createdAt: entry.createdAt,
+    })),
+  ];
+}
+
+async function recordTransferAudit(entry: {
+  orgId: string;
+  actorId: string;
+  action: string;
+  metadata: Record<string, unknown>;
+}) {
+  await recordAuditLog({
+    orgId: entry.orgId,
+    actorId: entry.actorId,
+    action: entry.action,
+    metadata: entry.metadata,
+  });
+}
+
+type TransferRecord = {
+  type: "PAYGW" | "GST";
+  amount: number;
+  transferId: string;
+  accountId: string;
+};
+
+async function executeTransfer(
+  orgId: string,
+  account: Awaited<ReturnType<typeof ensureDesignatedAccountCoverage>>,
+  amount: number,
+  actor: string,
+  description: string,
+  type: "PAYGW" | "GST",
+): Promise<TransferRecord> {
+  const result = await applyDesignatedAccountTransfer(
+    {
+      prisma,
+      auditLogger: (audit) =>
+        recordTransferAudit({ orgId, actorId: actor, action: audit.action, metadata: audit.metadata ?? {} }),
+    },
+    {
+      orgId,
+      accountId: account.id,
+      amount,
+      source: "bas_transfer",
+      actorId: actor,
+    },
+  );
+
+  return {
+    type,
+    amount,
+    transferId: result.transferId,
+    accountId: account.id,
+  };
+}
+
+export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (app) => {
+  app.post("/ingest/payroll", async (req, reply) => {
+    const contribution = parseWithSchema(contributionSchema, req.body);
+    await recordPayrollContribution({
+      prisma,
+      orgId: contribution.orgId,
+      amount: contribution.amount,
+      actorId: contribution.actorId,
+      payload: contribution.payload,
+      idempotencyKey: req.headers["idempotency-key"] as string | undefined,
+    });
+    contributionLog(app, req, contribution, "payroll");
+    reply.code(202).send({ status: "queued" });
+  });
+
+  app.post("/ingest/pos", async (req, reply) => {
+    const contribution = parseWithSchema(contributionSchema, req.body);
+    await recordPosTransaction({
+      prisma,
+      orgId: contribution.orgId,
+      amount: contribution.amount,
+      actorId: contribution.actorId,
+      payload: contribution.payload,
+      idempotencyKey: req.headers["idempotency-key"] as string | undefined,
+    });
+    contributionLog(app, req, contribution, "pos");
+    reply.code(202).send({ status: "queued" });
+  });
+
+  app.get("/compliance/pending", async (req, reply) => {
+    const orgId = resolveOrgId(req);
+    if (!orgId) {
+      reply.code(400).send({ error: "org_missing" });
+      return;
+    }
+    const pending = await fetchPendingContributions(orgId);
+    reply.send({
+      orgId,
+      pending,
+      guidance:
+        "Submit missing payroll/POS payloads with Idempotency-Key headers and rerun /compliance/precheck.",
+    });
+  });
+
+  app.post("/compliance/precheck", async (req, reply) => {
+    const body = parseWithSchema(precheckSchema, req.body);
+    const orgId = body.orgId ?? resolveOrgId(req);
+    if (!orgId) {
+      reply.code(400).send({ error: "org_missing" });
+      return;
+    }
+
+    const latest = await prisma.basCycle.findFirst({
+      where: { orgId, lodgedAt: null },
+      orderBy: { periodEnd: "desc" },
+    });
+    if (!latest) {
+      reply.code(404).send({ error: "bas_cycle_missing" });
+      return;
+    }
+
+    const summary = await summarizeContributions(prisma, orgId);
+    const forecast = await forecastObligations(prisma, orgId);
+    const result: Record<string, unknown> = {
+      orgId,
+      cycleId: latest.id,
+      paygwRequired: Number(latest.paygwRequired),
+      gstRequired: Number(latest.gstRequired),
+      paygwSecured: summary.paygwSecured,
+      gstSecured: summary.gstSecured,
+      cycleStart: latest.periodStart,
+      cycleEnd: latest.periodEnd,
+      forecast,
+      tierStatus: {
+        paygw: computeTierStatus(summary.paygwSecured, forecast.paygwForecast),
+        gst: computeTierStatus(summary.gstSecured, forecast.gstForecast),
+      },
+    };
+
+    try {
+      const paygwAccount = await ensureDesignatedAccountCoverage(
+        prisma,
+        orgId,
+        "PAYGW_BUFFER",
+        Number(latest.paygwRequired),
+      );
+      const gstAccount = await ensureDesignatedAccountCoverage(
+        prisma,
+        orgId,
+        "GST_BUFFER",
+        Number(latest.gstRequired),
+      );
+      await releaseAccountLock(prisma, paygwAccount.id);
+      await releaseAccountLock(prisma, gstAccount.id);
+      reply.send({ ...result, status: "ready" });
+    } catch (error) {
+      const pending = await fetchPendingContributions(orgId);
+      reply.code(409).send({
+        ...result,
+        status: "shortfall",
+        error: error instanceof Error ? error.message : "shortfall_detected",
+        errorCode: (error as any)?.code ?? "designated_shortfall",
+        pendingContributions: pending,
+        remediation: REMEDIATION_GUIDANCE,
+      });
+    }
+  });
+
+  app.post("/compliance/transfer", async (req, reply) => {
+    const body = parseWithSchema(complianceTransferSchema, req.body);
+    const orgId = body.orgId ?? resolveOrgId(req);
+    if (!orgId) {
+      reply.code(400).send({ error: "org_missing" });
+      return;
+    }
+
+    if (body.paygwAmount <= 0 && body.gstAmount <= 0) {
+      reply.code(400).send({ error: "no_transfer_amount" });
+      return;
+    }
+
+    const latest = await prisma.basCycle.findFirst({
+      where: { orgId, lodgedAt: null },
+      orderBy: { periodEnd: "desc" },
+    });
+    if (!latest) {
+      reply.code(404).send({ error: "bas_cycle_missing" });
+      return;
+    }
+
+    const cycleContext = {
+      cycleId: latest.id,
+      description: body.description ?? "BAS transfer",
+    };
+
+    const transfers: TransferRecord[] = [];
+    const principal = (req.user as any)?.sub ?? "system";
+
+    if (body.paygwAmount > 0) {
+      const account = await ensureDesignatedAccountCoverage(
+        prisma,
+        orgId,
+        "PAYGW_BUFFER",
+        body.paygwAmount,
+        cycleContext,
+      );
+      transfers.push(
+        await executeTransfer(
+          orgId,
+          account,
+          body.paygwAmount,
+          principal,
+          body.description ?? "BAS transfer",
+          "PAYGW",
+        ),
+      );
+    }
+
+    if (body.gstAmount > 0) {
+      const account = await ensureDesignatedAccountCoverage(
+        prisma,
+        orgId,
+        "GST_BUFFER",
+        body.gstAmount,
+        cycleContext,
+      );
+      transfers.push(
+        await executeTransfer(
+          orgId,
+          account,
+          body.gstAmount,
+          principal,
+          body.description ?? "BAS transfer",
+          "GST",
+        ),
+      );
+    }
+
+    const forecast = await forecastObligations(prisma, orgId);
+    const tierStatus = {
+      paygw: computeTierStatus(
+        transfers.find((tran) => tran.type === "PAYGW")?.amount ?? 0,
+        forecast.paygwForecast,
+        forecast.paygwForecast * 0.1,
+      ),
+      gst: computeTierStatus(
+        transfers.find((tran) => tran.type === "GST")?.amount ?? 0,
+        forecast.gstForecast,
+        forecast.gstForecast * 0.1,
+      ),
+    };
+
+    const reminderCycles = await prisma.basCycle.findMany({
+      where: { orgId, lodgedAt: null },
+      orderBy: { periodEnd: "asc" },
+      take: 3,
+    });
+    const afterAlerts = await prisma.alert.findMany({
+      where: { orgId, resolvedAt: null },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+    });
+
+    await buildPilotReport({
+      orgId,
+      transfers,
+      alerts: afterAlerts,
+      reminderCycles,
+    });
+
+    logPartnerMetadata();
+
+    const logEntry = buildSecurityLogEntry(
+      {
+        event: "designated.transfer",
+        orgId,
+        principal,
+        metadata: {
+          transfers,
+          description: body.description ?? "BAS transfer",
+          cycleId: latest.id,
+        },
+      },
+      buildSecurityContextFromRequest(req),
+    );
+    logSecurityEvent(app.log, logEntry);
+
+    reply.send({
+      status: "transferred",
+      transfers,
+      forecast,
+      tierStatus,
+      nextSteps: REMEDIATION_GUIDANCE,
+
+    });
+  });
+
+  app.get("/compliance/status", async (req, reply) => {
+    const orgId = resolveOrgId(req);
+    if (!orgId) {
+      reply.code(400).send({ error: "org_missing" });
+      return;
+    }
+
+    const forecast = await forecastObligations(prisma, orgId);
+
+    const accountPromises = (["PAYGW_BUFFER", "GST_BUFFER"] as const).map(
+      async (type) => {
+        try {
+          const snapshot = await reconcileAccountSnapshot(prisma, orgId, type);
+          return {
+            type,
+            balance: snapshot.balance,
+            updatedAt: snapshot.updatedAt,
+            error: null,
+          };
+        } catch (accountError) {
+          return {
+            type,
+            balance: 0,
+            updatedAt: new Date(0),
+            error: accountError instanceof Error
+              ? accountError.message
+              : "account_unavailable",
+          };
+        }
+      },
+    );
+    const accounts = await Promise.all(accountPromises);
+    const alerts = await prisma.alert.findMany({
+      where: { orgId, type: "DESIGNATED_FUNDS_SHORTFALL", resolvedAt: null },
+      orderBy: { createdAt: "desc" },
+    });
+    const summary = await summarizeContributions(prisma, orgId);
+    const pending = await fetchPendingContributions(orgId);
+
+    const tierStatuses = {
+      paygw: computeTierStatus(
+        accounts.find((entry) => entry.type === "PAYGW_BUFFER")?.balance ?? 0,
+        forecast.paygwForecast,
+        forecast.paygwForecast * 0.1,
+      ),
+      gst: computeTierStatus(
+        accounts.find((entry) => entry.type === "GST_BUFFER")?.balance ?? 0,
+        forecast.gstForecast,
+        forecast.gstForecast * 0.1,
+      ),
+    };
+
+    const partnerStatus =
+      readPartnerMetadata() ?? {
+        url: process.env.DESIGNATED_BANKING_URL ?? null,
+        productId: process.env.DSP_PRODUCT_ID ?? null,
+      };
+    const escalationAlert = await issueTierEscalationAlert(orgId, forecast, tierStatuses, req);
+    reply.send({
+      accounts: accounts.map((account) => ({
+        type: account.type,
+        balance: account.balance,
+        updatedAt: account.updatedAt,
+        locked: account.locked,
+        error: account.error,
+      })),
+      contributions: summary,
+      pendingContributions: pending,
+      alerts: alerts.map((alert) => ({
+        id: alert.id,
+        message: alert.message,
+        severity: alert.severity,
+        since: alert.createdAt,
+      })),
+      forecast,
+      tierStatus: tierStatuses,
+      remediation:
+        pending.length > 0 ? REMEDIATION_GUIDANCE : "Buffers are healthy and ready for BAS.",
+      partnerStatus,
+      escalationAlertId: escalationAlert?.id ?? null,
+    });
+  });
+
+  app.post("/compliance/tier-check", async (req, reply) => {
+    const orgs = await prisma.org.findMany({ select: { id: true } });
+    const results = [];
+    for (const { id } of orgs) {
+      const forecast = await forecastObligations(prisma, id);
+      const accounts = await Promise.all(
+        (["PAYGW_BUFFER", "GST_BUFFER"] as const).map(async (type) => {
+          const snapshot = await reconcileAccountSnapshot(prisma, id, type);
+          return snapshot;
+        }),
+      );
+      const tierStatuses = {
+        paygw: computeTierStatus(
+          accounts.find((entry) => entry.account.type === "PAYGW_BUFFER")?.balance ?? 0,
+          forecast.paygwForecast,
+          forecast.paygwForecast * 0.1,
+        ),
+        gst: computeTierStatus(
+          accounts.find((entry) => entry.account.type === "GST_BUFFER")?.balance ?? 0,
+          forecast.gstForecast,
+          forecast.gstForecast * 0.1,
+        ),
+      };
+      const alert = await issueTierEscalationAlert(id, forecast, tierStatuses, req);
+      results.push({
+        orgId: id,
+        tierStatus: tierStatuses,
+        forecast,
+        escalationAlertId: alert?.id ?? null,
+      });
+    }
+    reply.send({ results });
+  });
+
+  app.post("/compliance/alerts/:id/resolve", async (req, reply) => {
+    const alertId = (req.params as { id: string }).id;
+    const principal = (req.user as any)?.sub ?? "system";
+    const alert = await prisma.alert.findUnique({ where: { id: alertId } });
+    if (!alert) {
+      reply.code(404).send({ error: "alert_not_found" });
+      return;
+    }
+
+    await prisma.alert.update({
+      where: { id: alertId },
+      data: {
+        resolvedAt: new Date(),
+        metadata: {
+          ...(alert.metadata ?? {}),
+          resolvedBy: principal,
+          resolvedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    const entry = buildSecurityLogEntry(
+      {
+        event: "designated.alert.resolved",
+        orgId: alert.orgId,
+        principal,
+        metadata: {
+          alertId,
+          message: alert.message,
+        },
+      },
+      buildSecurityContextFromRequest(req),
+    );
+    logSecurityEvent(app.log, entry);
+
+    reply.send({ status: "resolved", alertId });
+  });
+
+  app.get("/compliance/reminders", async (req, reply) => {
+    const orgId = resolveOrgId(req);
+    if (!orgId) {
+      reply.code(400).send({ error: "org_missing" });
+      return;
+    }
+
+    const cycles = await prisma.basCycle.findMany({
+      where: { orgId, lodgedAt: null },
+      orderBy: { periodEnd: "asc" },
+      take: 3,
+    });
+    const now = Date.now();
+    reply.send(
+      cycles.map((cycle) => ({
+        cycleId: cycle.id,
+        dueInMs: cycle.periodEnd.getTime() - now,
+        dueInDays: Math.max(0, Math.ceil((cycle.periodEnd.getTime() - now) / (1000 * 60 * 60 * 24))),
+        status: cycle.paymentPlanRequests.length > 0 ? "payment_plan" : "pending",
+      })),
+    );
+  });
+};
+
+export default registerComplianceMonitorRoutes;
+
+
+===== FILE: .\services\api-gateway\src\lib\errors.ts =====
+
+import { AppError } from "@apgms/shared";
+
+export type ErrorCode =
+  | "onboarding_missing_identifier"
+  | "onboarding_missing_fields"
+  | "onboarding_missing_obligations"
+  | "forecast_missing_params"
+  | "cors_forbidden"
+  | "internal_error";
+
+export const ERROR_MESSAGES: Record<ErrorCode, string> = {
+  onboarding_missing_identifier: "ABN or TFN must be supplied",
+  onboarding_missing_fields: "ABN and legalName are required",
+  onboarding_missing_obligations: "At least one obligation must be selected",
+  forecast_missing_params: "orgId and type are required",
+  cors_forbidden: "Origin is not allowed",
+  internal_error: "Internal server error",
+};
+
+export function toAppError(error: unknown): AppError {
+  if (error instanceof AppError) return error;
+
+  if (error instanceof Error) {
+    return new AppError(
+      "internal_error",
+      error.message || "Unexpected error",
+      500,
+    );
+  }
+
+  return new AppError("internal_error", "Unexpected error", 500);
+}
+
+export function assertNever(x: never, message?: string): never {
+  throw new AppError(
+    "internal_error",
+    message ?? `Unexpected variant: ${JSON.stringify(x)}`,
+    500,
+  );
+}
+
+
+===== FILE: .\services\api-gateway\src\lib\retry.ts =====
+
+export interface RetryOptions {
+  readonly maxAttempts?: number;
+  readonly initialDelayMs?: number;
+  readonly maxDelayMs?: number;
+  readonly jitter?: boolean;
+  readonly retriable?: (error: unknown) => boolean;
+}
+
+/**
+ * General-purpose retry with jitter and backoff.
+ */
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  options: RetryOptions = {},
+): Promise<T> {
+  const {
+    maxAttempts = 3,
+    initialDelayMs = 250,
+    maxDelayMs = 5_000,
+    jitter = true,
+    retriable = () => true,
+  } = options;
+
+  let attempt = 0;
+  let delay = initialDelayMs;
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    try {
+      return await fn();
+    } catch (error) {
+      attempt += 1;
+      if (attempt >= maxAttempts || !retriable(error)) {
+        throw error;
+      }
+
+      let sleepFor = delay;
+      if (jitter) {
+        const rand = 0.5 + Math.random(); // 0.5â€“1.5
+        sleepFor = Math.floor(delay * rand);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, sleepFor));
+      delay = Math.min(delay * 2, maxDelayMs);
+    }
+  }
+}
+
+export type BackoffOptions = {
+  retries?: number;
+  minDelayMs?: number;
+  maxDelayMs?: number;
+  factor?: number;
+};
+
+/**
+ * Slightly simpler exponential backoff helper.
+ */
+export async function withExponentialBackoff<T>(
+  fn: () => Promise<T>,
+  options: BackoffOptions = {},
+): Promise<T> {
+  const retries = options.retries ?? 3;
+  const factor = options.factor ?? 2;
+  const minDelayMs = options.minDelayMs ?? 200;
+  const maxDelayMs = options.maxDelayMs ?? 5_000;
+
+  let attempt = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    try {
+      return await fn();
+    } catch (error) {
+      attempt += 1;
+      if (attempt > retries) throw error;
+
+      const delay = Math.min(
+        maxDelayMs,
+        minDelayMs * Math.pow(factor, attempt - 1),
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+}
+
+===== FILE: .\services\api-gateway\src\lib\secrets.ts =====
+
+import { fromIni } from "@aws-sdk/credential-providers";
+import {
+  SecretsManagerClient,
+  GetSecretValueCommand,
+} from "@aws-sdk/client-secrets-manager";
+
+const isAwsEnvConfigured =
+  !!process.env.AWS_REGION &&
+  !!process.env.AWS_SECRET_MANAGER_ENABLED &&
+  process.env.AWS_SECRET_MANAGER_ENABLED.toLowerCase() === "true";
+
+let client: SecretsManagerClient | null = null;
+
+function getClient(): SecretsManagerClient {
+  if (!isAwsEnvConfigured) {
+    throw new Error("AWS Secrets Manager is not enabled in this environment");
+  }
+  if (!client) {
+    client = new SecretsManagerClient({
+      region: process.env.AWS_REGION,
+      credentials: fromIni(), // or instance role in production
+    });
+  }
+  return client;
+}
+
+/**
+ * Load a JSON secret whose *ID* is in the given env var.
+ * In local/dev, falls back to treating the env var as the JSON payload itself.
+ */
+export async function loadSecretJson<T = unknown>(
+  secretIdEnv: string,
+): Promise<T | null> {
+  const envValue = process.env[secretIdEnv];
+  if (!envValue) return null;
+
+  // If AWS is not configured, treat env value as raw JSON payload.
+  if (!isAwsEnvConfigured) {
+    return JSON.parse(envValue) as T;
+  }
+
+  const sm = getClient();
+  try {
+    const result = await sm.send(
+      new GetSecretValueCommand({ SecretId: envValue }),
+    );
+
+    if (!result.SecretString) {
+      throw new Error(`Secret ${envValue} has no SecretString payload`);
+    }
+
+    return JSON.parse(result.SecretString) as T;
+  } catch (err) {
+    // Fallback to env value as raw JSON
+    return JSON.parse(envValue) as T;
+  }
+}
+
+/**
+ * Load a string secret whose *ID* is in the given env var.
+ * In local/dev, falls back to using the env var value directly.
+ */
+export async function loadSecretString(
+  secretIdEnv: string,
+): Promise<string | null> {
+  const envValue = process.env[secretIdEnv];
+  if (!envValue) return null;
+
+  if (!isAwsEnvConfigured) {
+    return envValue;
+  }
+
+  const sm = getClient();
+  try {
+    const result = await sm.send(
+      new GetSecretValueCommand({ SecretId: envValue }),
+    );
+
+    if (!result.SecretString) {
+      throw new Error(`Secret ${envValue} has no SecretString payload`);
+    }
+
+    return result.SecretString;
+  } catch (err) {
+    // Fallback to env value as raw secret
+    return envValue;
+  }
+}
+
+/**
+ * High-level helper that matches your original `getSecret` semantics.
+ *
+ * - `key`: the AWS secret id
+ * - `fallbackEnv`: optional env var name containing a fallback value
+ * - `json`: whether to JSON.parse the result
+ */
+export async function getSecret(
+  key: string,
+  options?: { fallbackEnv?: string; json?: boolean },
+): Promise<string | Record<string, unknown> | null> {
+  const fallbackEnv = options?.fallbackEnv ?? key;
+  const envValue = process.env[fallbackEnv];
+
+  // If AWS isnâ€™t configured, just use env
+  if (!isAwsEnvConfigured) {
+    if (!envValue) return null;
+    return options?.json ? JSON.parse(envValue) : envValue;
+  }
+
+  const sm = getClient();
+  try {
+    const res = await sm.send(
+      new GetSecretValueCommand({ SecretId: key }),
+    );
+    const secretString = res.SecretString;
+    if (!secretString) return null;
+    return options?.json ? JSON.parse(secretString) : secretString;
+  } catch (error) {
+    // Fall back to env on errors
+    if (!envValue) return null;
+    return options?.json ? JSON.parse(envValue) : envValue;
+  }
+}
+
+===== FILE: .\services\api-gateway\src\services\abr-stub.ts =====
+
+export type TaxObligationType = "GST" | "PAYGW" | "PAYGI";
+
+export type AbnTfnLookupInput = {
+  abn?: string;
+  tfn?: string;
+};
+
+export type AbnTfnLookupResult = {
+  abn?: string;
+  tfn?: string;
+  legalName: string;
+  obligations: TaxObligationType[];
+};
+
+/**
+ * Placeholder ABN/TFN validator.
+ * Replace later with real ATO/ABR integration.
+ */
+export async function validateAbnOrTfnStub(
+  input: AbnTfnLookupInput,
+): Promise<AbnTfnLookupResult> {
+  const abn = input.abn?.replace(/\s+/g, "") ?? "00000000000";
+  const tfn = input.tfn?.replace(/\s+/g, "");
+
+  // Very naive fake obligations logic:
+  const obligations: TaxObligationType[] = ["GST", "PAYGW"];
+  if (Number(abn[abn.length - 1] ?? "0") % 2 === 0) {
+    obligations.push("PAYGI");
+  }
+
+  return {
+    abn,
+    tfn,
+    legalName: `Stubbed Entity ${abn.slice(-4)}`,
+    obligations: Array.from(new Set(obligations)),
+  };
+}
+
+
+===== FILE: .\services\api-gateway\src\services\forecasting.ts =====
+
+export type ObligationSample = {
+  period: string; // e.g. "2025-Q1" or "2025-05"
+  cents: number;
+};
+
+export type ForecastPoint = {
+  period: string;
+  meanCents: number;
+  lowerCents: number;
+  upperCents: number;
+};
+
+export type EwmaForecastOptions = {
+  alpha?: number; // smoothing factor
+  volatilityMultiplier?: number; // for confidence band
+};
+
+/**
+ * EWMA-based forecaster that supports both monthly and quarterly labels.
+ */
+export function ewmaForecast(
+  history: ObligationSample[],
+  horizonPeriods: number,
+  options: EwmaForecastOptions = {},
+): ForecastPoint[] {
+  if (history.length === 0 || horizonPeriods <= 0) return [];
+
+  const alpha = options.alpha ?? 0.5;
+  const volMult = options.volatilityMultiplier ?? 2;
+
+  const sorted = [...history].sort((a, b) =>
+    a.period.localeCompare(b.period),
+  );
+
+  let mean = sorted[0]!.cents;
+  let variance = 0;
+
+  for (let i = 1; i < sorted.length; i += 1) {
+    const x = sorted[i]!.cents;
+    const prevMean = mean;
+    mean = alpha * x + (1 - alpha) * mean;
+    const diff = x - prevMean;
+    variance = alpha * diff * diff + (1 - alpha) * variance;
+  }
+
+  const stdDev = Math.sqrt(variance || 0);
+  const points: ForecastPoint[] = [];
+
+  const lastPeriod = sorted[sorted.length - 1]!.period;
+  const [baseYearStr, baseSuffix] = lastPeriod.split("-");
+  const baseYear = Number(baseYearStr);
+
+  const nextPeriodLabel = (index: number): string => {
+    // If suffix starts with "Q" treat as quarterly, else treat as month.
+    if (baseSuffix?.startsWith("Q")) {
+      const q = Number(baseSuffix.slice(1));
+      const totalQ = q + index;
+      const year = baseYear + Math.floor((totalQ - 1) / 4);
+      const qNum = ((totalQ - 1) % 4) + 1;
+      return `${year}-Q${qNum}`;
+    }
+    const baseMonth = Number(baseSuffix ?? "1");
+    const totalM = baseMonth + index;
+    const year = baseYear + Math.floor((totalM - 1) / 12);
+    const month = ((totalM - 1) % 12) + 1;
+    const mm = String(month).padStart(2, "0");
+    return `${year}-${mm}`;
+  };
+
+  for (let i = 1; i <= horizonPeriods; i += 1) {
+    const period = nextPeriodLabel(i);
+    const meanCents = Math.round(mean);
+    const delta = volMult * stdDev;
+    const lowerCents = Math.max(0, Math.round(mean - delta));
+    const upperCents = Math.round(mean + delta);
+    points.push({ period, meanCents, lowerCents, upperCents });
+  }
+
+  return points;
+}
+
+===== FILE: .\services\api-gateway\src\services\payto.ts =====
+
+import type { FastifyBaseLogger } from "fastify";
+
+export type PayToCreateMandateInput = {
+  orgId: string;
+  bsb: string;
+  accountNumber: string;
+  accountName: string;
+};
+
+export type PayToMandateStatus = "PENDING" | "ACTIVE" | "FAILED";
+
+export type PayToMandate = {
+  mandateId: string;
+  status: PayToMandateStatus;
+};
+
+export interface PayToProvider {
+  createMandate(input: PayToCreateMandateInput): Promise<PayToMandate>;
+  cancelMandate(mandateId: string): Promise<void>;
+}
+
+class BaseStubPayToProvider implements PayToProvider {
+  constructor(
+    private readonly bankCode: string,
+    private readonly log: FastifyBaseLogger,
+  ) {}
+
+  async createMandate(input: PayToCreateMandateInput): Promise<PayToMandate> {
+    const mandateId = `${this.bankCode}-${input.orgId}-${Date.now()}`;
+    this.log.info(
+      {
+        bank: this.bankCode,
+        orgId: input.orgId,
+        bsb: input.bsb,
+        accountNumber: input.accountNumber,
+      },
+      "payto_stub_create_mandate",
+    );
+    return { mandateId, status: "PENDING" };
+  }
+
+  async cancelMandate(mandateId: string): Promise<void> {
+    this.log.info(
+      { bank: this.bankCode, mandateId },
+      "payto_stub_cancel_mandate",
+    );
+  }
+}
+
+type BankCode = "cba" | "nab" | "anz";
+
+let cachedProviders: Record<BankCode, PayToProvider> | null = null;
+
+function ensureProviders(log?: FastifyBaseLogger): Record<BankCode, PayToProvider> {
+  if (cachedProviders) return cachedProviders;
+
+  const noopLog: FastifyBaseLogger = (log ??
+    ({
+      info: () => {},
+      error: () => {},
+      warn: () => {},
+      debug: () => {},
+      fatal: () => {},
+      child: () => noopLog,
+    } as unknown as FastifyBaseLogger));
+
+  cachedProviders = {
+    cba: new BaseStubPayToProvider("cba", noopLog),
+    nab: new BaseStubPayToProvider("nab", noopLog),
+    anz: new BaseStubPayToProvider("anz", noopLog),
+  };
+
+  return cachedProviders;
+}
+
+export function initPayToProviders(log: FastifyBaseLogger): void {
+  ensureProviders(log);
+}
+
+export function getPayToProvider(bankCode: BankCode): PayToProvider {
+  const providers = ensureProviders();
+  const provider = providers[bankCode];
+  if (!provider) {
+    throw new Error(`payto_provider_unsupported_${bankCode}`);
+  }
+  return provider;
+}
+
+export async function createPayToMandate(
+  bankCode: BankCode,
+  input: PayToCreateMandateInput,
+): Promise<PayToMandate> {
+  const provider = getPayToProvider(bankCode);
+  return provider.createMandate(input);
+}
+
+===== FILE: .\services\api-gateway\src\services\stp-generator.ts =====
+
+// services/api-gateway/src/services/stp-generator.ts
+export type PayEventEmployee = {
+  taxFileNumber: string;
+  grossCents: number;
+  paygWithheldCents: number;
+};
+
+export type StpPayEvent = {
+  payerAbn: string;
+  payPeriodStart: string;
+  payPeriodEnd: string;
+  payDate: string;
+  employees: PayEventEmployee[];
+};
+
+/**
+ * Generates a minimal STP-style payload for PAYGW.
+ * This is intentionally not the full ATO XML schema â€“ it's a logical representation.
+ */
+export function generateStpPayload(event: StpPayEvent): unknown {
+  const totalGross = event.employees.reduce(
+    (sum, e) => sum + e.grossCents,
+    0,
+  );
+  const totalWithheld = event.employees.reduce(
+    (sum, e) => sum + e.paygWithheldCents,
+    0,
+  );
+
+  return {
+    version: "STP-APGMS-0.1",
+    payer: {
+      abn: event.payerAbn,
+    },
+    period: {
+      start: event.payPeriodStart,
+      end: event.payPeriodEnd,
+      payDate: event.payDate,
+    },
+    totals: {
+      grossCents: totalGross,
+      paygWithheldCents: totalWithheld,
+    },
+    employees: event.employees.map((e) => ({
+      tfn: e.taxFileNumber,
+      grossCents: e.grossCents,
+      paygWithheldCents: e.paygWithheldCents,
+    })),
+  };
+}
+
+
+===== FILE: .\services\api-gateway\db\schema.prisma =====
+
+// services/api-gateway/db/schema.prisma
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Schedule {
+  MONTHLY
+  QUARTERLY
+}
+
+model Organization {
+  id        String @id @default(cuid())
+  abn       String @unique
+  legalName String
+
+  // Who created this organisation record (onboarding user)
+  createdByUserId String?
+
+  // Schedule + shortfall threshold for secured tax buffers
+  schedule              Schedule @default(QUARTERLY)
+  shortfallThresholdBps Int      @default(500)
+
+  designatedAccounts DesignatedAccount[]
+  obligationHistory  ObligationHistory[]
+}
+
+model DesignatedAccount {
+  id          String @id @default(cuid())
+  orgId       String
+  type        String
+  provider    String
+  mandateId   String?
+  displayName String?
+
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  // One designated account per org + tax type
+  @@unique([orgId, type], name: "orgId_type")
+}
+
+model ObligationHistory {
+  id        String   @id @default(cuid())
+  orgId     String
+  type      String   // "GST" | "PAYGW" | "PAYGI"
+  period    String   // "YYYY-MM" or "YYYY-Qn"
+  cents     Int
+  source    String   // "import", "statement", "manual"
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@index([orgId, type, period])
+}
+
+
+===== FILE: .\webapp\package.json =====
+
+{
+  "name": "apgms-webapp",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite --strictPort",
+    "build": "node scripts/clean-dist.js && vite build",
+    "preview": "vite preview --strictPort"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.30.1"
+  },
+  "devDependencies": {
+    "vite": "^5.4.8",
+    "@vitejs/plugin-react": "^4.2.0",
+    "typescript": "^5.3.0"
+  }
+}
+
+
+===== FILE: .\webapp\src\App.tsx =====
+
+// webapp/src/App.tsx
+import React from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import LoginPage from "./LoginPage";
+import DashboardPage from "./DashboardPage";
+import FeedsPage from "./FeedsPage";
+import AlertsPage from "./AlertsPage";
+import BasPage from "./BasPage";
+import CompliancePage from "./CompliancePage";
+import SecurityPage from "./SecurityPage";
+import DemoPage from "./DemoPage";
+import ProtectedLayout from "./ProtectedLayout";
+import RegulatorLoginPage from "./RegulatorLoginPage";
+import RegulatorLayout from "./RegulatorLayout";
+import RegulatorOverviewPage from "./RegulatorOverviewPage";
+import RegulatorEvidencePage from "./RegulatorEvidencePage";
+import RegulatorMonitoringPage from "./RegulatorMonitoringPage";
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* login */}
+        <Route path="/" element={<LoginPage />} />
+        <Route path="/regulator" element={<RegulatorLoginPage />} />
+        <Route path="/regulator/portal" element={<RegulatorLayout />}>
+          <Route index element={<Navigate to="overview" replace />} />
+          <Route path="overview" element={<RegulatorOverviewPage />} />
+          <Route path="evidence" element={<RegulatorEvidencePage />} />
+          <Route path="monitoring" element={<RegulatorMonitoringPage />} />
+        </Route>
+        <Route element={<ProtectedLayout />}>
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/feeds" element={<FeedsPage />} />
+          <Route path="/alerts" element={<AlertsPage />} />
+          <Route path="/bas" element={<BasPage />} />
+          <Route path="/compliance" element={<CompliancePage />} />
+          <Route path="/demo" element={<DemoPage />} />
+          <Route path="/security" element={<SecurityPage />} />
+        </Route>
+        {/* catch-all */}
+        <Route
+          path="*"
+          element={
+            <div style={{ fontFamily: "system-ui", padding: 24 }}>
+              Not found
+            </div>
+          }
+        />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+
+===== FILE: .\webapp\src\router.tsx =====
+
+import React from "react";
+import {
+  createBrowserRouter,
+  Navigate,
+  RouterProvider,
+} from "react-router-dom";
+import { OnboardingWizard } from "./routes/OnboardingWizard";
+import { Dashboard } from "./routes/Dashboard";
+import { Layout } from "./routes/Layout";
+
+// Very simple auth/org stub â€“ replace with your real context
+function useAuth() {
+  const stored = window.localStorage.getItem("apgms_org_id");
+  return { orgId: stored ?? null, isAuthenticated: true };
+}
+
+const router = createBrowserRouter([
+  {
+    path: "/",
+    element: <Layout />,
+    children: [
+      {
+        index: true,
+        element: <RedirectToDashboardOrOnboarding />,
+      },
+      {
+        path: "onboarding",
+        element: <OnboardingGuard />,
+      },
+      {
+        path: "dashboard",
+        element: <Dashboard />,
+      },
+      // ...your other routes...
+    ],
+  },
+]);
+
+function RedirectToDashboardOrOnboarding() {
+  const { orgId } = useAuth();
+  if (!orgId) return <Navigate to="/onboarding" replace />;
+  return <Navigate to="/dashboard" replace />;
+}
+
+function OnboardingGuard() {
+  const { orgId } = useAuth();
+  if (orgId) return <Navigate to="/dashboard" replace />;
+  return <OnboardingWizard />;
+}
+
+export const AppRouter: React.FC = () => <RouterProvider router={router} />;
+
+===== FILE: .\webapp\src\pages\OnboardingWizard.tsx =====
+
+import { useState } from "react";
+import { Box, Button, TextField, Select, MenuItem, Stepper, Step, StepLabel } from "@mui/material";
+
+export default function OnboardingWizard() {
+  const [step, setStep] = useState(0);
+  const [abn, setAbn] = useState("");
+  const [tfn, setTfn] = useState("");
+  const [obligations, setObligations] = useState<string[]>([]);
+  // other state: bank, accounts, scheduleâ€¦
+
+  async function handleValidate() {
+    const res = await fetch(`/onboarding/validate?abn=${abn}&tfn=${tfn}`, { credentials: "include" });
+    const data = await res.json();
+    setObligations(data.obligations);  // e.g. ["PAYGW", "GST"]
+    setStep(1);
+  }
+
+  // â€¦ handlers for schedule & bank selection â€¦
+
+  async function handleSubmit() {
+    await fetch("/onboarding/setup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        abn, tfn,
+        bankProvider,
+        schedule,
+        accounts: { paygw: paygwAccount, gst: gstAccount, paygi: paygiAccount },
+      }),
+    });
+    // redirect to dashboard
+  }
+
+  return (
+    <Box>
+      <Stepper activeStep={step}>
+        <Step><StepLabel>Verify ABN/TFN</StepLabel></Step>
+        <Step><StepLabel>Bank & Schedules</StepLabel></Step>
+        <Step><StepLabel>Summary</StepLabel></Step>
+      </Stepper>
+      {step === 0 && (
+        <Box>
+          <TextField label="ABN" value={abn} onChange={e => setAbn(e.target.value)} />
+          <TextField label="TFN" value={tfn} onChange={e => setTfn(e.target.value)} />
+          <Button onClick={handleValidate}>Next</Button>
+        </Box>
+      )}
+      {/* Implement other steps similarly */}
+    </Box>
+  );
+}
+
+
+===== FILE: .\webapp\src\routes\OnboardingWizard.tsx =====
+
+import React, { useState } from "react";
+
+type TaxObligationType = "GST" | "PAYGW" | "PAYGI";
+
+type ValidateResponse = {
+  abn?: string;
+  tfn?: string;
+  legalName: string;
+  obligations: TaxObligationType[];
+};
+
+type SetupPayload = {
+  abn: string;
+  legalName: string;
+  schedule: "MONTHLY" | "QUARTERLY";
+  shortfallThresholdBps: number;
+  bankCode: "cba" | "nab" | "anz";
+  account: {
+    bsb: string;
+    accountNumber: string;
+    accountName: string;
+  };
+  obligations: TaxObligationType[];
+};
+
+type Step = 0 | 1 | 2 | 3;
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api";
+
+export const OnboardingWizard: React.FC = () => {
+  const [step, setStep] = useState<Step>(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [abn, setAbn] = useState("");
+  const [tfn, setTfn] = useState("");
+  const [validateResult, setValidateResult] = useState<ValidateResponse | null>(
+    null,
+  );
+
+  const [schedule, setSchedule] = useState<"MONTHLY" | "QUARTERLY">(
+    "QUARTERLY",
+  );
+  const [shortfallBps, setShortfallBps] = useState(500);
+
+  const [bankCode, setBankCode] = useState<"cba" | "nab" | "anz">("cba");
+  const [bsb, setBsb] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [accountName, setAccountName] = useState("");
+
+  const [selectedObligations, setSelectedObligations] = useState<
+    TaxObligationType[]
+  >([]);
+
+  const toggleObligation = (code: TaxObligationType) => {
+    setSelectedObligations((prev) =>
+      prev.includes(code)
+        ? prev.filter((x) => x !== code)
+        : [...prev, code],
+    );
+  };
+
+  const callApi = async (path: string, options: RequestInit) => {
+    const res = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers ?? {}),
+      },
+      credentials: "include",
+    });
+
+    if (!res.ok) {
+      let msg = `Request failed with ${res.status}`;
+      try {
+        const body = await res.json();
+        msg = body?.error?.message ?? msg;
+      } catch {
+        // ignore
+      }
+      throw new Error(msg);
+    }
+
+    return res.json();
+  };
+
+  const handleValidate = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      const body: { abn?: string; tfn?: string } = {};
+      if (abn) body.abn = abn;
+      if (tfn) body.tfn = tfn;
+      const result: ValidateResponse = await callApi(
+        "/onboarding/validate",
+        {
+          method: "POST",
+          body: JSON.stringify(body),
+        },
+      );
+      setValidateResult(result);
+      setSelectedObligations(result.obligations);
+      setStep(1);
+    } catch (err: any) {
+      setError(err.message ?? String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSetup = async () => {
+    if (!validateResult?.abn) {
+      setError("ABN must be validated first");
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    try {
+      const payload: SetupPayload = {
+        abn: validateResult.abn,
+        legalName: validateResult.legalName,
+        schedule,
+        shortfallThresholdBps: shortfallBps,
+        bankCode,
+        account: {
+          bsb,
+          accountNumber,
+          accountName: accountName || validateResult.legalName,
+        },
+        obligations: selectedObligations,
+      };
+      await callApi("/onboarding/setup", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      // You could set apgms_org_id here from response if you expand the API.
+      // For now we just mark onboarding as done.
+      setStep(3);
+    } catch (err: any) {
+      setError(err.message ?? String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const canContinueFromStep1 =
+    !!validateResult &&
+    !!bsb &&
+    !!accountNumber &&
+    selectedObligations.length > 0;
+
+  return (
+    <div className="max-w-2xl mx-auto p-6 space-y-6">
+      <header className="space-y-1">
+        <h1 className="text-2xl font-semibold">
+          APGMS Onboarding â€“ Tax Buffer Setup
+        </h1>
+        <p className="text-sm text-slate-600">
+          We&apos;ll validate your ABN/TFN, detect obligations, and configure
+          secure PayTo mandates to your tax buffer.
+        </p>
+      </header>
+
+      <div className="flex items-center space-x-2 text-xs text-slate-600">
+        <span className={step === 0 ? "font-semibold" : ""}>1. ABN / TFN</span>
+        <span>â€º</span>
+        <span className={step === 1 ? "font-semibold" : ""}>
+          2. Bank &amp; Schedule
+        </span>
+        <span>â€º</span>
+        <span className={step === 2 ? "font-semibold" : ""}>
+          3. Confirm &amp; Create
+        </span>
+        <span>â€º</span>
+        <span className={step === 3 ? "font-semibold" : ""}>4. Done</span>
+      </div>
+
+      {error && (
+        <div className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
+          {error}
+        </div>
+      )}
+
+      {step === 0 && (
+        <section className="space-y-4 border rounded-lg p-4">
+          <h2 className="text-lg font-medium">Step 1 â€“ ABN / TFN</h2>
+          <p className="text-sm text-slate-600">
+            Enter your ABN or TFN so we can look up your registration and
+            obligations.
+          </p>
+          <div className="space-y-3">
+            <label className="block text-sm">
+              ABN
+              <input
+                className="mt-1 block w-full rounded-md border px-2 py-1 text-sm"
+                value={abn}
+                onChange={(e) => setAbn(e.target.value)}
+                placeholder="11-digit ABN"
+              />
+            </label>
+            <label className="block text-sm">
+              TFN (optional)
+              <input
+                className="mt-1 block w-full rounded-md border px-2 py-1 text-sm"
+                value={tfn}
+                onChange={(e) => setTfn(e.target.value)}
+                placeholder="TFN if applicable"
+              />
+            </label>
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={handleValidate}
+              disabled={loading || (!abn && !tfn)}
+              className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm font-medium disabled:opacity-60"
+            >
+              {loading ? "Validatingâ€¦" : "Validate"}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {step === 1 && validateResult && (
+        <section className="space-y-4 border rounded-lg p-4">
+          <h2 className="text-lg font-medium">
+            Step 2 â€“ Bank, Schedule &amp; Obligations
+          </h2>
+
+          <div className="space-y-2 text-sm">
+            <div>
+              <div className="font-semibold">Entity</div>
+              <div>{validateResult.legalName}</div>
+              <div className="text-slate-600">
+                ABN: {validateResult.abn ?? "â€”"} | TFN:{" "}
+                {validateResult.tfn ?? "â€”"}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 text-sm">
+            <div className="space-y-2">
+              <label className="block">
+                Payment frequency
+                <select
+                  className="mt-1 block w-full rounded-md border px-2 py-1 text-sm"
+                  value={schedule}
+                  onChange={(e) =>
+                    setSchedule(e.target.value as "MONTHLY" | "QUARTERLY")
+                  }
+                >
+                  <option value="MONTHLY">Monthly</option>
+                  <option value="QUARTERLY">Quarterly (BAS)</option>
+                </select>
+              </label>
+
+              <label className="block">
+                Shortfall threshold (%)
+                <input
+                  type="number"
+                  className="mt-1 block w-full rounded-md border px-2 py-1 text-sm"
+                  value={shortfallBps / 100}
+                  min={0}
+                  max={100}
+                  onChange={(e) =>
+                    setShortfallBps(Math.round(Number(e.target.value) * 100))
+                  }
+                />
+              </label>
+
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-medium">
+                  Obligations to secure
+                </legend>
+                {(["GST", "PAYGW", "PAYGI"] as TaxObligationType[]).map(
+                  (code) => {
+                    const detected = validateResult.obligations.includes(code);
+                    const checked = selectedObligations.includes(code);
+                    return (
+                      <label key={code} className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={!detected}
+                          onChange={() => toggleObligation(code)}
+                        />
+                        <span>
+                          {code}{" "}
+                          {!detected && (
+                            <span className="text-xs text-slate-500">
+                              (not detected on registration)
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                    );
+                  },
+                )}
+              </fieldset>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block">
+                Bank
+                <select
+                  className="mt-1 block w-full rounded-md border px-2 py-1 text-sm"
+                  value={bankCode}
+                  onChange={(e) =>
+                    setBankCode(e.target.value as "cba" | "nab" | "anz")
+                  }
+                >
+                  <option value="cba">CBA</option>
+                  <option value="nab">NAB</option>
+                  <option value="anz">ANZ</option>
+                </select>
+              </label>
+
+              <label className="block">
+                BSB
+                <input
+                  className="mt-1 block w-full rounded-md border px-2 py-1 text-sm"
+                  value={bsb}
+                  onChange={(e) => setBsb(e.target.value)}
+                  placeholder="e.g. 062-000"
+                />
+              </label>
+
+              <label className="block">
+                Account number
+                <input
+                  className="mt-1 block w-full rounded-md border px-2 py-1 text-sm"
+                  value={accountNumber}
+                  onChange={(e) => setAccountNumber(e.target.value)}
+                  placeholder="e.g. 12345678"
+                />
+              </label>
+
+              <label className="block">
+                Account name (optional)
+                <input
+                  className="mt-1 block w-full rounded-md border px-2 py-1 text-sm"
+                  value={accountName}
+                  onChange={(e) => setAccountName(e.target.value)}
+                  placeholder={validateResult.legalName}
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="flex justify-between">
+            <button
+              type="button"
+              className="text-sm underline"
+              onClick={() => setStep(0)}
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              disabled={loading || !canContinueFromStep1}
+              className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm font-medium disabled:opacity-60"
+              onClick={() => setStep(2)}
+            >
+              Next
+            </button>
+          </div>
+        </section>
+      )}
+
+      {step === 2 && validateResult && (
+        <section className="space-y-4 border rounded-lg p-4">
+          <h2 className="text-lg font-medium">Step 3 â€“ Confirm</h2>
+          <p className="text-sm text-slate-600">
+            Review your settings. When you continue, APGMS will initiate a
+            PayTo mandate and create designated tax buffer accounts.
+          </p>
+
+          <div className="space-y-2 text-sm">
+            <div>
+              <div className="font-semibold">Entity</div>
+              <div>{validateResult.legalName}</div>
+              <div className="text-slate-600">
+                ABN: {validateResult.abn ?? "â€”"}
+              </div>
+            </div>
+
+            <div>
+              <div className="font-semibold">Schedule</div>
+              <div>{schedule}</div>
+            </div>
+
+            <div>
+              <div className="font-semibold">Shortfall threshold</div>
+              <div>{(shortfallBps / 100).toFixed(2)}%</div>
+            </div>
+
+            <div>
+              <div className="font-semibold">Obligations</div>
+              <div>{selectedObligations.join(", ") || "None"}</div>
+            </div>
+
+            <div>
+              <div className="font-semibold">Bank account</div>
+              <div>
+                {bsb} / {accountNumber}
+              </div>
+              <div className="text-slate-600">
+                {accountName || validateResult.legalName}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-between">
+            <button
+              type="button"
+              className="text-sm underline"
+              onClick={() => setStep(1)}
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              disabled={loading}
+              className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm font-medium disabled:opacity-60"
+              onClick={handleSetup}
+            >
+              {loading ? "Creatingâ€¦" : "Create mandates & accounts"}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {step === 3 && (
+        <section className="space-y-3 border rounded-lg p-4">
+          <h2 className="text-lg font-medium">All done</h2>
+          <p className="text-sm text-slate-600">
+            Your organisation is onboarded. APGMS will now start tracking
+            buffer coverage versus your obligations. You can review this in the
+            dashboard.
+          </p>
+          <div>
+            <button
+              type="button"
+              className="inline-flex items-center rounded-md border px-3 py-1.5 text-sm font-medium"
+              onClick={() => {
+                window.location.href = "/dashboard";
+              }}
+            >
+              Go to dashboard
+            </button>
+          </div>
+        </section>
+      )}
+    </div>
+  );
+};
+
+

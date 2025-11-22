@@ -1,0 +1,3 @@
+﻿The following expected files/directories were NOT found:
+
+services\api-gateway\db\migrations

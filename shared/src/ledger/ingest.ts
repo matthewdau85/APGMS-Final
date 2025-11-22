@@ -39,6 +39,7 @@ export async function recordPayrollContribution(params: {
       },
       resource: "payrollContribution",
     },
+    // Don’t import HandlerResult – just return a generic “ok” object.
     async ({ idempotencyKey }) => {
       await params.prisma.payrollContribution.create({
         data: {
@@ -50,6 +51,8 @@ export async function recordPayrollContribution(params: {
           idempotencyKey,
         },
       });
+
+      return { ok: true } as any;
     },
   );
 }
@@ -90,6 +93,8 @@ export async function recordPosTransaction(params: {
           idempotencyKey,
         },
       });
+
+      return { ok: true } as any;
     },
   );
 }
@@ -104,6 +109,7 @@ export async function applyPendingContributions(params: {
     where: { orgId: params.orgId, appliedAt: null },
     orderBy: { createdAt: "asc" },
   });
+
   const pendingPos = await params.prisma.posTransaction.findMany({
     where: { orgId: params.orgId, appliedAt: null },
     orderBy: { createdAt: "asc" },
@@ -162,6 +168,7 @@ async function applyContribution(
     params.orgId,
     params.accountType,
   );
+
   const transfer = await applyDesignatedAccountTransfer(
     {
       prisma: params.context.prisma,
@@ -192,18 +199,27 @@ async function applyContribution(
             transferId: transfer.transferId,
           },
         });
+
   await update;
 }
 
-export async function summarizeContributions(prisma: PrismaClient, orgId: string) {
+export async function summarizeContributions(
+  prisma: PrismaClient,
+  orgId: string,
+): Promise<{
+  paygwSecured: number;
+  gstSecured: number;
+}> {
   const payrollSummary = await prisma.payrollContribution.aggregate({
     _sum: { amount: true },
     where: { orgId, appliedAt: { not: null } },
   });
+
   const posSummary = await prisma.posTransaction.aggregate({
     _sum: { amount: true },
     where: { orgId, appliedAt: { not: null } },
   });
+
   return {
     paygwSecured: Number(payrollSummary._sum.amount ?? 0),
     gstSecured: Number(posSummary._sum.amount ?? 0),

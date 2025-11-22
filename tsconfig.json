@@ -1,28 +1,28 @@
 {
-    "compilerOptions":  {
-                            "target":  "ES2020",
-                            "module":  "ESNext",
-                            "moduleResolution":  "Node",
-                            "strict":  true,
-                            "esModuleInterop":  true,
-                            "skipLibCheck":  true,
-                            "resolveJsonModule":  true,
-                            "outDir":  "dist",
-                            "baseUrl":  ".",
-                            "paths":  {
-                                          "@apgms/shared/*":  [
-                                                                  "shared/dist/*"
-                                                              ],
-                                          "@apgms/shared":  [
-                                                                  "shared/dist/index"
-                                                              ],
-                                          "@apgms/domain-policy": [
-                                                                  "packages/domain-policy/dist/index"
-                                                              ]
-                                      },
-                            "types":  [
-                                          "node",
-                                          "jest"
-                                      ]
-                        }
+    "compilerOptions": {
+        "target": "ES2020",
+        "module": "ESNext",
+        "moduleResolution": "Node",
+        "strict": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "resolveJsonModule": true,
+        "outDir": "dist",
+        "baseUrl": ".",
+        "paths": {
+            "@apgms/shared/*": [
+                "shared/dist/*"
+            ],
+            "@apgms/shared": [
+                "shared/dist/index"
+            ],
+            "@apgms/domain-policy": [
+                "packages/domain-policy/dist/index"
+            ]
+        },
+        "types": [
+            "node",
+            "jest"
+        ]
+    }
 }

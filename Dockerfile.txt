@@ -1,0 +1,62 @@
+# Dockerfile – monorepo build for @apgms/api-gateway
+
+FROM node:20 AS build
+
+WORKDIR /app
+
+# Environment for production + Prisma engines
+ENV NODE_ENV=production \
+    PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1
+
+# Enable corepack so pnpm works
+RUN corepack enable
+
+# -----------------------------------------------------------------------------
+# 1. Copy only manifest files first for better caching of `pnpm install`
+# -----------------------------------------------------------------------------
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+
+# Workspace package manifests (MATCHING YOUR ACTUAL STRUCTURE)
+COPY shared/package.json ./shared/package.json
+COPY packages/domain-policy/package.json ./packages/domain-policy/package.json
+COPY services/api-gateway/package.json ./services/api-gateway/package.json
+COPY services/connectors/package.json ./services/connectors/package.json
+
+# Install dependencies for the whole workspace
+RUN pnpm install --frozen-lockfile
+
+# -----------------------------------------------------------------------------
+# 2. Now copy the full source tree
+# -----------------------------------------------------------------------------
+COPY . .
+
+# -----------------------------------------------------------------------------
+# 3. Build all workspace packages
+# -----------------------------------------------------------------------------
+RUN pnpm -r build
+
+# -----------------------------------------------------------------------------
+# 4. Runtime image
+# -----------------------------------------------------------------------------
+FROM node:20-slim AS runtime
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+RUN corepack enable
+
+# Copy node_modules and workspace metadata
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/package.json ./package.json
+COPY --from=build /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+
+# Copy built services + packages
+COPY --from=build /app/services/api-gateway ./services/api-gateway
+COPY --from=build /app/shared ./shared
+COPY --from=build /app/packages ./packages
+
+# Expose api-gateway port
+EXPOSE 8080
+
+CMD ["pnpm", "--filter", "@apgms/api-gateway", "start"]

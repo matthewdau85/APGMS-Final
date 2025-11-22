@@ -1,13 +1,23 @@
-import type { PrismaClient, DesignatedAccount } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
+import type { DesignatedAccountType } from "./types.js";
 import { conflict } from "../errors.js";
-import { applyDesignatedAccountTransfer } from "@apgms/domain-policy";
 
-export type DesignatedAccountType = "PAYGW_BUFFER" | "GST_BUFFER";
+// Minimal shape we actually need from the Prisma model.
+// This avoids having to import `Prisma` and fights with its types.
+export interface DesignatedAccount {
+  id: string;
+  orgId: string;
+  type: string;
+  balance: unknown; // Prisma Decimal or number
+  updatedAt: Date;
+  locked: boolean;
+}
 
-const ALLOWED_TYPES: DesignatedAccountType[] = ["PAYGW_BUFFER", "GST_BUFFER"];
+// Use a const tuple so TS doesn’t complain about assignability.
+const ALLOWED_TYPES = ["PAYGW_BUFFER", "GST_BUFFER"] as const;
 
 function assertTaxType(type: string): asserts type is DesignatedAccountType {
-  if (!ALLOWED_TYPES.includes(type as DesignatedAccountType)) {
+  if (!(ALLOWED_TYPES as readonly string[]).includes(type)) {
     throw new Error(`Unsupported designated account type: ${type}`);
   }
 }
@@ -19,11 +29,14 @@ export interface BankingAdapter {
 
 class PrismaBankingAdapter implements BankingAdapter {
   async getBalance(account: DesignatedAccount): Promise<number> {
-    return Number(account.balance);
+    return Number((account as any).balance);
   }
 
-  async blockTransfer(account: DesignatedAccount, shortfall: number): Promise<void> {
-    await account; // no-op for now; placeholder for future alerts/sandbox plan
+  async blockTransfer(
+    _account: DesignatedAccount,
+    _shortfall: number,
+  ): Promise<void> {
+    // no-op for now; placeholder for future alerts/sandbox plan
   }
 }
 
@@ -31,14 +44,18 @@ class PartnerBankingAdapter implements BankingAdapter {
   constructor(private url: string, private token?: string) {}
 
   private headers(): Record<string, string> {
-    const auth = this.token ? { Authorization: `Bearer ${this.token}` } : {};
-    return {
+    const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      ...auth,
     };
+
+    if (this.token) {
+      headers.Authorization = `Bearer ${this.token}`;
+    }
+
+    return headers;
   }
 
-  private accountEndpoint(account: DesignatedAccount) {
+  private accountEndpoint(account: DesignatedAccount): string {
     return `${this.url.replace(/\/$/, "")}/accounts/${account.id}`;
   }
 
@@ -46,11 +63,13 @@ class PartnerBankingAdapter implements BankingAdapter {
     const res = await fetch(`${this.accountEndpoint(account)}/balance`, {
       headers: this.headers(),
     });
+
     if (!res.ok) {
       throw new Error(`Partner adapter balance fetch failed: ${res.status}`);
     }
+
     const payload = await res.json();
-    return Number(payload.balance ?? 0);
+    return Number((payload as any).balance ?? 0);
   }
 
   async blockTransfer(account: DesignatedAccount, shortfall: number): Promise<void> {
@@ -66,6 +85,7 @@ let currentAdapter: BankingAdapter;
 
 const partnerUrl = process.env.DESIGNATED_BANKING_URL?.trim();
 const partnerToken = process.env.DESIGNATED_BANKING_TOKEN?.trim();
+
 if (partnerUrl && partnerUrl.length > 0) {
   currentAdapter = new PartnerBankingAdapter(partnerUrl, partnerToken);
 } else {
@@ -83,15 +103,18 @@ export async function getDesignatedAccountByType(
   type: string,
 ): Promise<DesignatedAccount> {
   assertTaxType(type);
-  const account = await prisma.designatedAccount.findFirst({
+
+  const account = (await prisma.designatedAccount.findFirst({
     where: { orgId, type },
-  });
+  })) as unknown as DesignatedAccount | null;
+
   if (!account) {
     throw conflict(
       "designated_account_not_found",
       `Designated account for ${type} is not configured for org ${orgId}`,
     );
   }
+
   return account;
 }
 
@@ -110,6 +133,7 @@ export async function ensureDesignatedAccountCoverage(
   const account = await getDesignatedAccountByType(prisma, orgId, type);
   const balance = await currentAdapter.getBalance(account);
   const shortfall = requiredAmount - balance;
+
   if (shortfall > 0) {
     await prisma.alert.create({
       data: {
@@ -125,13 +149,18 @@ export async function ensureDesignatedAccountCoverage(
         },
       },
     });
+
     await currentAdapter.blockTransfer?.(account, shortfall);
     await markAccountLocked(prisma, account.id);
+
     throw conflict(
       "designated_insufficient_funds",
-      `Designated ${type} account balance ${balance.toFixed(2)} does not cover requirement ${requiredAmount.toFixed(2)}`,
+      `Designated ${type} account balance ${balance.toFixed(
+        2,
+      )} does not cover requirement ${requiredAmount.toFixed(2)}`,
     );
   }
+
   return account;
 }
 
@@ -169,12 +198,13 @@ export async function reconcileAccountSnapshot(
   account: DesignatedAccount;
   balance: number;
   updatedAt: Date;
-#  locked: boolean;
+  locked: boolean;
 }> {
   const account = await getDesignatedAccountByType(prisma, orgId, type);
+
   return {
     account,
-    balance: Number(account.balance),
+    balance: await currentAdapter.getBalance(account),
     updatedAt: account.updatedAt,
     locked: account.locked,
   };

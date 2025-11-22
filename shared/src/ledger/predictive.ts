@@ -43,8 +43,12 @@ export async function forecastObligations(
   const gstForecast = weightSum ? weightedGst / weightSum : 0;
 
   const xMean = (1 + count) / 2;
-  const yPaygwMean = cycles.reduce((sum, cycle) => sum + Number(cycle.paygwRequired), 0) / count;
-  const yGstMean = cycles.reduce((sum, cycle) => sum + Number(cycle.gstRequired), 0) / count;
+  const yPaygwMean =
+  cycles.reduce((sum: number, cycle: any) => sum + Number(cycle.paygwRequired), 0) / count;
+
+const yGstMean =
+  cycles.reduce((sum: number, cycle: any) => sum + Number(cycle.gstRequired), 0) / count;
+
 
   let numeratorPaygw = 0;
   let numeratorGst = 0;

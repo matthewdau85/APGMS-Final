@@ -1,69 +1,27 @@
-########################
-# Build stage
-########################
-FROM node:20-alpine AS build
+FROM node:20
 
 WORKDIR /app
 ENV NODE_ENV=production
 
-# enable pnpm via corepack (pnpm is already in your workspace)
+# Enable pnpm via corepack
 RUN corepack enable
 
-# 1. Copy workspace manifests first (cache-friendly)
-COPY pnpm-workspace.yaml ./pnpm-workspace.yaml
-COPY pnpm-lock.yaml ./pnpm-lock.yaml
-COPY package.json ./package.json
-COPY services/api-gateway/package.json ./services/api-gateway/package.json
-COPY shared/package.json ./shared/package.json
-COPY packages/ledger/package.json ./packages/ledger/package.json
-
-# 2. Install all deps for the whole monorepo
-RUN pnpm install --frozen-lockfile
-
-# 3. Bring in the full source
+# Copy the entire repo into the image; .dockerignore will exclude node_modules, dist, etc.
 COPY . .
 
-# 4. Generate the Prisma client now so TypeScript can see PrismaClient, Org, User, etc.
-#    This uses shared/prisma/schema.prisma
-RUN pnpm exec prisma generate --schema shared/prisma/schema.prisma
+# Install workspace dependencies (same as local)
+RUN pnpm install --frozen-lockfile
 
-# 5. Build shared libraries and connectors so TypeScript path imports resolve
-WORKDIR /app
-RUN pnpm --filter @apgms/shared build
-RUN pnpm --filter @apgms/domain-policy build
-# ensure connectors sees the freshly compiled domain policy
-RUN mkdir -p node_modules/@apgms/domain-policy && rm -rf node_modules/@apgms/domain-policy/dist
-RUN cp -R packages/domain-policy/dist node_modules/@apgms/domain-policy/dist
-RUN pnpm --filter @apgms/connectors build
+# Generate Prisma Client in the context of the api-gateway package,
+# so it uses the same schema/config as on your machine.
+RUN pnpm --filter @apgms/api-gateway exec prisma generate
 
-# 6. Build JUST the api-gateway package (this runs `tsc`, outputs dist/)
+# Build the bits the gateway depends on.
+# (domain-policy is a pure TS lib; connectors can be added later once its build is clean.)
+RUN pnpm --filter @apgms/shared build \
+  && pnpm --filter @apgms/domain-policy build \
+  && pnpm --filter @apgms/api-gateway build
+
+# Run the compiled gateway
 WORKDIR /app/services/api-gateway
-RUN pnpm --filter @apgms/api-gateway build
-
-
-########################
-# Runtime stage
-########################
-FROM node:20-alpine AS runtime
-ENV NODE_ENV=production
-
-
-RUN apk add --no-cache netcat-openbsd
-
-WORKDIR /app
-
-# Copy the entire monorepo state (including node_modules, dist, and generated Prisma client)
-COPY --from=build /app /app
-
-# Move to the gateway folder for runtime
-WORKDIR /app/services/api-gateway
-
-# Copy start.sh from the repo into the image
-COPY services/api-gateway/start.sh ./start.sh
-
-# Fix CRLF from Windows and make executable
-RUN sed -i 's/\r$//' ./start.sh && chmod +x ./start.sh
-
-EXPOSE 3000
-
-CMD ["./start.sh"]
+CMD ["node", "dist/index.js"]

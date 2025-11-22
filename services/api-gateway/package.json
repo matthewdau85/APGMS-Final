@@ -6,12 +6,18 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "dev": "tsx watch src/index.ts"
+    "dev": "tsx watch src/index.ts",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:generate": "prisma generate"
+  },
+  "prisma": {
+    "schema": "../../shared/prisma/schema.prisma"
   },
   "dependencies": {
     "@apgms/connectors": "workspace:*",
     "@apgms/domain-policy": "workspace:*",
     "@apgms/shared": "workspace:*",
+    "@aws-sdk/client-secrets-manager": "^3.933.0",
     "@fastify/helmet": "^13.0.2",
     "@fastify/rate-limit": "^10.3.0",
     "@opentelemetry/api": "^1.9.0",
@@ -19,7 +25,7 @@
     "@opentelemetry/resources": "^1.23.0",
     "@opentelemetry/sdk-node": "^0.50.0",
     "@opentelemetry/semantic-conventions": "^1.23.0",
-    "@prisma/client": "^6.17.1",
+    "@prisma/client": "6.19.0",
     "@simplewebauthn/server": "^13.2.2",
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.2.3",
@@ -32,6 +38,6 @@
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
     "@types/jsonwebtoken": "^9.0.10",
-    "prisma": "6.17.1"
+    "prisma": "6.19.0"
   }
 }
