@@ -1,6 +1,8 @@
 ﻿import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
+import { normalizeTfn } from "./au.js";
+
 const AES_ALGORITHM = "aes-256-gcm";
 const AES_IV_LENGTH = 12;
 const AES_AUTH_TAG_LENGTH = 16;
@@ -53,7 +55,7 @@ export function tokenizeTFN(plain: string): string {
     throw new Error("PII providers not configured");
   }
 
-  const normalized = plain.replace(/\s+/g, "");
+  const normalized = normalizeTfn(plain);
   if (!/^\d{8,9}$/.test(normalized)) {
     throw new Error("Invalid TFN format");
   }

@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { badRequest } from "@apgms/shared";
 
-import { isValidABN, normalizeAbn, isValidTFN } from "../lib/au.js";
+import { isValidABN, normalizeAbn, isValidTFN, normalizeTfn } from "../lib/au.js";
 
 import { parseWithSchema } from "../lib/validation.js";
 import { tokenizeTFN, encryptPII } from "../lib/pii.js";
@@ -45,7 +45,7 @@ export async function registerOnboardingRoutes(
         throw badRequest("invalid_abn", "ABN failed checksum validation");
       }
 
-      const normalizedTfn = payload.tfn.replace(/\s+/g, "");
+      const normalizedTfn = normalizeTfn(payload.tfn);
       if (!isValidTFN(normalizedTfn)) {
         throw badRequest("invalid_tfn", "TFN failed validation");
       }
