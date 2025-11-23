@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { fetchGstFeeds, fetchPayrollFeeds } from "./api";
+import { fetchGstFeeds, fetchPayrollFeeds, generateDemoBankLines } from "./api";
 import { getToken } from "./auth";
+import { ErrorState, SkeletonBlock, StatusChip } from "./components/UI";
 
 type PayrollRun = Awaited<ReturnType<typeof fetchPayrollFeeds>>["runs"][number];
 type GstDay = Awaited<ReturnType<typeof fetchGstFeeds>>["days"][number];
@@ -11,43 +12,76 @@ export default function FeedsPage() {
   const [gstDays, setGstDays] = useState<GstDay[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [demoBusy, setDemoBusy] = useState(false);
 
   useEffect(() => {
-    if (!token) {
-      return;
-    }
-    (async () => {
-      try {
-        const [payroll, gst] = await Promise.all([
-          fetchPayrollFeeds(token),
-          fetchGstFeeds(token),
-        ]);
-        setPayrollRuns(payroll.runs);
-        setGstDays(gst.days);
-      } catch (err) {
-        console.error(err);
-        setError("Unable to load feeds");
-      } finally {
-        setLoading(false);
-      }
-    })();
+    if (!token) return;
+    void loadFeeds();
   }, [token]);
 
-  if (!token) {
-    return null;
+  async function loadFeeds() {
+    if (!token) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const [payroll, gst] = await Promise.all([
+        fetchPayrollFeeds(token),
+        fetchGstFeeds(token),
+      ]);
+      setPayrollRuns(payroll.runs);
+      setGstDays(gst.days);
+      setSuccess(null);
+    } catch (err) {
+      console.error(err);
+      setError("Unable to load feeds");
+    } finally {
+      setLoading(false);
+    }
   }
+
+  async function handleDemoIngest() {
+    if (!token) return;
+    setDemoBusy(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await generateDemoBankLines(token, { daysBack: 5, intensity: "low" });
+      setSuccess("Demo feed ingested. Refreshing feeds...");
+      await loadFeeds();
+    } catch (err) {
+      console.error(err);
+      setError("Unable to ingest demo feed");
+    } finally {
+      setDemoBusy(false);
+    }
+  }
+
+  if (!token) return null;
 
   return (
     <div style={{ display: "grid", gap: "24px" }}>
-      <header>
-        <h1 style={pageTitleStyle}>Payroll & GST Feeds</h1>
-        <p style={pageSubtitleStyle}>
-          Live data feeds that feed the compliance engine. We surface payroll runs and daily GST summaries to monitor capture.
-        </p>
+      <header style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <div>
+          <h1 style={pageTitleStyle}>Payroll & GST Feeds</h1>
+          <p style={pageSubtitleStyle}>
+            Live data feeds that feed the compliance engine. We surface payroll runs and daily GST summaries to monitor capture.
+          </p>
+        </div>
+        <button type="button" className="app-button" onClick={() => void handleDemoIngest()} disabled={demoBusy}>
+          {demoBusy ? "Ingesting demo feed..." : "Reingest demo feed"}
+        </button>
       </header>
 
-      {loading && <div style={infoTextStyle}>Loading feeds...</div>}
-      {error && <div style={errorTextStyle}>{error}</div>}
+      {loading && (
+        <div style={{ display: "grid", gap: 8 }}>
+          <SkeletonBlock width="50%" />
+          <SkeletonBlock width="100%" height={120} />
+          <SkeletonBlock width="100%" height={120} />
+        </div>
+      )}
+      {error && <ErrorState message={error} onRetry={loadFeeds} detail="We could not load feed ingests." />}
+      {success && <div style={successTextStyle}>{success}</div>}
 
       {!loading && !error && (
         <>
@@ -73,14 +107,14 @@ export default function FeedsPage() {
                     <td style={tdStyle}>{formatCurrency(run.paygwCalculated)}</td>
                     <td style={tdStyle}>{formatCurrency(run.paygwSecured)}</td>
                     <td style={tdStyle}>
-                      <StatusPill status={run.status} />
+                      <StatusChip tone={statusTone(run.status)}>{run.status}</StatusChip>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
             {payrollRuns.length === 0 && (
-              <div style={infoTextStyle}>No payroll runs recorded yet.</div>
+              <div style={infoTextStyle}>No payroll runs recorded yet. Try the demo feed.</div>
             )}
           </section>
 
@@ -104,14 +138,14 @@ export default function FeedsPage() {
                     <td style={tdStyle}>{formatCurrency(day.gstCalculated)}</td>
                     <td style={tdStyle}>{formatCurrency(day.gstSecured)}</td>
                     <td style={tdStyle}>
-                      <StatusPill status={day.status} />
+                      <StatusChip tone={statusTone(day.status)}>{day.status}</StatusChip>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
             {gstDays.length === 0 && (
-              <div style={infoTextStyle}>No GST feed data captured yet.</div>
+              <div style={infoTextStyle}>No GST feed data captured yet. Try the demo feed.</div>
             )}
           </section>
         </>
@@ -120,39 +154,12 @@ export default function FeedsPage() {
   );
 }
 
-function StatusPill({ status }: { status: string }) {
-  const palette = statusPalette(status);
-  return (
-    <span
-      style={{
-        padding: "4px 10px",
-        borderRadius: "999px",
-        fontSize: "12px",
-        fontWeight: 600,
-        color: palette.text,
-        backgroundColor: palette.background,
-        textTransform: "uppercase",
-        letterSpacing: "0.02em",
-      }}
-    >
-      {status}
-    </span>
-  );
-}
-
-function statusPalette(status: string) {
-  switch (status.toUpperCase()) {
-    case "READY":
-    case "OK":
-      return { background: "rgba(16, 185, 129, 0.12)", text: "#047857" };
-    case "PARTIAL":
-      return { background: "rgba(250, 204, 21, 0.18)", text: "#92400e" };
-    case "SHORT":
-    case "SHORTFALL":
-      return { background: "rgba(239, 68, 68, 0.12)", text: "#b91c1c" };
-    default:
-      return { background: "rgba(107, 114, 128, 0.14)", text: "#374151" };
-  }
+function statusTone(status: string) {
+  const upper = status.toUpperCase();
+  if (upper === "READY" || upper === "OK") return "success";
+  if (upper === "PARTIAL") return "warning";
+  if (upper === "SHORT" || upper === "SHORTFALL") return "danger";
+  return "neutral";
 }
 
 const currencyFormatter = new Intl.NumberFormat("en-AU", {
@@ -220,7 +227,7 @@ const infoTextStyle: React.CSSProperties = {
   color: "#6b7280",
 };
 
-const errorTextStyle: React.CSSProperties = {
+const successTextStyle: React.CSSProperties = {
   fontSize: "14px",
-  color: "#b91c1c",
+  color: "#047857",
 };

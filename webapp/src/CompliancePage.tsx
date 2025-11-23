@@ -6,14 +6,11 @@ import {
   fetchEvidenceArtifactDetail,
 } from "./api";
 import { getToken } from "./auth";
+import { ErrorState, SkeletonBlock, StatusChip, StatCard } from "./components/UI";
 
 type ComplianceReport = Awaited<ReturnType<typeof fetchComplianceReport>>;
-
 type PaymentPlan = ComplianceReport["paymentPlans"][number];
-
-type EvidenceArtifactSummary = Awaited<
-  ReturnType<typeof fetchEvidenceArtifacts>
->["artifacts"][number];
+type EvidenceArtifactSummary = Awaited<ReturnType<typeof fetchEvidenceArtifacts>>["artifacts"][number];
 
 export default function CompliancePage() {
   const token = getToken();
@@ -26,7 +23,13 @@ export default function CompliancePage() {
   const [artifactSuccess, setArtifactSuccess] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
-  const loadReport = async () => {
+  useEffect(() => {
+    if (!token) return;
+    void loadReport();
+    void loadArtifacts();
+  }, [token]);
+
+  async function loadReport() {
     if (!token) return;
     setLoading(true);
     setError(null);
@@ -39,9 +42,9 @@ export default function CompliancePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const loadArtifacts = async () => {
+  async function loadArtifacts() {
     if (!token) return;
     setArtifactLoading(true);
     setArtifactError(null);
@@ -55,18 +58,6 @@ export default function CompliancePage() {
     } finally {
       setArtifactLoading(false);
     }
-  };
-
-  useEffect(() => {
-    if (!token) {
-      return;
-    }
-    void loadReport();
-    void loadArtifacts();
-  }, [token]);
-
-  if (!token) {
-    return null;
   }
 
   function handleDownload() {
@@ -80,7 +71,7 @@ export default function CompliancePage() {
     try {
       const response = await createEvidenceArtifact(token);
       setArtifactSuccess(
-        `Evidence pack generated (${response.artifact.id.slice(0, 8)}â€¦, sha ${response.artifact.sha256.slice(0, 12)})`
+        `Evidence pack generated (${response.artifact.id.slice(0, 8)}…, sha ${response.artifact.sha256.slice(0, 12)})`
       );
       await loadArtifacts();
     } catch (err) {
@@ -113,6 +104,8 @@ export default function CompliancePage() {
     }
   }
 
+  if (!token) return null;
+
   return (
     <div style={{ display: "grid", gap: "24px" }}>
       <header>
@@ -122,17 +115,23 @@ export default function CompliancePage() {
         </p>
       </header>
 
-      {loading && <div style={infoTextStyle}>Building compliance view...</div>}
-      {error && <div style={errorTextStyle}>{error}</div>}
+      {loading && (
+        <div style={{ display: "grid", gap: 8 }}>
+          <SkeletonBlock width="60%" />
+          <SkeletonBlock width="100%" height={120} />
+          <SkeletonBlock width="100%" height={120} />
+        </div>
+      )}
+      {error && <ErrorState message={error} onRetry={loadReport} detail="We could not load the compliance report." />}
 
       {report && !error && (
         <>
           <section style={summaryCardsWrapper}>
-            <SummaryCard label="Next BAS Due" value={report.nextBasDue ? new Date(report.nextBasDue).toLocaleDateString() : "Not scheduled"} />
-            <SummaryCard label="Open High Severity Alerts" value={report.alertsSummary.openHighSeverity.toString()} />
-            <SummaryCard label="Resolved This Quarter" value={report.alertsSummary.resolvedThisQuarter.toString()} />
-            <SummaryCard label="PAYGW Secured" value={currencyFormatter.format(report.designatedTotals.paygw)} />
-            <SummaryCard label="GST Secured" value={currencyFormatter.format(report.designatedTotals.gst)} />
+            <StatCard title="Next BAS Due" value={report.nextBasDue ? new Date(report.nextBasDue).toLocaleDateString() : "Not scheduled"} />
+            <StatCard title="Open High Severity" value={report.alertsSummary.openHighSeverity} tone={report.alertsSummary.openHighSeverity > 0 ? "warning" : "success"} />
+            <StatCard title="Resolved This Quarter" value={report.alertsSummary.resolvedThisQuarter} />
+            <StatCard title="PAYGW Secured" value={currencyFormatter.format(report.designatedTotals.paygw)} />
+            <StatCard title="GST Secured" value={currencyFormatter.format(report.designatedTotals.gst)} />
           </section>
 
           <section style={cardStyle}>
@@ -156,7 +155,7 @@ export default function CompliancePage() {
                   {report.paymentPlans.map((plan) => (
                     <tr key={plan.id}>
                       <td style={tdStyle}>{plan.basCycleId}</td>
-                      <td style={tdStyle}>{plan.status}</td>
+                      <td style={tdStyle}><StatusChip tone={statusTone(plan.status)}>{plan.status}</StatusChip></td>
                       <td style={tdStyle}>{plan.reason}</td>
                       <td style={tdStyle}>{formatWeeklyAmount(plan)}</td>
                       <td style={tdStyle}>{formatPlanStartDate(plan)}</td>
@@ -172,7 +171,7 @@ export default function CompliancePage() {
           <section style={cardStyle}>
             <div style={cardHeaderStyle}>
               <h2 style={sectionTitleStyle}>BAS Lodgment History</h2>
-              <button type="button" style={downloadButtonStyle} onClick={handleDownload}>
+              <button type="button" className="app-button ghost" onClick={handleDownload}>
                 Download compliance pack (JSON)
               </button>
             </div>
@@ -190,7 +189,7 @@ export default function CompliancePage() {
                   <tr key={entry.period}>
                     <td style={tdStyle}>{entry.period}</td>
                     <td style={tdStyle}>{entry.lodgedAt ? new Date(entry.lodgedAt).toLocaleString() : "Not lodged"}</td>
-                    <td style={tdStyle}>{entry.status}</td>
+                    <td style={tdStyle}><StatusChip tone={statusTone(entry.status)}>{entry.status}</StatusChip></td>
                     <td style={tdStyle}>{entry.notes}</td>
                   </tr>
                 ))}
@@ -202,14 +201,14 @@ export default function CompliancePage() {
           <section style={cardStyle}>
             <div style={cardHeaderStyle}>
               <h2 style={sectionTitleStyle}>Evidence Pack History</h2>
-              <button type="button" style={downloadButtonStyle} onClick={handleGenerateEvidence}>
+              <button type="button" className="app-button" onClick={handleGenerateEvidence}>
                 Generate new evidence pack
               </button>
             </div>
             {artifactSuccess && <div style={successTextStyle}>{artifactSuccess}</div>}
-            {artifactError && <div style={errorTextStyle}>{artifactError}</div>}
+            {artifactError && <ErrorState message={artifactError} onRetry={loadArtifacts} detail="Could not load or generate evidence." />}
             {artifactLoading ? (
-              <div style={infoTextStyle}>Loading recorded evidence packs...</div>
+              <SkeletonBlock width="100%" height={100} />
             ) : artifacts.length === 0 ? (
               <div style={infoTextStyle}>No evidence packs have been generated yet.</div>
             ) : (
@@ -235,8 +234,9 @@ export default function CompliancePage() {
                       <td style={tdStyle}>
                         <button
                           type="button"
-                          style={smallButtonStyle}
-                          onClick={() => handleDownloadArtifact(artifact.id)}
+                          className="app-button ghost"
+                          style={{ padding: "6px 12px", fontSize: 12 }}
+                          onClick={() => void handleDownloadArtifact(artifact.id)}
                           disabled={downloadingId === artifact.id}
                         >
                           {downloadingId === artifact.id ? "Preparing..." : "Download JSON"}
@@ -254,30 +254,25 @@ export default function CompliancePage() {
   );
 }
 
+function statusTone(status: string) {
+  const upper = status.toUpperCase();
+  if (upper === "READY" || upper === "OK") return "success";
+  if (upper === "PARTIAL" || upper === "PENDING") return "warning";
+  if (upper === "BLOCKED" || upper === "FAILED") return "danger";
+  return "neutral";
+}
+
 type SummaryCardProps = {
   label: string;
   value: string;
 };
 
-function SummaryCard({ label, value }: SummaryCardProps) {
-  return (
-    <div style={summaryCardStyle}>
-      <span style={summaryLabelStyle}>{label}</span>
-      <span style={summaryValueStyle}>{value}</span>
-    </div>
-  );
-}
-
 function formatWeeklyAmount(plan: PaymentPlan): string {
   const raw = plan.details["weeklyAmount"];
-  if (typeof raw === "number") {
-    return currencyFormatter.format(raw);
-  }
+  if (typeof raw === "number") return currencyFormatter.format(raw);
   if (typeof raw === "string") {
     const parsed = Number(raw);
-    if (Number.isFinite(parsed)) {
-      return currencyFormatter.format(parsed);
-    }
+    if (Number.isFinite(parsed)) return currencyFormatter.format(parsed);
   }
   return "N/A";
 }
@@ -286,9 +281,7 @@ function formatPlanStartDate(plan: PaymentPlan): string {
   const raw = plan.details["startDate"];
   if (typeof raw === "string" && raw.trim().length > 0) {
     const parsed = new Date(raw);
-    if (!Number.isNaN(parsed.getTime())) {
-      return parsed.toLocaleDateString();
-    }
+    if (!Number.isNaN(parsed.getTime())) return parsed.toLocaleDateString();
     return raw;
   }
   return "N/A";
@@ -314,11 +307,6 @@ const infoTextStyle: React.CSSProperties = {
   color: "#6b7280",
 };
 
-const errorTextStyle: React.CSSProperties = {
-  fontSize: "14px",
-  color: "#b91c1c",
-};
-
 const successTextStyle: React.CSSProperties = {
   fontSize: "14px",
   color: "#047857",
@@ -328,29 +316,6 @@ const summaryCardsWrapper: React.CSSProperties = {
   display: "grid",
   gap: "16px",
   gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-};
-
-const summaryCardStyle: React.CSSProperties = {
-  backgroundColor: "#ffffff",
-  borderRadius: "12px",
-  padding: "18px",
-  border: "1px solid #e2e8f0",
-  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.08)",
-  display: "grid",
-  gap: "6px",
-};
-
-const summaryLabelStyle: React.CSSProperties = {
-  fontSize: "12px",
-  letterSpacing: "0.06em",
-  textTransform: "uppercase",
-  color: "#6b7280",
-};
-
-const summaryValueStyle: React.CSSProperties = {
-  fontSize: "18px",
-  fontWeight: 600,
-  color: "#111827",
 };
 
 const cardStyle: React.CSSProperties = {
@@ -374,26 +339,6 @@ const sectionTitleStyle: React.CSSProperties = {
   fontSize: "18px",
   fontWeight: 600,
   margin: 0,
-};
-
-const downloadButtonStyle: React.CSSProperties = {
-  backgroundColor: "#0b5fff",
-  color: "#ffffff",
-  border: "none",
-  borderRadius: "6px",
-  padding: "10px 16px",
-  fontSize: "14px",
-  cursor: "pointer",
-};
-
-const smallButtonStyle: React.CSSProperties = {
-  backgroundColor: "#0b5fff",
-  color: "#ffffff",
-  border: "none",
-  borderRadius: "4px",
-  padding: "6px 12px",
-  fontSize: "12px",
-  cursor: "pointer",
 };
 
 const tableStyle: React.CSSProperties = {
