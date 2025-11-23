@@ -163,6 +163,12 @@ jobs:
       - name: Install Playwright deps
         run: pnpm exec playwright install --with-deps
 
+      - name: Build backend images for docker-compose
+        run: |
+          docker build -t apgms-final-api-gateway -f Dockerfile .
+          docker build -t apgms-tax-engine -f services/tax-engine/Dockerfile .
+          docker build -t apgms-final-worker -f services/worker/Dockerfile .
+
       - name: Start backend services
         run: docker compose up -d
 
