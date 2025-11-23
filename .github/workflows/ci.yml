@@ -138,3 +138,49 @@ jobs:
           configPath: ./lighthouserc.json
           runs: 1
           uploadArtifacts: true
+
+  playwright-a11y:
+    name: Playwright a11y smoke
+    needs: build
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.11.x'
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright deps
+        run: pnpm exec playwright install --with-deps
+
+      - name: Start backend services
+        run: docker compose up -d
+
+      - name: Wait for API readiness
+        run: |
+          for i in {1..30}; do
+            if curl -sf http://localhost:3000/ready > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API gateway failed to become ready" >&2
+          docker compose logs api-gateway
+          exit 1
+
+      - name: Playwright compliance a11y smoke
+        run: pnpm -w exec playwright test webapp/tests/compliance-a11y-smoke.spec.ts
+
+      - name: Stop services
+        if: always()
+        run: docker compose down
