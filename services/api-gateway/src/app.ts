@@ -54,6 +54,7 @@ import { registerComplianceMonitorRoutes } from "./routes/compliance-monitor.js"
 import { registerOnboardingRoutes } from "./routes/onboarding.js";
 import { registerForecastRoutes } from "./routes/forecast.js";
 import { ERROR_MESSAGES } from "./lib/errors.js";
+import { helmetConfigFor } from "./security-headers.js";
 
 type BuildServerOptions = {
   bankLinesPlugin?: FastifyPluginAsync;
@@ -102,7 +103,10 @@ export async function buildServer(
   app.addHook("onResponse", (request, reply, done) => {
     const metricState = (reply as any).__metrics ?? {};
     const route =
-      metricState.route ?? request.routeOptions?.url ?? request.raw.url ?? "unknown";
+      metricState.route ??
+      request.routeOptions?.url ??
+      request.raw.url ??
+      "unknown";
     const method = metricState.method ?? request.method;
     const status = String(reply.statusCode);
 
@@ -150,46 +154,18 @@ export async function buildServer(
       return;
     }
     request.log.error({ err: error }, "Unhandled error");
-    reply
-      .status(500)
-      .send({
-        error: {
-          code: "internal_error",
-          message: ERROR_MESSAGES.internal_error,
-        },
-      });
+    reply.status(500).send({
+      error: {
+        code: "internal_error",
+        message: ERROR_MESSAGES.internal_error,
+      },
+    });
   });
 
   await app.register(rateLimit);
-  await app.register(helmet, {
-    hidePoweredBy: true,
-    frameguard: { action: "deny" },
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        baseUri: ["'self'"],
-        connectSrc: ["'self'", ...config.cors.allowedOrigins],
-        scriptSrc: [
-          "'self'",
-          "'sha256-+Ul8C6HpBvEV0hgFekKPKiEh0Ug3SIn50SjA+iyTNHo='",
-        ],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", "data:"],
-        objectSrc: ["'none'"],
-        frameAncestors: ["'none'"],
-      },
-    },
-    crossOriginEmbedderPolicy: false,
-    crossOriginResourcePolicy: { policy: "same-site" },
-    dnsPrefetchControl: { allow: false },
-    referrerPolicy: { policy: "no-referrer" },
-    xssFilter: true,
-    hsts: {
-      maxAge: 15_552_000,
-      includeSubDomains: true,
-      preload: true,
-    },
-  });
+
+  // Use extracted, testable helmet configuration
+  await app.register(helmet, helmetConfigFor(config));
 
   await app.register(cors, {
     origin: (origin, cb) => {
