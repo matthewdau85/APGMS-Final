@@ -25,7 +25,7 @@ export default {
     ],
   },
 
-  testMatch: ["**/?(*.)+(test).[tj]s?(x)"],
+  testMatch: ["**/?(*.)+(spec|test).[tj]s?(x)"],
 
   // Resolve monorepo imports like @apgms/shared
   moduleNameMapper: {
