@@ -22,7 +22,18 @@ const PaymentPlanStatusSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
-type AuthenticatedRequest = FastifyRequest & { user?: { orgId?: string; sub?: string } };
+type AuthenticatedRequest = FastifyRequest & { user?: { orgId?: string; sub?: string; role?: string } };
+
+const ALLOWED_PAYMENT_PLAN_ROLES = ["owner", "admin", "accountant"] as const;
+
+function ensurePlanRole(request: AuthenticatedRequest, reply: FastifyReply): boolean {
+  const role = request.user?.role;
+  if (!role || !ALLOWED_PAYMENT_PLAN_ROLES.includes(role as (typeof ALLOWED_PAYMENT_PLAN_ROLES)[number])) {
+    reply.code(403).send({ error: { code: "forbidden_role", message: "Insufficient role for payment plans" } });
+    return false;
+  }
+  return true;
+}
 
 export async function registerPaymentPlanRoutes(app: FastifyInstance) {
   app.addHook("onRequest", authGuard);
@@ -33,6 +44,7 @@ export async function registerPaymentPlanRoutes(app: FastifyInstance) {
       reply.code(401).send({ error: "unauthenticated" });
       return;
     }
+    if (!ensurePlanRole(request, reply)) return;
     const plans = await listPaymentPlans(orgId);
     reply.send({ plans });
   });
@@ -43,6 +55,7 @@ export async function registerPaymentPlanRoutes(app: FastifyInstance) {
       reply.code(401).send({ error: "unauthenticated" });
       return;
     }
+    if (!ensurePlanRole(request, reply)) return;
     const payload = parseWithSchema(PaymentPlanBodySchema, request.body);
     const plan = await createPaymentPlanRequest({
       orgId,
@@ -54,6 +67,7 @@ export async function registerPaymentPlanRoutes(app: FastifyInstance) {
   });
 
   app.post("/payment-plans/:id/status", async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!ensurePlanRole(request as AuthenticatedRequest, reply)) return;
     const payload = parseWithSchema(PaymentPlanStatusSchema, request.body);
     try {
       const updated = await updatePaymentPlanStatus(

@@ -1,11 +1,12 @@
 // services/api-gateway/src/routes/regulator.ts
 import type { Decimal, JsonValue } from "@prisma/client/runtime/library.js";
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { z } from "zod";
 
 import { prisma } from "../db.js";
 import { recordAuditLog } from "../lib/audit.js";
+import { parseWithSchema } from "../lib/validation.js";
 
 type RegulatorRequest = FastifyRequest & {
   user?: { orgId?: string; sub?: string };
@@ -36,10 +37,12 @@ async function logRegulatorAction(
   action: string,
   metadata: Record<string, unknown | null> | undefined,
   auditLogger?: RegulatorRoutesDeps["auditLogger"],
+  orgIdOverride?: string,
 ) {
   const logger = auditLogger ?? recordAuditLog;
+  const orgId = orgIdOverride ?? ensureOrgId(request);
   await logger({
-    orgId: ensureOrgId(request),
+    orgId,
     actorId: actorIdFrom(request),
     action,
     metadata:
@@ -47,6 +50,15 @@ async function logRegulatorAction(
         ? null
         : (JSON.parse(JSON.stringify(metadata)) as JsonValue),
   });
+}
+
+function resolveOrgIdOrReply(request: RegulatorRequest, reply: FastifyReply): string | null {
+  try {
+    return ensureOrgId(request);
+  } catch {
+    reply.code(401).send({ error: { code: "unauthenticated", message: "Regulator authentication required" } });
+    return null;
+  }
 }
 
 function toNumber(value: Decimal | null | undefined): number {
@@ -65,13 +77,16 @@ export async function registerRegulatorRoutes(
   const db = deps.prisma ?? prisma;
   const auditLogger = deps.auditLogger;
 
-  app.get("/health", async (request: RegulatorRequest) => {
-    await logRegulatorAction(request, "regulator.health", undefined, auditLogger);
+  app.get("/health", async (request: RegulatorRequest, reply: FastifyReply) => {
+    const orgId = resolveOrgIdOrReply(request, reply);
+    if (!orgId) return;
+    await logRegulatorAction(request, "regulator.health", undefined, auditLogger, orgId);
     return { ok: true, service: "regulator" };
   });
 
-  app.get("/compliance/report", async (request: RegulatorRequest) => {
-    const orgId = ensureOrgId(request);
+  app.get("/compliance/report", async (request: RegulatorRequest, reply: FastifyReply) => {
+    const orgId = resolveOrgIdOrReply(request, reply);
+    if (!orgId) return;
 
     const [
       basCycles,
@@ -141,6 +156,7 @@ export async function registerRegulatorRoutes(
       "regulator.compliance.report",
       { basPeriods: basHistory.length },
       auditLogger,
+      orgId,
     );
 
     return {
@@ -159,8 +175,9 @@ export async function registerRegulatorRoutes(
     };
   });
 
-  app.get("/alerts", async (request: RegulatorRequest) => {
-    const orgId = ensureOrgId(request);
+  app.get("/alerts", async (request: RegulatorRequest, reply: FastifyReply) => {
+    const orgId = resolveOrgIdOrReply(request, reply);
+    if (!orgId) return;
     const alerts = await db.alert.findMany({
       where: { orgId },
       orderBy: { createdAt: "desc" },
@@ -171,6 +188,7 @@ export async function registerRegulatorRoutes(
       "regulator.alerts.list",
       { count: alerts.length },
       auditLogger,
+      orgId,
     );
 
     return {
@@ -186,8 +204,9 @@ export async function registerRegulatorRoutes(
     };
   });
 
-  app.get("/monitoring/snapshots", async (request: RegulatorRequest) => {
-    const orgId = ensureOrgId(request);
+  app.get("/monitoring/snapshots", async (request: RegulatorRequest, reply: FastifyReply) => {
+    const orgId = resolveOrgIdOrReply(request, reply);
+    if (!orgId) return;
 
     const querySchema = z.object({
       limit: z
@@ -198,13 +217,8 @@ export async function registerRegulatorRoutes(
         .default(5),
     });
 
-    const parsed = querySchema.safeParse(request.query ?? {});
-    if (!parsed.success) {
-      return {
-        error: { code: "invalid_query", details: parsed.error.flatten() },
-      };
-    }
-    const limit = parsed.data.limit;
+    const parsed = parseWithSchema(querySchema, request.query ?? {});
+    const limit = parsed.limit;
 
     const snapshots = await db.monitoringSnapshot.findMany({
       where: { orgId },
@@ -217,6 +231,7 @@ export async function registerRegulatorRoutes(
       "regulator.monitoring.snapshots",
       { limit },
       auditLogger,
+      orgId,
     );
 
     return {
@@ -229,8 +244,9 @@ export async function registerRegulatorRoutes(
     };
   });
 
-  app.get("/evidence", async (request: RegulatorRequest) => {
-    const orgId = ensureOrgId(request);
+  app.get("/evidence", async (request: RegulatorRequest, reply: FastifyReply) => {
+    const orgId = resolveOrgIdOrReply(request, reply);
+    if (!orgId) return;
     const artifacts = await db.evidenceArtifact.findMany({
       where: { orgId },
       orderBy: { createdAt: "desc" },
@@ -242,6 +258,7 @@ export async function registerRegulatorRoutes(
       "regulator.evidence.list",
       { count: artifacts.length },
       auditLogger,
+      orgId,
     );
 
     return {
@@ -256,19 +273,14 @@ export async function registerRegulatorRoutes(
   });
 
   app.get("/evidence/:artifactId", async (request: RegulatorRequest, reply) => {
-    const orgId = ensureOrgId(request);
+    const orgId = resolveOrgIdOrReply(request, reply);
+    if (!orgId) return;
     const paramsSchema = z.object({ artifactId: z.string().min(1) });
 
-    const parsed = paramsSchema.safeParse(request.params ?? {});
-    if (!parsed.success) {
-      reply
-        .code(400)
-        .send({ error: { code: "invalid_params", details: parsed.error.flatten() } });
-      return;
-    }
+    const parsed = parseWithSchema(paramsSchema, request.params ?? {});
 
     const artifact = await db.evidenceArtifact.findUnique({
-      where: { id: parsed.data.artifactId },
+      where: { id: parsed.artifactId },
     });
     if (!artifact || artifact.orgId !== orgId) {
       reply.code(404).send({ error: "artifact_not_found" });
@@ -280,6 +292,7 @@ export async function registerRegulatorRoutes(
       "regulator.evidence.detail",
       { artifactId: artifact.id },
       auditLogger,
+      orgId,
     );
 
     return {
@@ -294,8 +307,9 @@ export async function registerRegulatorRoutes(
     };
   });
 
-  app.get("/bank-lines/summary", async (request: RegulatorRequest) => {
-    const orgId = ensureOrgId(request);
+  app.get("/bank-lines/summary", async (request: RegulatorRequest, reply: FastifyReply) => {
+    const orgId = resolveOrgIdOrReply(request, reply);
+    if (!orgId) return;
     const [aggregate, firstEntry, lastEntry, recent] = await Promise.all([
       db.bankLine.aggregate({
         where: { orgId },
@@ -322,6 +336,7 @@ export async function registerRegulatorRoutes(
       "regulator.bank.summary",
       { entries: aggregate._count?.id ?? 0 },
       auditLogger,
+      orgId,
     );
 
     return {
