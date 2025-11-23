@@ -1,6 +1,11 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { clearToken, getToken } from "./auth";
+import {
+  fetchAlerts,
+  fetchCurrentObligations,
+  fetchEvidenceArtifacts,
+} from "./api";
 import { useTheme, type ThemeName } from "./theme";
 
 const navItems: Array<{ to: string; label: string }> = [
@@ -18,6 +23,24 @@ export default function ProtectedLayout() {
   const location = useLocation();
   const token = getToken();
   const { theme, setTheme } = useTheme();
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [summary, setSummary] = useState<{
+    paygwStatus: string;
+    gstStatus: string;
+    nextBasDue: string | null;
+    alerts: Array<{
+      id: string;
+      severity: string;
+      message: string;
+      createdAt: string;
+    }>;
+    evidence: Array<{
+      id: string;
+      createdAt: string;
+      wormUri: string;
+    }>;
+  } | null>(null);
 
   useEffect(() => {
     if (!token) {
@@ -34,17 +57,59 @@ export default function ProtectedLayout() {
     navigate("/", { replace: true });
   }
 
+  useEffect(() => {
+    if (!token) return;
+    setSummaryLoading(true);
+    setSummaryError(null);
+    (async () => {
+      try {
+        const [obligations, alerts, evidence] = await Promise.all([
+          fetchCurrentObligations(token),
+          fetchAlerts(token),
+          fetchEvidenceArtifacts(token),
+        ]);
+
+        setSummary({
+          paygwStatus: obligations.paygw.status,
+          gstStatus: obligations.gst.status,
+          nextBasDue: obligations.nextBasDue,
+          alerts: alerts.alerts.slice(0, 5),
+          evidence: evidence.artifacts.slice(0, 3),
+        });
+      } catch (err) {
+        console.error(err);
+        setSummaryError("Unable to load summary");
+      } finally {
+        setSummaryLoading(false);
+      }
+    })();
+  }, [token]);
+
   const summaryChips = [
-    { label: "PAYGW coverage OK", tone: "success" },
-    { label: "GST shortfall detected", tone: "warning" },
-    { label: "Next BAS due 15 Dec", tone: "neutral" },
+    summary?.paygwStatus
+      ? { label: `PAYGW ${summary.paygwStatus}`, tone: summary.paygwStatus === "ok" ? "success" : "warning" }
+      : null,
+    summary?.gstStatus
+      ? { label: `GST ${summary.gstStatus}`, tone: summary.gstStatus === "ok" ? "success" : "warning" }
+      : null,
+    summary?.nextBasDue
+      ? { label: `Next BAS due ${new Date(summary.nextBasDue).toLocaleDateString()}`, tone: "neutral" }
+      : { label: "Next BAS not scheduled", tone: "neutral" },
   ];
 
-  const activityItems = [
-    { title: "Evidence pack generated", meta: "2m ago • pack #4821" },
-    { title: "PAYGW shortfall alert", meta: "10m ago • escalated" },
-    { title: "Regulator view opened", meta: "21m ago • sandbox" },
-  ];
+  const activityItems = useMemo(() => {
+    const alertItems =
+      summary?.alerts.map((a) => ({
+        title: a.message,
+        meta: `${a.severity.toUpperCase()} • ${new Date(a.createdAt).toLocaleTimeString()}`,
+      })) ?? [];
+    const evidenceItems =
+      summary?.evidence.map((e) => ({
+        title: `Evidence pack ${e.id}`,
+        meta: new Date(e.createdAt).toLocaleTimeString(),
+      })) ?? [];
+    return [...alertItems, ...evidenceItems].slice(0, 6);
+  }, [summary]);
 
   return (
     <div style={outerShellStyle}>
@@ -114,14 +179,32 @@ export default function ProtectedLayout() {
               PAYGW/GST coverage, BAS readiness, and evidence status at a glance.
             </div>
             <div style={chipRowStyle}>
-              {summaryChips.map((chip) => (
-                <span
-                  key={chip.label}
-                  className={`app-chip ${chip.tone === "neutral" ? "" : chip.tone}`}
-                >
-                  {chip.label}
-                </span>
-              ))}
+              {summaryLoading && <div className="app-skeleton" style={{ width: 220, height: 16 }} />}
+              {summaryError && (
+                <div style={{ color: "var(--danger)", fontSize: 13, fontWeight: 600 }}>
+                  {summaryError}{" "}
+                  <button
+                    type="button"
+                    className="app-button ghost"
+                    style={{ padding: "4px 8px", fontSize: 12, marginLeft: 6 }}
+                    onClick={() => setSummaryError(null)}
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+              {!summaryLoading &&
+                !summaryError &&
+                summaryChips
+                  .filter(Boolean)
+                  .map((chip) => (
+                    <span
+                      key={chip!.label}
+                      className={`app-chip ${chip!.tone === "neutral" ? "" : chip!.tone}`}
+                    >
+                      {chip!.label}
+                    </span>
+                  ))}
             </div>
           </div>
           <div style={summaryActionsStyle}>
@@ -139,14 +222,25 @@ export default function ProtectedLayout() {
           </div>
           <aside style={activityRailStyle}>
             <div style={railHeaderStyle}>Activity / Alerts</div>
-            <div style={railListStyle}>
-              {activityItems.map((item) => (
-                <div key={item.title} style={railItemStyle}>
-                  <div style={{ fontWeight: 600 }}>{item.title}</div>
-                  <div style={{ fontSize: 12, color: "var(--muted)" }}>{item.meta}</div>
-                </div>
-              ))}
-            </div>
+            {summaryLoading && <div className="app-skeleton" style={{ width: "100%", height: 160 }} />}
+            {summaryError && (
+              <div style={{ color: "var(--danger)", fontSize: 13, fontWeight: 600 }}>{summaryError}</div>
+            )}
+            {!summaryLoading && !summaryError && (
+              <div style={railListStyle}>
+                {activityItems.length === 0 && (
+                  <div style={{ fontSize: 13, color: "var(--muted)" }}>
+                    No recent activity. Run a pre-check or generate evidence to populate.
+                  </div>
+                )}
+                {activityItems.map((item) => (
+                  <div key={`${item.title}-${item.meta}`} style={railItemStyle}>
+                    <div style={{ fontWeight: 600 }}>{item.title}</div>
+                    <div style={{ fontSize: 12, color: "var(--muted)" }}>{item.meta}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </aside>
         </div>
       </main>
