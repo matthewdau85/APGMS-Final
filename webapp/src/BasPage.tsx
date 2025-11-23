@@ -8,6 +8,7 @@ import {
   initiateMfa,
 } from "./api";
 import { getToken, getSessionUser } from "./auth";
+import { ErrorState, SkeletonBlock, StatusChip, StatCard } from "./components/UI";
 
 type BasPreviewResponse = Awaited<ReturnType<typeof fetchBasPreview>>;
 type DesignatedAccountsResponse = Awaited<ReturnType<typeof fetchDesignatedAccounts>>;
@@ -32,7 +33,23 @@ export default function BasPage() {
 
   const basCycleId = preview?.basCycleId ?? null;
 
-  const loadPreview = async () => {
+  useEffect(() => {
+    if (!token) return;
+    void loadPreview();
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    if (basCycleId) {
+      void loadPaymentPlan(basCycleId);
+    } else {
+      setPaymentPlan(null);
+      setPlanError(null);
+      setPlanSuccess(null);
+    }
+  }, [token, basCycleId]);
+
+  async function loadPreview() {
     if (!token) return;
     setError(null);
     setDesignatedError(null);
@@ -50,9 +67,9 @@ export default function BasPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const loadPaymentPlan = async (cycleId: string) => {
+  async function loadPaymentPlan(cycleId: string) {
     if (!token) return;
     setPlanError(null);
     setPlanSuccess(null);
@@ -66,27 +83,7 @@ export default function BasPage() {
     } finally {
       setPlanLoading(false);
     }
-  };
-
-  useEffect(() => {
-    if (!token) {
-      return;
-    }
-    void loadPreview();
-  }, [token]);
-
-  useEffect(() => {
-    if (!token) {
-      return;
-    }
-    if (basCycleId) {
-      void loadPaymentPlan(basCycleId);
-    } else {
-      setPaymentPlan(null);
-      setPlanError(null);
-      setPlanSuccess(null);
-    }
-  }, [token, basCycleId]);
+  }
 
   async function handleLodge() {
     if (!token) return;
@@ -148,22 +145,16 @@ export default function BasPage() {
   async function handleCreatePaymentPlan() {
     if (!token || !basCycleId) return;
     const reason = window.prompt("Reason for payment plan", "CASHFLOW_SHORTFALL");
-    if (!reason || reason.trim() === "") {
-      return;
-    }
+    if (!reason || reason.trim() === "") return;
     const weeklyAmountInput = window.prompt("Weekly amount (AUD)", "1500");
-    if (!weeklyAmountInput) {
-      return;
-    }
+    if (!weeklyAmountInput) return;
     const weeklyAmount = Number(weeklyAmountInput);
     if (!Number.isFinite(weeklyAmount) || weeklyAmount <= 0) {
       setPlanError("Weekly amount must be a positive number");
       return;
     }
     const startDate = window.prompt("Proposed start date (YYYY-MM-DD)", new Date().toISOString().slice(0, 10));
-    if (!startDate) {
-      return;
-    }
+    if (!startDate) return;
     const notes = window.prompt("Additional notes (optional)") ?? undefined;
 
     setPlanError(null);
@@ -187,9 +178,7 @@ export default function BasPage() {
     }
   }
 
-  if (!token) {
-    return null;
-  }
+  if (!token) return null;
 
   const hasActiveCycle = Boolean(preview?.periodStart && preview?.periodEnd);
   const periodStart = hasActiveCycle && preview?.periodStart ? new Date(preview.periodStart).toLocaleDateString() : null;
@@ -206,17 +195,22 @@ export default function BasPage() {
         </p>
       </header>
 
-      {loading && <div style={infoTextStyle}>Loading BAS preview...</div>}
-      {error && <div style={errorTextStyle}>{error}</div>}
+      {loading && (
+        <div style={{ display: "grid", gap: 8 }}>
+          <SkeletonBlock width="50%" />
+          <SkeletonBlock width="100%" height={140} />
+        </div>
+      )}
+      {error && <ErrorState message={error} onRetry={loadPreview} detail="We could not load BAS preview." />}
       {success && <div style={successTextStyle}>{success}</div>}
 
       {preview && !error && hasActiveCycle && (
         <>
           <section style={overviewCardStyle}>
-            <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-              <span style={statusBadgeStyle(preview.overallStatus)}>
-                {preview.overallStatus === "READY" ? "READY" : "BLOCKED"}
-              </span>
+            <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
+              <StatusChip tone={preview.overallStatus === "READY" ? "success" : "warning"}>
+                {preview.overallStatus === "READY" ? "Ready" : "Blocked"}
+              </StatusChip>
               <div>
                 <div style={overviewTitleStyle}>BAS period {periodStart} to {periodEnd}</div>
                 <div style={metaTextStyle}>
@@ -224,16 +218,16 @@ export default function BasPage() {
                 </div>
               </div>
             </div>
-            {preview.overallStatus === "READY" && (
+            <div style={{ display: "flex", gap: 10 }}>
               <button
                 type="button"
-                style={lodgeButtonStyle}
+                className="app-button"
                 onClick={handleLodge}
-                disabled={submitting}
+                disabled={submitting || preview.overallStatus !== "READY"}
               >
                 {submitting ? "Lodging..." : "Lodge BAS now"}
               </button>
-            )}
+            </div>
           </section>
 
           <section style={gridTwoColumns}>
@@ -271,9 +265,12 @@ export default function BasPage() {
           <p style={accountsSubtitleStyle}>
             The ATO transfer draws directly from these PAYGW and GST designated accounts when you lodge.
           </p>
-          {designatedError && <div style={errorTextStyle}>{designatedError}</div>}
+          {designatedError && <ErrorState message={designatedError} detail="Holding accounts unavailable." />}
           {!designated && !designatedError && (
-            <div style={infoTextStyle}>Loading holding account balances...</div>
+            <div style={{ display: "grid", gap: 8 }}>
+              <SkeletonBlock width="100%" height={60} />
+              <SkeletonBlock width="100%" height={60} />
+            </div>
           )}
           {designated && (
             <div style={accountsGridStyle}>
@@ -288,12 +285,14 @@ export default function BasPage() {
         <section style={planCardStyle}>
           <div style={planHeaderStyle}>
             <h2 style={planTitleStyle}>Payment plan request</h2>
-            <span style={planStatusBadgeStyle(paymentPlan?.status ?? "NONE")}>{paymentPlan ? paymentPlan.status : "NONE"}</span>
+            <StatusChip tone={paymentPlan ? statusTone(paymentPlan.status) : "neutral"}>
+              {paymentPlan ? paymentPlan.status : "NONE"}
+            </StatusChip>
           </div>
           <p style={planSubtitleStyle}>
             Shortfalls can be escalated to the ATO early. Request a structured payment plan so the evidence trail shows good faith remediation.
           </p>
-          {planError && <div style={errorTextStyle}>{planError}</div>}
+          {planError && <ErrorState message={planError} onRetry={() => basCycleId && loadPaymentPlan(basCycleId)} />}
           {planSuccess && <div style={successTextStyle}>{planSuccess}</div>}
           {planLoading && <div style={infoTextStyle}>Checking payment plan status...</div>}
           {paymentPlan ? (
@@ -316,7 +315,7 @@ export default function BasPage() {
           ) : (
             <button
               type="button"
-              style={planRequestButtonStyle}
+              className="app-button ghost"
               onClick={handleCreatePaymentPlan}
               disabled={planLoading}
             >
@@ -331,124 +330,49 @@ export default function BasPage() {
 
 function HoldingAccountCard({ title, account }: { title: string; account: DesignatedAccountView | null }) {
   const balance = account?.balance ?? 0;
-  const palette = account
-    ? balance > 0
-      ? { background: "rgba(16, 185, 129, 0.12)", text: "#047857" }
-      : { background: "rgba(250, 204, 21, 0.18)", text: "#92400e" }
-    : { background: "rgba(148, 163, 184, 0.18)", text: "#334155" };
-
+  const tone = balance > 0 ? "success" : "warning";
   return (
     <div style={accountsCardColumnStyle}>
       <div style={accountsCardHeaderStyle}>
         <h3 style={accountsCardTitleStyle}>{title}</h3>
-        <span
-          style={{
-            padding: "4px 10px",
-            borderRadius: "999px",
-            fontSize: "12px",
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: "0.05em",
-            backgroundColor: palette.background,
-            color: palette.text,
-          }}
-        >
-          {account ? "Inbound only" : "Not provisioned"}
-        </span>
+        <StatusChip tone={tone}>{account ? "Inbound only" : "Not provisioned"}</StatusChip>
       </div>
       <div style={accountsBalanceStyle}>{currencyFormatter.format(balance)}</div>
       <div style={accountsUpdatedStyle}>
-        {account ? `Updated ${new Date(account.updatedAt).toLocaleString()}` : "Configure in database seed"}
-      </div>
-      <div>
-        <div style={accountsTransfersTitleStyle}>Recent transfers</div>
-        {account && account.transfers.length > 0 ? (
-          <ul style={accountsTransfersListStyle}>
-            {account.transfers.map((transfer) => (
-              <li key={transfer.id} style={accountsTransferItemStyle}>
-                <div>{currencyFormatter.format(transfer.amount)}</div>
-                <div style={accountsTransferMetaStyle}>
-                  {transfer.source} - {new Date(transfer.createdAt).toLocaleString()}
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div style={infoTextStyle}>
-            {account ? "No transfers recorded yet." : "No account created yet."}
-          </div>
-        )}
+        Last updated {account?.updatedAt ? new Date(account.updatedAt).toLocaleString() : "N/A"}
       </div>
     </div>
   );
 }
 
-function ObligationCard({
-  title,
-  data,
-}: {
-  title: string;
-  data: { required: number; secured: number; status: string };
-}) {
-  const palette = statusPalette(data.status);
+function ObligationCard({ title, data }: { title: string; data: BasPreviewResponse["paygw"] }) {
+  const shortfall = Math.max(0, (data.required ?? 0) - (data.secured ?? 0));
+  const tone = shortfall > 0 ? "warning" : "success";
   return (
     <div style={obligationCardStyle}>
-      <div style={cardHeaderStyle}>
+      <div style={obligationHeaderStyle}>
         <h3 style={obligationTitleStyle}>{title}</h3>
-        <span
-          style={{
-            padding: "4px 10px",
-            borderRadius: "20px",
-            backgroundColor: palette.background,
-            color: palette.text,
-            fontSize: "12px",
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: "0.03em",
-          }}
-        >
-          {data.status}
-        </span>
+        <StatusChip tone={tone}>{shortfall > 0 ? "Short" : "Covered"}</StatusChip>
       </div>
-      <dl style={metricsListStyle}>
-        <div style={metricRowStyle}>
-          <dt style={metricLabelStyle}>Required</dt>
-          <dd style={metricValueStyle}>{formatCurrency(data.required)}</dd>
-        </div>
-        <div style={metricRowStyle}>
-          <dt style={metricLabelStyle}>Secured</dt>
-          <dd style={metricValueStyle}>{formatCurrency(data.secured)}</dd>
-        </div>
-        <div style={metricRowStyle}>
-          <dt style={metricLabelStyle}>Gap</dt>
-          <dd style={metricValueStyle}>
-            {formatCurrency(Math.max(0, Math.round((data.required - data.secured) * 100) / 100))}
-          </dd>
-        </div>
-      </dl>
+      <div style={obligationValueStyle}>{currencyFormatter.format(data.secured ?? 0)}</div>
+      <div style={obligationMetaStyle}>Required: {currencyFormatter.format(data.required ?? 0)}</div>
+      {shortfall > 0 && <div style={obligationMetaStyle}>Shortfall: {currencyFormatter.format(shortfall)}</div>}
     </div>
   );
 }
 
-function statusPalette(status: string) {
-  switch (status.toUpperCase()) {
-    case "READY":
-      return { background: "rgba(16, 185, 129, 0.12)", text: "#047857" };
-    case "BLOCKED":
-      return { background: "rgba(239, 68, 68, 0.12)", text: "#b91c1c" };
-    default:
-      return { background: "rgba(250, 204, 21, 0.18)", text: "#92400e" };
-  }
+function statusTone(status: string) {
+  const upper = status.toUpperCase();
+  if (upper === "READY" || upper === "OK") return "success";
+  if (upper === "PARTIAL" || upper === "PENDING") return "warning";
+  if (upper === "BLOCKED" || upper === "FAILED") return "danger";
+  return "neutral";
 }
 
 const currencyFormatter = new Intl.NumberFormat("en-AU", {
   style: "currency",
   currency: "AUD",
 });
-
-function formatCurrency(value: number) {
-  return currencyFormatter.format(value ?? 0);
-}
 
 const pageTitleStyle: React.CSSProperties = {
   fontSize: "24px",
@@ -468,11 +392,6 @@ const infoTextStyle: React.CSSProperties = {
   color: "#6b7280",
 };
 
-const errorTextStyle: React.CSSProperties = {
-  fontSize: "14px",
-  color: "#b91c1c",
-};
-
 const successTextStyle: React.CSSProperties = {
   fontSize: "14px",
   color: "#047857",
@@ -481,50 +400,34 @@ const successTextStyle: React.CSSProperties = {
 const overviewCardStyle: React.CSSProperties = {
   backgroundColor: "#ffffff",
   borderRadius: "12px",
-  padding: "24px",
+  padding: "20px",
   border: "1px solid #e2e8f0",
   boxShadow: "0 1px 2px rgba(15, 23, 42, 0.08)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  flexWrap: "wrap",
 };
 
 const overviewTitleStyle: React.CSSProperties = {
   fontSize: "18px",
-  fontWeight: 600,
-  marginBottom: "4px",
+  fontWeight: 700,
+  margin: 0,
 };
 
 const metaTextStyle: React.CSSProperties = {
-  fontSize: "13px",
-  color: "#6b7280",
-};
-
-const statusBadgeStyle = (status: string): React.CSSProperties => ({
-  padding: "6px 12px",
-  borderRadius: "20px",
-  fontSize: "13px",
-  fontWeight: 600,
-  backgroundColor: status === "READY" ? "rgba(16, 185, 129, 0.12)" : "rgba(239, 68, 68, 0.12)",
-  color: status === "READY" ? "#047857" : "#b91c1c",
-});
-
-const lodgeButtonStyle: React.CSSProperties = {
-  marginTop: "16px",
-  padding: "10px 16px",
-  borderRadius: "8px",
-  border: "none",
-  backgroundColor: "#111827",
-  color: "#ffffff",
   fontSize: "14px",
-  fontWeight: 600,
-  cursor: "pointer",
+  color: "#4b5563",
 };
 
 const gridTwoColumns: React.CSSProperties = {
   display: "grid",
-  gap: "16px",
-  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+  gap: "12px",
+  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
 };
 
-const obligationCardStyle: React.CSSProperties = {
+const blockersCardStyle: React.CSSProperties = {
   backgroundColor: "#ffffff",
   borderRadius: "12px",
   padding: "20px",
@@ -532,231 +435,157 @@ const obligationCardStyle: React.CSSProperties = {
   boxShadow: "0 1px 2px rgba(15, 23, 42, 0.08)",
 };
 
-const cardHeaderStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginBottom: "12px",
-};
-
-const obligationTitleStyle: React.CSSProperties = {
-  margin: 0,
-  fontSize: "16px",
-  fontWeight: 600,
-};
-
-const metricsListStyle: React.CSSProperties = {
-  margin: 0,
-  padding: 0,
-  display: "grid",
-  gap: "8px",
-};
-
-const metricRowStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-};
-
-const metricLabelStyle: React.CSSProperties = {
-  fontSize: "13px",
-  color: "#6b7280",
-};
-
-const metricValueStyle: React.CSSProperties = {
-  fontSize: "14px",
-  fontWeight: 600,
-};
-
-const blockersCardStyle: React.CSSProperties = {
-  backgroundColor: "#fff9f0",
-  borderRadius: "12px",
-  padding: "20px 24px",
-  border: "1px solid #fed7aa",
-};
-
-const sectionTitleStyle: React.CSSProperties = {
-  fontSize: "18px",
-  fontWeight: 600,
-  marginBottom: "12px",
-};
-
 const blockersListStyle: React.CSSProperties = {
   margin: 0,
-  paddingLeft: "20px",
-  display: "grid",
-  gap: "8px",
-  color: "#92400e",
-  fontSize: "14px",
+  paddingLeft: "18px",
+  color: "#1f2937",
 };
 
 const blockerItemStyle: React.CSSProperties = {
-  lineHeight: 1.5,
+  marginBottom: "6px",
 };
 
 const accountsCardStyle: React.CSSProperties = {
   backgroundColor: "#ffffff",
   borderRadius: "12px",
+  padding: "20px",
   border: "1px solid #e2e8f0",
   boxShadow: "0 1px 2px rgba(15, 23, 42, 0.08)",
-  padding: "24px",
   display: "grid",
-  gap: "16px",
+  gap: "12px",
 };
 
 const accountsTitleStyle: React.CSSProperties = {
+  fontSize: "18px",
+  fontWeight: 700,
   margin: 0,
-  fontSize: "20px",
-  fontWeight: 600,
 };
 
 const accountsSubtitleStyle: React.CSSProperties = {
-  margin: 0,
   fontSize: "14px",
   color: "#4b5563",
-  maxWidth: "620px",
+  margin: 0,
 };
 
 const accountsGridStyle: React.CSSProperties = {
   display: "grid",
-  gap: "16px",
+  gap: "12px",
   gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
 };
 
 const accountsCardColumnStyle: React.CSSProperties = {
-  backgroundColor: "#f8fafc",
-  borderRadius: "12px",
-  border: "1px solid #dbeafe",
-  padding: "18px",
+  border: "1px solid #e2e8f0",
+  borderRadius: "10px",
+  padding: "14px",
+  background: "#fff",
   display: "grid",
-  gap: "12px",
+  gap: "6px",
 };
 
 const accountsCardHeaderStyle: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  gap: "12px",
 };
 
 const accountsCardTitleStyle: React.CSSProperties = {
-  margin: 0,
-  fontSize: "16px",
-  fontWeight: 600,
+  fontSize: "15px",
+  fontWeight: 700,
 };
 
 const accountsBalanceStyle: React.CSSProperties = {
-  fontSize: "22px",
-  fontWeight: 700,
-  color: "#0f172a",
+  fontSize: "20px",
+  fontWeight: 800,
 };
 
 const accountsUpdatedStyle: React.CSSProperties = {
   fontSize: "12px",
-  color: "#64748b",
-};
-
-const accountsTransfersTitleStyle: React.CSSProperties = {
-  fontSize: "12px",
-  textTransform: "uppercase",
-  letterSpacing: "0.08em",
-  fontWeight: 600,
-  color: "#64748b",
-};
-
-const accountsTransfersListStyle: React.CSSProperties = {
-  listStyle: "none",
-  margin: 0,
-  padding: 0,
-  display: "grid",
-  gap: "8px",
-};
-
-const accountsTransferItemStyle: React.CSSProperties = {
-  backgroundColor: "#ffffff",
-  borderRadius: "10px",
-  padding: "10px",
-  border: "1px solid #e2e8f0",
-  display: "grid",
-  gap: "4px",
-};
-
-const accountsTransferMetaStyle: React.CSSProperties = {
-  fontSize: "12px",
-  color: "#64748b",
+  color: "#6b7280",
 };
 
 const planCardStyle: React.CSSProperties = {
   backgroundColor: "#ffffff",
   borderRadius: "12px",
+  padding: "20px",
   border: "1px solid #e2e8f0",
   boxShadow: "0 1px 2px rgba(15, 23, 42, 0.08)",
-  padding: "24px",
   display: "grid",
-  gap: "16px",
+  gap: "12px",
 };
 
 const planHeaderStyle: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  gap: "12px",
-  flexWrap: "wrap",
+  gap: 12,
 };
 
 const planTitleStyle: React.CSSProperties = {
+  fontSize: "18px",
+  fontWeight: 700,
   margin: 0,
-  fontSize: "20px",
-  fontWeight: 600,
-};
-
-const planStatusBadgeStyle = (status: string): React.CSSProperties => {
-  switch (status.toUpperCase()) {
-    case "APPROVED":
-      return { backgroundColor: "rgba(16, 185, 129, 0.12)", color: "#047857", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" };
-    case "UNDER_REVIEW":
-    case "SUBMITTED":
-      return { backgroundColor: "rgba(250, 204, 21, 0.18)", color: "#92400e", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" };
-    case "REJECTED":
-      return { backgroundColor: "rgba(239, 68, 68, 0.12)", color: "#b91c1c", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" };
-    default:
-      return { backgroundColor: "rgba(148, 163, 184, 0.18)", color: "#334155", padding: "4px 10px", borderRadius: "999px", fontSize: "12px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" };
-  }
 };
 
 const planSubtitleStyle: React.CSSProperties = {
-  margin: 0,
   fontSize: "14px",
   color: "#4b5563",
-  maxWidth: "640px",
+  margin: 0,
 };
 
 const planDetailsGridStyle: React.CSSProperties = {
   display: "grid",
+  gap: "12px",
   gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-  gap: "16px",
 };
 
 const planDetailLabelStyle: React.CSSProperties = {
   fontSize: "12px",
+  color: "#6b7280",
   textTransform: "uppercase",
-  letterSpacing: "0.06em",
-  color: "#64748b",
+  letterSpacing: "0.05em",
 };
 
 const planDetailValueStyle: React.CSSProperties = {
   fontSize: "14px",
-  fontWeight: 600,
   color: "#111827",
 };
 
-const planRequestButtonStyle: React.CSSProperties = {
-  padding: "10px 16px",
-  borderRadius: "8px",
-  border: "1px solid #1d4ed8",
-  backgroundColor: "#1d4ed8",
-  color: "#ffffff",
+const obligationCardStyle: React.CSSProperties = {
+  border: "1px solid #e2e8f0",
+  borderRadius: "10px",
+  padding: "14px",
+  background: "#fff",
+  display: "grid",
+  gap: "6px",
+};
+
+const obligationHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+};
+
+const obligationTitleStyle: React.CSSProperties = {
+  fontSize: "15px",
+  fontWeight: 700,
+};
+
+const obligationValueStyle: React.CSSProperties = {
+  fontSize: "20px",
+  fontWeight: 800,
+};
+
+const obligationMetaStyle: React.CSSProperties = {
+  fontSize: "13px",
+  color: "#4b5563",
+};
+
+const successTextStyle: React.CSSProperties = {
   fontSize: "14px",
-  fontWeight: 600,
-  cursor: "pointer",
-  alignSelf: "start",
+  color: "#047857",
+};
+
+const infoTextStyle: React.CSSProperties = {
+  fontSize: "14px",
+  color: "#6b7280",
 };

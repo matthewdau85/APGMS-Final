@@ -6,6 +6,7 @@ import {
   fetchDesignatedAccounts,
 } from "./api";
 import { getToken } from "./auth";
+import { ErrorState, SkeletonBlock, StatCard, StatusChip } from "./components/UI";
 
 type Obligations = Awaited<ReturnType<typeof fetchCurrentObligations>>;
 type BankLine = Awaited<ReturnType<typeof fetchBankLines>>["lines"][number];
@@ -27,44 +28,46 @@ export default function DashboardPage() {
   const [designatedError, setDesignatedError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [formState, setFormState] = useState({
-    date: "2025-10-20T00:00:00.000Z",
+    date: new Date().toISOString(),
     amount: "123.45",
     payee: "ATO Sweep",
     desc: "PAYGW escrow capture",
   });
 
   useEffect(() => {
-    if (!token) {
+    if (!token) return;
+    void loadData();
+  }, [token]);
+
+  async function loadData() {
+    if (!token) return;
+    setLoading(true);
+    setError(null);
+    setDesignatedError(null);
+    try {
+      const [obligationsResponse, bankLinesResponse] = await Promise.all([
+        fetchCurrentObligations(token),
+        fetchBankLines(token),
+      ]);
+      setObligations(obligationsResponse);
+      setBankLines(bankLinesResponse.lines);
+    } catch (err) {
+      console.error(err);
+      setError("Unable to load dashboard data");
+      setLoading(false);
       return;
     }
 
-    (async () => {
-      setLoading(true);
-      try {
-        const [obligationsResponse, bankLinesResponse] = await Promise.all([
-          fetchCurrentObligations(token),
-          fetchBankLines(token),
-        ]);
-        setObligations(obligationsResponse);
-        setBankLines(bankLinesResponse.lines);
-      } catch (err) {
-        console.error(err);
-        setError("Unable to load dashboard data");
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const designatedResponse = await fetchDesignatedAccounts(token);
-        setDesignated(designatedResponse);
-        setDesignatedError(null);
-      } catch (designatedErr) {
-        console.error(designatedErr);
-        setDesignatedError("Unable to load designated account balances");
-      }
-      setLoading(false);
-    })();
-  }, [token]);
+    try {
+      const designatedResponse = await fetchDesignatedAccounts(token);
+      setDesignated(designatedResponse);
+      setDesignatedError(null);
+    } catch (designatedErr) {
+      console.error(designatedErr);
+      setDesignatedError("Unable to load designated account balances");
+    }
+    setLoading(false);
+  }
 
   const paygwGap = useMemo(() => {
     if (!obligations) return 0;
@@ -100,9 +103,7 @@ export default function DashboardPage() {
   async function handleCreateLine(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setFormError(null);
-    if (!token) {
-      return;
-    }
+    if (!token) return;
     try {
       await createBankLine(token, formState);
       const refreshed = await fetchBankLines(token);
@@ -113,9 +114,7 @@ export default function DashboardPage() {
     }
   }
 
-  if (!token) {
-    return null;
-  }
+  if (!token) return null;
 
   return (
     <div style={{ display: "grid", gap: "24px" }}>
@@ -126,35 +125,32 @@ export default function DashboardPage() {
         </p>
       </header>
 
-      {loading && <div style={infoTextStyle}>Loading APGMS control panel…</div>}
-      {error && <div style={errorTextStyle}>{error}</div>}
+      {loading && (
+        <div style={{ display: "grid", gap: 8 }}>
+          <SkeletonBlock width="50%" />
+          <SkeletonBlock width="100%" height={120} />
+          <SkeletonBlock width="100%" height={160} />
+        </div>
+      )}
+      {error && <ErrorState message={error} onRetry={loadData} detail="We could not load dashboard data." />}
 
       {obligations && !error && (
         <>
           <section style={summaryGridStyle}>
-            <ObligationSummary
+            <StatCard
               title="PAYGW"
-              required={obligations.paygw.required}
-              secured={obligations.paygw.secured}
-              shortfall={obligations.paygw.shortfall}
-              status={obligations.paygw.status}
+              value={`${currencyFormatter.format(obligations.paygw.secured)} / ${currencyFormatter.format(obligations.paygw.required)}`}
+              subtitle={`Status: ${obligations.paygw.status}`}
+              tone={statusTone(obligations.paygw.status)}
             />
-            <ObligationSummary
+            <StatCard
               title="GST"
-              required={obligations.gst.required}
-              secured={obligations.gst.secured}
-              shortfall={obligations.gst.shortfall}
-              status={obligations.gst.status}
+              value={`${currencyFormatter.format(obligations.gst.secured)} / ${currencyFormatter.format(obligations.gst.required)}`}
+              subtitle={`Status: ${obligations.gst.status}`}
+              tone={statusTone(obligations.gst.status)}
             />
-            <div style={nextBasCardStyle}>
-              <span style={infoLabelStyle}>Next BAS Due</span>
-              <div style={nextBasValueStyle}>
-                {nextBasDueDisplay}
-              </div>
-              <p style={nextBasDescriptionStyle}>
-                APGMS blocks the ATO transfer if the holding accounts are short so you can remediate early.
-              </p>
-            </div>
+            <StatCard title="Shortfall" value={currencyFormatter.format(paygwGap + gstGap)} tone={paygwGap + gstGap > 0 ? "warning" : "success"} />
+            <StatCard title="Next BAS Due" value={nextBasDueDisplay} />
           </section>
 
           {(designated || designatedError) && (
@@ -165,9 +161,12 @@ export default function DashboardPage() {
                   PAYGW and GST cash is ringfenced in inbound-only accounts. Shortfalls appear here before BAS lodgment.
                 </p>
               </div>
-              {designatedError && <div style={errorTextStyle}>{designatedError}</div>}
+              {designatedError && <ErrorState message={designatedError} detail="Holding account balances unavailable." />}
               {!designated && !designatedError && (
-                <div style={infoTextStyle}>Loading designated account balances...</div>
+                <div style={{ display: "grid", gap: 8 }}>
+                  <SkeletonBlock width="100%" height={60} />
+                  <SkeletonBlock width="100%" height={60} />
+                </div>
               )}
               {designated && (
                 <div style={designatedGridStyle}>
@@ -191,11 +190,7 @@ export default function DashboardPage() {
               <div>
                 <h2 style={ledgerTitleStyle}>Bank Ledger Evidence</h2>
                 <p style={ledgerSubtitleStyle}>
-                  Every protected withdrawal or capture is audited. Shortfall right now:{" "}
-                  <strong>
-                    {currencyFormatter.format(paygwGap + gstGap)} total
-                  </strong>
-                  .
+                  Every protected withdrawal or capture is audited. Shortfall right now: {currencyFormatter.format(paygwGap + gstGap)}.
                 </p>
               </div>
             </div>
@@ -237,19 +232,15 @@ export default function DashboardPage() {
                   <input
                     style={formInputStyle}
                     value={formState.date}
-                    onChange={(e) =>
-                      setFormState((prev) => ({ ...prev, date: e.target.value }))
-                    }
+                    onChange={(e) => setFormState((prev) => ({ ...prev, date: e.target.value }))}
                   />
                 </label>
                 <label style={formLabelStyle}>
-                  <span>Amount</span>
+                  <span>Amount (AUD)</span>
                   <input
                     style={formInputStyle}
                     value={formState.amount}
-                    onChange={(e) =>
-                      setFormState((prev) => ({ ...prev, amount: e.target.value }))
-                    }
+                    onChange={(e) => setFormState((prev) => ({ ...prev, amount: e.target.value }))}
                   />
                 </label>
                 <label style={formLabelStyle}>
@@ -257,9 +248,7 @@ export default function DashboardPage() {
                   <input
                     style={formInputStyle}
                     value={formState.payee}
-                    onChange={(e) =>
-                      setFormState((prev) => ({ ...prev, payee: e.target.value }))
-                    }
+                    onChange={(e) => setFormState((prev) => ({ ...prev, payee: e.target.value }))}
                   />
                 </label>
                 <label style={formLabelStyle}>
@@ -267,22 +256,29 @@ export default function DashboardPage() {
                   <input
                     style={formInputStyle}
                     value={formState.desc}
-                    onChange={(e) =>
-                      setFormState((prev) => ({ ...prev, desc: e.target.value }))
-                    }
+                    onChange={(e) => setFormState((prev) => ({ ...prev, desc: e.target.value }))}
                   />
                 </label>
               </div>
               {formError && <div style={errorTextStyle}>{formError}</div>}
-              <button type="submit" style={submitButtonStyle}>
-                Add ledger entry
-              </button>
+              <div>
+                <button type="submit" className="app-button">
+                  Create ledger entry
+                </button>
+              </div>
             </form>
           </section>
         </>
       )}
     </div>
   );
+}
+
+function statusTone(status: string) {
+  const upper = status.toUpperCase();
+  if (upper === "READY" || upper === "OK") return "success";
+  if (upper === "SHORT" || upper === "BLOCKED" || upper === "ALERT") return "warning";
+  return "neutral";
 }
 
 function DesignatedAccountCard({
@@ -295,136 +291,26 @@ function DesignatedAccountCard({
   required: number;
 }) {
   const balance = account?.balance ?? 0;
-  const shortfall = Math.max(0, required - balance);
-  const status =
-    account === null
-      ? "Not provisioned"
-      : shortfall <= 0
-      ? "Sufficient"
-      : `Shortfall ${currencyFormatter.format(shortfall)}`;
-  const palette = designatedStatusPalette(
-    account === null ? "missing" : shortfall <= 0 ? "ready" : "short"
-  );
+  const tone = balance >= required ? "success" : balance > 0 ? "warning" : "danger";
   return (
     <div style={designatedCardStyle}>
       <div style={designatedCardHeaderStyle}>
-        <h3 style={designatedCardTitleStyle}>{title}</h3>
-        <span
-          style={{
-            ...designationStatusChipBase,
-            backgroundColor: palette.background,
-            color: palette.text,
-          }}
-        >
-          {status}
-        </span>
+        <div>
+          <div style={designatedCardTitleStyle}>{title}</div>
+          <div style={designatedCardSubStyle}>Inbound-only</div>
+        </div>
+        <StatusChip tone={tone}>{balance >= required ? "Covered" : balance > 0 ? "Partial" : "Short"}</StatusChip>
       </div>
       <div style={designatedBalanceStyle}>{currencyFormatter.format(balance)}</div>
-      <div style={designatedCaptionStyle}>
-        Required this BAS: {currencyFormatter.format(required)}
-      </div>
-      <div>
-        <div style={designatedTransfersTitleStyle}>Last transfers</div>
-        {account && account.transfers.length > 0 ? (
-          <ul style={designatedTransfersListStyle}>
-            {account.transfers.map((transfer) => (
-              <li key={transfer.id} style={designatedTransferItemStyle}>
-                <div>{currencyFormatter.format(transfer.amount)}</div>
-                <div style={designatedTransferMetaStyle}>
-                  {transfer.source} • {new Date(transfer.createdAt).toLocaleString()}
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div style={infoTextStyle}>
-            {account
-              ? "No transfers recorded yet."
-              : "Account has not been provisioned in this demo."}
-          </div>
-        )}
+      <div style={designatedMetaStyle}>
+        Last updated {account?.updatedAt ? new Date(account.updatedAt).toLocaleString() : "N/A"}
       </div>
     </div>
   );
-}
-
-function ObligationSummary(props: {
-  title: string;
-  required: number;
-  secured: number;
-  shortfall: number;
-  status: string;
-}) {
-  const palette = statusPalette(props.status);
-  return (
-    <div style={obligationCardStyle}>
-      <div style={obligationHeaderStyle}>
-        <h3 style={obligationTitleStyle}>{props.title}</h3>
-        <span
-          style={{
-            padding: "4px 12px",
-            borderRadius: "20px",
-            fontSize: "12px",
-            fontWeight: 600,
-            backgroundColor: palette.background,
-            color: palette.text,
-            textTransform: "uppercase",
-            letterSpacing: "0.05em",
-          }}
-        >
-          {props.status}
-        </span>
-      </div>
-      <dl style={metricsListStyle}>
-        <Metric label="Required" value={props.required} />
-        <Metric label="Secured" value={props.secured} />
-        <Metric label="Shortfall" value={props.shortfall} emphasize={props.shortfall > 0} />
-      </dl>
-    </div>
-  );
-}
-
-function Metric({ label, value, emphasize }: { label: string; value: number; emphasize?: boolean }) {
-  return (
-    <div style={metricRowStyle}>
-      <dt style={metricLabelStyle}>{label}</dt>
-      <dd
-        style={{
-          ...metricValueStyle,
-          color: emphasize ? "#b91c1c" : metricValueStyle.color,
-        }}
-      >
-        {currencyFormatter.format(value ?? 0)}
-      </dd>
-    </div>
-  );
-}
-
-function statusPalette(status: string) {
-  switch (status.toUpperCase()) {
-    case "READY":
-      return { background: "rgba(16, 185, 129, 0.12)", text: "#047857" };
-    case "SHORTFALL":
-      return { background: "rgba(239, 68, 68, 0.12)", text: "#b91c1c" };
-    default:
-      return { background: "rgba(251, 191, 36, 0.18)", text: "#92400e" };
-  }
-}
-
-function designatedStatusPalette(
-  state: "ready" | "short" | "missing"
-): { background: string; text: string } {
-  if (state === "ready") {
-    return { background: "rgba(16, 185, 129, 0.12)", text: "#047857" };
-  }
-  if (state === "short") {
-    return { background: "rgba(239, 68, 68, 0.12)", text: "#b91c1c" };
-  }
-  return { background: "rgba(148, 163, 184, 0.18)", text: "#334155" };
 }
 
 const pageTitleStyle: React.CSSProperties = {
-  fontSize: "26px",
+  fontSize: "24px",
   fontWeight: 700,
   marginBottom: "8px",
 };
@@ -433,98 +319,23 @@ const pageSubtitleStyle: React.CSSProperties = {
   color: "#4b5563",
   margin: 0,
   fontSize: "14px",
-  maxWidth: "680px",
+  maxWidth: "700px",
 };
 
 const summaryGridStyle: React.CSSProperties = {
   display: "grid",
-  gap: "16px",
-  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-};
-
-const obligationCardStyle: React.CSSProperties = {
-  backgroundColor: "#ffffff",
-  borderRadius: "12px",
-  padding: "20px",
-  border: "1px solid #e2e8f0",
-  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.08)",
-};
-
-const obligationHeaderStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginBottom: "12px",
-};
-
-const obligationTitleStyle: React.CSSProperties = {
-  margin: 0,
-  fontSize: "18px",
-  fontWeight: 600,
-};
-
-const metricsListStyle: React.CSSProperties = {
-  margin: 0,
-  padding: 0,
-  display: "grid",
-  gap: "8px",
-};
-
-const metricRowStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "baseline",
-};
-
-const metricLabelStyle: React.CSSProperties = {
-  fontSize: "12px",
-  letterSpacing: "0.06em",
-  textTransform: "uppercase",
-  color: "#6b7280",
-};
-
-const metricValueStyle: React.CSSProperties = {
-  fontSize: "16px",
-  fontWeight: 600,
-  color: "#111827",
-};
-
-const nextBasCardStyle: React.CSSProperties = {
-  backgroundColor: "#0b5fff",
-  color: "#ffffff",
-  borderRadius: "12px",
-  padding: "20px",
-  display: "grid",
-  gap: "8px",
-};
-
-const infoLabelStyle: React.CSSProperties = {
-  fontSize: "12px",
-  textTransform: "uppercase",
-  letterSpacing: "0.08em",
-  opacity: 0.85,
-};
-
-const nextBasValueStyle: React.CSSProperties = {
-  fontSize: "18px",
-  fontWeight: 600,
-};
-
-const nextBasDescriptionStyle: React.CSSProperties = {
-  fontSize: "13px",
-  margin: 0,
-  opacity: 0.85,
-  lineHeight: 1.5,
+  gap: "12px",
+  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
 };
 
 const designatedSectionStyle: React.CSSProperties = {
   backgroundColor: "#ffffff",
   borderRadius: "12px",
+  padding: "20px",
   border: "1px solid #e2e8f0",
   boxShadow: "0 1px 2px rgba(15, 23, 42, 0.08)",
-  padding: "24px",
   display: "grid",
-  gap: "16px",
+  gap: "12px",
 };
 
 const designatedHeaderStyle: React.CSSProperties = {
@@ -533,93 +344,54 @@ const designatedHeaderStyle: React.CSSProperties = {
 };
 
 const designatedTitleStyle: React.CSSProperties = {
+  fontSize: "18px",
+  fontWeight: 700,
   margin: 0,
-  fontSize: "20px",
-  fontWeight: 600,
 };
 
 const designatedSubtitleStyle: React.CSSProperties = {
-  margin: 0,
   fontSize: "14px",
   color: "#4b5563",
-  maxWidth: "640px",
+  margin: 0,
 };
 
 const designatedGridStyle: React.CSSProperties = {
   display: "grid",
-  gap: "16px",
-  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+  gap: "12px",
+  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
 };
 
 const designatedCardStyle: React.CSSProperties = {
-  backgroundColor: "#f8fafc",
-  borderRadius: "12px",
-  padding: "20px",
-  border: "1px solid #dbeafe",
+  border: "1px solid #e2e8f0",
+  borderRadius: "10px",
+  padding: "14px",
+  background: "#fff",
   display: "grid",
-  gap: "16px",
+  gap: "6px",
 };
 
 const designatedCardHeaderStyle: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  gap: "12px",
 };
 
 const designatedCardTitleStyle: React.CSSProperties = {
-  margin: 0,
-  fontSize: "16px",
-  fontWeight: 600,
+  fontSize: "15px",
+  fontWeight: 700,
 };
 
-const designationStatusChipBase: React.CSSProperties = {
-  padding: "4px 12px",
-  borderRadius: "999px",
+const designatedCardSubStyle: React.CSSProperties = {
   fontSize: "12px",
-  fontWeight: 600,
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
+  color: "#64748b",
 };
 
 const designatedBalanceStyle: React.CSSProperties = {
-  fontSize: "24px",
-  fontWeight: 700,
-  color: "#0f172a",
+  fontSize: "20px",
+  fontWeight: 800,
 };
 
-const designatedCaptionStyle: React.CSSProperties = {
-  fontSize: "13px",
-  color: "#475569",
-};
-
-const designatedTransfersTitleStyle: React.CSSProperties = {
-  fontSize: "13px",
-  fontWeight: 600,
-  textTransform: "uppercase",
-  letterSpacing: "0.08em",
-  color: "#64748b",
-  marginBottom: "8px",
-};
-
-const designatedTransfersListStyle: React.CSSProperties = {
-  listStyle: "none",
-  margin: 0,
-  padding: 0,
-  display: "grid",
-  gap: "10px",
-};
-
-const designatedTransferItemStyle: React.CSSProperties = {
-  backgroundColor: "#ffffff",
-  borderRadius: "10px",
-  padding: "12px",
-  border: "1px solid #e2e8f0",
-  display: "grid",
-  gap: "4px",
-};
-
-const designatedTransferMetaStyle: React.CSSProperties = {
+const designatedMetaStyle: React.CSSProperties = {
   fontSize: "12px",
   color: "#6b7280",
 };
@@ -631,35 +403,32 @@ const ledgerCardStyle: React.CSSProperties = {
   border: "1px solid #e2e8f0",
   boxShadow: "0 1px 2px rgba(15, 23, 42, 0.08)",
   display: "grid",
-  gap: "20px",
+  gap: "12px",
 };
 
 const ledgerHeaderStyle: React.CSSProperties = {
   display: "flex",
+  alignItems: "center",
   justifyContent: "space-between",
-  alignItems: "flex-start",
-  flexWrap: "wrap",
   gap: "12px",
+  flexWrap: "wrap",
 };
 
 const ledgerTitleStyle: React.CSSProperties = {
+  fontSize: "18px",
+  fontWeight: 700,
   margin: 0,
-  fontSize: "20px",
-  fontWeight: 600,
 };
 
 const ledgerSubtitleStyle: React.CSSProperties = {
-  margin: "6px 0 0 0",
-  color: "#4b5563",
   fontSize: "14px",
-  maxWidth: "560px",
-  lineHeight: 1.5,
+  color: "#4b5563",
+  margin: 0,
 };
 
 const tableStyle: React.CSSProperties = {
   borderCollapse: "collapse",
   width: "100%",
-  minWidth: "640px",
 };
 
 const thStyle: React.CSSProperties = {
@@ -680,10 +449,9 @@ const tdStyle: React.CSSProperties = {
 };
 
 const ledgerFormStyle: React.CSSProperties = {
-  borderTop: "1px solid #e2e8f0",
-  paddingTop: "20px",
   display: "grid",
-  gap: "16px",
+  gap: "12px",
+  marginTop: "12px",
 };
 
 const formGridStyle: React.CSSProperties = {
@@ -694,27 +462,16 @@ const formGridStyle: React.CSSProperties = {
 
 const formLabelStyle: React.CSSProperties = {
   display: "grid",
-  gap: "6px",
-  fontSize: "13px",
-  color: "#1f2937",
+  gap: "4px",
+  fontSize: "14px",
+  color: "#111827",
 };
 
 const formInputStyle: React.CSSProperties = {
   padding: "10px",
+  borderRadius: "8px",
+  border: "1px solid #e2e8f0",
   fontSize: "14px",
-  borderRadius: "6px",
-  border: "1px solid #cbd5f5",
-};
-
-const submitButtonStyle: React.CSSProperties = {
-  justifySelf: "flex-start",
-  backgroundColor: "#111827",
-  color: "#ffffff",
-  border: "none",
-  borderRadius: "6px",
-  padding: "10px 16px",
-  fontSize: "14px",
-  cursor: "pointer",
 };
 
 const infoTextStyle: React.CSSProperties = {
