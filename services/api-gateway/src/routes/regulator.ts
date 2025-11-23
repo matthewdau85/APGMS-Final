@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { prisma } from "../db.js";
 import { recordAuditLog } from "../lib/audit.js";
+import { redactEvidenceArtifact } from "../utils/compliance-artifacts.js";
 
 type RegulatorRequest = FastifyRequest & {
   user?: { orgId?: string; sub?: string };
@@ -245,13 +246,7 @@ export async function registerRegulatorRoutes(
     );
 
     return {
-      artifacts: artifacts.map((artifact) => ({
-        id: artifact.id,
-        kind: artifact.kind,
-        sha256: artifact.sha256,
-        wormUri: artifact.wormUri,
-        createdAt: artifact.createdAt.toISOString(),
-      })),
+      artifacts: artifacts.map((artifact) => redactEvidenceArtifact(artifact)),
     };
   });
 
@@ -283,14 +278,7 @@ export async function registerRegulatorRoutes(
     );
 
     return {
-      artifact: {
-        id: artifact.id,
-        kind: artifact.kind,
-        sha256: artifact.sha256,
-        wormUri: artifact.wormUri,
-        createdAt: artifact.createdAt.toISOString(),
-        payload: artifact.payload ?? null,
-      },
+      artifact: redactEvidenceArtifact(artifact, true),
     };
   });
 
