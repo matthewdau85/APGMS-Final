@@ -5,6 +5,7 @@ import {
   runDemoPayroll,
 } from "./api";
 import { getToken } from "./auth";
+import { ErrorState, SkeletonBlock, StatusChip } from "./components/UI";
 
 type BankFeedState = {
   busy: boolean;
@@ -37,9 +38,7 @@ export default function DemoPage() {
 
   const bankSection = useMemo(() => {
     if (!bankState.summary) return null;
-    return (
-      <pre style={preStyle}>{bankState.summary}</pre>
-    );
+    return <pre style={preStyle}>{bankState.summary}</pre>;
   }, [bankState.summary]);
 
   const payrollSection = useMemo(() => {
@@ -62,14 +61,12 @@ export default function DemoPage() {
       });
       setBankState({
         busy: false,
-        summary: `${response.note}\nGenerated ${response.generated} entries (${response.intensity})\nRange: ${response.range}`,
+        summary: JSON.stringify(response, null, 2),
         rows: response.rows,
       });
-    } catch (error) {
-      setBankState({
-        busy: false,
-        error: "Unable to generate demo bank feed",
-      });
+    } catch (err) {
+      console.error(err);
+      setBankState({ busy: false, error: "Unable to generate bank feed" });
     }
   }
 
@@ -80,15 +77,10 @@ export default function DemoPage() {
       const response = await runDemoPayroll(token, {
         includeBankLines: includeBank,
       });
-      setPayrollState({
-        busy: false,
-        summary: `${response.note}\nPAYGW secured: ${response.totalPaygWithheld.toFixed(2)}\nPayslips: ${response.payslips}\npayRunId: ${response.payRunId}`,
-      });
-    } catch (error) {
-      setPayrollState({
-        busy: false,
-        error: "Unable to run demo payroll",
-      });
+      setPayrollState({ busy: false, summary: JSON.stringify(response, null, 2) });
+    } catch (err) {
+      console.error(err);
+      setPayrollState({ busy: false, error: "Unable to run demo payroll" });
     }
   }
 
@@ -100,42 +92,49 @@ export default function DemoPage() {
         year: basPeriod.year,
         month: basPeriod.month,
       });
-      setBasState({
-        busy: false,
-        summary: `${response.note}\nPeriod: ${response.period.year}-${response.period.month}\nGST Collected ${response.gstCollected}\nGST Credits ${response.gstCredits}\nNet GST ${response.netGst}\nPAYGW ${response.paygWithheld}\nBank lines: ${response.bankLines}\nPayslips: ${response.payslips}`,
-      });
-    } catch (error) {
-      setBasState({
-        busy: false,
-        error: "Unable to compile demo BAS",
-      });
+      setBasState({ busy: false, summary: JSON.stringify(response, null, 2) });
+    } catch (err) {
+      console.error(err);
+      setBasState({ busy: false, error: "Unable to compile demo BAS" });
     }
   }
 
+  if (!token) return null;
+
   return (
-    <div style={{ display: "grid", gap: "24px" }}>
-      <section style={cardStyle}>
-        <h2 style={headingStyle}>Demo bank feed</h2>
-        <p style={descriptionStyle}>
-          Replay a position/day feed that locks PAYGW & GST capture for the demo organisation.
+    <div style={{ display: "grid", gap: 16 }}>
+      <header>
+        <h1 style={pageTitleStyle}>Demo mode</h1>
+        <p style={pageSubtitleStyle}>
+          Generate demo bank feeds, payroll runs, and BAS compiles to populate the dashboard with sample data.
         </p>
-        <div style={controlsRow}>
-          <label>
-            Days back
+      </header>
+
+      <section style={cardStyle}>
+        <div style={cardHeaderStyle}>
+          <div>
+            <h2 style={sectionTitleStyle}>Demo bank feed</h2>
+            <p style={sectionSubtitleStyle}>Replay a position/day feed that locks PAYGW & GST capture for the demo organisation.</p>
+          </div>
+          <StatusChip tone="neutral">Inbound only</StatusChip>
+        </div>
+        <div style={gridTwoColumns}>
+          <label style={labelStyle}>
+            <span>Days back</span>
             <input
               type="number"
-              value={demoDays}
-              onChange={(event) => setDemoDays(Number(event.target.value))}
               min={1}
               max={30}
+              value={demoDays}
+              onChange={(e) => setDemoDays(Number(e.target.value))}
               style={inputStyle}
             />
           </label>
-          <label>
-            Intensity
+          <label style={labelStyle}>
+            <span>Intensity</span>
             <select
               value={demoIntensity}
-              onChange={(event) => setDemoIntensity(event.target.value as "low" | "high")}
+              onChange={(e) => setDemoIntensity(e.target.value as any)}
               style={inputStyle}
             >
               <option value="low">Low</option>
@@ -143,121 +142,160 @@ export default function DemoPage() {
             </select>
           </label>
         </div>
-        <button onClick={handleGenerateBankFeed} disabled={bankState.busy} style={buttonStyle}>
-          {bankState.busy ? "Generating…" : "Generate demo bank feed"}
-        </button>
-        {bankState.error && <div style={errorStyle}>{bankState.error}</div>}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button type="button" className="app-button" onClick={handleGenerateBankFeed} disabled={bankState.busy}>
+            {bankState.busy ? "Generating..." : "Generate demo bank feed"}
+          </button>
+        </div>
+        {bankState.busy && <SkeletonBlock width="100%" height={60} />}
+        {bankState.error && <ErrorState message={bankState.error} />}
         {bankSection}
       </section>
 
       <section style={cardStyle}>
-        <h2 style={headingStyle}>Demo payroll run</h2>
-        <p style={descriptionStyle}>Create a payroll run and optionally mirror it in the bank feed.</p>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <label style={{ fontSize: "13px" }}>
-            <input
-              type="checkbox"
-              checked={includeBank}
-              onChange={(event) => setIncludeBank(event.target.checked)}
-            />{" "}
-            Create linked bank line
-          </label>
+        <div style={cardHeaderStyle}>
+          <div>
+            <h2 style={sectionTitleStyle}>Demo payroll run</h2>
+            <p style={sectionSubtitleStyle}>Create a payroll run and optionally mirror it in the bank feed.</p>
+          </div>
+          <StatusChip tone="neutral">Demo org</StatusChip>
         </div>
-        <button onClick={handleRunPayroll} disabled={payrollState.busy} style={buttonStyle}>
-          {payrollState.busy ? "Running…" : "Run demo payroll"}
-        </button>
-        {payrollState.error && <div style={errorStyle}>{payrollState.error}</div>}
+        <label style={checkboxStyle}>
+          <input
+            type="checkbox"
+            checked={includeBank}
+            onChange={(e) => setIncludeBank(e.target.checked)}
+          />
+          Create linked bank line
+        </label>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button type="button" className="app-button" onClick={handleRunPayroll} disabled={payrollState.busy}>
+            {payrollState.busy ? "Running..." : "Run demo payroll"}
+          </button>
+        </div>
+        {payrollState.busy && <SkeletonBlock width="100%" height={40} />}
+        {payrollState.error && <ErrorState message={payrollState.error} />}
         {payrollSection}
       </section>
 
       <section style={cardStyle}>
-        <h2 style={headingStyle}>Demo BAS compile</h2>
-        <p style={descriptionStyle}>Compile a mock BAS report for the chosen period.</p>
-        <div style={controlsRow}>
-          <label>
-            Year
+        <div style={cardHeaderStyle}>
+          <div>
+            <h2 style={sectionTitleStyle}>Demo BAS compile</h2>
+            <p style={sectionSubtitleStyle}>Compile a mock BAS report for the chosen period.</p>
+          </div>
+          <StatusChip tone="neutral">Preview only</StatusChip>
+        </div>
+        <div style={gridTwoColumns}>
+          <label style={labelStyle}>
+            <span>Year</span>
             <input
               type="number"
               value={basPeriod.year}
-              onChange={(event) => setBasPeriod((prev) => ({ ...prev, year: Number(event.target.value) }))}
+              onChange={(e) => setBasPeriod((prev) => ({ ...prev, year: Number(e.target.value) }))}
               style={inputStyle}
             />
           </label>
-          <label>
-            Month
+          <label style={labelStyle}>
+            <span>Month</span>
             <input
               type="number"
               min={1}
               max={12}
               value={basPeriod.month}
-              onChange={(event) => setBasPeriod((prev) => ({ ...prev, month: Number(event.target.value) }))}
+              onChange={(e) => setBasPeriod((prev) => ({ ...prev, month: Number(e.target.value) }))}
               style={inputStyle}
             />
           </label>
         </div>
-        <button onClick={handleCompileBas} disabled={basState.busy} style={buttonStyle}>
-          {basState.busy ? "Compiling…" : "Compile demo BAS"}
-        </button>
-        {basState.error && <div style={errorStyle}>{basState.error}</div>}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button type="button" className="app-button" onClick={handleCompileBas} disabled={basState.busy}>
+            {basState.busy ? "Compiling..." : "Compile demo BAS"}
+          </button>
+        </div>
+        {basState.busy && <SkeletonBlock width="100%" height={40} />}
+        {basState.error && <ErrorState message={basState.error} />}
         {basSection}
       </section>
     </div>
   );
 }
 
+const pageTitleStyle: React.CSSProperties = {
+  fontSize: "24px",
+  fontWeight: 700,
+  marginBottom: "8px",
+};
+
+const pageSubtitleStyle: React.CSSProperties = {
+  color: "#4b5563",
+  margin: 0,
+  fontSize: "14px",
+  maxWidth: "700px",
+};
+
 const cardStyle: React.CSSProperties = {
-  backgroundColor: "#fff",
+  backgroundColor: "#ffffff",
   borderRadius: "12px",
   padding: "20px",
-  boxShadow: "0 1px 4px rgba(31, 41, 55, 0.08)",
   border: "1px solid #e2e8f0",
+  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.08)",
+  display: "grid",
+  gap: "10px",
 };
 
-const headingStyle: React.CSSProperties = {
-  margin: 0,
-  fontSize: "18px",
-  marginBottom: "6px",
-};
-
-const descriptionStyle: React.CSSProperties = {
-  margin: 0,
-  color: "#475569",
-  marginBottom: "12px",
-};
-
-const controlsRow: React.CSSProperties = {
+const cardHeaderStyle: React.CSSProperties = {
   display: "flex",
-  gap: "16px",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
   flexWrap: "wrap",
-  marginBottom: "12px",
+};
+
+const sectionTitleStyle: React.CSSProperties = {
+  fontSize: "18px",
+  fontWeight: 600,
+  margin: 0,
+};
+
+const sectionSubtitleStyle: React.CSSProperties = {
+  fontSize: "14px",
+  color: "#4b5563",
+  margin: 0,
+};
+
+const gridTwoColumns: React.CSSProperties = {
+  display: "grid",
+  gap: "12px",
+  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+};
+
+const labelStyle: React.CSSProperties = {
+  display: "grid",
+  gap: "4px",
+  fontSize: "14px",
+  color: "#111827",
 };
 
 const inputStyle: React.CSSProperties = {
-  marginTop: "4px",
-  width: "120px",
-  padding: "8px",
+  padding: "10px",
+  borderRadius: "8px",
+  border: "1px solid #e2e8f0",
+  fontSize: "14px",
 };
 
-const buttonStyle: React.CSSProperties = {
-  marginTop: "8px",
-  padding: "10px 14px",
-  borderRadius: "6px",
-  border: "none",
-  backgroundColor: "#111827",
-  color: "#fff",
-  cursor: "pointer",
-};
-
-const errorStyle: React.CSSProperties = {
-  color: "#b91c1c",
-  marginTop: "8px",
+const checkboxStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  fontSize: "14px",
 };
 
 const preStyle: React.CSSProperties = {
-  marginTop: "12px",
-  backgroundColor: "#0b5fff0f",
-  padding: "12px",
-  borderRadius: "6px",
-  fontSize: "13px",
-  color: "#0b5fff",
+  background: "#f8fafc",
+  border: "1px solid #e2e8f0",
+  borderRadius: 8,
+  padding: 12,
+  fontSize: 12,
+  overflow: "auto",
 };
