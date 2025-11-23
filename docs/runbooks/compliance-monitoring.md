@@ -37,7 +37,7 @@ This runbook notes the safeguards that surround the designated one-way accounts,
 - Track the ATO DSP application (OSF questionnaire, product registration, STP/BAS entitlement) in parallel with this code work. Log the submitted product ID, scope of services, and the readiness checklist inside this runbook so audits can see the progress. Document whether you plan to act as a software-only adviser (no fund movement) or to layer onto a licensed banking partner or restricted ADI.
 - Before any real fund movement: confirm whether AFSL/ADI/ASIC/AUSTRAC registration is required, engage legal counsel, and note the chosen path in the repository with the key dates/status. Maintain an evidence folder (`artifacts/compliance/`) that captures the OSF questionnaire export plus any banking partner contracts so you can prove compliance during reviews.
 
--## Phase 3 Partnering & Pilots
+## Phase 3 Partnering & Pilots
 - Swap in a sandboxed ADI/banking adapter by setting `DESIGNATED_BANKING_URL`/`DESIGNATED_BANKING_TOKEN` (or call `configureBankingAdapter`) so the compliance ledger queries a sandbox endpoint. Record the partner API spec, certificate fingerprint, and contract in `artifacts/compliance/`.
 - Capture the ATO DSP Product ID, OSF questionnaire reference, STP/BAS entitlement, and any AUSTRAC/ASIC/AFSL updates in `docs/runbooks/admin-controls.md` and the compliance dashboard so auditors can confirm your regulatory posture.
 - Run pilots for at least two orgs (real or virtual): ingest payroll/POS batches through `/ingest/*`, perform `/compliance/precheck`, execute `/compliance/transfer`, and track alerts/resolutions via `/compliance/status` and `/compliance/reminders`. Log the pilot outputs (payloads, transfer receipts, reminder states) in `artifacts/compliance/` to demonstrate the entire ingest -> ledger -> precheck -> transfer -> alert loop.
@@ -52,22 +52,26 @@ This runbook notes the safeguards that surround the designated one-way accounts,
 
 ### CSP/CORS controls
 - The gateway applies Helmet CSP headers on every public endpoint with a deny-by-default policy (`default-src 'self'`, strict script hashes) and rejects any browser origin not whitelisted via `CORS_ALLOWED_ORIGINS`; disallowed origins receive a 403 while approved origins return ACAO/ACAH/ACEH headers for Idempotency-Key flows.【F:services/api-gateway/test/security.headers.spec.ts†L18-L71】
-- Allowed origins are defined by environment (`CORS_ALLOWED_ORIGINS`, comma-separated) with local defaults of `http://localhost:5173`; adjust these values in deployment manifests so CSP/CORS align with the surfaced hostnames used by the admin/web apps.【F:services/api-gateway/src/config.ts†L330-L359】
+- Allowed origins are defined by environment (`CORS_ALLOWED_ORIGINS`, comma-separated) with local defaults of `http://localhost:5173`; adjust these values in deployment manifests so CSP/CORS align with the surfaced hostnames used by the admin/web apps. Record changes in release notes so reviewers can map origins to environments.【F:services/api-gateway/src/config.ts†L330-L359】
+- Untrusted origins are blocked at the edge and responses are logged as `security_event` entries with the origin header captured (and redacted); include these logs in reviewer evidence when demonstrating CORS enforcement.
 
 ### TFN/PII redaction and log retention
 - TFNs, ABNs, emails, and IBANs are masked before logging via the shared redaction helpers, which replace identifiers with tagged tokens (e.g., `[REDACTED:TFN]`) before values hit structured logs or security events.【F:shared/src/redaction.ts†L5-L69】
 - TFN handling uses tokenisation (HMAC with per-environment salts) and KMS-backed envelope encryption for any transient plaintext, with admin decrypt/export calls audited per the TFN SOP; follow that SOP during quarterly reviews or incident drills.【F:docs/security/TFN-SOP.md†L1-L24】
-- Retention: standard application logs (with redaction applied) are retained for 90 days for operational forensics; security/audit streams (including `security_event` entries for TFN activities) are retained for 400 days; reviewer evidence exports are copied to `artifacts/compliance/` with a 7-year retention clock and a quarterly integrity check hash noted in the evidence index.
+- Retention: standard application logs (with redaction applied) are retained for 90 days for operational forensics; security/audit streams (including `security_event` entries for TFN activities) are retained for 400 days; reviewer evidence exports are copied to `artifacts/compliance/` with a 7-year retention clock and a quarterly integrity check hash noted in the evidence index. Create a quarterly rotation ticket to verify masking is still effective and that retention timers delete expired entries.
 
 ### Evidence pack handling
 - Store reconciliation transcripts, alert payloads, banking adapter swap artefacts, and DSP/OSF filings in `artifacts/compliance/`, alongside any tier-state snapshots and remediation proofs referenced above.【F:docs/runbooks/compliance-monitoring.md†L24-L58】
 - Maintain an evidence index (CSV/markdown) in that folder noting provenance, hash, and expiry date; rotate out artefacts after 7 years unless an investigation/legal hold extends the window, and record deletions as `data_retention` security events so the audit trail captures lifecycle changes.
+- Evidence handoff: when providing packs to external reviewers, include the index plus the latest A11y/CI reports and a note of any open waivers. Store a checksum of the zipped pack in the index to make tampering detectable.
 
 ### Accessibility testing and results
 - A11y gates run via Playwright + axe-core (`pnpm -r test --filter @apgms/webapp test:axe`) across landing and bank-lines flows; CI artifacts include the JSON axe report for reviewers.【F:docs/accessibility/smoke.md†L1-L9】【F:docs/accessibility/report.md†L1-L5】
 - Latest run reports no serious/critical WCAG violations; re-run the suite after any UI change and attach updated reports to the evidence pack so DSP/ATO reviewers can trace regressions.【F:docs/accessibility/report.md†L1-L5】
+- Track defects and waivers in the accessibility issue log; reference ticket IDs in release notes so reviewers can correlate fixes to scans.
 
 ### CI gates and failure handling
 - Supply-chain workflows generate CycloneDX SBOMs and enforce npm audit (high+) plus gitleaks secret scanning on every PR/main push; failures block the build and upload artifacts (`sbom`, `audit.json`) for triage.【F:.github/workflows/supply-chain.yml†L1-L37】
 - Nightly security scans run pnpm audit, SBOM generation, Semgrep SAST, Gitleaks, Trivy FS (high/critical, ignore-unfixed), Prisma drift checks, and security header/auth smoke tests; any failing step marks the pipeline red and must be remediated or explicitly risk-accepted before deployment.【F:.github/workflows/security.yml†L1-L41】
 - Dedicated Trivy workflow enforces fs vulnerability scans (HIGH/CRITICAL) on pushes/PRs with `exit-code: 1`; reports upload even on failure to support waiver documentation in the evidence pack.【F:.github/workflows/trivy.yml†L1-L21】
+- Failure handling: open a security incident for HIGH/CRITICAL findings that block pipelines, attach the CI artifact to the incident, and document the remediation or waiver approval (owner, expiry). Close the incident only after rerunning the failing workflow and capturing the passing artifact in the evidence pack.
