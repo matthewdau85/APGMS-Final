@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { fetchSecurityUsers, initiateMfa, verifyMfa } from "./api";
 import { getToken, getSessionUser, updateSession } from "./auth";
+import { ErrorState, SkeletonBlock, StatusChip, StatCard } from "./components/UI";
 
 type SecurityUser = Awaited<ReturnType<typeof fetchSecurityUsers>>["users"][number];
 
@@ -15,47 +16,40 @@ export default function SecurityPage() {
   const [enableSuccess, setEnableSuccess] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!token) {
-      return;
-    }
-    (async () => {
-      try {
-        const response = await fetchSecurityUsers(token);
-        setUsers(response.users);
-      } catch (err) {
-        console.error(err);
-        setError("Unable to load security settings");
-      } finally {
-        setLoading(false);
-      }
-    })();
+    if (!token) return;
+    void loadUsers();
   }, [token]);
 
-  async function handleEnableMfa() {
-    if (!token || !sessionUser) {
-      return;
+  async function loadUsers() {
+    if (!token) return;
+    setError(null);
+    setLoading(true);
+    try {
+      const response = await fetchSecurityUsers(token);
+      setUsers(response.users);
+    } catch (err) {
+      console.error(err);
+      setError("Unable to load security settings");
+    } finally {
+      setLoading(false);
     }
+  }
+
+  async function handleEnableMfa() {
+    if (!token || !sessionUser) return;
     setEnableLoading(true);
     setEnableError(null);
     setEnableSuccess(null);
     try {
       const challenge = await initiateMfa(token);
-      window.alert(
-        `MFA enrolment initiated.\n\nDev stub code: ${challenge.code} (expires in ${challenge.expiresInSeconds}s).`
-      );
-      const supplied = window.prompt(
-        "Enter the MFA code to finish enabling MFA on your account:",
-        challenge.code
-      );
+      window.alert(`MFA enrolment initiated.\n\nDev stub code: ${challenge.code} (expires in ${challenge.expiresInSeconds}s).`);
+      const supplied = window.prompt("Enter the MFA code to finish enabling MFA on your account:", challenge.code);
       if (!supplied || supplied.trim().length === 0) {
         setEnableError("MFA enrolment cancelled.");
         return;
       }
       const verification = await verifyMfa(token, supplied.trim());
-      updateSession({
-        token: verification.token,
-        user: verification.user,
-      });
+      updateSession({ token: verification.token, user: verification.user });
       setEnableSuccess("Multi-factor authentication enabled for your account.");
       const refreshedToken = getToken();
       if (refreshedToken) {
@@ -70,9 +64,9 @@ export default function SecurityPage() {
     }
   }
 
-  if (!token) {
-    return null;
-  }
+  if (!token) return null;
+
+  const mfaEnabledCount = users.filter((u) => u.mfaEnabled).length;
 
   return (
     <div style={{ display: "grid", gap: "24px" }}>
@@ -83,70 +77,62 @@ export default function SecurityPage() {
         </p>
       </header>
 
-      {loading && <div style={infoTextStyle}>Loading security roster...</div>}
-      {error && <div style={errorTextStyle}>{error}</div>}
-
-      {!loading && !error && sessionUser && (
-        <section style={enrolCardStyle}>
-          <div style={{ display: "grid", gap: "6px" }}>
-            <h2 style={sectionTitleStyle}>Your MFA status</h2>
-            <p style={pageSubtitleStyle}>
-              MFA protects high-risk actions like BAS lodgment and high-severity alert resolution. Enable it before pilot handover.
-            </p>
-            {enableError && <span style={errorTextStyle}>{enableError}</span>}
-            {enableSuccess && <span style={successTextStyle}>{enableSuccess}</span>}
-          </div>
-          <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-            <span style={sessionUser.mfaEnabled ? mfaOnBadgeStyle : mfaOffBadgeStyle}>
-              {sessionUser.mfaEnabled ? "Enabled" : "MFA OFF"}
-            </span>
-            {!sessionUser.mfaEnabled && (
-              <button
-                type="button"
-                onClick={handleEnableMfa}
-                style={enableMfaButtonStyle}
-                disabled={enableLoading}
-              >
-                {enableLoading ? "Enabling..." : "Enable MFA (beta)"}
-              </button>
-            )}
-          </div>
-        </section>
+      {loading && (
+        <div style={{ display: "grid", gap: 8 }}>
+          <SkeletonBlock width="50%" />
+          <SkeletonBlock width="100%" height={120} />
+        </div>
       )}
+      {error && <ErrorState message={error} onRetry={loadUsers} detail="We could not load security settings." />}
 
       {!loading && !error && (
-        <section style={cardStyle}>
-          <h2 style={sectionTitleStyle}>Administrators</h2>
-          <table style={tableStyle}>
-            <thead>
-              <tr>
-                <th style={thStyle}>User ID</th>
-                <th style={thStyle}>Email</th>
-                <th style={thStyle}>Role</th>
-                <th style={thStyle}>MFA</th>
-                <th style={thStyle}>Last Login</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((user) => (
-                <tr key={user.id}>
-                  <td style={tdStyle}>{user.id}</td>
-                  <td style={tdStyle}>{user.email}</td>
-                  <td style={tdStyle}>
-                    <span style={roleBadgeStyle}>{user.role}</span>
-                  </td>
-                  <td style={tdStyle}>
-                    <span style={user.mfaEnabled ? mfaOnBadgeStyle : mfaOffBadgeStyle}>
-                      {user.mfaEnabled ? "Enabled" : "MFA OFF"}
-                    </span>
-                  </td>
-                  <td style={tdStyle}>{new Date(user.lastLogin).toLocaleString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {users.length === 0 && <div style={infoTextStyle}>No users found for this org.</div>}
-        </section>
+        <>
+          <section style={summaryGridStyle}>
+            <StatCard title="Users" value={users.length} />
+            <StatCard title="MFA Enabled" value={mfaEnabledCount} tone={mfaEnabledCount === users.length ? "success" : "warning"} />
+          </section>
+
+          <section style={cardStyle}>
+            <div style={headerRowStyle}>
+              <div>
+                <h2 style={sectionTitleStyle}>Access List</h2>
+                <p style={sectionSubtitleStyle}>Users, roles, and MFA status.</p>
+              </div>
+              <button type="button" className="app-button" onClick={handleEnableMfa} disabled={enableLoading}>
+                {enableLoading ? "Enabling..." : "Enable MFA for me"}
+              </button>
+            </div>
+            {enableError && <ErrorState message={enableError} />}
+            {enableSuccess && <div style={successTextStyle}>{enableSuccess}</div>}
+
+            {users.length === 0 ? (
+              <div style={infoTextStyle}>No users found.</div>
+            ) : (
+              <table style={tableStyle}>
+                <thead>
+                  <tr>
+                    <th style={thStyle}>Email</th>
+                    <th style={thStyle}>Role</th>
+                    <th style={thStyle}>MFA</th>
+                    <th style={thStyle}>Created</th>
+                    <th style={thStyle}>Last Login</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((user) => (
+                    <tr key={user.id}>
+                      <td style={tdStyle}>{user.email}</td>
+                      <td style={tdStyle}><StatusChip tone="neutral">{user.role}</StatusChip></td>
+                      <td style={tdStyle}><StatusChip tone={user.mfaEnabled ? "success" : "warning"}>{user.mfaEnabled ? "Enabled" : "Pending"}</StatusChip></td>
+                      <td style={tdStyle}>{new Date(user.createdAt).toLocaleString()}</td>
+                      <td style={tdStyle}>{user.lastLogin ? new Date(user.lastLogin).toLocaleString() : "Never"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+        </>
       )}
     </div>
   );
@@ -162,50 +148,42 @@ const pageSubtitleStyle: React.CSSProperties = {
   color: "#4b5563",
   margin: 0,
   fontSize: "14px",
-  maxWidth: "620px",
+  maxWidth: "600px",
 };
 
-const infoTextStyle: React.CSSProperties = {
-  fontSize: "14px",
-  color: "#6b7280",
-};
-
-const errorTextStyle: React.CSSProperties = {
-  fontSize: "14px",
-  color: "#b91c1c",
-};
-
-const successTextStyle: React.CSSProperties = {
-  fontSize: "14px",
-  color: "#047857",
-};
-
-const enrolCardStyle: React.CSSProperties = {
-  backgroundColor: "#ffffff",
-  borderRadius: "12px",
-  padding: "20px 24px",
-  border: "1px solid #e2e8f0",
-  boxShadow: "0 1px 2px rgba(15, 23, 42, 0.08)",
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: "16px",
-  flexWrap: "wrap",
+const summaryGridStyle: React.CSSProperties = {
+  display: "grid",
+  gap: "12px",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
 };
 
 const cardStyle: React.CSSProperties = {
   backgroundColor: "#ffffff",
   borderRadius: "12px",
-  padding: "24px",
+  padding: "20px",
   border: "1px solid #e2e8f0",
   boxShadow: "0 1px 2px rgba(15, 23, 42, 0.08)",
   display: "grid",
-  gap: "16px",
+  gap: "12px",
+};
+
+const headerRowStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  flexWrap: "wrap",
 };
 
 const sectionTitleStyle: React.CSSProperties = {
   fontSize: "18px",
   fontWeight: 600,
+  margin: 0,
+};
+
+const sectionSubtitleStyle: React.CSSProperties = {
+  fontSize: "14px",
+  color: "#4b5563",
   margin: 0,
 };
 
@@ -231,44 +209,12 @@ const tdStyle: React.CSSProperties = {
   color: "#111827",
 };
 
-const roleBadgeStyle: React.CSSProperties = {
-  padding: "4px 10px",
-  borderRadius: "20px",
-  backgroundColor: "rgba(59, 130, 246, 0.12)",
-  color: "#1d4ed8",
-  fontSize: "12px",
-  fontWeight: 600,
-  textTransform: "uppercase",
-  letterSpacing: "0.04em",
-};
-
-const mfaOnBadgeStyle: React.CSSProperties = {
-  padding: "4px 10px",
-  borderRadius: "20px",
-  backgroundColor: "rgba(16, 185, 129, 0.12)",
-  color: "#047857",
-  fontSize: "12px",
-  fontWeight: 600,
-  textTransform: "uppercase",
-};
-
-const mfaOffBadgeStyle: React.CSSProperties = {
-  padding: "4px 10px",
-  borderRadius: "20px",
-  backgroundColor: "rgba(239, 68, 68, 0.12)",
-  color: "#b91c1c",
-  fontSize: "12px",
-  fontWeight: 700,
-  textTransform: "uppercase",
-};
-
-const enableMfaButtonStyle: React.CSSProperties = {
-  padding: "10px 16px",
-  borderRadius: "8px",
-  border: "1px solid #1d4ed8",
-  backgroundColor: "#1d4ed8",
-  color: "#ffffff",
+const infoTextStyle: React.CSSProperties = {
   fontSize: "14px",
-  fontWeight: 600,
-  cursor: "pointer",
+  color: "#6b7280",
+};
+
+const successTextStyle: React.CSSProperties = {
+  fontSize: "14px",
+  color: "#047857",
 };
