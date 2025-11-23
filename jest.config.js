@@ -29,6 +29,9 @@ export default {
 
   // Resolve monorepo imports like @apgms/shared
   moduleNameMapper: {
+    "^(\\.{1,2}/.*)\\.js$": "$1",
+    "^@apgms/shared$": "<rootDir>/shared/src/index.ts",
+    "^@apgms/shared/(.*)$": "<rootDir>/shared/src/$1",
     "^@apgms/(.*)$": "<rootDir>/packages/$1/src",
   },
 

@@ -11,10 +11,10 @@
         "baseUrl": ".",
         "paths": {
             "@apgms/shared/*": [
-                "shared/dist/*"
+                "shared/src/*"
             ],
             "@apgms/shared": [
-                "shared/dist/index"
+                "shared/src/index"
             ],
             "@apgms/domain-policy": [
                 "packages/domain-policy/dist/index"
