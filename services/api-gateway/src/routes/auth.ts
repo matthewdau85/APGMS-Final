@@ -90,9 +90,13 @@ export async function registerAuthRoutes(app: FastifyInstance) {
   app.post("/auth/login", async (request, reply) => {
     const body = parseWithSchema(LoginBodySchema, request.body);
     const { email, password } = body;
+    const requestId = (request as any).requestId as string | undefined;
 
     // Do NOT log password
-    request.log.info({ email }, "auth.login: incoming login request");
+    request.log.info(
+      { email, requestId },
+      "auth.login: incoming login request",
+    );
 
     const user = await prisma.user.findUnique({
       where: { email },
@@ -100,6 +104,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
 
     request.log.info(
       {
+        requestId,
         found: !!user,
         id: user?.id,
         email: user?.email,
@@ -115,7 +120,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     const passwordOk = await bcrypt.compare(password, user.password);
 
     request.log.info(
-      { userId: user.id, passwordOk },
+      { userId: user.id, passwordOk, requestId },
       "auth.login: password comparison result",
     );
 

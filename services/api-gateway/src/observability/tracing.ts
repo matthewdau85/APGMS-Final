@@ -1,5 +1,7 @@
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
+import { FastifyInstrumentation } from "@opentelemetry/instrumentation-fastify";
+import { PrismaInstrumentation } from "@opentelemetry/instrumentation-prisma";
 
 let sdk: NodeSDK | null = null;
 
@@ -19,7 +21,15 @@ export async function startTracing() {
 
   sdk = new NodeSDK({
     // rely on env OTEL_SERVICE_NAME instead of programmatic Resource to avoid TS drift
-    traceExporter: traceExporter as unknown as any
+    traceExporter: traceExporter as unknown as any,
+    instrumentations: [
+      new FastifyInstrumentation({
+        requestHook(span) {
+          span?.setAttribute("service.name", "apgms-api-gateway");
+        },
+      }),
+      new PrismaInstrumentation(),
+    ],
   });
 
   await sdk.start();
