@@ -13,7 +13,11 @@ describe("helmet configuration", () => {
         requireHttps: false,
       },
       cors: {
-        allowedOrigins: ["http://localhost:5173", "https://example.com"],
+        allowedOrigins: [
+          "http://localhost:5173",
+          "https://example.com",
+          "http://localhost:5173",
+        ],
       },
       taxEngineUrl: "https://tax.example.com",
       auth: {
@@ -65,7 +69,11 @@ describe("helmet configuration", () => {
 
     expect(directives).toBeDefined();
     expect(directives?.defaultSrc).toContain("'self'");
-    expect(directives?.connectSrc).toEqual(["'self'", ...cfg.cors.allowedOrigins]);
+    expect(directives?.connectSrc).toEqual([
+      "'self'",
+      "http://localhost:5173",
+      "https://example.com",
+    ]);
     expect(directives?.frameAncestors).toEqual(["'none'"]);
     expect(directives?.objectSrc).toEqual(["'none'"]);
   });
