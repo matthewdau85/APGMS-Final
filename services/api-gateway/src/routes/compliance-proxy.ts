@@ -1,4 +1,5 @@
 // services/api-gateway/src/routes/compliance-proxy.ts
+import { createHash } from "crypto";
 import { type FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 
@@ -148,20 +149,43 @@ export const registerComplianceProxy: FastifyPluginAsync = async (app) => {
       reply.code(401).send({ error: "unauthorized" });
       return;
     }
+
+    const artifactBodySchema = z.object({
+      kind: z.string().min(1),
+      wormUri: z.string().url(),
+      payload: z.record(z.any()),
+    });
+
+    const parsedBody = artifactBodySchema.safeParse(req.body ?? {});
+    if (!parsedBody.success) {
+      reply
+        .code(400)
+        .send({ error: { code: "invalid_body", details: parsedBody.error.flatten() } });
+      return;
+    }
+
+    const payloadJson = JSON.stringify(parsedBody.data.payload);
+    const sha256 = createHash("sha256").update(payloadJson).digest("hex");
+
     const artifact = await prisma.evidenceArtifact.create({
       data: {
         orgId,
-        kind: "designated-reconciliation",
-        sha256: "mock",
-        wormUri: "mock://evidence",
-        payload: {},
+        kind: parsedBody.data.kind,
+        sha256,
+        wormUri: parsedBody.data.wormUri,
+        payload: parsedBody.data.payload,
       },
     });
-    reply.send({ artifact: { id: artifact.id } });
+    reply.send({ artifact: { id: artifact.id, sha256 } });
   });
 
   app.get("/compliance/evidence/:artifactId", { preHandler: [authGuard] }, async (req, reply) => {
     const artifactParamsSchema = z.object({ artifactId: z.string().min(1) });
+    const orgId = (req.user as any)?.orgId;
+    if (!orgId) {
+      reply.code(401).send({ error: "unauthorized" });
+      return;
+    }
     const parsed = artifactParamsSchema.safeParse(req.params ?? {});
     if (!parsed.success) {
       reply
@@ -170,8 +194,8 @@ export const registerComplianceProxy: FastifyPluginAsync = async (app) => {
       return;
     }
 
-    const artifact = await prisma.evidenceArtifact.findUnique({
-      where: { id: parsed.data.artifactId },
+    const artifact = await prisma.evidenceArtifact.findFirst({
+      where: { id: parsed.data.artifactId, orgId },
     });
     if (!artifact) {
       reply.code(404).send({ error: "artifact_not_found" });
