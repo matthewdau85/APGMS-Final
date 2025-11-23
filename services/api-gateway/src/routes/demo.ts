@@ -65,7 +65,6 @@ function createBankLinePayload(orgId: string, index: number, daysBack: number, i
     payeeKid: payee.kid,
     descCiphertext: desc.ciphertext,
     descKid: desc.kid,
-    tag: amount >= 0 ? "income" : "payroll",
   };
 }
 
@@ -110,7 +109,6 @@ export async function registerDemoRoutes(app: FastifyInstance) {
             payeeKid: payload.payeeKid,
             descCiphertext: payload.descCiphertext,
             descKid: payload.descKid,
-            tag: payload.tag,
           },
         });
         rows.push({ id: created.id, amount: created.amount.toNumber(), date: created.date.toISOString() });
@@ -152,15 +150,15 @@ export async function registerDemoRoutes(app: FastifyInstance) {
     const payRunId = `demo-payrun-${Date.now()}`;
     const grossWages = 12000;
     const totalPaygWithheld = 3200;
+    const today = new Date();
     await prisma.payRun.create({
       data: {
         id: payRunId,
         orgId: user.orgId,
-        runDate: new Date(),
-        grossWages: new Decimal(grossWages),
-        paygwCalculated: new Decimal(totalPaygWithheld),
-        paygwSecured: new Decimal(totalPaygWithheld),
-        status: "READY",
+        periodStart: today,
+        periodEnd: today,
+        paymentDate: today,
+        status: "committed",
       },
     });
 
@@ -176,7 +174,6 @@ export async function registerDemoRoutes(app: FastifyInstance) {
           payeeKid: payloadBank.payeeKid,
           descCiphertext: payloadBank.descCiphertext,
           descKid: payloadBank.descKid,
-          tag: payloadBank.tag,
         },
       });
     }

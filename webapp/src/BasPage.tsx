@@ -532,6 +532,13 @@ const planSubtitleStyle: React.CSSProperties = {
   margin: 0,
 };
 
+const sectionTitleStyle: React.CSSProperties = {
+  fontSize: "16px",
+  fontWeight: 700,
+  margin: 0,
+  color: "#111827",
+};
+
 const planDetailsGridStyle: React.CSSProperties = {
   display: "grid",
   gap: "12px",
@@ -578,14 +585,4 @@ const obligationValueStyle: React.CSSProperties = {
 const obligationMetaStyle: React.CSSProperties = {
   fontSize: "13px",
   color: "#4b5563",
-};
-
-const successTextStyle: React.CSSProperties = {
-  fontSize: "14px",
-  color: "#047857",
-};
-
-const infoTextStyle: React.CSSProperties = {
-  fontSize: "14px",
-  color: "#6b7280",
 };

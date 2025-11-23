@@ -21,6 +21,14 @@ export type ApiSession = {
   };
 };
 
+export type BankLine = {
+  id: string;
+  postedAt: string;
+  amount: number;
+  description: string;
+  createdAt: string;
+};
+
 export async function login(email: string, password: string) {
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: "POST",
@@ -89,14 +97,13 @@ export async function fetchBankLines(token: string) {
   });
   if (!res.ok) throw new Error("unauthorized");
   return res.json() as Promise<{
-    lines: Array<{
-      id: string;
-      postedAt: string;
-      amount: number;
-      description: string; // "***"
-      createdAt: string;
-    }>;
+    lines: BankLine[];
   }>;
+}
+
+// Backwards-compatible helper used by legacy components
+export async function getBankLines(token: string) {
+  return fetchBankLines(token);
 }
 
 export async function createBankLine(

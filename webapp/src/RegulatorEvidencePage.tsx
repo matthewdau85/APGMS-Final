@@ -48,12 +48,13 @@ export default function RegulatorEvidencePage() {
       setListState({ loading: false, error: "Session expired", artifacts: [] });
       return;
     }
+    const authToken = token;
 
     let cancelled = false;
     async function loadList() {
       setListState(initialListState);
       try {
-        const data = await fetchRegulatorEvidenceList(token);
+        const data = await fetchRegulatorEvidenceList(authToken);
         if (cancelled) return;
         setListState({ loading: false, error: null, artifacts: data.artifacts });
         if (data.artifacts.length > 0) {
@@ -76,6 +77,8 @@ export default function RegulatorEvidencePage() {
       setDetailState(initialDetailState);
       return;
     }
+    const authToken = token;
+    const artifactId = selectedId;
     let cancelled = false;
     async function loadDetail() {
       setDetailState({
@@ -85,7 +88,7 @@ export default function RegulatorEvidencePage() {
         verification: { status: "idle" },
       });
       try {
-        const data = await fetchRegulatorEvidenceDetail(token, selectedId);
+        const data = await fetchRegulatorEvidenceDetail(authToken, artifactId);
         if (cancelled) return;
         setDetailState({
           loading: false,

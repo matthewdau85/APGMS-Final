@@ -40,15 +40,16 @@ export default function RegulatorOverviewPage() {
       setState((prev) => ({ ...prev, loading: false, error: "Session expired" }));
       return;
     }
+    const authToken = token;
     let cancelled = false;
     async function load() {
       setState(initialState);
       try {
         const [compliance, alerts, snapshots, bankSummary] = await Promise.all([
-          fetchRegulatorComplianceReport(token),
-          fetchRegulatorAlerts(token),
-          fetchRegulatorMonitoringSnapshots(token, 5),
-          fetchRegulatorBankSummary(token),
+          fetchRegulatorComplianceReport(authToken),
+          fetchRegulatorAlerts(authToken),
+          fetchRegulatorMonitoringSnapshots(authToken, 5),
+          fetchRegulatorBankSummary(authToken),
         ]);
         if (cancelled) return;
         setState({

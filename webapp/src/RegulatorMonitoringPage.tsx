@@ -27,11 +27,12 @@ export default function RegulatorMonitoringPage() {
       setState({ loading: false, error: "Session expired", snapshots: [] });
       return;
     }
+    const authToken = token;
     let cancelled = false;
     async function load() {
       setState(initialState);
       try {
-        const data = await fetchRegulatorMonitoringSnapshots(token, 10);
+        const data = await fetchRegulatorMonitoringSnapshots(authToken, 10);
         if (cancelled) return;
         setState({
           loading: false,

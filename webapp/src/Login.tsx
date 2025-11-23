@@ -2,11 +2,7 @@
 import React, { useState } from "react";
 import { login } from "./api";
 
-interface Props {
-  onLogin: (token: string) => void;
-}
-
-export default function Login({ onLogin }: Props) {
+export default function Login({ onLogin }: { onLogin: (token: string) => void }) {
   const [email, setEmail] = useState("dev@example.com");
   const [password, setPassword] = useState("admin123");
   const [err, setErr] = useState("");
@@ -15,8 +11,8 @@ export default function Login({ onLogin }: Props) {
     e.preventDefault();
     setErr("");
     try {
-      const token = await login(email, password);
-      onLogin(token);
+      const session = await login(email, password);
+      onLogin(session.token);
     } catch (e: any) {
       setErr(e.message || "Login failed");
     }
