@@ -1,17 +1,18 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
-    <meta charSet="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
-    <meta http-equiv="X-Frame-Options" content="DENY" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self';" />
-    <meta name="referrer" content="no-referrer" />
+    <meta charset="UTF-8" />
     <title>APGMS Admin</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      NOTE: Intentionally NO Content-Security-Policy meta tag here.
+      CSP for the API is still enforced via HTTP headers on :3000, but
+      the webapp needs to be able to call http://localhost:3000 from
+      http://localhost:5173 during development.
+    -->
   </head>
   <body>
     <div id="root"></div>
-    <script>window.__APGMS_CSP__=true;</script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

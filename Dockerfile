@@ -8,55 +8,45 @@ WORKDIR /app
 ENV NODE_ENV=production \
     PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1
 
-# Enable corepack so pnpm works
 RUN corepack enable
 
-# -----------------------------------------------------------------------------
-# 1. Copy only manifest files first for better caching of `pnpm install`
-# -----------------------------------------------------------------------------
+# 1. Copy manifests for efficient pnpm install
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 
-# Workspace package manifests (MATCHING YOUR ACTUAL STRUCTURE)
 COPY shared/package.json ./shared/package.json
 COPY packages/domain-policy/package.json ./packages/domain-policy/package.json
 COPY services/api-gateway/package.json ./services/api-gateway/package.json
 COPY services/connectors/package.json ./services/connectors/package.json
 
-# Install dependencies for the whole workspace
+# Install all workspace deps (prod + needed peer deps)
 RUN pnpm install --frozen-lockfile
 
-# -----------------------------------------------------------------------------
-# 2. Now copy the full source tree
-# -----------------------------------------------------------------------------
+# 2. Copy full source
 COPY . .
 
-# -----------------------------------------------------------------------------
-# 3. Build all workspace packages
-# -----------------------------------------------------------------------------
-RUN pnpm -r build
+# 3. Build only the backend packages needed in this image
+RUN pnpm --filter @apgms/shared build \
+  && pnpm --filter @apgms/domain-policy build \
+  && pnpm --filter @apgms/api-gateway build
 
-# -----------------------------------------------------------------------------
 # 4. Runtime image
-# -----------------------------------------------------------------------------
 FROM node:20-slim AS runtime
 
 WORKDIR /app
-
 ENV NODE_ENV=production
 
 RUN corepack enable
 
-# Copy node_modules and workspace metadata
+# Bring in node_modules + workspace metadata
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
 
-# Copy built services + packages
+# Bring in built code
 COPY --from=build /app/services/api-gateway ./services/api-gateway
 COPY --from=build /app/shared ./shared
 COPY --from=build /app/packages ./packages
 
-# Expose api-gateway port
-EXPOSE 8080
+EXPOSE 3000
 
 CMD ["pnpm", "--filter", "@apgms/api-gateway", "start"]

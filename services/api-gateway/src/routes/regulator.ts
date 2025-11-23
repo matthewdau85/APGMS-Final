@@ -1,11 +1,11 @@
+// services/api-gateway/src/routes/regulator.ts
 import type { Decimal, JsonValue } from "@prisma/client/runtime/library.js";
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { z } from "zod";
 
 import { prisma } from "../db.js";
 import { recordAuditLog } from "../lib/audit.js";
-import { parseWithSchema } from "../lib/validation.js";
 
 type RegulatorRequest = FastifyRequest & {
   user?: { orgId?: string; sub?: string };
@@ -58,7 +58,10 @@ function formatPeriod(start: Date, end: Date): string {
   return `${start.toISOString().slice(0, 10)}-${end.toISOString().slice(0, 10)}`;
 }
 
-export async function registerRegulatorRoutes(app: FastifyInstance, deps: RegulatorRoutesDeps = {}) {
+export async function registerRegulatorRoutes(
+  app: FastifyInstance,
+  deps: RegulatorRoutesDeps = {},
+) {
   const db = deps.prisma ?? prisma;
   const auditLogger = deps.auditLogger;
 
@@ -101,7 +104,9 @@ export async function registerRegulatorRoutes(app: FastifyInstance, deps: Regula
       period: formatPeriod(cycle.periodStart, cycle.periodEnd),
       lodgedAt: cycle.lodgedAt?.toISOString() ?? null,
       status: cycle.overallStatus,
-      notes: `PAYGW ${toNumber(cycle.paygwSecured)} / ${toNumber(cycle.paygwRequired)} · GST ${toNumber(cycle.gstSecured)} / ${toNumber(cycle.gstRequired)}`,
+      notes: `PAYGW ${toNumber(cycle.paygwSecured)} / ${toNumber(
+        cycle.paygwRequired,
+      )} · GST ${toNumber(cycle.gstSecured)} / ${toNumber(cycle.gstRequired)}`,
     }));
 
     const paymentPlanHistory = paymentPlans.map((plan) => ({
@@ -131,9 +136,12 @@ export async function registerRegulatorRoutes(app: FastifyInstance, deps: Regula
       orderBy: { periodEnd: "asc" },
     });
 
-    await logRegulatorAction(request, "regulator.compliance.report", {
-      basPeriods: basHistory.length,
-    }, auditLogger);
+    await logRegulatorAction(
+      request,
+      "regulator.compliance.report",
+      { basPeriods: basHistory.length },
+      auditLogger,
+    );
 
     return {
       orgId,
@@ -158,7 +166,12 @@ export async function registerRegulatorRoutes(app: FastifyInstance, deps: Regula
       orderBy: { createdAt: "desc" },
     });
 
-    await logRegulatorAction(request, "regulator.alerts.list", { count: alerts.length }, auditLogger);
+    await logRegulatorAction(
+      request,
+      "regulator.alerts.list",
+      { count: alerts.length },
+      auditLogger,
+    );
 
     return {
       alerts: alerts.map((alert) => ({
@@ -184,7 +197,8 @@ export async function registerRegulatorRoutes(app: FastifyInstance, deps: Regula
         .optional()
         .default(5),
     });
-    const parsed = parseWithSchema(querySchema, request.query ?? {});
+
+    const parsed = querySchema.safeParse(request.query ?? {});
     if (!parsed.success) {
       return {
         error: { code: "invalid_query", details: parsed.error.flatten() },
@@ -198,7 +212,12 @@ export async function registerRegulatorRoutes(app: FastifyInstance, deps: Regula
       take: limit,
     });
 
-    await logRegulatorAction(request, "regulator.monitoring.snapshots", { limit }, auditLogger);
+    await logRegulatorAction(
+      request,
+      "regulator.monitoring.snapshots",
+      { limit },
+      auditLogger,
+    );
 
     return {
       snapshots: snapshots.map((snapshot) => ({
@@ -218,7 +237,12 @@ export async function registerRegulatorRoutes(app: FastifyInstance, deps: Regula
       take: 50,
     });
 
-    await logRegulatorAction(request, "regulator.evidence.list", { count: artifacts.length }, auditLogger);
+    await logRegulatorAction(
+      request,
+      "regulator.evidence.list",
+      { count: artifacts.length },
+      auditLogger,
+    );
 
     return {
       artifacts: artifacts.map((artifact) => ({
@@ -234,9 +258,12 @@ export async function registerRegulatorRoutes(app: FastifyInstance, deps: Regula
   app.get("/evidence/:artifactId", async (request: RegulatorRequest, reply) => {
     const orgId = ensureOrgId(request);
     const paramsSchema = z.object({ artifactId: z.string().min(1) });
-    const parsed = parseWithSchema(paramsSchema, request.params ?? {});
+
+    const parsed = paramsSchema.safeParse(request.params ?? {});
     if (!parsed.success) {
-      reply.code(400).send({ error: { code: "invalid_params", details: parsed.error.flatten() } });
+      reply
+        .code(400)
+        .send({ error: { code: "invalid_params", details: parsed.error.flatten() } });
       return;
     }
 
@@ -248,7 +275,12 @@ export async function registerRegulatorRoutes(app: FastifyInstance, deps: Regula
       return;
     }
 
-    await logRegulatorAction(request, "regulator.evidence.detail", { artifactId: artifact.id }, auditLogger);
+    await logRegulatorAction(
+      request,
+      "regulator.evidence.detail",
+      { artifactId: artifact.id },
+      auditLogger,
+    );
 
     return {
       artifact: {
@@ -285,9 +317,12 @@ export async function registerRegulatorRoutes(app: FastifyInstance, deps: Regula
       }),
     ]);
 
-    await logRegulatorAction(request, "regulator.bank.summary", {
-      entries: aggregate._count?.id ?? 0,
-    }, auditLogger);
+    await logRegulatorAction(
+      request,
+      "regulator.bank.summary",
+      { entries: aggregate._count?.id ?? 0 },
+      auditLogger,
+    );
 
     return {
       summary: {

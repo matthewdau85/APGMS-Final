@@ -1,8 +1,19 @@
 import { createHash } from "node:crypto";
 
-import type { PrismaClient } from "@prisma/client";
-
 type BigIntLike = bigint | number;
+
+/**
+ * Minimal Prisma-like interface for the parts of the client we use here.
+ * This avoids needing the PrismaClient type from @prisma/client directly,
+ * which was causing the TS2305 error in the ledger build.
+ */
+export interface PrismaJournalClient {
+  journal: {
+    findFirst(args: any): Promise<{ seq: bigint; hash: string | null } | null>;
+    create(args: any): Promise<any>;
+  };
+  $transaction<T>(fn: (tx: PrismaJournalClient) => Promise<T>): Promise<T>;
+}
 
 export interface PostingInput {
   accountId: string;
@@ -27,19 +38,23 @@ export interface JournalWriteResult {
 }
 
 export class JournalWriter {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(private readonly prisma: PrismaJournalClient) {}
 
   async write(input: JournalWriteInput): Promise<JournalWriteResult> {
     if (input.postings.length === 0) {
       throw new UnbalancedJournalError("journal requires at least one posting");
     }
 
-    const total = input.postings.reduce<bigint>((sum, posting) => sum + BigInt(posting.amountCents), BigInt(0));
+    const total = input.postings.reduce<bigint>(
+      (sum, posting) => sum + BigInt(posting.amountCents),
+      BigInt(0),
+    );
+
     if (total !== BigInt(0)) {
       throw new UnbalancedJournalError("journal postings must balance to zero");
     }
 
-    const result = await this.prisma.$transaction(async (tx: any) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const last = await tx.journal.findFirst({
         where: { orgId: input.orgId },
         orderBy: { seq: "desc" },
@@ -103,20 +118,24 @@ export class UnbalancedJournalError extends Error {
 
 function computeHash(prevHash: string | null, input: JournalWriteInput): string {
   const hasher = createHash("sha256");
+
   if (prevHash) {
     hasher.update(prevHash);
   }
+
   hasher.update(input.orgId);
   hasher.update(input.eventId);
   hasher.update(input.dedupeId);
   hasher.update(input.type);
   hasher.update(input.occurredAt.toISOString());
   hasher.update(input.source);
+
   for (const posting of input.postings) {
     hasher.update(posting.accountId);
     hasher.update(BigInt(posting.amountCents).toString());
     hasher.update(posting.memo ?? "");
   }
+
   return hasher.digest("hex");
 }
 

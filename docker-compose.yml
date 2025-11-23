@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   db:
     image: postgres:16
@@ -12,11 +10,8 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      # persistent data
       - apgms-final_pgdata:/var/lib/postgresql/data
-      # bootstrap schema + seed admin user
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-      - ./services/api-gateway:/app/services/api-gateway
     networks:
       - apgmsnet
 
@@ -37,10 +32,7 @@ services:
       - apgmsnet
 
   api-gateway:
-    build:
-      context: .
-      dockerfile: services/api-gateway/Dockerfile.local-built
-    image: apgms-final-api-gateway:latest
+    image: apgms-final-api-gateway
     container_name: apgms-api-gateway
     depends_on:
       - db
@@ -48,22 +40,18 @@ services:
       - tax-engine
     restart: unless-stopped
     environment: &gateway_env
-      # --- DB URLs ---
+      # --- Database URLs ---
       DATABASE_URL: "postgresql://postgres:postgres@db:5432/apgms?schema=public"
       SHADOW_DATABASE_URL: "postgresql://postgres:postgres@db:5432/apgms?schema=public"
 
       # --- Auth / JWT config ---
       AUTH_AUDIENCE: "apgms-local"
       AUTH_ISSUER: "http://auth.local.test"
-
-      # HS256 secret used by /auth/login to sign tokens, and by authGuard to verify them
       AUTH_DEV_SECRET: "local-dev-shared-secret-change-me"
-
-      # still required by loadConfig() / config.ts
       AUTH_JWKS: >-
         {"keys":[{"kid":"dev-key-1","alg":"RS256"}]}
 
-      # --- PII crypto material (your generated secrets from before) ---
+      # --- PII crypto material ---
       PII_KEYS: >-
         [{"kid":"dev-key-1","material":"GPHZGdDjE+r7X6S6zQA8KRU34GRXPeePjRGN8dkgk00="}]
       PII_ACTIVE_KEY: "dev-key-1"
@@ -72,26 +60,29 @@ services:
         [{"sid":"dev-salt-1","secret":"BN10EUaMmjdthpHf3WGjdHrBuXNL4TkzQNg0KALHEB4="}]
       PII_ACTIVE_SALT: "dev-salt-1"
 
-      # --- rate limit / monitoring knobs ---
+      # --- Rate limit / security knobs ---
       API_RATE_LIMIT_MAX: "60"
       API_RATE_LIMIT_WINDOW: "1 minute"
       AUTH_FAILURE_THRESHOLD: "5"
 
-      # --- CORS so the webapp can talk to the API ---
+      # --- CORS for webapp ---
       CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://localhost:3000"
 
-      # --- service-to-service URL for tax-engine ---
+      # --- Internal service URLs ---
       TAX_ENGINE_URL: "http://tax-engine:8000"
+
+      # --- Redis config (important: use the redis service, not localhost) ---
+      REDIS_URL: "redis://redis:6379"
+      REDIS_HOST: "redis"
+      REDIS_PORT: "6379"
+
     ports:
       - "3000:3000"
     networks:
       - apgmsnet
 
   worker:
-    build:
-      context: .
-      dockerfile: ./services/api-gateway/Dockerfile
-    image: apgms-final-worker:latest
+    image: apgms-final-worker
     container_name: apgms-worker
     depends_on:
       - db
@@ -100,20 +91,6 @@ services:
     restart: on-failure
     environment: *gateway_env
     command: pnpm --filter worker exec tsx src/index.ts
-    networks:
-      - apgmsnet
-
-  webapp:
-    build:
-      context: ./webapp
-    image: apgms-webapp:latest
-    container_name: apgms-webapp
-    environment:
-      VITE_API_BASE_URL: "http://localhost:3000"
-    depends_on:
-      - api-gateway
-    ports:
-      - "5173:5173"
     networks:
       - apgmsnet
 

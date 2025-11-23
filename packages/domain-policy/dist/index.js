@@ -1,1 +1,1 @@
-export { applyDesignatedAccountTransfer, generateDesignatedAccountReconciliationArtifact, } from "./designated-accounts";
+export { applyDesignatedAccountTransfer, generateDesignatedAccountReconciliationArtifact, } from "./designated-accounts.js";

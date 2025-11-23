@@ -1,9 +1,10 @@
 // services/api-gateway/src/routes/auth.ts
 import crypto from "node:crypto";
+import bcrypt from "bcryptjs";
 import { FastifyInstance } from "fastify";
 import {
   authGuard,
-  verifyCredentials,
+  // verifyCredentials, // no longer used
   signToken,
   buildClientUser,
   buildSessionUser,
@@ -83,12 +84,42 @@ function cleanupPendingTotp(): void {
 }
 
 export async function registerAuthRoutes(app: FastifyInstance) {
+  //
+  // LOGIN
+  //
   app.post("/auth/login", async (request, reply) => {
     const body = parseWithSchema(LoginBodySchema, request.body);
+    const { email, password } = body;
 
-    const user = await verifyCredentials(body.email, body.password);
+    // Do NOT log password
+    request.log.info({ email }, "auth.login: incoming login request");
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    request.log.info(
+      {
+        found: !!user,
+        id: user?.id,
+        email: user?.email,
+        role: user?.role,
+      },
+      "auth.login: user lookup result",
+    );
 
     if (!user) {
+      throw unauthorized("bad_credentials", "Invalid email/password");
+    }
+
+    const passwordOk = await bcrypt.compare(password, user.password);
+
+    request.log.info(
+      { userId: user.id, passwordOk },
+      "auth.login: password comparison result",
+    );
+
+    if (!passwordOk) {
       throw unauthorized("bad_credentials", "Invalid email/password");
     }
 
@@ -106,6 +137,9 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     });
   });
 
+  //
+  // MFA STATUS
+  //
   app.get(
     "/auth/mfa/status",
     { preHandler: authGuard },
@@ -155,6 +189,9 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     },
   );
 
+  //
+  // MFA: TOTP BEGIN
+  //
   app.post(
     "/auth/mfa/totp/begin",
     { preHandler: authGuard },
@@ -215,6 +252,9 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     },
   );
 
+  //
+  // MFA: TOTP CONFIRM
+  //
   app.post(
     "/auth/mfa/totp/confirm",
     { preHandler: authGuard },
@@ -277,6 +317,9 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     },
   );
 
+  //
+  // MFA: STEP UP
+  //
   app.post(
     "/auth/mfa/step-up",
     { preHandler: authGuard },
@@ -319,6 +362,9 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     },
   );
 
+  //
+  // MFA: PASSKEY REGISTRATION OPTIONS
+  //
   app.post(
     "/auth/mfa/passkey/registration-options",
     { preHandler: authGuard },
@@ -364,6 +410,9 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     },
   );
 
+  //
+  // MFA: PASSKEY REGISTER
+  //
   app.post(
     "/auth/mfa/passkey/register",
     { preHandler: authGuard },
@@ -429,6 +478,9 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     },
   );
 
+  //
+  // MFA: PASSKEY AUTH OPTIONS
+  //
   app.post(
     "/auth/mfa/passkey/authentication-options",
     { preHandler: authGuard },
@@ -476,6 +528,9 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     },
   );
 
+  //
+  // MFA: PASSKEY VERIFY
+  //
   app.post(
     "/auth/mfa/passkey/verify",
     { preHandler: authGuard },
@@ -555,6 +610,9 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     },
   );
 
+  //
+  // MFA: RESET
+  //
   app.post(
     "/auth/mfa/reset",
     { preHandler: authGuard },

@@ -1,14 +1,15 @@
+// services/api-gateway/src/routes/compliance-proxy.ts
 import { type FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 
 import { authGuard } from "../auth.js";
 import { prisma } from "../db.js";
-import { parseWithSchema } from "../lib/validation.js";
 
 const formatPeriod = (start: Date, end: Date): string =>
   `${start.toISOString().slice(0, 10)}-${end.toISOString().slice(0, 10)}`;
 
-const toNumber = (value: unknown): number => (typeof value === "number" ? value : Number(value ?? 0));
+const toNumber = (value: unknown): number =>
+  typeof value === "number" ? value : Number(value ?? 0);
 
 export const registerComplianceProxy: FastifyPluginAsync = async (app) => {
   app.get("/compliance/report", { preHandler: [authGuard] }, async (req, reply) => {
@@ -18,34 +19,35 @@ export const registerComplianceProxy: FastifyPluginAsync = async (app) => {
       return;
     }
 
-    const [basCycles, paymentPlans, openHighSeverity, resolvedThisQuarter, designatedAccounts] = await Promise.all([
-      prisma.basCycle.findMany({
-        where: { orgId },
-        orderBy: { periodStart: "desc" },
-      }),
-      prisma.paymentPlanRequest.findMany({
-        where: { orgId },
-        orderBy: { requestedAt: "desc" },
-      }),
-      prisma.alert.count({
-        where: { orgId, severity: "HIGH", resolvedAt: null },
-      }),
-      prisma.alert.count({
-        where: {
-          orgId,
-          resolvedAt: { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) },
-        },
-      }),
-      prisma.designatedAccount.findMany({ where: { orgId } }),
-    ]);
+    const [basCycles, paymentPlans, openHighSeverity, resolvedThisQuarter, designatedAccounts] =
+      await Promise.all([
+        prisma.basCycle.findMany({
+          where: { orgId },
+          orderBy: { periodStart: "desc" },
+        }),
+        prisma.paymentPlanRequest.findMany({
+          where: { orgId },
+          orderBy: { requestedAt: "desc" },
+        }),
+        prisma.alert.count({
+          where: { orgId, severity: "HIGH", resolvedAt: null },
+        }),
+        prisma.alert.count({
+          where: {
+            orgId,
+            resolvedAt: { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) },
+          },
+        }),
+        prisma.designatedAccount.findMany({ where: { orgId } }),
+      ]);
 
     const basHistory = basCycles.map((cycle) => ({
       period: formatPeriod(cycle.periodStart, cycle.periodEnd),
       lodgedAt: cycle.lodgedAt?.toISOString() ?? null,
       status: cycle.overallStatus,
-      notes: `PAYGW ${toNumber(cycle.paygwSecured)} / ${toNumber(cycle.paygwRequired)} | GST ${toNumber(
-        cycle.gstSecured,
-      )} / ${toNumber(cycle.gstRequired)}`,
+      notes: `PAYGW ${toNumber(cycle.paygwSecured)} / ${toNumber(
+        cycle.paygwRequired,
+      )} | GST ${toNumber(cycle.gstSecured)} / ${toNumber(cycle.gstRequired)}`,
     }));
 
     const paymentPlanHistory = paymentPlans.map((plan) => ({
@@ -88,9 +90,11 @@ export const registerComplianceProxy: FastifyPluginAsync = async (app) => {
     }
 
     const paramsSchema = z.object({ orgId: z.string().min(1) });
-    const parsed = parseWithSchema(paramsSchema, req.params ?? {});
+    const parsed = paramsSchema.safeParse(req.params ?? {});
     if (!parsed.success) {
-      reply.code(400).send({ error: { code: "invalid_params", details: parsed.error.flatten() } });
+      reply
+        .code(400)
+        .send({ error: { code: "invalid_params", details: parsed.error.flatten() } });
       return;
     }
 
@@ -158,9 +162,11 @@ export const registerComplianceProxy: FastifyPluginAsync = async (app) => {
 
   app.get("/compliance/evidence/:artifactId", { preHandler: [authGuard] }, async (req, reply) => {
     const artifactParamsSchema = z.object({ artifactId: z.string().min(1) });
-    const parsed = parseWithSchema(artifactParamsSchema, req.params ?? {});
+    const parsed = artifactParamsSchema.safeParse(req.params ?? {});
     if (!parsed.success) {
-      reply.code(400).send({ error: { code: "invalid_params", details: parsed.error.flatten() } });
+      reply
+        .code(400)
+        .send({ error: { code: "invalid_params", details: parsed.error.flatten() } });
       return;
     }
 

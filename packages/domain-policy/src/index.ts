@@ -1,7 +1,7 @@
 export {
   applyDesignatedAccountTransfer,
   generateDesignatedAccountReconciliationArtifact,
-} from "./designated-accounts";
+} from "./designated-accounts.js";
 
 export type {
   PrismaClient,
