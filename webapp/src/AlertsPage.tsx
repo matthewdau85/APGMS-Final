@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { fetchAlerts, resolveAlert, initiateMfa } from "./api";
 import { getToken, getSessionUser } from "./auth";
+import { ErrorState, SkeletonBlock, StatusChip } from "./components/UI";
 
 type AlertRecord = Awaited<ReturnType<typeof fetchAlerts>>["alerts"][number];
 
@@ -14,9 +15,7 @@ export default function AlertsPage() {
   const [success, setSuccess] = useState<string | null>(null);
 
   const loadAlerts = async () => {
-    if (!token) {
-      return;
-    }
+    if (!token) return;
     setError(null);
     try {
       const result = await fetchAlerts(token);
@@ -30,27 +29,14 @@ export default function AlertsPage() {
   };
 
   useEffect(() => {
-    if (!token) {
-      return;
-    }
+    if (!token) return;
     void loadAlerts();
   }, [token]);
 
   async function handleResolve(alert: AlertRecord) {
     if (!token) return;
-    const note =
-      window.prompt(
-        "Add a resolution note for the audit log:",
-        "We transferred the missing GST this morning."
-      ) ?? "";
-    if (!note.trim()) {
-      return;
-    }
-
-    const trimmedNote = note.trim();
-    if (!trimmedNote) {
-      return;
-    }
+    const note = window.prompt("Add a resolution note for the audit log:", "We transferred the missing GST this morning.") ?? "";
+    if (!note.trim()) return;
 
     setSubmittingId(alert.id);
     setError(null);
@@ -60,7 +46,7 @@ export default function AlertsPage() {
     let requiresMfa = false;
 
     try {
-      await resolveAlert(token, alert.id, trimmedNote);
+      await resolveAlert(token, alert.id, note.trim());
       resolved = true;
     } catch (err) {
       if (
@@ -79,17 +65,12 @@ export default function AlertsPage() {
     if (!resolved && requiresMfa) {
       try {
         const challenge = await initiateMfa(token);
-        window.alert(
-          `MFA verification required.\n\nDev stub code: ${challenge.code} (expires in ${challenge.expiresInSeconds}s).`
-        );
-        const supplied = window.prompt(
-          "Enter the MFA code to resolve this high-severity alert:",
-          challenge.code
-        );
+        window.alert(`MFA verification required.\n\nDev stub code: ${challenge.code} (expires in ${challenge.expiresInSeconds}s).`);
+        const supplied = window.prompt("Enter the MFA code to resolve this high-severity alert:", challenge.code);
         if (!supplied || supplied.trim().length === 0) {
           setError("MFA verification cancelled.");
         } else {
-          await resolveAlert(token, alert.id, trimmedNote, supplied.trim());
+          await resolveAlert(token, alert.id, note.trim(), supplied.trim());
           resolved = true;
         }
       } catch (err) {
@@ -106,9 +87,7 @@ export default function AlertsPage() {
     setSubmittingId(null);
   }
 
-  if (!token) {
-    return null;
-  }
+  if (!token) return null;
 
   return (
     <div style={{ display: "grid", gap: "20px" }}>
@@ -119,34 +98,37 @@ export default function AlertsPage() {
         </p>
       </header>
 
-      {loading && <div style={infoTextStyle}>Loading alerts...</div>}
-      {error && <div style={errorTextStyle}>{error}</div>}
+      {loading && (
+        <div style={{ display: "grid", gap: 8 }}>
+          <SkeletonBlock width="60%" />
+          <SkeletonBlock width="100%" height={140} />
+        </div>
+      )}
+      {error && <ErrorState message={error} onRetry={loadAlerts} detail="We could not load alerts right now." />}
       {success && <div style={successTextStyle}>{success}</div>}
 
       {!loading && !error && (
         <section style={cardStyle}>
           {alerts.length === 0 ? (
-            <div style={infoTextStyle}>No alerts to display.</div>
+            <div style={infoTextStyle}>No alerts to display. Run a pre-check or ingest demo data to populate.</div>
           ) : (
             <ul style={alertListStyle}>
               {alerts.map((alert) => (
                 <li key={alert.id} style={alertRowStyle}>
                   <div style={{ display: "grid", gap: "4px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <SeverityBadge severity={alert.severity} />
+                      <StatusChip tone={severityTone(alert.severity)}>{alert.severity.toUpperCase()}</StatusChip>
                       <span style={alertTitleStyle}>{alert.message}</span>
                     </div>
                     <div style={metaTextStyle}>
-                      {alert.type} • {new Date(alert.createdAt).toLocaleString()}
+                      {alert.type} � {new Date(alert.createdAt).toLocaleString()}
                     </div>
-                    {alert.resolutionNote && (
-                      <div style={resolutionNoteStyle}>
-                        Note: {alert.resolutionNote}
-                      </div>
-                    )}
+                    {alert.resolutionNote && <div style={resolutionNoteStyle}>Note: {alert.resolutionNote}</div>}
                   </div>
                   <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    <ResolvedBadge resolved={alert.resolved} />
+                    <StatusChip tone={alert.resolved ? "success" : "warning"}>
+                      {alert.resolved ? "Resolved" : "Needs Attention"}
+                    </StatusChip>
                     {!alert.resolved && (
                       <button
                         type="button"
@@ -156,9 +138,9 @@ export default function AlertsPage() {
                           cursor: submittingId === alert.id ? "wait" : "pointer",
                         }}
                         disabled={submittingId === alert.id}
-                        onClick={() => handleResolve(alert)}
+                        onClick={() => void handleResolve(alert)}
                       >
-                        {submittingId === alert.id ? "Resolving…" : "Resolve"}
+                        {submittingId === alert.id ? "Resolving..." : "Resolve"}
                       </button>
                     )}
                   </div>
@@ -172,53 +154,11 @@ export default function AlertsPage() {
   );
 }
 
-function SeverityBadge({ severity }: { severity: string }) {
-  const palette = severityPalette(severity);
-  return (
-    <span
-      style={{
-        padding: "4px 10px",
-        borderRadius: "20px",
-        fontSize: "12px",
-        fontWeight: 600,
-        backgroundColor: palette.background,
-        color: palette.text,
-      }}
-    >
-      {severity}
-    </span>
-  );
-}
-
-function ResolvedBadge({ resolved }: { resolved: boolean }) {
-  return (
-    <span
-      style={{
-        padding: "4px 10px",
-        borderRadius: "20px",
-        fontSize: "12px",
-        fontWeight: 600,
-        backgroundColor: resolved ? "rgba(16, 185, 129, 0.12)" : "rgba(251, 191, 36, 0.18)",
-        color: resolved ? "#047857" : "#92400e",
-      }}
-    >
-      {resolved ? "Resolved" : "Needs Attention"}
-    </span>
-  );
-}
-
-function severityPalette(severity: string) {
-  switch (severity.toUpperCase()) {
-    case "HIGH":
-      return { background: "rgba(239, 68, 68, 0.12)", text: "#b91c1c" };
-    case "MEDIUM":
-      return { background: "rgba(251, 191, 36, 0.18)", text: "#92400e" };
-    case "LOW":
-    case "INFO":
-      return { background: "rgba(96, 165, 250, 0.18)", text: "#1d4ed8" };
-    default:
-      return { background: "rgba(107, 114, 128, 0.14)", text: "#374151" };
-  }
+function severityTone(severity: string) {
+  const upper = severity.toUpperCase();
+  if (upper === "HIGH") return "danger";
+  if (upper === "MEDIUM") return "warning";
+  return "neutral";
 }
 
 const pageTitleStyle: React.CSSProperties = {
@@ -271,11 +211,6 @@ const metaTextStyle: React.CSSProperties = {
 const infoTextStyle: React.CSSProperties = {
   fontSize: "14px",
   color: "#6b7280",
-};
-
-const errorTextStyle: React.CSSProperties = {
-  fontSize: "14px",
-  color: "#b91c1c",
 };
 
 const successTextStyle: React.CSSProperties = {
