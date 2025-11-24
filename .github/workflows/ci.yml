@@ -108,7 +108,7 @@ jobs:
 
       # Quick a11y smoke gate against critical UI (fast fail if it's totally broken)
       - name: A11y smoke
-        run: pnpm --filter @apgms/webapp exec playwright test webapp/tests/a11y.spec.ts
+        run: pnpm --filter @apgms/webapp exec playwright test tests/a11y.spec.ts
 
       # Full WCAG axe scan (per-route, attaches violations to CI artifacts)
       - run: pnpm --filter @apgms/webapp test:axe
