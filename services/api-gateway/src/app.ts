@@ -4,7 +4,8 @@ import Fastify, {
 } from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
-import { context, trace } from "@opentelemetry/api";
+import { context, propagation, trace } from "@opentelemetry/api";
+import { randomUUID } from "node:crypto";
 import "dotenv/config.js";
 
 import {
@@ -80,6 +81,35 @@ export async function buildServer(
   (app as any).setDraining = (v: boolean) => {
     drainingState.value = v;
   };
+
+  app.addHook("preHandler", (request, reply, done) => {
+    const incomingRequestId = request.headers["x-request-id"];
+    const requestId =
+      typeof incomingRequestId === "string" && incomingRequestId.trim().length > 0
+        ? incomingRequestId
+        : randomUUID();
+
+    reply.header("x-request-id", requestId);
+
+    const span = trace.getSpan(context.active());
+    if (span) {
+      span.setAttribute("request.id", requestId);
+    }
+
+    const requestLogger = request.log.child({ requestId });
+    request.log = requestLogger;
+    reply.log = requestLogger;
+    (request as any).requestId = requestId;
+
+    const baggage = propagation.createBaggage({
+      "request.id": { value: requestId },
+    });
+    const ctxWithRequestId = propagation.setBaggage(
+      context.active(),
+      baggage,
+    );
+    context.with(ctxWithRequestId, () => done());
+  });
 
   app.addHook("onRequest", (request, reply, done) => {
     const span = trace.getSpan(context.active());
