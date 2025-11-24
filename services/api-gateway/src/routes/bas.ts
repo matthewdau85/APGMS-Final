@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { z } from "zod";
 
 import {
   finalizeBasLodgment,
@@ -10,6 +11,7 @@ import {
 import { metrics } from "../observability/metrics.js";
 import { assertOrgAccess } from "../utils/orgScope.js";
 import { recordCriticalAuditLog } from "../lib/audit.js";
+import { parseWithSchema } from "../lib/validation.js";
 
 const TAX_TYPES: Array<{ key: string; label: string }> = [
   { key: "PAYGW", label: "PAYGW obligations" },
@@ -21,13 +23,25 @@ type LodgmentRequest = FastifyRequest<{
   Body?: { initiatedBy?: string };
 }>;
 
+const BasLodgmentQuerySchema = z.object({
+  basCycleId: z.string().min(1).optional(),
+});
+
+const BasLodgmentBodySchema = z.object({
+  initiatedBy: z.string().min(1).optional(),
+});
+
 function ensureUserOrg(request: FastifyRequest, reply: FastifyReply): string | null {
-  const user = (request as any).user as { orgId?: string } | undefined;
+  const user = (request as any).user as { orgId?: string; role?: string } | undefined;
   if (!user?.orgId) {
     reply.code(401).send({ error: "unauthorized", message: "Authentication required" });
     return null;
   }
   if (!assertOrgAccess(request, reply, user.orgId)) {
+    return null;
+  }
+  if (!user.role || !["owner", "admin", "accountant"].includes(user.role)) {
+    reply.code(403).send({ error: { code: "forbidden_role", message: "Insufficient role for BAS" } });
     return null;
   }
   return user.orgId;
@@ -48,10 +62,12 @@ export async function registerBasRoutes(
       const orgId = ensureUserOrg(request, reply);
       if (!orgId) return;
 
-      const basCycleId = String(request.query.basCycleId ?? "manual");
+      const query = parseWithSchema(BasLodgmentQuerySchema, request.query ?? {});
+      const body = parseWithSchema(BasLodgmentBodySchema, request.body ?? {});
+      const basCycleId = String(query.basCycleId ?? "manual");
       const lodgment = await recordBasLodgment({
         orgId,
-        initiatedBy: request.body?.initiatedBy,
+        initiatedBy: body.initiatedBy,
         taxTypes: TAX_TYPES.map((type) => type.key),
         status: "in_progress",
       });

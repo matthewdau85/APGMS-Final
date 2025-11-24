@@ -10,12 +10,14 @@ const ABN_REGEX =
   /\b\d{2}\s?\d{3}\s?\d{3}\s?\d{3}\b/g;
 const IBAN_REGEX =
   /\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/g;
+const ACCOUNT_REGEX = /\b\d{6,12}\b/g;
 
 function redactIdentifiers(value: string): string {
   let redacted = value.replace(EMAIL_REGEX, "[REDACTED:EMAIL]");
   redacted = redacted.replace(ABN_REGEX, "[REDACTED:ABN]");
   redacted = redacted.replace(TFN_REGEX, "[REDACTED:TFN]");
   redacted = redacted.replace(IBAN_REGEX, "[REDACTED:IBAN]");
+  redacted = redacted.replace(ACCOUNT_REGEX, "[REDACTED:ACCOUNT]");
   return redacted;
 }
 

@@ -1,9 +1,10 @@
 import { PrismaClient } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library.js";
-import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 
 import { prisma } from "../db.js";
+import { parseWithSchema } from "../lib/validation.js";
 import { assertRoleForBankLines, requireOrgContext, redactBankLine } from "../utils/orgScope.js";
 
 const createBankLineSchema = z.object({
@@ -29,19 +30,7 @@ export function createBankLinesPlugin(deps: BankLineRoutesDeps): FastifyPluginAs
       const ctx = requireOrgContext(req, reply);
       if (!ctx) return;
 
-      const parsed = createBankLineSchema.safeParse(req.body);
-      if (!parsed.success) {
-        reply.code(400).send({
-          error: {
-            code: "invalid_body",
-            message: "Validation failed",
-            details: parsed.error.flatten(),
-          },
-        });
-        return;
-      }
-
-      const data = parsed.data;
+      const data = parseWithSchema(createBankLineSchema, req.body);
       if (!assertRoleForBankLines(req, reply)) return;
 
       const existing = await deps.prisma.bankLine.findUnique({
@@ -54,7 +43,7 @@ export function createBankLinesPlugin(deps: BankLineRoutesDeps): FastifyPluginAs
       });
 
       if (existing) {
-        reply.header("idempotent-replay", "true");
+        reply.header("Idempotent-Replay", "true");
         reply.code(201).send(redactBankLine(existing));
         return;
       }
@@ -72,7 +61,7 @@ export function createBankLinesPlugin(deps: BankLineRoutesDeps): FastifyPluginAs
         },
       });
 
-      reply.header("idempotent-replay", "false");
+      reply.header("Idempotent-Replay", "false");
       reply.code(201).send(redactBankLine(created));
     });
 

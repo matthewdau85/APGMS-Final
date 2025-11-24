@@ -6,6 +6,17 @@ import jwt from "jsonwebtoken";
 
 import { createBankLinesPlugin } from "../src/routes/bank-lines";
 
+function installErrorHandler(app: FastifyInstance) {
+  app.setErrorHandler((error, _request, reply) => {
+    const err = error as any;
+    if (err?.status) {
+      reply.status(err.status).send({ error: { code: err.code, message: err.message, fields: err.fields } });
+      return;
+    }
+    reply.status(500).send({ error: { code: "internal_error" } });
+  });
+}
+
 type StoredBankLine = {
   id: string;
   orgId: string;
@@ -111,6 +122,7 @@ describe("bank-lines routes", () => {
     };
 
     app = Fastify();
+    installErrorHandler(app);
     app.addHook("onRequest", authGuard);
     await app.register(createBankLinesPlugin({ prisma: prismaStub } as any));
     await app.ready();
@@ -123,6 +135,21 @@ describe("bank-lines routes", () => {
   it("rejects unauthenticated callers", async () => {
     const response = await app.inject({ method: "GET", url: "/bank-lines" });
     assert.equal(response.statusCode, 401);
+  });
+
+  it("rejects invalid payloads with structured validation errors", async () => {
+    const token = signToken();
+    const response = await app.inject({
+      method: "POST",
+      url: "/bank-lines",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { amount: "oops" },
+    });
+
+    assert.equal(response.statusCode, 400);
+    const body = response.json() as { error?: { code?: string; fields?: Array<{ path: string }> } };
+    assert.equal(body.error?.code, "invalid_body");
+    assert.ok(body.error?.fields?.some((field) => field.path === "idempotencyKey"));
   });
 
   it("creates bank lines for authorised roles", async () => {
