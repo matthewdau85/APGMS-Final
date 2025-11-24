@@ -27,7 +27,8 @@ export default {
 
   // Keep node:test suites under services/api-gateway/test/*.spec.* out of Jest
   // until they are migrated to the Jest runner.
-  testMatch: ["**/?(*.)+test.[tj]s?(x)"],
+  testMatch: ["**/?(*.)+(spec|test).[tj]s?(x)"],
+  testPathIgnorePatterns: ["/services/api-gateway/test/.*\\.spec\\.[tj]sx?$"],
 
   // Resolve monorepo imports like @apgms/shared
   moduleNameMapper: {
