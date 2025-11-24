@@ -8,7 +8,7 @@ on:
 
 permissions:
   contents: read
-  actions: write # required for upload-artifact
+  actions: write # required so upload-artifact can save SBOM/audit/Trivy outputs
 
 jobs:
   sbom:
