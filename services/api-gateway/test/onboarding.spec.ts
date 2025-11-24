@@ -103,6 +103,57 @@ describe("onboarding validation", () => {
     await app.close();
   });
 
+  it("accepts formatted TFNs during onboarding", async () => {
+    const app = Fastify();
+    let payToCalledWith: any;
+    const payto: PayToProvider = {
+      id: "mock",
+      async initiateMandate(request) {
+        payToCalledWith = request;
+        return {
+          provider: "mock",
+          mandateId: "mandate-123",
+          status: "pending",
+          submittedAt: new Date("2025-01-01T00:00:00Z").toISOString(),
+          reference: request.reference,
+        };
+      },
+    };
+
+    await registerOnboardingRoutes(app, { payToProvider: payto });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/onboarding/validate",
+      payload: {
+        abn: "51 824 753 556",
+        tfn: "123-456-788",
+        orgName: "Demo Org",
+        bank: {
+          accountName: "Demo Org",
+          bsb: "123456",
+          accountNumber: "1234567",
+        },
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = response.json() as {
+      tfnToken: string;
+      secret: { ciphertext: string; kid: string };
+    };
+
+    assert.ok(body.tfnToken.startsWith("salt-test."));
+    assert.ok(!body.tfnToken.includes("123456788"));
+    assert.ok(!JSON.stringify(body).includes("123456788"));
+
+    assert.ok(payToCalledWith);
+    assert.equal(payToCalledWith.orgId, "51824753556");
+
+    await app.close();
+  });
+
   it("rejects invalid TFNs", async () => {
     const app = Fastify();
     const rejectingProvider: PayToProvider = {

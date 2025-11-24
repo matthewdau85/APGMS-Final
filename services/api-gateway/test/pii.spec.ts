@@ -75,6 +75,20 @@ describe("TFN handling", () => {
 
     assert.throws(() => decryptPII({ ciphertext: token, kid: "test-kid" }));
   });
+
+  it("normalises formatted TFNs before tokenising", () => {
+    const formatted = "123-456-788";
+    const dotted = "123.456.788";
+
+    const baseToken = tokenizeTFN(formatted);
+    const dottedToken = tokenizeTFN(dotted);
+
+    assert.equal(isValidTFN(formatted), true);
+    assert.equal(isValidTFN(dotted), true);
+    assert.equal(baseToken.startsWith("salt-v1."), true);
+    assert.equal(baseToken.includes("123456788"), false);
+    assert.equal(baseToken, dottedToken);
+  });
 });
 
 describe("admin decryption", () => {
