@@ -150,10 +150,10 @@ importers:
         specifier: ^1.23.0
         version: 1.37.0
       '@prisma/client':
-        specifier: 6.19.0
+        specifier: ^6.19.0
         version: 6.19.0(prisma@6.19.0(typescript@5.9.3))(typescript@5.9.3)
       '@prisma/instrumentation':
-        specifier: 6.19.0
+        specifier: ^6.19.0
         version: 6.19.0(@opentelemetry/api@1.8.0)
       '@simplewebauthn/server':
         specifier: ^13.2.2
@@ -187,7 +187,7 @@ importers:
         specifier: ^9.0.10
         version: 9.0.10
       prisma:
-        specifier: 6.19.0
+        specifier: ^6.19.0
         version: 6.19.0(typescript@5.9.3)
 
   services/connectors:
