@@ -6,6 +6,7 @@
     "scripts":  {
                     "build":  "echo build worker",
                     "test":  "echo test worker",
-                    "typecheck":  "echo no typecheck for worker"
+                    "typecheck":  "echo no typecheck for worker",
+                    "lint":  "pnpm exec eslint . --ext .ts"
                 }
 }

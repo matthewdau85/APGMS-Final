@@ -55,6 +55,16 @@ pnpm -w exec prisma migrate deploy
 pnpm --filter @apgms/api-gateway dev   # API on :3000
 ```
 
+## Development workflow
+
+Run the standard checks locally before opening a PR. Linting uses the shared workspace ESLint config and will fail on any style or formatting issues.
+
+```bash
+pnpm -r lint
+pnpm -r typecheck
+pnpm -r test -- --coverage
+```
+
 Verify:
 
 ```bash

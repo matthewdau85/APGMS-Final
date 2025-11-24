@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
+    "lint": "pnpm exec eslint . --ext .ts",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate"
   },
