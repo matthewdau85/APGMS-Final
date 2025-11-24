@@ -4,6 +4,8 @@ import { z } from "zod";
 
 import { authGuard } from "../auth.js";
 import { prisma } from "../db.js";
+import { recordEvidenceAudit } from "../utils/evidence-audit.js";
+import { redactEvidenceArtifact } from "../utils/compliance-artifacts.js";
 
 const formatPeriod = (start: Date, end: Date): string =>
   `${start.toISOString().slice(0, 10)}-${end.toISOString().slice(0, 10)}`;
@@ -161,6 +163,14 @@ export const registerComplianceProxy: FastifyPluginAsync = async (app) => {
   });
 
   app.get("/compliance/evidence/:artifactId", { preHandler: [authGuard] }, async (req, reply) => {
+    const user = (req.user as any) ?? {};
+    const orgId = user.orgId;
+
+    if (!orgId) {
+      reply.code(401).send({ error: "unauthorized" });
+      return;
+    }
+
     const artifactParamsSchema = z.object({ artifactId: z.string().min(1) });
     const parsed = artifactParamsSchema.safeParse(req.params ?? {});
     if (!parsed.success) {
@@ -170,14 +180,33 @@ export const registerComplianceProxy: FastifyPluginAsync = async (app) => {
       return;
     }
 
+    const includePayload = user.regulator === true;
     const artifact = await prisma.evidenceArtifact.findUnique({
       where: { id: parsed.data.artifactId },
+      select: {
+        id: true,
+        orgId: true,
+        kind: true,
+        sha256: true,
+        wormUri: true,
+        createdAt: true,
+        payload: includePayload,
+      },
     });
-    if (!artifact) {
+    if (!artifact || artifact.orgId !== orgId) {
       reply.code(404).send({ error: "artifact_not_found" });
       return;
     }
-    reply.send({ artifact });
+
+    const requestedAt = new Date();
+    await recordEvidenceAudit({
+      artifactId: artifact.id,
+      orgId: artifact.orgId,
+      requesterId: user.sub ?? "unknown",
+      timestamp: requestedAt,
+    });
+
+    reply.send({ artifact: redactEvidenceArtifact(artifact, includePayload) });
   });
 };
 
