@@ -1,0 +1,90 @@
+import Fastify from "fastify";
+
+import { registerBasRoutes } from "../src/routes/bas";
+import {
+  createPaymentPlanRequest,
+  createTransferInstruction,
+  finalizeBasLodgment,
+  recordBasLodgment,
+  verifyObligations,
+} from "@apgms/shared";
+import { recordCriticalAuditLog } from "../src/lib/audit";
+
+jest.mock("@apgms/shared", () => ({
+  recordBasLodgment: jest.fn(),
+  verifyObligations: jest.fn(),
+  createTransferInstruction: jest.fn(),
+  createPaymentPlanRequest: jest.fn(),
+  finalizeBasLodgment: jest.fn(),
+}));
+
+jest.mock("../src/lib/audit", () => ({
+  recordCriticalAuditLog: jest.fn(),
+}));
+
+jest.mock("../src/observability/metrics", () => ({
+  metrics: {
+    basLodgmentsTotal: { inc: jest.fn() },
+    transferInstructionTotal: { inc: jest.fn() },
+    paymentPlanRequestsTotal: { inc: jest.fn() },
+  },
+}));
+
+const mockUser = { orgId: "org-1", sub: "user-1", role: "admin" };
+
+const makeApp = (user: any) => {
+  const app = Fastify();
+  app.decorateRequest("user", null as any);
+  app.addHook("onRequest", (req, _rep, done) => {
+    (req as any).user = user;
+    done();
+  });
+  app.register(registerBasRoutes);
+  return app;
+};
+
+describe("bas lodgment validation/auth", () => {
+  beforeEach(() => {
+    jest.resetAllMocks();
+    (recordBasLodgment as jest.Mock).mockResolvedValue({ id: "lodg-1" });
+    (verifyObligations as jest.Mock).mockResolvedValue({ balance: 0, pending: 0, shortfall: 0 });
+    (createTransferInstruction as jest.Mock).mockResolvedValue(undefined);
+    (createPaymentPlanRequest as jest.Mock).mockResolvedValue(undefined);
+    (finalizeBasLodgment as jest.Mock).mockResolvedValue(undefined);
+    (recordCriticalAuditLog as jest.Mock).mockResolvedValue(undefined);
+  });
+
+  it("401 when unauthenticated", async () => {
+    const app = makeApp(null);
+    const res = await app.inject({ method: "POST", url: "/bas/lodgment", payload: {} });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("403 when role missing", async () => {
+    const app = makeApp({ orgId: "org-1", sub: "user-1" });
+    const res = await app.inject({ method: "POST", url: "/bas/lodgment", payload: {} });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it("400 on invalid body", async () => {
+    const app = makeApp(mockUser);
+    const res = await app.inject({
+      method: "POST",
+      url: "/bas/lodgment",
+      payload: { initiatedBy: "" },
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("happy path lodges bas", async () => {
+    const app = makeApp(mockUser);
+    const res = await app.inject({ method: "POST", url: "/bas/lodgment", payload: { initiatedBy: "tester" } });
+    expect(res.statusCode).toBe(200);
+    expect(recordBasLodgment).toHaveBeenCalled();
+    expect(recordCriticalAuditLog).toHaveBeenCalled();
+    await app.close();
+  });
+});

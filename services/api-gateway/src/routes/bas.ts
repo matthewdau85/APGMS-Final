@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { z } from "zod";
 
 import {
   finalizeBasLodgment,
@@ -20,6 +21,8 @@ type LodgmentRequest = FastifyRequest<{
   Querystring: { basCycleId?: string };
   Body?: { initiatedBy?: string };
 }>;
+
+const BasLodgmentBodySchema = z.object({ initiatedBy: z.string().min(1).optional() });
 
 function ensureUserOrg(request: FastifyRequest, reply: FastifyReply): string | null {
   const user = (request as any).user as { orgId?: string } | undefined;
@@ -48,10 +51,27 @@ export async function registerBasRoutes(
       const orgId = ensureUserOrg(request, reply);
       if (!orgId) return;
 
+      if (!request.user?.role) {
+        reply.code(403).send({ error: "forbidden_role" });
+        return;
+      }
+
+      const parsed = BasLodgmentBodySchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        reply.code(400).send({
+          error: {
+            code: "invalid_body",
+            message: "Validation failed",
+            details: parsed.error.flatten(),
+          },
+        });
+        return;
+      }
+
       const basCycleId = String(request.query.basCycleId ?? "manual");
       const lodgment = await recordBasLodgment({
         orgId,
-        initiatedBy: request.body?.initiatedBy,
+        initiatedBy: parsed.data.initiatedBy,
         taxTypes: TAX_TYPES.map((type) => type.key),
         status: "in_progress",
       });

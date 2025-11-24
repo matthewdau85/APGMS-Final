@@ -192,7 +192,7 @@ export async function registerRegulatorRoutes(
     };
   });
 
-  app.get("/monitoring/snapshots", async (request: RegulatorRequest) => {
+  app.get("/monitoring/snapshots", async (request: RegulatorRequest, reply) => {
     const orgId = ensureOrgId(request);
 
     const querySchema = z.object({
@@ -206,9 +206,10 @@ export async function registerRegulatorRoutes(
 
     const parsed = querySchema.safeParse(request.query ?? {});
     if (!parsed.success) {
-      return {
-        error: { code: "invalid_query", details: parsed.error.flatten() },
-      };
+      reply
+        .code(400)
+        .send({ error: { code: "invalid_query", details: parsed.error.flatten() } });
+      return;
     }
     const limit = parsed.data.limit;
 
