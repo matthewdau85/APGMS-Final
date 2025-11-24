@@ -48,10 +48,6 @@ export default function ProtectedLayout() {
     }
   }, [token, navigate, location.pathname]);
 
-  if (!token) {
-    return null;
-  }
-
   function handleLogout() {
     clearToken();
     navigate("/", { replace: true });
@@ -110,6 +106,10 @@ export default function ProtectedLayout() {
       })) ?? [];
     return [...alertItems, ...evidenceItems].slice(0, 6);
   }, [summary]);
+
+  if (!token) {
+    return null;
+  }
 
   return (
     <div style={outerShellStyle}>

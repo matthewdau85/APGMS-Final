@@ -139,10 +139,10 @@ export function registerPIIRoutes(app: FastifyInstance, guard: AdminGuard): void
           metadata: { kid: body.kid },
         });
         return reply.code(200).send({ value });
-      } catch (error) {
-        return reply.code(400).send({ error: "invalid_payload" });
-      }
-    },
+        } catch (_error) {
+          return reply.code(400).send({ error: "invalid_payload" });
+        }
+      },
   );
 }
 

@@ -53,9 +53,9 @@ async function loadKeys(): Promise<void> {
   let parsed: { keys?: JWK[] };
   try {
     parsed = JSON.parse(jwksEnv) as { keys?: JWK[] };
-  } catch (error) {
-    throw new AuthError("Invalid JWT key set", 500, "jwt_config_invalid");
-  }
+    } catch (_error) {
+      throw new AuthError("Invalid JWT key set", 500, "jwt_config_invalid");
+    }
   if (!parsed.keys || parsed.keys.length === 0) {
     throw new AuthError("JWT key set is empty", 500, "jwt_config_invalid");
   }
@@ -141,9 +141,9 @@ export async function verifyRequest(
         issuer,
         clockTolerance: clockToleranceSeconds,
       });
-    } catch (error) {
-      throw new AuthError("Token verification failed");
-    }
+      } catch (_error) {
+        throw new AuthError("Token verification failed");
+      }
     payload = verification.payload;
   } else {
     const secret = process.env.AUTH_DEV_SECRET;
@@ -156,9 +156,9 @@ export async function verifyRequest(
         issuer,
         clockTolerance: clockToleranceSeconds,
       }) as JWTPayload;
-    } catch (error) {
-      throw new AuthError("Token verification failed");
-    }
+      } catch (_error) {
+        throw new AuthError("Token verification failed");
+      }
   }
 
   const principal = buildPrincipalFromPayload(payload, kid, token);

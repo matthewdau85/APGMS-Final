@@ -13,7 +13,10 @@ module.exports = {
     extends: ['eslint:recommended', 'plugin:@typescript-eslint/recommended'],
     rules: {
         '@typescript-eslint/no-explicit-any': 'off',
-        '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+        '@typescript-eslint/no-unused-vars': [
+            'warn',
+            { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+        ],
         '@typescript-eslint/no-empty-object-type': 'warn',
         '@typescript-eslint/ban-ts-comment': 'warn',
         'no-empty': 'warn',

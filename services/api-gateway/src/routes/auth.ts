@@ -27,7 +27,7 @@ import {
   PasskeyRegistrationBodySchema,
   PasskeyVerifyBodySchema,
   unauthorized,
-  forbidden,
+  forbidden as _forbidden,
   notFound,
   conflict,
   badRequest,

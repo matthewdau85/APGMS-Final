@@ -1,36 +1,20 @@
 import { useState } from "react";
-import { Box, Button, TextField, Select, MenuItem, Stepper, Step, StepLabel } from "@mui/material";
+import { Box, Button, TextField, Stepper, Step, StepLabel } from "@mui/material";
 
 export default function OnboardingWizard() {
   const [step, setStep] = useState(0);
   const [abn, setAbn] = useState("");
   const [tfn, setTfn] = useState("");
-  const [obligations, setObligations] = useState<string[]>([]);
   // other state: bank, accounts, schedule…
 
   async function handleValidate() {
     const res = await fetch(`/onboarding/validate?abn=${abn}&tfn=${tfn}`, { credentials: "include" });
-    const data = await res.json();
-    setObligations(data.obligations);  // e.g. ["PAYGW", "GST"]
+    await res.json();
+    // use obligations response to populate subsequent steps, e.g. ["PAYGW", "GST"]
     setStep(1);
   }
 
   // … handlers for schedule & bank selection …
-
-  async function handleSubmit() {
-    await fetch("/onboarding/setup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        abn, tfn,
-        bankProvider,
-        schedule,
-        accounts: { paygw: paygwAccount, gst: gstAccount, paygi: paygiAccount },
-      }),
-    });
-    // redirect to dashboard
-  }
 
   return (
     <Box>

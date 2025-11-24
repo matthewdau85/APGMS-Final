@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   fetchComplianceReport,
   fetchEvidenceArtifacts,
@@ -23,13 +23,7 @@ export default function CompliancePage() {
   const [artifactSuccess, setArtifactSuccess] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!token) return;
-    void loadReport();
-    void loadArtifacts();
-  }, [token]);
-
-  async function loadReport() {
+  const loadReport = useCallback(async () => {
     if (!token) return;
     setLoading(true);
     setError(null);
@@ -42,9 +36,9 @@ export default function CompliancePage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [token]);
 
-  async function loadArtifacts() {
+  const loadArtifacts = useCallback(async () => {
     if (!token) return;
     setArtifactLoading(true);
     setArtifactError(null);
@@ -58,7 +52,13 @@ export default function CompliancePage() {
     } finally {
       setArtifactLoading(false);
     }
-  }
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    void loadReport();
+    void loadArtifacts();
+  }, [token, loadReport, loadArtifacts]);
 
   function handleDownload() {
     window.open("http://localhost:3000/compliance/report", "_blank");
@@ -71,7 +71,7 @@ export default function CompliancePage() {
     try {
       const response = await createEvidenceArtifact(token);
       setArtifactSuccess(
-        `Evidence pack generated (${response.artifact.id.slice(0, 8)}…, sha ${response.artifact.sha256.slice(0, 12)})`
+        `Evidence pack generated (${response.artifact.id.slice(0, 8)}â€¦, sha ${response.artifact.sha256.slice(0, 12)})`
       );
       await loadArtifacts();
     } catch (err) {
@@ -261,11 +261,6 @@ function statusTone(status: string) {
   if (upper === "BLOCKED" || upper === "FAILED") return "danger";
   return "neutral";
 }
-
-type SummaryCardProps = {
-  label: string;
-  value: string;
-};
 
 function formatWeeklyAmount(plan: PaymentPlan): string {
   const raw = plan.details["weeklyAmount"];

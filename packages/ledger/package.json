@@ -7,7 +7,7 @@
   "types": "dist/index.d.ts",
     "scripts": {
       "build": "tsc -p tsconfig.json",
-    "lint": "pnpm exec eslint . --ext .ts",
+    "lint": "pnpm exec eslint . --ext .ts --max-warnings=0",
       "test": "pnpm exec jest --config ../../jest.config.js --runTestsByPath ../../packages/ledger/tests/journalWriter.test.ts --coverage"
     },
   "dependencies": {

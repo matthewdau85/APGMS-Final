@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { fetchAlerts, resolveAlert, initiateMfa } from "./api";
 import { getToken, getSessionUser } from "./auth";
 import { ErrorState, SkeletonBlock, StatusChip } from "./components/UI";
@@ -14,7 +14,7 @@ export default function AlertsPage() {
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const loadAlerts = async () => {
+  const loadAlerts = useCallback(async () => {
     if (!token) return;
     setError(null);
     try {
@@ -26,12 +26,12 @@ export default function AlertsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     if (!token) return;
     void loadAlerts();
-  }, [token]);
+  }, [token, loadAlerts]);
 
   async function handleResolve(alert: AlertRecord) {
     if (!token) return;
@@ -121,7 +121,7 @@ export default function AlertsPage() {
                       <span style={alertTitleStyle}>{alert.message}</span>
                     </div>
                     <div style={metaTextStyle}>
-                      {alert.type} • {new Date(alert.createdAt).toLocaleString()}
+                      {alert.type} ï¿½ {new Date(alert.createdAt).toLocaleString()}
                     </div>
                     {alert.resolutionNote && <div style={resolutionNoteStyle}>Note: {alert.resolutionNote}</div>}
                   </div>

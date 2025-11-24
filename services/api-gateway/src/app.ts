@@ -8,12 +8,12 @@ import { context, trace } from "@opentelemetry/api";
 import "dotenv/config.js";
 
 import {
-  AppError,
-  badRequest,
-  conflict,
-  forbidden,
-  notFound,
-  unauthorized,
+  AppError as _AppError,
+  badRequest as _badRequest,
+  conflict as _conflict,
+  forbidden as _forbidden,
+  notFound as _notFound,
+  unauthorized as _unauthorized,
 } from "@apgms/shared";
 import { config } from "./config.js";
 
@@ -27,16 +27,16 @@ import { registerBankLinesRoutes } from "./routes/bank-lines.js";
 import { registerTaxRoutes } from "./routes/tax.js";
 import registerConnectorRoutes from "./routes/connectors.js";
 import { prisma } from "./db.js";
-import { parseWithSchema } from "./lib/validation.js";
+import { parseWithSchema as _parseWithSchema } from "./lib/validation.js";
 import { registerBasRoutes } from "./routes/bas.js";
 import { registerTransferRoutes } from "./routes/transfers.js";
 import { registerIntegrationEventRoutes } from "./routes/integration-events.js";
 import {
-  verifyChallenge,
-  requireRecentVerification,
-  type VerifyChallengeResult,
+  verifyChallenge as _verifyChallenge,
+  requireRecentVerification as _requireRecentVerification,
+  type VerifyChallengeResult as _VerifyChallengeResult,
 } from "./security/mfa.js";
-import { recordAuditLog } from "./lib/audit.js";
+import { recordAuditLog as _recordAuditLog } from "./lib/audit.js";
 import { ensureRegulatorSessionActive } from "./lib/regulator-session.js";
 import {
   metrics,

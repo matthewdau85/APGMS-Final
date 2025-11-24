@@ -4,11 +4,7 @@ import {
   collectDefaultMetrics,
   register,
 } from "prom-client";
-import type {
-  FastifyInstance,
-  FastifyPluginCallback,
-  FastifyRequest,
-} from "fastify";
+import type { FastifyPluginCallback, FastifyRequest } from "fastify";
 
 collectDefaultMetrics();
 

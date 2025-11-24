@@ -62,10 +62,10 @@ export async function registerPaymentPlanRoutes(app: FastifyInstance) {
         payload.metadata,
       );
       reply.send({ updated });
-    } catch (error) {
-      reply.code(404).send({ error: "plan_not_found" });
-    }
-  });
+      } catch (_error) {
+        reply.code(404).send({ error: "plan_not_found" });
+      }
+    });
 
   app.get("/payment-plans/:id/summary", async (request: FastifyRequest, reply: FastifyReply) => {
     const id = (request.params as { id: string }).id;

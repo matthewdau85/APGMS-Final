@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { fetchGstFeeds, fetchPayrollFeeds, generateDemoBankLines } from "./api";
 import { getToken } from "./auth";
 import { ErrorState, SkeletonBlock, StatusChip } from "./components/UI";
@@ -15,12 +15,7 @@ export default function FeedsPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [demoBusy, setDemoBusy] = useState(false);
 
-  useEffect(() => {
-    if (!token) return;
-    void loadFeeds();
-  }, [token]);
-
-  async function loadFeeds() {
+  const loadFeeds = useCallback(async () => {
     if (!token) return;
     setLoading(true);
     setError(null);
@@ -38,7 +33,12 @@ export default function FeedsPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    void loadFeeds();
+  }, [token, loadFeeds]);
 
   async function handleDemoIngest() {
     if (!token) return;
