@@ -20,7 +20,6 @@ export interface AppConfig {
   };
   readonly taxEngineUrl: string;
 
-  // auth bits we actually use at runtime (these were in env before)
   readonly auth: {
     readonly audience: string;
     readonly issuer: string;
@@ -270,6 +269,7 @@ export function loadConfig(): AppConfig {
   // if we reached here, PII is valid
   const kmsKeysetLoaded = true;
   const requireHttps = process.env.REQUIRE_TLS === "true";
+  const enableIsolation = process.env.SECURITY_ENABLE_ISOLATION === "true";
 
   // rate limit config
   const rateLimitMax = parseIntegerEnv(

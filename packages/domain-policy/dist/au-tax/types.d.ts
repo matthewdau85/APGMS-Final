@@ -24,7 +24,7 @@ export interface PaygwBracket {
 }
 export interface PaygwConfig {
     meta: TaxParameterSetMeta;
-    brackets: PaygwBracket[];
+    brackets: ReadonlyArray<PaygwBracket>;
     flags?: Record<string, boolean | string | number>;
 }
 export interface GstConfig {
@@ -37,6 +37,9 @@ export interface GstConfig {
  * Engines should downcast based on taxType.
  */
 export type AuTaxConfig = PaygwConfig | GstConfig;
+/**
+ * Repository interface used by engines to load AU tax configuration.
+ */
 export interface TaxConfigRepository {
     /**
      * Resolve the AU tax parameter set in effect for the given date and tax type.

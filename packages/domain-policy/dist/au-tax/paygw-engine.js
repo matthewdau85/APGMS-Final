@@ -11,19 +11,19 @@ export class PaygwEngine {
         this.configRepo = configRepo;
     }
     async calculate(input) {
-        const { jurisdiction, paymentDate } = input;
+        const { jurisdiction, paymentDate, grossCents } = input;
         const config = await this.configRepo.getActiveConfig({
             jurisdiction,
             taxType: TaxType.PAYGW,
             onDate: paymentDate,
         });
         const paygwConfig = this.assertPaygwConfig(config);
-        const bracketIndex = this.findBracketIndex(paygwConfig.brackets, input.grossCents);
+        const bracketIndex = this.findBracketIndex(paygwConfig.brackets, grossCents);
         if (bracketIndex < 0) {
-            throw new Error(`No PAYGW bracket found for grossCents=${input.grossCents} in parameter set ${paygwConfig.meta.id}`);
+            throw new Error(`No PAYGW bracket found for grossCents=${grossCents} in parameter set ${paygwConfig.meta.id}`);
         }
         const bracket = paygwConfig.brackets[bracketIndex];
-        const withholdingCents = this.applyBracket(bracket, input.grossCents);
+        const withholdingCents = this.applyBracket(bracket, grossCents);
         return {
             withholdingCents,
             parameterSetId: paygwConfig.meta.id,
@@ -32,7 +32,7 @@ export class PaygwEngine {
     }
     assertPaygwConfig(config) {
         const typed = config;
-        if (!typed.meta || !Array.isArray(typed.brackets)) {
+        if (!typed?.meta || !Array.isArray(typed.brackets)) {
             throw new Error("Invalid PAYGW config returned from repository");
         }
         return typed;
@@ -55,9 +55,8 @@ export class PaygwEngine {
         // milli-rate is rate * 1000, so divide by 1000 to obtain the fractional rate.
         const variableComponent = Math.floor((excessCents * bracket.marginalRateMilli) / 1000);
         const rawWithholding = bracket.baseWithholdingCents + variableComponent;
-        // ATO tables typically round to whole dollars, but that policy belongs
-        // in the data layer (i.e. pre-rounded schedule values). Here we only
-        // clamp at zero to avoid negative withholding.
+        // ATO tables typically round to whole dollars in the published schedule, but
+        // this should be reflected in the schedule itself, not hard-coded here.
         return Math.max(0, rawWithholding);
     }
 }

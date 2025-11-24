@@ -1,15 +1,11 @@
 import { JurisdictionCode, TaxConfigRepository } from "./types";
+export type PayPeriod = "weekly" | "fortnightly" | "monthly" | "quarterly" | "annual";
 export interface PaygwCalculationInput {
     jurisdiction: JurisdictionCode;
     paymentDate: Date;
     grossCents: number;
-    payPeriod: "weekly" | "fortnightly" | "monthly" | "quarterly" | "annual";
-    flags?: {
-        hasHelpDebt?: boolean;
-        hasStslDebt?: boolean;
-        medicareExempt?: boolean;
-        [key: string]: boolean | string | number | undefined;
-    };
+    payPeriod: PayPeriod;
+    flags?: Record<string, boolean | string | number | undefined>;
 }
 export interface PaygwCalculationResult {
     withholdingCents: number;

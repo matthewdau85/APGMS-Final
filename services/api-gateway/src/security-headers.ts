@@ -3,37 +3,45 @@ import type { FastifyHelmetOptions } from "@fastify/helmet";
 import type { AppConfig } from "./config.js";
 
 /**
- * Extracted helmet configuration to keep security policy testable.
+ * Centralised Helmet configuration for the API gateway.
+ * We keep it strict enough for ATO/DSP expectations but not so
+ * exotic that it breaks local/dev.
  */
-export function helmetConfigFor(cfg: AppConfig): FastifyHelmetOptions {
+export function helmetConfigFor(config: AppConfig): FastifyHelmetOptions {
+  const isProduction = config.security.requireHttps;
+
+  const cspDirectives = {
+    defaultSrc: ["'self'"],
+    baseUri: ["'self'"],
+    scriptSrc: ["'self'"],
+    styleSrc: ["'self'", "'unsafe-inline'"],
+    imgSrc: ["'self'", "data:"],
+    connectSrc: ["'self'"],
+    fontSrc: ["'self'", "data:"],
+    objectSrc: ["'none'"],
+    frameAncestors: ["'none'"],
+    // We rely on TLS in prod; this hint is mainly for browsers.
+    upgradeInsecureRequests: [] as string[],
+  };
+
   return {
     hidePoweredBy: true,
     frameguard: { action: "deny" },
+    referrerPolicy: { policy: "no-referrer" },
+
+    // Helmet/fastify-helmet CSP – always an object here, no booleans,
+    // so TS is happy and the browser gets a clear policy.
     contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        baseUri: ["'self'"],
-        connectSrc: ["'self'", ...cfg.cors.allowedOrigins],
-        scriptSrc: [
-          "'self'",
-          // Inline boot script hash – keep this in sync with the webapp if changed
-          "'sha256-+Ul8C6HpBvEV0hgFekKPKiEh0Ug3SIn50SjA+iyTNHo='",
-        ],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", "data:"],
-        objectSrc: ["'none'"],
-        frameAncestors: ["'none'"],
-      },
+      directives: cspDirectives,
     },
-    crossOriginEmbedderPolicy: false,
-    crossOriginResourcePolicy: { policy: "same-site" as const },
-    dnsPrefetchControl: { allow: false },
-    referrerPolicy: { policy: "no-referrer" as const },
-    xssFilter: true,
-    hsts: {
-      maxAge: 15_552_000, // 180 days
-      includeSubDomains: true,
-      preload: true,
-    },
+
+    // Strict HSTS only when we *actually* require HTTPS.
+    hsts: isProduction
+      ? {
+          maxAge: 15552000, // 180 days
+          includeSubDomains: true,
+          preload: false,
+        }
+      : false,
   };
 }

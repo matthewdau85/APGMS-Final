@@ -34,7 +34,7 @@ export interface PaygwBracket {
 
 export interface PaygwConfig {
   meta: TaxParameterSetMeta;
-  brackets: PaygwBracket[];
+  brackets: ReadonlyArray<PaygwBracket>;
   // Optional additional AU flags, e.g. Medicare levy switches, STSL flags, etc.
   flags?: Record<string, boolean | string | number>;
 }
@@ -53,6 +53,9 @@ export interface GstConfig {
  */
 export type AuTaxConfig = PaygwConfig | GstConfig;
 
+/**
+ * Repository interface used by engines to load AU tax configuration.
+ */
 export interface TaxConfigRepository {
   /**
    * Resolve the AU tax parameter set in effect for the given date and tax type.

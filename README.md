@@ -1,161 +1,218 @@
-# APGMS
+APGMS – Automated PAYGW & GST Management System
 
-## Prerequisites
+Status: Prototype • AU-only • Designed for ATO DSP Operational Security Framework (OSF) alignment
+Scope: PAYGW, GST, BAS automation, one-way designated accounts, regulator view, audit guarantees.
 
-* Node 20.11.x (respect `.nvmrc` / `.tool-versions`; `nvm use` or `asdf install` will pick this up)
-* PNPM 9 via Corepack (`corepack enable && corepack prepare pnpm@9 --activate`)
-* Docker & Docker Compose
-* Playwright browsers: `pnpm exec playwright install --with-deps`
-* (Optional for smoke) k6 installed locally
+APGMS is an Australian-only platform providing hardened, DSP-grade management of PAYGW and GST liabilities, including:
 
-## Environment
+Automated PAYGW/GST calculation using versioned configuration tables.
 
-Create `.env` files at package roots as needed. **Gateway hard-start checks**:
+Designated one-way accounts ensuring PAYGW/GST cannot be misused as operating cash.
 
-* `CORS_ALLOWED_ORIGINS` **must be set** (comma-separated) or the API refuses to start.
-* KMS keyset must be available/loaded or the API refuses to start.
+ATO-grade audit trails (idempotency, immutable ledgers, shortfall tracking, reconciliation).
 
-Example (root `.env` or `services/api-gateway/.env`):
+Regulator views and APIs consistent with ATO DSP OSF requirements.
 
-```
+End-to-end encryption of TFN/ABN/BSB/account numbers using AES-256-GCM envelopes.
+
+Monorepo Structure
+APGMS-Final/
+├── services/
+│   ├── api-gateway/      # Fastify API gateway, auth, MFA, security headers, regulator routes
+│   └── connectors/       # Bank/ATO provider scaffolding (mock + real)
+├── packages/
+│   ├── domain-policy/    # AU tax engines, designated account policy, rules
+│   └── ledger/           # Double-entry ledger engine, journal & tests
+├── shared/               # Shared Prisma schema, client, cross-cutting utils (crypto, redaction)
+├── apps/
+│   └── phase1-demo/      # UI demo for Phase 1 flows
+├── webapp/               # Main UI (React/Vite)
+├── worker/               # Background jobs (parameter updates, projections)
+└── artifacts/            # KMS keys, compliance evidence bundles (gitignored except .gitkeep)
+
+AU-Only Tax Scope
+
+APGMS limits itself to the Australian tax system only for tightness of compliance and correctness:
+
+BAS, PAYGW and GST are implemented through versioned config tables.
+
+Engines do not hardcode thresholds or rates.
+
+Future extensions (PAYGI, FBT, company tax) remain AU-only.
+
+Aligns with ATO's DSP Operational Security Framework by design.
+
+Prerequisites
+Required
+
+Node.js 20.11.x
+(Use .nvmrc or .tool-versions; supports nvm use or asdf install)
+
+PNPM 9 via Corepack
+
+corepack enable
+corepack prepare pnpm@9 --activate
+
+
+Docker + Docker Compose
+
+PostgreSQL 15/16
+
+Playwright browsers
+
+pnpm exec playwright install --with-deps
+
+Optional
+
+k6 for load testing
+
+Environment Configuration
+
+Create .env files where needed (root, services/api-gateway, etc).
+
+API Gateway startup requirements (hard-fail if missing):
+
+CORS_ALLOWED_ORIGINS must be set (comma-separated).
+
+KMS keyset must be present or API refuses to start.
+
+Example .env:
 CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/apgms?schema=public
 SHADOW_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/apgms_shadow?schema=public
+
 AUTH_AUDIENCE=urn:apgms:local
 AUTH_ISSUER=urn:apgms:issuer
 AUTH_DEV_SECRET=local-dev-shared-secret-change-me
 AUTH_JWKS={"keys":[{"kid":"local","alg":"RS256","kty":"RSA","n":"replace-with-base64url-modulus","e":"AQAB"}]}
+
 ENCRYPTION_MASTER_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+
 API_RATE_LIMIT_MAX=120
 API_RATE_LIMIT_WINDOW=1 minute
 AUTH_FAILURE_THRESHOLD=5
+
 WEBAUTHN_RP_ID=localhost
 WEBAUTHN_RP_NAME=APGMS Admin
 WEBAUTHN_ORIGIN=http://localhost:5173
+
 REGULATOR_ACCESS_CODE=regulator-dev-code
 REGULATOR_JWT_AUDIENCE=urn:apgms:regulator
 REGULATOR_SESSION_TTL_MINUTES=60
+
 BANKING_PROVIDER=mock
 BANKING_MAX_READ_TRANSACTIONS=1000
 BANKING_MAX_WRITE_CENTS=5000000
-```
 
-> KMS dev keys: store JSON key material under `artifacts/kms/` (git-ignored). The directory is tracked via `.gitkeep`.
-> Rotate keys: `pnpm security:rotate-keys --write-env .env` (omit `--write-env` to dry-run).
+KMS Keying
 
----
+Store dev keys in artifacts/kms/*.json (ignored in git).
 
-## Quickstart (local)
+Rotate keys:
 
-```bash
+pnpm security:rotate-keys --write-env .env
+
+Quickstart (Local)
 pnpm i --frozen-lockfile
 pnpm -r build
 docker compose up -d
 pnpm -w exec prisma migrate deploy
-pnpm --filter @apgms/api-gateway dev   # API on :3000
-```
+pnpm --filter @apgms/api-gateway dev
 
-Verify:
 
-```bash
+API runs on http://localhost:3000
+.
+
+Smoke test
 curl -sf http://localhost:3000/health
 curl -sf http://localhost:3000/ready
 curl -sf http://localhost:3000/metrics
-```
 
----
+Idempotency (ATO-grade)
 
-## API Idempotency
+All mutating endpoints require:
 
-All mutating REST endpoints now require an `Idempotency-Key` header. Replays with the same key will return the original response payload and a response header `Idempotent-Replay: true`. Re-using a key with different payload, actor, or org scope is rejected with `409 idempotency_conflict`. Generate a fresh key for each unique write operation and persist it across retries.
+Idempotency-Key: <uuid or ULID>
 
----
 
-## Quality & Security Gates (local mirrors of CI)
+Behaviour:
 
-Run these before pushing. They match the CI jobs and "blockers".
+First request stores response in immutable log.
 
-```bash
-# Type safety
+Replays return the exact same payload plus:
+
+Idempotent-Replay: true
+
+
+Reuse with different payload, org, or actor →
+409 idempotency_conflict
+
+Persist keys across retries.
+
+Quality & Security Gates
+
+These replicate CI locally. Run before pushing.
+
+Type Safety
 pnpm -r typecheck
 
-# Tests + coverage (>= 85% enforced)
+Unit tests + coverage gate (>= 85%)
 pnpm -r test -- --coverage
 node ./scripts/check-coverage.mjs
 
-# Dependency SCA (fail on high/critical)
+Dependency SCA
 pnpm audit --audit-level=high
 
-# Secret scanning (redacted output)
-curl -sSL https://github.com/gitleaks/gitleaks/releases/latest/download/gitleaks-linux-amd64 -o gitleaks && chmod +x gitleaks
+Secret scanning
 ./gitleaks detect --no-color --redact --exit-code 1
 
-# SBOM (CycloneDX) at repo root -> sbom.json
-pnpm sbom
+SBOM generation
+pnpm sbom        # output sbom.json
 
-# Schema drift
+Schema drift
 pnpm -w exec prisma migrate status
 
-# Merge-conflict guard
-git grep -n '<<<<<<<\|=======\|>>>>>>>' -- ':!*.lock' || true
-```
+Merge-conflict guard
+git grep -n '<<<<<<<\|=======\|>>>>>>>' -- ':!*.lock'
 
----
-
-## Accessibility & Performance
-
-```bash
-# A11y smoke (fast fail)
+Accessibility & Performance
+WCAG Smoke
 pnpm -w exec playwright test webapp/tests/a11y.spec.ts
 
-# WCAG 2.1 A/AA checks (per-route axe scan)
+Axe per-route
 pnpm --filter @apgms/webapp test:axe
 
-# (Optional) Lighthouse locally, if lhci is installed
-# pnpm -w exec lhci autorun --config=./lighthouserc.json
-```
+(Optional) Lighthouse
+pnpm -w exec lhci autorun --config=./lighthouserc.json
 
----
+Operational Smoke Tests
 
-## Operational Smoke
+Once API is running:
 
-After the gateway is up:
-
-```bash
 pnpm k6:smoke -- --env BASE_URL=http://localhost:3000
-```
 
----
+Release Compliance Workflow
 
-## Release compliance
+A typical evidence bundle:
 
-* Follow `docs/compliance/checklist.md` and attach **evidence artifacts** for each run.
-* Publish dashboards from `docs/ops/dashboards.md` to the status site when applicable.
-
-**Suggested evidence bundle (per release):**
-
-```bash
 STAMP=$(date +%Y-%m-%dT%H%M%S)
 OUT=artifacts/compliance/$STAMP && mkdir -p "$OUT"
 
-# Save evidence
 pnpm -r test -- --coverage && cp -r coverage "$OUT/coverage"
 node ./scripts/check-coverage.mjs 2>&1 | tee "$OUT/coverage_gate.txt"
+
 pnpm audit --audit-level=high 2>&1 | tee "$OUT/sca.txt"
 ./gitleaks detect --no-color --redact --exit-code 1 2>&1 | tee "$OUT/gitleaks.txt" || true
+
 pnpm sbom && mv sbom.json "$OUT/sbom.json"
+
 pnpm -w exec prisma migrate status 2>&1 | tee "$OUT/prisma_status.txt"
+
 curl -sSf http://localhost:3000/ready -o "$OUT/ready.json"
 curl -sSf http://localhost:3000/metrics -o "$OUT/metrics.prom" || true
-```
 
----
-
-## Pushing your changes
-
-```bash
+Pushing Changes
 git checkout -b hardening/compliance-5-2
 git add -A
 git commit -m "docs(readme): align local workflow with 5.2 compliance gates"
 git push -u origin hardening/compliance-5-2
-```

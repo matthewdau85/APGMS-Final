@@ -8,20 +8,22 @@ import {
   TaxType,
 } from "./types";
 
+export type PayPeriod =
+  | "weekly"
+  | "fortnightly"
+  | "monthly"
+  | "quarterly"
+  | "annual";
+
 export interface PaygwCalculationInput {
   jurisdiction: JurisdictionCode; // "AU"
   paymentDate: Date;
   // Gross pay for the period in whole cents.
   grossCents: number;
   // Periodicity, used only to resolve the right AU tax table in data.
-  payPeriod: "weekly" | "fortnightly" | "monthly" | "quarterly" | "annual";
+  payPeriod: PayPeriod;
   // Optional flags for HELP/STSL etc. These must be interpreted via config flags.
-  flags?: {
-    hasHelpDebt?: boolean;
-    hasStslDebt?: boolean;
-    medicareExempt?: boolean;
-    [key: string]: boolean | string | number | undefined;
-  };
+  flags?: Record<string, boolean | string | number | undefined>;
 }
 
 export interface PaygwCalculationResult {
@@ -38,14 +40,12 @@ export interface PaygwCalculationResult {
  * No numeric rates or thresholds are hard-coded here.
  */
 export class PaygwEngine {
-  private readonly configRepo: TaxConfigRepository;
+  constructor(private readonly configRepo: TaxConfigRepository) {}
 
-  constructor(configRepo: TaxConfigRepository) {
-    this.configRepo = configRepo;
-  }
-
-  async calculate(input: PaygwCalculationInput): Promise<PaygwCalculationResult> {
-    const { jurisdiction, paymentDate } = input;
+  async calculate(
+    input: PaygwCalculationInput
+  ): Promise<PaygwCalculationResult> {
+    const { jurisdiction, paymentDate, grossCents } = input;
 
     const config = await this.configRepo.getActiveConfig({
       jurisdiction,
@@ -57,18 +57,17 @@ export class PaygwEngine {
 
     const bracketIndex = this.findBracketIndex(
       paygwConfig.brackets,
-      input.grossCents
+      grossCents
     );
 
     if (bracketIndex < 0) {
       throw new Error(
-        `No PAYGW bracket found for grossCents=${input.grossCents} in parameter set ${paygwConfig.meta.id}`
+        `No PAYGW bracket found for grossCents=${grossCents} in parameter set ${paygwConfig.meta.id}`
       );
     }
 
     const bracket = paygwConfig.brackets[bracketIndex];
-
-    const withholdingCents = this.applyBracket(bracket, input.grossCents);
+    const withholdingCents = this.applyBracket(bracket, grossCents);
 
     return {
       withholdingCents,
@@ -79,14 +78,14 @@ export class PaygwEngine {
 
   private assertPaygwConfig(config: unknown): PaygwConfig {
     const typed = config as PaygwConfig;
-    if (!typed.meta || !Array.isArray(typed.brackets)) {
+    if (!typed?.meta || !Array.isArray(typed.brackets)) {
       throw new Error("Invalid PAYGW config returned from repository");
     }
     return typed;
   }
 
   private findBracketIndex(
-    brackets: PaygwBracket[],
+    brackets: ReadonlyArray<PaygwBracket>,
     grossCents: number
   ): number {
     // Brackets are expected to be sorted ascending by thresholdCents.
@@ -102,10 +101,7 @@ export class PaygwEngine {
   }
 
   private applyBracket(bracket: PaygwBracket, grossCents: number): number {
-    const excessCents = Math.max(
-      0,
-      grossCents - bracket.thresholdCents
-    );
+    const excessCents = Math.max(0, grossCents - bracket.thresholdCents);
 
     // milli-rate is rate * 1000, so divide by 1000 to obtain the fractional rate.
     const variableComponent = Math.floor(
@@ -114,9 +110,8 @@ export class PaygwEngine {
 
     const rawWithholding = bracket.baseWithholdingCents + variableComponent;
 
-    // ATO tables typically round to whole dollars, but that policy belongs
-    // in the data layer (i.e. pre-rounded schedule values). Here we only
-    // clamp at zero to avoid negative withholding.
+    // ATO tables typically round to whole dollars in the published schedule, but
+    // this should be reflected in the schedule itself, not hard-coded here.
     return Math.max(0, rawWithholding);
   }
 }

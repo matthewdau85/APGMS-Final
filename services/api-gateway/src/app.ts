@@ -20,6 +20,7 @@ import { config } from "./config.js";
 import rateLimit from "./plugins/rate-limit.js";
 import { authGuard, createAuthGuard, REGULATOR_AUDIENCE } from "./auth.js";
 import { registerAuthRoutes } from "./routes/auth.js";
+import { helmetConfigFor } from "./security-headers";
 import { registerRegulatorAuthRoutes } from "./routes/regulator-auth.js";
 import { registerRegulatorRoutes } from "./routes/regulator.js";
 import { registerAdminDataRoutes } from "./routes/admin.data.js";
@@ -54,7 +55,7 @@ import { registerComplianceMonitorRoutes } from "./routes/compliance-monitor.js"
 import { registerOnboardingRoutes } from "./routes/onboarding.js";
 import { registerForecastRoutes } from "./routes/forecast.js";
 import { ERROR_MESSAGES } from "./lib/errors.js";
-import { helmetConfigFor } from "./security-headers.js";
+
 
 type BuildServerOptions = {
   bankLinesPlugin?: FastifyPluginAsync;

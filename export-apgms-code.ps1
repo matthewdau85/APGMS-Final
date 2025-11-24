@@ -3,6 +3,7 @@
 # Exclusions:
 # - node_modules
 # - .git
+# - dist
 # - the output file itself (combined-code-export.txt)
 
 # Detect repo root as the folder this script lives in
@@ -32,15 +33,13 @@ $codeExtensions = @(
     '.html', '.css'
 )
 
-# Find all files under the repo root, excluding node_modules, .git, and the export file
 $allFiles = Get-ChildItem -Path $root -Recurse -File -ErrorAction SilentlyContinue |
     Where-Object {
-        # Exclude node_modules and .git
-        ($_.FullName -notmatch '\\node_modules\\') -and
-        ($_.FullName -notmatch '\\\.git\\') -and
-        # Exclude the export file itself
-        ($_.FullName -ne $output) -and
-        # Only include code/text extensions
+        $full = $_.FullName
+        ($full -notmatch '\\node_modules\\') -and
+        ($full -notmatch '\\\.git\\') -and
+        ($full -notmatch '\\dist\\') -and
+        ($full -ne $output) -and
         ($codeExtensions -contains $_.Extension.ToLower())
     } |
     Select-Object -ExpandProperty FullName |
@@ -62,4 +61,3 @@ foreach ($file in $allFiles) {
 Write-Host ""
 Write-Host "Exported $($allFiles.Count) files to:"
 Write-Host "  $output"
-

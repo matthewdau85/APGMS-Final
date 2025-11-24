@@ -1,168 +1,229 @@
-# APGMS Compliance And Patent Mapping (Australia Only)
+# APGMS Compliance and Patent Mapping (Australia Only)
 
-## Overview
+## 1. Scope and Positioning
 
-The Automated PAYGW & GST Management System (APGMS) is implemented as an
-Australia-only platform that automates real-time securing of PAYGW and GST
-liabilities into designated one-way accounts, and then supports accurate BAS
-lodgment, shortfall management, payment plans, and evidence capture for the
-Australian Taxation Office (ATO).
+The Automated PAYGW & GST Management System (APGMS) is an **Australia-only** platform
+designed to:
 
-The core scope is:
+- Secure PAYGW and GST liabilities in real time into **designated one-way accounts**.
+- Support accurate and auditable **BAS lodgment**.
+- Manage **shortfalls, payment plans and remissions** in line with ATO practice.
+- Provide **regulator-grade views** for the Australian Taxation Office (ATO).
+
+Current scope:
 
 - Australian BAS only.
-- Australian PAYGW and GST only (with extension points for PAYGI, FBT, and company tax).
-- Designated one-way accounts for PAYGW and GST to prevent misuse of tax funds.
-- Central, versioned Australian tax configuration tables (no hard-coded rates).
-- Full compliance trail and regulator views for ATO users.
+- Australian PAYGW and GST only (with clearly-defined extension points for PAYGI, FBT and
+  company tax).
+- Australian entities only; multi-jurisdiction logic is out of scope.
 
-All organisations in the system are treated as Australian entities and all tax
-logic, tests, and integrations are aligned with ATO rules and processes.
+All tax logic, tests and integrations are aligned with **ATO legislation, practice
+statements and DSP Operational Security Framework (DSP OSF)** expectations.
 
-## Patent Feature Mapping
+---
 
-### 1. One-Way Designated Accounts
+## 2. One-Way Designated Accounts
 
-**Patent feature**
+### Patent-Aligned Feature
 
-- Dedicated, one-way designated accounts for PAYGW and GST.
-- Deposit-only semantics enforced at the application level.
-- Lifecycle management (activation, sunset, closure).
+- Dedicated **designated accounts** for PAYGW and GST.
+- **Deposit-only** semantics enforced at the application layer.
+- Lifecycle management from **activation through sunsetting and closure**.
 
-**Implementation**
+### Implementation
 
-- Prisma model for designated tax accounts tied to `Org` and `TaxType`.
-- Application logic enforces:
-  - No withdrawals from designated accounts.
-  - At most one ACTIVE designated account per `(orgId, taxType)`.
-  - Lifecycle transitions from activation through to closure.
-- API routes expose:
-  - Creation, activation, sunset, and closure of designated accounts.
-  - Validation endpoints to confirm account configuration before use.
+- Domain model in `packages/domain-policy/src/designated-accounts`:
+  - `DesignatedAccountType`, `DesignatedAccountLifecycle`,
+    `DesignatedAccount` interface.
+- Guard logic in `guards.ts`:
+  - Rejects non-positive amounts.
+  - Forbids movements on `PENDING_ACTIVATION` and `CLOSED` accounts.
+  - For `SUNSETTING` accounts, permits deposits only.
+  - For all one-way accounts, forbids withdrawals and internal transfers.
+- Persistence via Prisma models (not shown in this doc) that tie accounts to:
+  - An `Org` (entity).
+  - A banking provider account identifier.
 
-### 2. Real-Time PAYGW and GST Securing
+This delivers the “designated, one-way account” behaviour described in the patent
+without relying on bank-side controls alone.
 
-**Patent feature**
+---
+
+## 3. Real-Time PAYGW and GST Securing
+
+### Patent-Aligned Feature
 
 - Continuous securing of PAYGW and GST into designated accounts based on:
-  - STP (Single Touch Payroll) data for PAYGW.
-  - POS/transaction feeds for GST.
-- Final remittance at BAS lodgment only.
+  - **STP / payroll events** for PAYGW.
+  - **POS / transaction feeds** for GST.
+- Final remittance occurs at **BAS lodgment**, not at the point of sale/payroll.
 
-**Implementation**
+### Implementation
 
-- Prisma models for PAYGW and GST obligations tied to:
-  - Payroll/STP events (PAYGW).
-  - Transaction feeds (GST).
-- Domain engines:
-  - `calculatePaygwObligation` uses tax parameter sets and rate schedules.
-  - `calculateGstObligation` computes net GST for a BAS period.
-- `BasCycle` tracks:
-  - Required vs secured PAYGW and GST.
-  - JSON breakdowns for audit and ATO evidence.
+- PAYGW and GST obligations are persisted as AU-specific domain records tied to:
+  - Payroll / STP feeds (PAYGW).
+  - Transaction feeds and journal entries (GST).
+- The AU tax engine in `packages/domain-policy/src/au-tax` is entirely
+  **data-driven**:
+  - `TaxParameterSet` and `TaxRateSchedule` tables define rate sets and brackets.
+  - `PaygwEngine` resolves the active parameter set by jurisdiction, tax type and
+    date, then applies brackets to calculate withholding.
+  - A separate GST config maps financial years to a **single rate in basis points**.
+- BAS cycle records capture:
+  - Required vs secured PAYGW and GST for each BAS period.
+  - JSON breakdowns that can be surfaced directly in regulator views.
 
-### 3. BAS Lodgment And Remittance
+No PAYGW, GST or HELP/STSL rates are hard-coded in the engine; they are
+maintained in versioned configuration tables.
 
-**Patent feature**
+---
 
-- Lodgment of Australian BAS periods with correct PAYGW and GST totals.
-- Shortfall detection and refund BAS handling.
+## 4. BAS Lodgment and Remittance
 
-**Implementation**
+### Patent-Aligned Feature
 
-- `BasCycle` state machine:
-  - `DRAFT` → `READY` → `LODGED` / `REFUND_DUE`, with `SHORTFALL` when under-secured.
+- Correct and traceable lodgment of Australian BAS periods.
+- Handling of **shortfalls** and **refund BAS** scenarios.
+
+### Implementation
+
+- A `BasCycle` state machine (domain-level) tracks:
+  - Period status: `DRAFT` → `READY` → `LODGED` / `REFUND_DUE`.
+  - Coverage ratios (secured vs required PAYGW and GST).
+  - Shortfall detection when secured amounts undershoot obligations.
 - Lodgment logic:
-  - Uses tax engines and configuration tables only (no hard-coded rates).
-  - Records lodgment metadata and outcomes.
-- Connectors:
+  - Uses only the AU configuration tables and engines for calculations.
+  - Stores lodgment metadata and any ATO reference identifiers.
+- Connectors (planned / stubbed):
   - Adapter for ATO BAS lodgment (e.g. via SBR).
-  - Evidence artifacts linking to statements and confirmations.
+  - Storage of ATO confirmations as evidence artefacts.
 
-### 4. Shortfall Detection And Alerts
+---
 
-**Patent feature**
+## 5. Shortfall Detection and Alerts
 
-- Pre-lodgment shortfall detection.
-- Alerts/monitoring snapshots for regulator oversight.
+### Patent-Aligned Feature
 
-**Implementation**
+- Early detection of likely BAS shortfalls.
+- Monitoring and alerting for both the business and the regulator.
 
-- `Alert` and `MonitoringSnapshot` models for:
-  - Shortfall warnings.
-  - Designated account imbalance.
-  - Other AU risk signals.
-- Regulator routes:
+### Implementation
+
+- Domain models for:
+  - `Alert` and `MonitoringSnapshot` (e.g. “PAYGW shortfall projected for this BAS
+    period”, “Designated account not funded for X days”).
+- Regulator routes (demo / stub level):
   - `/regulator/compliance/report`
   - `/regulator/alerts`
   - `/regulator/monitoring/snapshots`
-- Dashboard surfaces:
-  - BAS coverage, secured ratios, and risk bands.
+- Outputs:
+  - Per-org shortfall warnings.
+  - Coverage ratios and basic risk bands.
+  - Aggregated views that can be used for ATO portfolio-level analysis.
 
-### 5. Payment Plans, Remissions, And Evidence
+---
 
-**Patent feature**
+## 6. Payment Plans, Penalties and Evidence
+
+### Patent-Aligned Feature
 
 - Structured payment plans for BAS-related debts.
-- GIC/penalty modelling and remission workflows.
-- Rich evidence trail for hardship and compliance.
+- GIC / penalty modelling and remission workflows.
+- Rich, auditable evidence trails.
 
-**Implementation**
+### Implementation
 
-- Models:
-  - `PaymentPlanSchedule`, `PaymentPlanInstalment`.
-  - `PenaltyEvent`, `RemissionRequest`.
-  - `EvidenceArtifact` for bank statements, STP snapshots, ATO account statements, etc.
-- Domain logic:
-  - Generates schedules and updates statuses.
-  - Tracks GIC and penalty events.
-- Endpoints:
-  - `/payment-plans/*` for plan creation and review.
-  - `/regulator/evidence/*` for regulator-facing evidence views.
+- Domain models:
+  - `PaymentPlanSchedule` / `PaymentPlanInstalment` for structured arrangements.
+  - `PenaltyEvent` and `RemissionRequest` for GIC/penalty activity.
+  - `EvidenceArtifact` for:
+    - Bank statements.
+    - STP snapshots.
+    - ATO account statements and notices.
+- APIs:
+  - `/payment-plans/*` for creating and updating plans.
+  - `/regulator/evidence/*` for ATO-facing evidence views.
+- The ledger component provides an immutable journal underpinning
+  reconciliations between:
+  - Source transactions.
+  - Designated accounts.
+  - ATO running balance accounts.
 
-### 6. AU Tax Configuration Tables
+---
 
-**Patent feature**
+## 7. AU Tax Configuration Tables
+
+### Patent-Aligned Feature
 
 - Central, versioned Australian tax configuration.
-- No hard-coded PAYGW, GST, HELP/STSL, or other rates in code.
+- No hard-coded PAYGW, GST or other rates.
 
-**Implementation**
+### Implementation
 
-- Tax configuration models (parameter sets and rate schedules) with:
-  - `TaxType`, effective dates, and JSON parameters.
-  - Bracketed rate schedules for PAYGW.
-- Rule-update worker:
-  - Validates non-overlapping periods per tax type.
+- Prisma models for:
+  - `TaxParameterSet` (jurisdiction, tax type, financial year, validity window).
+  - `TaxRateSchedule` (brackets for PAYGW, simple rate rows for GST).
+- Repository implementation (`PrismaTaxConfigRepository`):
+  - Resolves the active parameter set per `(jurisdiction, taxType, date)`.
+  - Shapes rows into typed AU config objects (`PaygwConfig`, `GstConfig`).
+  - Performs a soft check for overlapping parameter windows (enforced properly by
+    migrations and the rule-update worker).
+- A rule-update worker (planned / stubbed):
+  - Upserts new parameter sets.
+  - Validates non-overlapping windows per tax type.
   - Logs changes for audit.
 
-### 7. Regulator Views, Risk Scoring, And Projections
+---
 
-**Patent feature**
+## 8. Regulator Views, Risk Scoring and Projections
 
-- Regulator-level view of risk and projected impact on collectable debt.
+### Patent-Aligned Feature
 
-**Implementation**
+- Regulator-level views of risk and projected impact on collectable debt.
+
+### Implementation
 
 - Regulator domain module computes:
-  - Per-org compliance reports and risk scores.
-  - Macro-level simulations of reduced collectable debt with APGMS adoption.
+  - Per-organisation compliance summaries and risk scores.
+  - Simple portfolio-level projections of collectable-debt reduction under
+    different APGMS adoption scenarios.
 - Routes:
   - `/regulator/compliance/report`
-  - `/regulator/simulations/debt-reduction`
+  - `/regulator/simulations/debt-reduction` (planned/demo).
 
-## Security And Privacy (ATO/DSP Context)
+---
 
-- Helmet-based CSP, HSTS, referrer policy, and frameguard.
-- AES-256-GCM envelope encryption for PII and account identifiers.
-- Key management via environment/KMS-backed providers.
-- Logging with redaction for TFN, ABN, BSB, account numbers, and auth headers.
-- Idempotency records and audit logs for all mutating operations.
+## 9. Security and Privacy (ATO / DSP OSF Context)
 
-## Scope And Extensibility
+APGMS is being built as a **DSP-grade product**, not a generic app:
 
-The system is intentionally constrained to **Australia and the ATO**:
+- HTTP security:
+  - Fastify with `@fastify/helmet`:
+    - CSP with `default-src 'self'`.
+    - HSTS (production only).
+    - Referrer-Policy, X-Content-Type-Options, X-Frame-Options, etc.
+  - Centralised security header configuration in the API gateway.
+- Data protection:
+  - AES-256-GCM envelope encryption for PII and banking identifiers.
+  - Key management via environment/KMS-backed providers.
+- Logging and observability:
+  - Structured logging with redaction of TFNs, ABNs, BSBs, account numbers and
+    authorisation headers.
+  - Audit logs for all mutating actions.
+- DSP OSF alignment:
+  - Strong authentication and authorisation layers.
+  - Isolation of production environments and secrets.
+  - Support for regulator-only access paths and views.
 
-- All tax logic is AU-only and tied to ATO rules.
-- Future extensions (PAYGI, FBT, company tax) stay within AU scope.
-- No multi-country regime support; any `regime` fields are treated as AU.
+---
+
+## 10. Extensibility and Limits
+
+The system is **deliberately constrained** to the Australian regime:
+
+- All tax logic and configuration are AU-only and linked to ATO rules.
+- Future extensions (PAYGI, FBT, company tax) remain AU-centric.
+- No cross-jurisdiction or multi-regime logic is in scope for this codebase.
+
+This narrow scope makes the compliance story clearer for both patent purposes
+and ATO DSP OSF assessment.
