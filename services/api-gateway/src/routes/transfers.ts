@@ -15,7 +15,19 @@ const TransferRequestSchema = z.object({
 
 export async function registerTransferRoutes(app: FastifyInstance) {
   app.post("/bas/transfer", async (request: FastifyRequest, reply: FastifyReply) => {
-    const payload = TransferRequestSchema.parse(request.body);
+    const parsed = TransferRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      reply.code(400).send({
+        error: {
+          code: "invalid_body",
+          message: "Validation failed",
+          details: parsed.error.flatten(),
+        },
+      });
+      return;
+    }
+
+    const payload = parsed.data;
     const expectedCode = process.env.BAS_MFA_CODE ?? "0000";
     if (payload.mfaCode !== expectedCode) {
       metrics.transferExecutionTotal.inc({ status: "failed" });
@@ -45,6 +57,7 @@ export async function registerTransferRoutes(app: FastifyInstance) {
             metadata: { instructionId: payload.instructionId },
           });
           metrics.transferExecutionTotal.inc({ status: "success" });
+          reply.header("idempotent-replay", "false");
           reply.send({ instructionId: payload.instructionId, status: "sent" });
           return { statusCode: 200 };
         },
@@ -53,6 +66,7 @@ export async function registerTransferRoutes(app: FastifyInstance) {
       metrics.transferExecutionTotal.inc({ status: "failed" });
       const message = error instanceof Error ? error.message : undefined;
       if (message?.includes("idempotent_replay")) {
+        reply.header("idempotent-replay", "true");
         reply.code(409).send({ error: "transfer_conflict" });
       } else {
         reply.code(500).send({ error: "transfer_failed" });

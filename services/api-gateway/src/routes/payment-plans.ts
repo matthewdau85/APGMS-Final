@@ -8,7 +8,6 @@ import {
   updatePaymentPlanStatus,
 } from "@apgms/shared";
 import { authGuard } from "../auth.js";
-import { parseWithSchema } from "../lib/validation.js";
 import { buildPaymentPlanNarrative } from "@apgms/shared";
 
 const PaymentPlanBodySchema = z.object({
@@ -33,6 +32,10 @@ export async function registerPaymentPlanRoutes(app: FastifyInstance) {
       reply.code(401).send({ error: "unauthenticated" });
       return;
     }
+    if (!request.user?.role) {
+      reply.code(403).send({ error: "forbidden_role" });
+      return;
+    }
     const plans = await listPaymentPlans(orgId);
     reply.send({ plans });
   });
@@ -43,7 +46,22 @@ export async function registerPaymentPlanRoutes(app: FastifyInstance) {
       reply.code(401).send({ error: "unauthenticated" });
       return;
     }
-    const payload = parseWithSchema(PaymentPlanBodySchema, request.body);
+    if (!request.user?.role) {
+      reply.code(403).send({ error: "forbidden_role" });
+      return;
+    }
+    const parsed = PaymentPlanBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      reply.code(400).send({
+        error: {
+          code: "invalid_body",
+          message: "Validation failed",
+          details: parsed.error.flatten(),
+        },
+      });
+      return;
+    }
+    const payload = parsed.data;
     const plan = await createPaymentPlanRequest({
       orgId,
       basCycleId: payload.basCycleId,
@@ -54,7 +72,18 @@ export async function registerPaymentPlanRoutes(app: FastifyInstance) {
   });
 
   app.post("/payment-plans/:id/status", async (request: FastifyRequest, reply: FastifyReply) => {
-    const payload = parseWithSchema(PaymentPlanStatusSchema, request.body);
+    const parsed = PaymentPlanStatusSchema.safeParse(request.body);
+    if (!parsed.success) {
+      reply.code(400).send({
+        error: {
+          code: "invalid_body",
+          message: "Validation failed",
+          details: parsed.error.flatten(),
+        },
+      });
+      return;
+    }
+    const payload = parsed.data;
     try {
       const updated = await updatePaymentPlanStatus(
         (request.params as { id: string }).id,
@@ -68,6 +97,15 @@ export async function registerPaymentPlanRoutes(app: FastifyInstance) {
   });
 
   app.get("/payment-plans/:id/summary", async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = (request as AuthenticatedRequest).user;
+    if (!user?.orgId) {
+      reply.code(401).send({ error: "unauthenticated" });
+      return;
+    }
+    if (!user.role) {
+      reply.code(403).send({ error: "forbidden_role" });
+      return;
+    }
     const id = (request.params as { id: string }).id;
     const plan = await prisma.paymentPlanRequest.findUnique({
       where: { id },
@@ -83,6 +121,10 @@ export async function registerPaymentPlanRoutes(app: FastifyInstance) {
     });
     if (!plan) {
       reply.code(404).send({ error: "plan_not_found" });
+      return;
+    }
+    if (plan.orgId !== user.orgId) {
+      reply.code(403).send({ error: "forbidden_wrong_org" });
       return;
     }
     const narrative = buildPaymentPlanNarrative(plan);
