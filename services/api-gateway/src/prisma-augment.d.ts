@@ -22,7 +22,7 @@ declare module '@prisma/client' {
   // The real PrismaClient is a generic class; we declare a matching generic
   // interface so TypeScript will merge these members into it.
 
-  interface PrismaClient<T = any, U = any, V = any> {
+  interface PrismaClient<_T = any, _U = any, _V = any> {
     // From src/auth.ts, src/routes/auth.ts
     user: any;
 

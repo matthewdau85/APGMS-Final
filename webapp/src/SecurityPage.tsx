@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { fetchSecurityUsers, initiateMfa, verifyMfa } from "./api";
 import { getToken, getSessionUser, updateSession } from "./auth";
 import { ErrorState, SkeletonBlock, StatusChip, StatCard } from "./components/UI";
@@ -15,12 +15,7 @@ export default function SecurityPage() {
   const [enableError, setEnableError] = useState<string | null>(null);
   const [enableSuccess, setEnableSuccess] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!token) return;
-    void loadUsers();
-  }, [token]);
-
-  async function loadUsers() {
+  const loadUsers = useCallback(async () => {
     if (!token) return;
     setError(null);
     setLoading(true);
@@ -33,7 +28,12 @@ export default function SecurityPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    void loadUsers();
+  }, [token, loadUsers]);
 
   async function handleEnableMfa() {
     if (!token || !sessionUser) return;

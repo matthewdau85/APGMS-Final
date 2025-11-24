@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   fetchBasPreview,
   lodgeBas,
@@ -8,7 +8,7 @@ import {
   initiateMfa,
 } from "./api";
 import { getToken, getSessionUser } from "./auth";
-import { ErrorState, SkeletonBlock, StatusChip, StatCard } from "./components/UI";
+import { ErrorState, SkeletonBlock, StatusChip } from "./components/UI";
 
 type BasPreviewResponse = Awaited<ReturnType<typeof fetchBasPreview>>;
 type DesignatedAccountsResponse = Awaited<ReturnType<typeof fetchDesignatedAccounts>>;
@@ -33,23 +33,7 @@ export default function BasPage() {
 
   const basCycleId = preview?.basCycleId ?? null;
 
-  useEffect(() => {
-    if (!token) return;
-    void loadPreview();
-  }, [token]);
-
-  useEffect(() => {
-    if (!token) return;
-    if (basCycleId) {
-      void loadPaymentPlan(basCycleId);
-    } else {
-      setPaymentPlan(null);
-      setPlanError(null);
-      setPlanSuccess(null);
-    }
-  }, [token, basCycleId]);
-
-  async function loadPreview() {
+  const loadPreview = useCallback(async () => {
     if (!token) return;
     setError(null);
     setDesignatedError(null);
@@ -67,23 +51,42 @@ export default function BasPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [token]);
 
-  async function loadPaymentPlan(cycleId: string) {
+  const loadPaymentPlan = useCallback(
+    async (cycleId: string) => {
+      if (!token) return;
+      setPlanError(null);
+      setPlanSuccess(null);
+      setPlanLoading(true);
+      try {
+        const response = await fetchPaymentPlanRequest(token, cycleId);
+        setPaymentPlan(response.request);
+      } catch (err) {
+        console.error(err);
+        setPlanError("Unable to load payment plan status");
+      } finally {
+        setPlanLoading(false);
+      }
+    },
+    [token],
+  );
+
+  useEffect(() => {
     if (!token) return;
-    setPlanError(null);
-    setPlanSuccess(null);
-    setPlanLoading(true);
-    try {
-      const response = await fetchPaymentPlanRequest(token, cycleId);
-      setPaymentPlan(response.request);
-    } catch (err) {
-      console.error(err);
-      setPlanError("Unable to load payment plan status");
-    } finally {
-      setPlanLoading(false);
+    void loadPreview();
+  }, [token, loadPreview]);
+
+  useEffect(() => {
+    if (!token) return;
+    if (basCycleId) {
+      void loadPaymentPlan(basCycleId);
+    } else {
+      setPaymentPlan(null);
+      setPlanError(null);
+      setPlanSuccess(null);
     }
-  }
+  }, [token, basCycleId, loadPaymentPlan]);
 
   async function handleLodge() {
     if (!token) return;

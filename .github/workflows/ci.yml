@@ -33,6 +33,10 @@ jobs:
       - name: Typecheck
         run: pnpm -r typecheck
 
+      # 2b. 🔒 Enforce lint/style rules across workspaces
+      - name: Lint
+        run: pnpm -r lint
+
       # 3. Tests + coverage gate
       #    First run tests with coverage output...
       - name: Test (with coverage)

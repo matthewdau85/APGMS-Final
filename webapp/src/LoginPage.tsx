@@ -18,7 +18,7 @@ export default function LoginPage() {
       const session = await login(email, password);
       saveSession(session);
       nav("/dashboard");
-    } catch (_) {
+    } catch (_error) {
       setError("Login failed");
     }
   }

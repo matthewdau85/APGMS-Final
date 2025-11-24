@@ -114,10 +114,10 @@ describe("POST /admin/data/delete", () => {
     };
 
     let findCalled = false;
-    prismaStub.user.findFirst = (async (...args: any[]) => {
-      findCalled = true;
-      return null;
-    }) as typeof prismaStub.user.findFirst;
+      prismaStub.user.findFirst = (async (..._args: any[]) => {
+        findCalled = true;
+        return null;
+      }) as typeof prismaStub.user.findFirst;
 
     const response = await app.inject({
       method: "POST",

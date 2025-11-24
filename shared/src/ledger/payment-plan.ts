@@ -1,4 +1,4 @@
-import { Decimal, InputJsonValue } from "@prisma/client/runtime/library";
+import { InputJsonValue } from "@prisma/client/runtime/library";
 
 import { prisma } from "../db.js";
 

@@ -9,7 +9,7 @@ export async function registerTaxRoutes(app: FastifyInstance) {
 
   app.get("/tax/health", { preHandler: guard([]) }, async (_req, reply) => {
     const span = trace.getTracer("api").startSpan("tax.health");
-    const ctx = trace.setSpan(context.active(), span);
+    const _ctx = trace.setSpan(context.active(), span);
     try {
       const upstream = String((app as any).config?.taxEngineUrl ?? "");
       if (!upstream) {
@@ -18,7 +18,7 @@ export async function registerTaxRoutes(app: FastifyInstance) {
       }
       const res = await fetch(`${upstream}/health`, { signal: AbortSignal.timeout(2000) });
       reply.send({ ok: res.ok, upstream });
-    } catch (err) {
+    } catch (_err) {
       app.metrics?.recordSecurityEvent?.("tax.health.error");
       reply.code(502).send({ ok: false });
     } finally {

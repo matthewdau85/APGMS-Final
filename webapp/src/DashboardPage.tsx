@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   fetchBankLines,
   fetchCurrentObligations,
@@ -34,12 +34,7 @@ export default function DashboardPage() {
     desc: "PAYGW escrow capture",
   });
 
-  useEffect(() => {
-    if (!token) return;
-    void loadData();
-  }, [token]);
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     if (!token) return;
     setLoading(true);
     setError(null);
@@ -67,7 +62,12 @@ export default function DashboardPage() {
       setDesignatedError("Unable to load designated account balances");
     }
     setLoading(false);
-  }
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    void loadData();
+  }, [token, loadData]);
 
   const paygwGap = useMemo(() => {
     if (!obligations) return 0;

@@ -457,7 +457,8 @@ test("deleting an organisation requires matching admin role and audits the actio
   assert.ok(stub.state.auditLogs.some((entry) => entry.action === "admin.org.delete"));
 });
 
-function createPrismaStub(initial?: Partial<State>): Stub {
+  // eslint-disable-next-line no-inner-declarations
+  function createPrismaStub(initial?: Partial<State>): Stub {
   const state: State = {
     orgs: initial?.orgs ?? [],
     users: initial?.users ?? [],
@@ -664,7 +665,8 @@ function createPrismaStub(initial?: Partial<State>): Stub {
   return { client, state };
 }
 
-  function seedOrgWithData(state: State, ids: { orgId: string; userId: string; lineId: string }) {
+    // eslint-disable-next-line no-inner-declarations
+    function seedOrgWithData(state: State, ids: { orgId: string; userId: string; lineId: string }) {
     const createdAt = new Date("2024-01-01T00:00:00Z");
     state.orgs.push({
       id: ids.orgId,
@@ -694,7 +696,8 @@ function createPrismaStub(initial?: Partial<State>): Stub {
     } as BankLine);
   }
 
-  function pick<T>(value: T, select: Record<string, boolean>): Record<string, unknown> {
+    // eslint-disable-next-line no-inner-declarations
+    function pick<T>(value: T, select: Record<string, boolean>): Record<string, unknown> {
     const result: Record<string, unknown> = {};
     for (const [key, include] of Object.entries(select)) {
       if (include && key in (value as any)) {

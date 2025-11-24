@@ -21,7 +21,7 @@ export function BankLineForm({
     try {
       await createBankLine(token, { date, amount, payee, desc });
       onCreated();
-    } catch (err) {
+    } catch (_error) {
       setError("Failed to create");
     }
   }

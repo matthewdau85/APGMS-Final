@@ -10,10 +10,7 @@ import {
   applyPendingContributions,
   summarizeContributions,
 } from "@apgms/shared/ledger/ingest.js";
-import {
-  DesignatedAccountType,
-  ensureDesignatedAccountCoverage,
-} from "@apgms/shared/ledger/designated-account.js";
+import { ensureDesignatedAccountCoverage } from "@apgms/shared/ledger/designated-account.js";
 
 const SYSTEM_ACTOR = "system";
 

@@ -113,7 +113,7 @@ export async function registerDemoRoutes(app: FastifyInstance) {
         });
         rows.push({ id: created.id, amount: created.amount.toNumber(), date: created.date.toISOString() });
         generated += 1;
-      } catch (err) {
+      } catch (_err) {
         // Ignore duplicates due to idempotency
       }
     }
@@ -147,9 +147,8 @@ export async function registerDemoRoutes(app: FastifyInstance) {
     }
     const payload = parsed.data;
 
-    const payRunId = `demo-payrun-${Date.now()}`;
-    const grossWages = 12000;
-    const totalPaygWithheld = 3200;
+      const payRunId = `demo-payrun-${Date.now()}`;
+      const totalPaygWithheld = 3200;
     const today = new Date();
     await prisma.payRun.create({
       data: {

@@ -104,10 +104,6 @@ function decodeEnvelope(data: Uint8Array): BusEnvelope {
   return JSON.parse(raw) as BusEnvelope;
 }
 
-function ensureHeaderString(value: string | undefined): string | undefined {
-  return value === undefined ? undefined : value;
-}
-
 function buildHeaders<T>(msg: BusEnvelope<T>) {
   const hdrs = headers();
   hdrs.set("apgms-eventType", msg.eventType);

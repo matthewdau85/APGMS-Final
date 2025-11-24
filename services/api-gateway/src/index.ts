@@ -13,10 +13,12 @@ async function main() {
   const shutdown = async (signal: string) => {
     try {
       app.log.info({ signal }, "shutdown_start");
-      try {
-        // @ts-ignore custom decorator defined in app.ts
-        app.setDraining?.(true);
-      } catch {}
+        try {
+          // @ts-expect-error custom decorator defined in app.ts
+          app.setDraining?.(true);
+        } catch (decoratorErr) {
+          app.log.warn({ decoratorErr }, "drain-flag-not-set");
+        }
       await app.close();
       await stopTracing();
       app.log.info("shutdown_complete");
