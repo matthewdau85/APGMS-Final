@@ -25,8 +25,7 @@ export default {
     ],
   },
 
-  testMatch: ["**/?(*.)+(spec|test).[tj]s?(x)"],
-  testPathIgnorePatterns: ["<rootDir>/services/api-gateway/test/.*\\.spec\\.[tj]sx?$"],
+  testMatch: ["**/?(*.)+(test).[tj]s?(x)"],
 
   // Resolve monorepo imports like @apgms/shared
   moduleNameMapper: {
