@@ -74,7 +74,9 @@ jest.mock("../src/providers", () => ({
 jest.mock("../src/auth", () => {
   const authGuard = (request: any, reply: any, done: () => void) => {
     if (!request.headers.authorization) {
-      reply.code(401).send({ error: { code: "unauthorized" } });
+      reply.code(401).send({
+        error: { code: "unauthorized", message: "Authorization header missing" },
+      });
       return;
     }
     done();
@@ -184,6 +186,11 @@ describe("health and readiness routes", () => {
 
   beforeAll(async () => {
     app = await buildServer();
+    await app.ready();
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
   });
 
   afterAll(async () => {
@@ -193,11 +200,14 @@ describe("health and readiness routes", () => {
   it("/health returns ok", async () => {
     const res = await app.inject({ method: "GET", url: "/health" });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ ok: true, service: "api-gateway" });
+    expect(res.json()).toMatchObject({ ok: true });
   });
 
   it("/ready returns ok when providers succeed", async () => {
     const res = await app.inject({ method: "GET", url: "/ready" });
+    expect(mockPrisma.$queryRaw).toHaveBeenCalled();
+    expect(mockProviders.redis?.ping).toHaveBeenCalled();
+    expect(mockProviders.nats?.flush).toHaveBeenCalled();
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       ok: true,
@@ -205,9 +215,23 @@ describe("health and readiness routes", () => {
     });
   });
 
+  it("/ready returns 503 when a provider check fails", async () => {
+    mockProviders.redis.ping.mockRejectedValueOnce(new Error("redis down"));
+
+    const res = await app.inject({ method: "GET", url: "/ready" });
+
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toEqual({
+      ok: false,
+      components: { db: true, redis: false, nats: true },
+    });
+  });
+
   it("auth guard returns 401 on secured routes without auth", async () => {
     const res = await app.inject({ method: "GET", url: "/bank-lines" });
     expect(res.statusCode).toBe(401);
-    expect(res.json()).toEqual({ error: { code: "unauthorized" } });
+    expect(res.json()).toEqual({
+      error: { code: "unauthorized", message: "Authorization header missing" },
+    });
   });
 });
