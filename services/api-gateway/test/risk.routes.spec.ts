@@ -9,20 +9,16 @@ process.env.AUTH_ISSUER ??= "urn:test:issuer";
 process.env.AUTH_AUDIENCE ??= "urn:test:aud";
 process.env.AUTH_JWKS ??=
   JSON.stringify({ keys: [{ kid: "local-dev", kty: "oct", alg: "HS256", k: Buffer.from(process.env.AUTH_DEV_SECRET!, "utf8").toString("base64") }] });
+process.env.MOCK_PRISMA_CLIENT ??= "true";
+process.env.DATABASE_URL ??= "file:mock.db";
 
 const SECRET = process.env.AUTH_DEV_SECRET!;
 const ISSUER = process.env.AUTH_ISSUER!;
 const AUDIENCE = process.env.AUTH_AUDIENCE!;
 
-const shared = await import("@apgms/shared");
+let detectRiskMock: ReturnType<typeof mock.fn>;
 
-const detectRiskMock = mock.method(shared as any, "detectRisk", async (orgId: string, taxType: string) => ({
-  record: { id: "risk-1", orgId, taxType, severity: "low", score: 0.1, description: "ok" },
-  snapshot: { anomaly: { score: 0.1 } },
-}));
-
-mock.method(shared as any, "listRiskEvents", async () => []);
-
+const { resetRiskOperations, setRiskOperations } = await import("../src/operations/risk.js");
 const { authGuard } = await import("../src/auth.js");
 const { registerRiskRoutes } = await import("../src/routes/risk.js");
 
@@ -47,10 +43,15 @@ describe("risk routes", () => {
   });
 
   beforeEach(() => {
-    detectRiskMock.mock.reset();
+    detectRiskMock = mock.fn(async (orgId: string, taxType: string) => ({
+      record: { id: "risk-1", orgId, taxType, severity: "low", score: 0.1, description: "ok" },
+      snapshot: { anomaly: { score: 0.1 } },
+    }));
+    setRiskOperations({ detectRisk: detectRiskMock, listRiskEvents: async () => [] });
   });
 
   after(async () => {
+    resetRiskOperations();
     await app.close();
   });
 
@@ -63,7 +64,7 @@ describe("risk routes", () => {
     });
 
     assert.equal(response.statusCode, 200);
-    assert.equal(detectRiskMock.mock.callCount(), 1);
+    assert.equal(detectRiskMock.mock.calls.length, 1);
     assert.deepEqual(detectRiskMock.mock.calls[0].arguments, ["org-valid", "GST"]);
     const body = response.json() as { risk: { taxType: string } };
     assert.equal(body.risk.taxType, "GST");
@@ -78,7 +79,7 @@ describe("risk routes", () => {
     });
 
     assert.equal(response.statusCode, 400);
-    assert.equal(detectRiskMock.mock.callCount(), 0);
+    assert.equal(detectRiskMock.mock.calls.length, 0);
     const body = response.json() as { error: { code: string; details: { fieldErrors: Record<string, string[]> } } };
     assert.equal(body.error.code, "invalid_query");
     assert.ok(body.error.details.fieldErrors.taxType?.length);

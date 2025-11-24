@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
 import { authGuard } from "../auth.js";
-import { detectRisk, listRiskEvents } from "@apgms/shared";
+import { detectRisk, listRiskEvents } from "../operations/risk.js";
 import { metrics } from "../observability/metrics.js";
 
 type RiskRequest = FastifyRequest & { user?: { orgId?: string } };
