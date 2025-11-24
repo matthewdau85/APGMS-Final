@@ -5,12 +5,21 @@ import { z } from "zod";
 
 import { authGuard } from "../auth.js";
 import { prisma } from "../db.js";
+import type { EvidenceArtifact } from "@prisma/client";
 
 const formatPeriod = (start: Date, end: Date): string =>
   `${start.toISOString().slice(0, 10)}-${end.toISOString().slice(0, 10)}`;
 
 const toNumber = (value: unknown): number =>
   typeof value === "number" ? value : Number(value ?? 0);
+
+const redactArtifact = (artifact: EvidenceArtifact) => ({
+  id: artifact.id,
+  kind: artifact.kind,
+  sha256: artifact.sha256,
+  wormUri: artifact.wormUri,
+  createdAt: artifact.createdAt.toISOString(),
+});
 
 export const registerComplianceProxy: FastifyPluginAsync = async (app) => {
   app.get("/compliance/report", { preHandler: [authGuard] }, async (req, reply) => {
@@ -201,7 +210,7 @@ export const registerComplianceProxy: FastifyPluginAsync = async (app) => {
       reply.code(404).send({ error: "artifact_not_found" });
       return;
     }
-    reply.send({ artifact });
+    reply.send({ artifact: redactArtifact(artifact) });
   });
 };
 
