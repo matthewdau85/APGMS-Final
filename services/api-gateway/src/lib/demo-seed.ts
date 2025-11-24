@@ -218,15 +218,20 @@ export async function seedDemoOrg(options: SeedOptions = {}) {
   });
   await prisma.gstTransaction.createMany({ data: gstTransactions, skipDuplicates: true });
 
+  const q1Start = dateDaysAgo(today, 120);
+  const q1End = dateDaysAgo(today, 90);
+  const q2Start = dateDaysAgo(today, 90);
+  const q2End = dateDaysAgo(today, 1);
+
   const basPeriods = await Promise.all([
     prisma.basPeriod.upsert({
-      where: { id: `demo-bas-${today.getFullYear()}-Q1` },
+      where: { orgId_start_end: { orgId: org.id, start: q1Start, end: q1End } },
       update: { status: "lodged", lodgedAt: dateDaysAgo(today, 30) },
       create: {
-        id: `demo-bas-${today.getFullYear()}-Q1`,
+        id: crypto.randomUUID(),
         orgId: org.id,
-        start: dateDaysAgo(today, 120),
-        end: dateDaysAgo(today, 90),
+        start: q1Start,
+        end: q1End,
         status: "lodged",
         lodgedAt: dateDaysAgo(today, 30),
         readyAt: dateDaysAgo(today, 35),
@@ -234,13 +239,13 @@ export async function seedDemoOrg(options: SeedOptions = {}) {
       },
     }),
     prisma.basPeriod.upsert({
-      where: { id: `demo-bas-${today.getFullYear()}-Q2` },
+      where: { orgId_start_end: { orgId: org.id, start: q2Start, end: q2End } },
       update: { status: "ready", readyAt: dateDaysAgo(today, 5) },
       create: {
-        id: `demo-bas-${today.getFullYear()}-Q2`,
+        id: crypto.randomUUID(),
         orgId: org.id,
-        start: dateDaysAgo(today, 90),
-        end: dateDaysAgo(today, 1),
+        start: q2Start,
+        end: q2End,
         status: "ready",
         readyAt: dateDaysAgo(today, 5),
       },
