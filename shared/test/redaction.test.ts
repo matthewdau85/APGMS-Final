@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { redactValue, redactError } from "../src/redaction";
+import { redactValue, redactError, redactLogPayload } from "../src/redaction";
 
 test("redactValue removes common identifiers", () => {
   const sample = {
