@@ -1,5 +1,4 @@
 // services/api-gateway/src/lib/idempotency.ts
-import { Prisma } from "@prisma/client";
 import { createHash } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import { conflict } from "@apgms/shared";
@@ -70,7 +69,8 @@ export async function withIdempotency<T extends HandlerResult>(
       requestHash: hashPayload(ctx.requestPayload ?? null),
       responseHash: hashPayload(null),
       statusCode: 202,
-      responsePayload: Prisma.JsonNull,
+      // Store null initially; we'll update after handler runs
+      responsePayload: null as any,
       resource: ctx.resource ?? null,
       resourceId: null,
     },
@@ -82,7 +82,7 @@ export async function withIdempotency<T extends HandlerResult>(
   // 4) Best-effort update (resource/resourceId)
   try {
     const responsePayload =
-      result.body === undefined ? Prisma.JsonNull : (result.body as Prisma.InputJsonValue | typeof Prisma.JsonNull);
+      result.body === undefined ? null : (result.body as any);
 
     await ctx.prisma.idempotencyEntry.update({
       where: { orgId_key: { orgId: ctx.orgId, key } },

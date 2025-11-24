@@ -26,7 +26,10 @@ function redactInternal(value, key) {
         return value;
     }
     if (typeof value === "object") {
-        return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, redactInternal(v, k)]));
+        return Object.fromEntries(Object.entries(value).map(([k, v]) => [
+            k,
+            redactInternal(v, k),
+        ]));
     }
     return maskValue(value, key);
 }

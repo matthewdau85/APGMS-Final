@@ -1,3 +1,4 @@
+// services/api-gateway/src/lib/masking.ts
 const SENSITIVE_KEY_PATTERNS = [
     "password",
     "token",
@@ -28,6 +29,22 @@ function maskString(value) {
     const end = value.slice(-2);
     return `${start}${"*".repeat(Math.max(3, value.length - 6))}${end}`;
 }
+function maskPotentialSecret(value, key) {
+    if (shouldMaskKey(key)) {
+        return MASK;
+    }
+    if (/password|secret|token|key/i.test(value)) {
+        return MASK;
+    }
+    if (/^postgres(?:ql)?:\/\//i.test(value) ||
+        /^mongodb:\/\//i.test(value)) {
+        return maskString(value);
+    }
+    if (value.length > 32) {
+        return maskString(value);
+    }
+    return value;
+}
 export function maskValue(value, key) {
     if (value == null)
         return value;
@@ -48,21 +65,6 @@ export function maskValue(value, key) {
     }
     return value;
 }
-function maskPotentialSecret(value, key) {
-    if (shouldMaskKey(key)) {
-        return MASK;
-    }
-    if (/password|secret|token|key/i.test(value)) {
-        return MASK;
-    }
-    if (/^postgres(?:ql)?:\/\//i.test(value) || /^mongodb:\/\//i.test(value)) {
-        return maskString(value);
-    }
-    if (value.length > 32) {
-        return maskString(value);
-    }
-    return value;
-}
 export function maskObject(input) {
     if (input == null) {
         return input;
@@ -73,10 +75,7 @@ export function maskObject(input) {
     if (typeof input !== "object") {
         return maskValue(input);
     }
-    const entries = Object.entries(input).map(([key, value]) => [
-        key,
-        maskValue(value, key),
-    ]);
+    const entries = Object.entries(input).map(([key, value]) => [key, maskValue(value, key)]);
     return Object.fromEntries(entries);
 }
 export function maskError(err) {

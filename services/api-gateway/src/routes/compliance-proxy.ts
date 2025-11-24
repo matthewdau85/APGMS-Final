@@ -4,12 +4,19 @@ import { z } from "zod";
 
 import { authGuard } from "../auth.js";
 import { prisma } from "../db.js";
+import { createHash } from "node:crypto";
 
 const formatPeriod = (start: Date, end: Date): string =>
   `${start.toISOString().slice(0, 10)}-${end.toISOString().slice(0, 10)}`;
 
 const toNumber = (value: unknown): number =>
   typeof value === "number" ? value : Number(value ?? 0);
+
+function sha256Of(value: unknown): string {
+  const raw =
+    typeof value === "string" ? value : JSON.stringify(value ?? null);
+  return createHash("sha256").update(raw).digest("hex");
+}
 
 export const registerComplianceProxy: FastifyPluginAsync = async (app) => {
   app.get("/compliance/report", { preHandler: [authGuard] }, async (req, reply) => {
@@ -41,7 +48,7 @@ export const registerComplianceProxy: FastifyPluginAsync = async (app) => {
         prisma.designatedAccount.findMany({ where: { orgId } }),
       ]);
 
-    const basHistory = basCycles.map((cycle) => ({
+    const basHistory = basCycles.map((cycle: any) => ({
       period: formatPeriod(cycle.periodStart, cycle.periodEnd),
       lodgedAt: cycle.lodgedAt?.toISOString() ?? null,
       status: cycle.overallStatus,
@@ -50,7 +57,7 @@ export const registerComplianceProxy: FastifyPluginAsync = async (app) => {
       )} | GST ${toNumber(cycle.gstSecured)} / ${toNumber(cycle.gstRequired)}`,
     }));
 
-    const paymentPlanHistory = paymentPlans.map((plan) => ({
+    const paymentPlanHistory = paymentPlans.map((plan: any) => ({
       id: plan.id,
       basCycleId: plan.basCycleId,
       requestedAt: plan.requestedAt.toISOString(),
@@ -61,7 +68,7 @@ export const registerComplianceProxy: FastifyPluginAsync = async (app) => {
     }));
 
     const totals = designatedAccounts.reduce(
-      (acc, account) => {
+      (acc: { paygw: number; gst: number }, account: any) => {
         if (account.type === "PAYGW") {
           acc.paygw += Number(account.balance ?? 0);
         } else if (account.type === "GST") {
@@ -148,19 +155,48 @@ export const registerComplianceProxy: FastifyPluginAsync = async (app) => {
       reply.code(401).send({ error: "unauthorized" });
       return;
     }
+
+    const bodySchema = z
+      .object({
+        kind: z.string().min(1).default("designated-reconciliation"),
+        payload: z.unknown().optional(),
+        wormUri: z.string().min(1).optional(),
+      })
+      .default({} as any);
+
+    const parsed = bodySchema.safeParse((req as any).body ?? {});
+    if (!parsed.success) {
+      reply
+        .code(400)
+        .send({ error: { code: "invalid_body", details: parsed.error.flatten() } });
+      return;
+    }
+
+    const { kind, payload, wormUri } = parsed.data;
+
+    const sha256 = sha256Of(payload ?? {});
+    const effectiveWormUri = wormUri ?? "local://evidence";
+
     const artifact = await prisma.evidenceArtifact.create({
       data: {
         orgId,
-        kind: "designated-reconciliation",
-        sha256: "mock",
-        wormUri: "mock://evidence",
-        payload: {},
+        kind,
+        sha256,
+        wormUri: effectiveWormUri,
+        payload: payload ?? {},
       },
     });
-    reply.send({ artifact: { id: artifact.id } });
+
+    reply.code(201).send({ artifact: { id: artifact.id } });
   });
 
   app.get("/compliance/evidence/:artifactId", { preHandler: [authGuard] }, async (req, reply) => {
+    const orgId = (req.user as any)?.orgId;
+    if (!orgId) {
+      reply.code(401).send({ error: "unauthorized" });
+      return;
+    }
+
     const artifactParamsSchema = z.object({ artifactId: z.string().min(1) });
     const parsed = artifactParamsSchema.safeParse(req.params ?? {});
     if (!parsed.success) {
@@ -173,11 +209,23 @@ export const registerComplianceProxy: FastifyPluginAsync = async (app) => {
     const artifact = await prisma.evidenceArtifact.findUnique({
       where: { id: parsed.data.artifactId },
     });
-    if (!artifact) {
+
+    if (!artifact || artifact.orgId !== orgId) {
       reply.code(404).send({ error: "artifact_not_found" });
       return;
     }
-    reply.send({ artifact });
+
+    reply.send({
+      artifact: {
+        id: artifact.id,
+        kind: artifact.kind,
+        sha256: artifact.sha256,
+        wormUri: artifact.wormUri,
+        createdAt: artifact.createdAt.toISOString(),
+        // payload included but still scoped to orgId
+        payload: artifact.payload ?? null,
+      },
+    });
   });
 };
 

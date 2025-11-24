@@ -2,11 +2,6 @@ import { createHash } from "node:crypto";
 import { DiscardPolicy, RetentionPolicy, StorageType, StringCodec, connect, consumerOpts, headers, } from "nats";
 const codec = StringCodec();
 export class NatsBus {
-    connection;
-    jetStream;
-    jetStreamManager;
-    stream;
-    prefix;
     constructor(connection, jetStream, jetStreamManager, stream, prefix) {
         this.connection = connection;
         this.jetStream = jetStream;

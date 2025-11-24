@@ -1,12 +1,17 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "module": "ESNext",
-    "moduleResolution": "Node"
-  },
-  "include": ["src/**/*.ts"],
-  "exclude": ["dist"]
-}
+    // Make the "root" of this project the monorepo root so that
+    // imports resolved via @apgms/shared (../../shared/src) are
+    // considered inside the project and don't trigger TS6059.
+    "rootDir": "../..",
 
+    // We only want phase1-demo to type-check; the main build
+    // artefacts come from the other packages (shared, api-gateway, webapp, etc.)
+    // so don't emit JS for this app.
+    "noEmit": true
+  },
+  "include": [
+    "src"
+  ]
+}

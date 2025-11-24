@@ -1,6 +1,8 @@
 import { EventEmitter } from "node:events";
 export class InMemoryEventBus {
-    emitter = new EventEmitter({ captureRejections: true });
+    constructor() {
+        this.emitter = new EventEmitter({ captureRejections: true });
+    }
     async publish(subject, msg) {
         this.emitter.emit(subject, msg);
     }

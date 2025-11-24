@@ -1,13 +1,13 @@
+// services/api-gateway/src/lib/audit.ts
 import crypto from "node:crypto";
-import { Prisma } from "@prisma/client";
-
 import { prisma } from "../db.js";
 
 type RecordAuditLogParams = {
   orgId: string;
   actorId: string;
   action: string;
-  metadata?: Prisma.JsonValue | null;
+  // We only need this to be JSON-serialisable; avoid hard Prisma typing.
+  metadata?: unknown | null;
   throwOnError?: boolean;
   timestamp?: Date;
 };
@@ -46,7 +46,8 @@ export async function recordAuditLog({
         orgId,
         actorId,
         action,
-        metadata: metadataValue ?? Prisma.JsonNull,
+        // Let Prisma coerce this to JSON; avoid JsonNull typings.
+        metadata: metadataValue as any,
         createdAt,
         hash,
         prevHash,
@@ -61,6 +62,8 @@ export async function recordAuditLog({
   }
 }
 
-export async function recordCriticalAuditLog(params: Omit<RecordAuditLogParams, "throwOnError">) {
+export async function recordCriticalAuditLog(
+  params: Omit<RecordAuditLogParams, "throwOnError">
+) {
   await recordAuditLog({ ...params, throwOnError: true });
 }

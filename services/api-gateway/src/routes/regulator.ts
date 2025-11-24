@@ -1,5 +1,5 @@
 // services/api-gateway/src/routes/regulator.ts
-import type { Decimal, JsonValue } from "@prisma/client/runtime/library.js";
+import type { JsonValue } from "@prisma/client/runtime/library.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { z } from "zod";
@@ -49,8 +49,8 @@ async function logRegulatorAction(
   });
 }
 
-function toNumber(value: Decimal | null | undefined): number {
-  if (!value) return 0;
+function toNumber(value: unknown | null | undefined): number {
+  if (value == null) return 0;
   return Number(value);
 }
 
@@ -62,7 +62,7 @@ export async function registerRegulatorRoutes(
   app: FastifyInstance,
   deps: RegulatorRoutesDeps = {},
 ) {
-  const db = deps.prisma ?? prisma;
+  const db = deps.prisma ?? (prisma as any as PrismaClient);
   const auditLogger = deps.auditLogger;
 
   app.get("/health", async (request: RegulatorRequest) => {

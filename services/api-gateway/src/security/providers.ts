@@ -3,19 +3,12 @@
 import { randomBytes } from "node:crypto";
 import { Buffer } from "node:buffer";
 
-// DO NOT import PrismaClient types from @prisma/client here.
-// Prisma v6 in Docker doesn't expose the same named type the way our local copy did.
-// We'll treat the prisma we receive as "any".
-//
-// We'll assume prisma.auditLog.create(...) exists at runtime.
-
 import {
   createSecretManager,
   type SecretManager,
 } from "./secret-manager.js";
 import { recordAuditLog } from "../lib/audit.js";
 import { redactValue } from "@apgms/shared";
-import type { Prisma } from "@prisma/client";
 
 import type {
   AuditEvent,
@@ -25,6 +18,10 @@ import type {
   SaltMaterial,
   TokenSaltProvider,
 } from "../lib/pii.js";
+
+// Minimal JSON type for safe metadata coercion
+type JsonPrimitive = string | number | boolean | null;
+type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 
 interface RawKeyMaterial {
   kid: string;
@@ -53,26 +50,20 @@ class EnvKeyManagementService implements KeyManagementService {
     }
     for (const raw of rawKeys) {
       if (!raw.kid || !raw.material) {
-        throw new Error(
-          "PII_KEYS entries require kid and material"
-        );
+        throw new Error("PII_KEYS entries require kid and material");
       }
       this.keys.set(raw.kid, decodeKeyMaterial(raw));
     }
     this.activeKid = activeKid ?? rawKeys[0]!.kid;
     if (!this.keys.has(this.activeKid)) {
-      throw new Error(
-        `PII_ACTIVE_KEY ${this.activeKid} missing from key set`
-      );
+      throw new Error(`PII_ACTIVE_KEY ${this.activeKid} missing from key set`);
     }
   }
 
   getActiveKey(): EncryptionKey {
     const key = this.keys.get(this.activeKid);
     if (!key) {
-      throw new Error(
-        `Active key ${this.activeKid} is not available`
-      );
+      throw new Error(`Active key ${this.activeKid} is not available`);
     }
     return key;
   }
@@ -98,9 +89,7 @@ class EnvSaltProvider implements TokenSaltProvider {
 
     for (const raw of rawSalts) {
       if (!raw.sid || !raw.secret) {
-        throw new Error(
-          "PII_SALTS entries require sid and secret"
-        );
+        throw new Error("PII_SALTS entries require sid and secret");
       }
       this.salts.set(raw.sid, {
         sid: raw.sid,
@@ -141,7 +130,7 @@ class PrismaAuditLogger implements AuditLogger {
         (payload.metadata?.orgId as string | undefined) ??
         "unknown";
       const metadata = coerceMetadata(payload.metadata);
-      const safeMetadata = redactValue(metadata) as Prisma.JsonValue | null;
+      const safeMetadata = redactValue(metadata) as JsonValue | null;
 
       await recordAuditLog({
         orgId,
@@ -194,12 +183,12 @@ export function createAuditLogger(prisma: any): AuditLogger {
 
 function coerceMetadata(
   metadata: AuditEvent["metadata"] | undefined
-    ): Prisma.JsonValue | null {
+): JsonValue | null {
   if (metadata == null) {
     return null;
   }
-      const jsonSafe = JSON.parse(JSON.stringify(metadata));
-      return jsonSafe as Prisma.JsonValue;
+  const jsonSafe = JSON.parse(JSON.stringify(metadata));
+  return jsonSafe as JsonValue;
 }
 
 async function readJsonSecret<T>(

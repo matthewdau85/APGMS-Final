@@ -1,6 +1,5 @@
 ﻿// services/connectors/src/index.ts
 
-import type { PrismaClient } from "@prisma/client";
 import {
   applyDesignatedAccountTransfer,
   generateDesignatedAccountReconciliationArtifact,
@@ -9,7 +8,7 @@ import {
 } from "@apgms/domain-policy";
 
 export type ConnectorContext = {
-  prisma: PrismaClient;
+  prisma: any;
   auditLogger?: (entry: {
     orgId: string;
     actorId: string;
@@ -55,10 +54,9 @@ async function runCapture(
   const { prisma, auditLogger } = context;
   const { orgId, amount, actorId } = input;
 
-  // Wire the simple auditLogger into the domain-policy AuditLogger shape
   const transfer = await deps.applyTransfer(
     {
-      prisma: prisma as unknown as any,
+      prisma: prisma as any,
       auditLogger: auditLogger
         ? {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -75,7 +73,7 @@ async function runCapture(
     },
     {
       orgId,
-      accountId: "payroll-buffer", // domain-policy shim is tolerant of this
+      accountId: "payroll-buffer",
       amount,
       source,
       actorId,

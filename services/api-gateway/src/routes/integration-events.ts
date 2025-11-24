@@ -1,9 +1,9 @@
+// services/api-gateway/src/routes/integration-events.ts
 import type {
   FastifyInstance,
   FastifyReply,
   FastifyRequest,
 } from "fastify";
-import { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 import {
@@ -26,7 +26,7 @@ const IntegrationEventSchema = z.object({
   amount: z
     .union([z.number(), z.string()])
     .transform((value) =>
-      typeof value === "number" ? value.toString() : value,
+      typeof value === "number" ? value.toString() : value
     )
     .refine((value) => {
       const numeric = Number(value);
@@ -40,17 +40,16 @@ type IntegrationPayload = z.infer<typeof IntegrationEventSchema>;
 
 function extractExpectedAmount(
   metadata?: Record<string, unknown>,
-): Prisma.Decimal | null {
+): number | null {
   if (!metadata) return null;
   const value = (metadata as { expectedAmount?: unknown }).expectedAmount;
   if (value == null) return null;
 
-  try {
-    const decimal = new Prisma.Decimal(value as string | number);
-    return decimal.gt(0) ? decimal : null;
-  } catch {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
     return null;
   }
+  return numeric;
 }
 
 async function handleIntegrationEvent(
@@ -112,12 +111,14 @@ async function handleIntegrationEvent(
     const expectedAmount = extractExpectedAmount(
       payload.metadata as Record<string, unknown> | undefined,
     );
-    if (expectedAmount && expectedAmount.gt(new Prisma.Decimal(payload.amount))) {
+    const actualAmount = Number(payload.amount);
+
+    if (expectedAmount != null && expectedAmount > actualAmount) {
       await recordDiscrepancy({
         orgId: payload.orgId,
         taxType,
         eventId: event.id,
-        expectedAmount,
+        expectedAmount: expectedAmount.toString(),
         actualAmount: payload.amount,
         reason: "Secured amount below expected obligation",
       });
@@ -253,7 +254,7 @@ export async function registerIntegrationEventRoutes(
             .toString(),
           createdAt: alert.createdAt,
         })),
-      anomaly,
+        anomaly,
         paymentPlans: plans.map((plan: any) => ({
           id: plan.id,
           basCycleId: plan.basCycleId,

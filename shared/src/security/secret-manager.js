@@ -1,3 +1,4 @@
+// shared/src/security/secret-manager.ts
 import assert from "node:assert/strict";
 export function createSecretManager() {
     const provider = (process.env.SECRETS_PROVIDER ?? "env").toLowerCase();
@@ -16,16 +17,16 @@ class EnvSecretManager {
     }
 }
 class VaultSecretManager {
-    addr;
-    token;
-    namespace;
     constructor(addr, token, namespace) {
         this.addr = addr;
         this.token = token;
         this.namespace = namespace;
     }
     async getSecret(identifier) {
-        const path = identifier.startsWith("http") ? identifier : `${this.addr.replace(/\/$/, "")}/v1/${identifier.replace(/^\//, "")}`;
+        // allow either a full URL or a KV path
+        const path = identifier.startsWith("http")
+            ? identifier
+            : `${this.addr.replace(/\/$/, "")}/v1/${identifier.replace(/^\//, "")}`;
         const headers = {
             "X-Vault-Token": this.token,
         };
@@ -54,7 +55,7 @@ function extractVaultData(body) {
     if (!body.data) {
         return undefined;
     }
-    // kv v2 nests data.data
+    // Vault KV v2 returns { data: { data: {...}, metadata: {...} } }
     if (typeof body.data === "object" &&
         body.data !== null &&
         "data" in body.data &&
