@@ -1,3 +1,4 @@
+// services/api-gateway/src/security-headers.ts
 import type { FastifyHelmetOptions } from "@fastify/helmet";
 import type { AppConfig } from "./config.js";
 
