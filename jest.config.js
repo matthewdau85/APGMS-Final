@@ -25,7 +25,7 @@ export default {
     ],
   },
 
-  testMatch: ["**/?(*.)test.[tj]s?(x)"],
+  testMatch: ["**/?(*.)+(spec|test).[tj]s?(x)"],
   testPathIgnorePatterns: [
     "<rootDir>/services/api-gateway/test/.*\\.spec\\.[tj]s?$",
   ],
