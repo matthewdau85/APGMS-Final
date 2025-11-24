@@ -7,8 +7,9 @@ import { prisma } from "../db.js";
 import { forbidden } from "@apgms/shared";
 import { recordAuditLog } from "../lib/audit.js";
 import { encryptPII } from "../lib/pii.js";
+import { seedDemoOrg } from "../lib/demo-seed.js";
 
-const DEMO_ORG_ID = process.env.DEV_ADMIN_ORG_ID?.trim() ?? "demo-org";
+const DEMO_ORG_ID = process.env.DEV_ADMIN_ORG_ID?.trim() ?? "11111111-1111-1111-1111-111111111111";
 const MOCK_DATE = process.env.DEMO_MOCK_DATE ? new Date(process.env.DEMO_MOCK_DATE) : new Date();
 
 const bankSchema = z.object({
@@ -227,5 +228,19 @@ export async function registerDemoRoutes(app: FastifyInstance) {
     });
 
     reply.send(summary);
+  });
+
+  app.post("/demo/seed", async (request, reply) => {
+    const user = ensureDemoOrg(request);
+    const summary = await seedDemoOrg();
+
+    await recordAuditLog({
+      orgId: user.orgId,
+      actorId: user.sub,
+      action: "demo_seed_org",
+      metadata: auditMetadata(summary),
+    });
+
+    reply.send({ summary });
   });
 }

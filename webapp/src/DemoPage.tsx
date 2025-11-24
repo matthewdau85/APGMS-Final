@@ -3,9 +3,10 @@ import {
   compileDemoBas,
   generateDemoBankLines,
   runDemoPayroll,
+  seedDemoOrg,
 } from "./api";
 import { getToken } from "./auth";
-import { ErrorState, SkeletonBlock, StatusChip } from "./components/UI";
+import { ActivityRail, ErrorState, KpiRibbon, SkeletonBlock, StatusChip } from "./components/UI";
 
 type BankFeedState = {
   busy: boolean;
@@ -26,6 +27,13 @@ type BasState = {
   error?: string;
 };
 
+type SeedState = {
+  busy: boolean;
+  summary?: Record<string, unknown>;
+  error?: string;
+  lastRun?: string;
+};
+
 export default function DemoPage() {
   const token = getToken();
   const [bankState, setBankState] = useState<BankFeedState>({ busy: false });
@@ -35,6 +43,7 @@ export default function DemoPage() {
   const [includeBank, setIncludeBank] = useState(true);
   const [basState, setBasState] = useState<BasState>({ busy: false });
   const [basPeriod, setBasPeriod] = useState({ year: new Date().getFullYear(), month: new Date().getMonth() + 1 });
+  const [seedState, setSeedState] = useState<SeedState>({ busy: false });
 
   const bankSection = useMemo(() => {
     if (!bankState.summary) return null;
@@ -50,6 +59,64 @@ export default function DemoPage() {
     if (!basState.summary) return null;
     return <pre style={preStyle}>{basState.summary}</pre>;
   }, [basState.summary]);
+
+  const seedKpis = useMemo(() => {
+    if (!seedState.summary) return [];
+    return [
+      { title: "Bank lines", value: String(seedState.summary.bankLines ?? "-"), tone: "success" as const },
+      { title: "Payroll runs", value: String(seedState.summary.payrollRuns ?? "-"), tone: "neutral" as const },
+      { title: "GST days", value: String(seedState.summary.gstDays ?? "-"), tone: "neutral" as const },
+      { title: "BAS periods", value: String(seedState.summary.basPeriods ?? "-"), tone: "neutral" as const },
+      { title: "Alerts", value: String(seedState.summary.alerts ?? "-"), tone: "warning" as const },
+      { title: "Evidence packs", value: String(seedState.summary.evidenceArtifacts ?? "-"), tone: "success" as const },
+    ];
+  }, [seedState.summary]);
+
+  const activityItems = useMemo(
+    () => [
+      {
+        title: "Seed demo org",
+        status: seedState.busy ? "loading" : seedState.summary ? "success" : seedState.error ? "error" : "idle",
+        detail: seedState.error ?? "Creates evidence, BAS periods, feeds, and users",
+        meta: seedState.lastRun ?? undefined,
+      },
+      {
+        title: "Generate bank feed",
+        status: bankState.busy ? "loading" : bankState.summary ? "success" : bankState.error ? "error" : "idle",
+        detail: bankState.error ?? `Days back: ${demoDays}, intensity ${demoIntensity}`,
+      },
+      {
+        title: "Run payroll",
+        status: payrollState.busy ? "loading" : payrollState.summary ? "success" : payrollState.error ? "error" : "idle",
+        detail: payrollState.error ?? (includeBank ? "Includes bank line" : "Payroll only"),
+      },
+      {
+        title: "Compile BAS",
+        status: basState.busy ? "loading" : basState.summary ? "success" : basState.error ? "error" : "idle",
+        detail: basState.error ?? `Period ${basPeriod.year}-${basPeriod.month.toString().padStart(2, "0")}`,
+      },
+    ],
+    [
+      bankState.busy,
+      bankState.error,
+      bankState.summary,
+      demoDays,
+      demoIntensity,
+      payrollState.busy,
+      payrollState.error,
+      payrollState.summary,
+      includeBank,
+      basState.busy,
+      basState.error,
+      basState.summary,
+      basPeriod.year,
+      basPeriod.month,
+      seedState.busy,
+      seedState.error,
+      seedState.summary,
+      seedState.lastRun,
+    ],
+  );
 
   async function handleGenerateBankFeed() {
     if (!token) return;
@@ -99,6 +166,22 @@ export default function DemoPage() {
     }
   }
 
+  async function handleSeed() {
+    if (!token) return;
+    setSeedState({ busy: true });
+    try {
+      const response = await seedDemoOrg(token);
+      setSeedState({
+        busy: false,
+        summary: response.summary,
+        lastRun: new Date().toLocaleString(),
+      });
+    } catch (err) {
+      console.error(err);
+      setSeedState({ busy: false, error: "Unable to seed demo org" });
+    }
+  }
+
   if (!token) return null;
 
   return (
@@ -109,6 +192,34 @@ export default function DemoPage() {
           Generate demo bank feeds, payroll runs, and BAS compiles to populate the dashboard with sample data.
         </p>
       </header>
+
+      <section style={cardStyle}>
+        <div style={cardHeaderStyle}>
+          <div>
+            <h2 style={sectionTitleStyle}>Full demo seed</h2>
+            <p style={sectionSubtitleStyle}>
+              Create the full demo organisation with history, alerts, evidence, and security users.
+            </p>
+          </div>
+          <button type="button" className="app-button" onClick={handleSeed} disabled={seedState.busy}>
+            {seedState.busy ? "Seeding demo data..." : "Generate demo org"}
+          </button>
+        </div>
+        {seedState.busy && <SkeletonBlock width="100%" height={48} />}
+        {seedState.error && <ErrorState message={seedState.error} />}
+        {seedKpis.length > 0 && <KpiRibbon items={seedKpis} columns={3} />}
+      </section>
+
+      <section style={cardStyle}>
+        <div style={cardHeaderStyle}>
+          <div>
+            <h2 style={sectionTitleStyle}>Demo control rail</h2>
+            <p style={sectionSubtitleStyle}>Track the status of each demo data generator.</p>
+          </div>
+          <StatusChip tone="neutral">Live preview</StatusChip>
+        </div>
+        <ActivityRail items={activityItems} />
+      </section>
 
       <section style={cardStyle}>
         <div style={cardHeaderStyle}>

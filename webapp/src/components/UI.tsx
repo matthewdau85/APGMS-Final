@@ -1,6 +1,6 @@
 import React from "react";
 
-type Tone = "neutral" | "success" | "warning" | "danger";
+export type Tone = "neutral" | "success" | "warning" | "danger";
 
 export function StatusChip({
   tone = "neutral",
@@ -78,6 +78,73 @@ export function StatCard({
       <div style={{ fontSize: 13, color: "var(--muted)" }}>{title}</div>
       <div style={{ fontSize: 22, fontWeight: 800, color: toneColor }}>{value}</div>
       {subtitle && <div style={{ fontSize: 13, color: "var(--muted)" }}>{subtitle}</div>}
+    </div>
+  );
+}
+
+export function ActivityRail({
+  items,
+}: {
+  items: Array<{
+    title: string;
+    status: "idle" | "loading" | "success" | "error";
+    detail?: string;
+    meta?: string;
+  }>;
+}) {
+  const toneFor = (status: string): Tone => {
+    if (status === "success") return "success";
+    if (status === "error") return "danger";
+    if (status === "loading") return "warning";
+    return "neutral";
+  };
+
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      {items.map((item, index) => (
+        <div
+          key={`${item.title}-${index}`}
+          style={{
+            display: "grid",
+            gridTemplateColumns: "auto 1fr auto",
+            alignItems: "center",
+            gap: 12,
+            padding: "8px 12px",
+            borderRadius: 10,
+            border: "1px solid var(--border)",
+            background: "#f8fafc",
+          }}
+        >
+          <StatusChip tone={toneFor(item.status)}>{item.status}</StatusChip>
+          <div>
+            <div style={{ fontWeight: 600 }}>{item.title}</div>
+            {item.detail && <div style={{ fontSize: 13, color: "var(--muted)" }}>{item.detail}</div>}
+          </div>
+          {item.meta && <div style={{ fontSize: 12, color: "var(--muted)" }}>{item.meta}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function KpiRibbon({
+  items,
+  columns = 4,
+}: {
+  items: Array<{ title: string; value: React.ReactNode; subtitle?: string; tone?: Tone }>;
+  columns?: number;
+}) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: `repeat(auto-fit, minmax(${Math.floor(320 / columns)}px, 1fr))`,
+        gap: 12,
+      }}
+    >
+      {items.map((item) => (
+        <StatCard key={item.title} title={item.title} value={item.value} subtitle={item.subtitle} tone={item.tone} />
+      ))}
     </div>
   );
 }

@@ -689,6 +689,15 @@ export async function compileDemoBas(
   }>;
 }
 
+export async function seedDemoOrg(token: string) {
+  const res = await fetch(`${API_BASE}/demo/seed`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error("failed_demo_seed");
+  return res.json() as Promise<{ summary: Record<string, unknown> }>();
+}
+
 export async function fetchRegulatorBankSummary(token: string) {
   const res = await fetch(`${API_BASE}/regulator/bank-lines/summary`, {
     headers: authHeaders(token),
