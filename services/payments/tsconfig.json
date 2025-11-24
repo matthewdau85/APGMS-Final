@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "outDir": "../../dist/services/payments"
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}
