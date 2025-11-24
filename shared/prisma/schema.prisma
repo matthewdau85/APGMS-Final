@@ -306,6 +306,17 @@ model EvidenceArtifact {
   @@index([orgId, kind])
 }
 
+model EvidenceAudit {
+  id          String   @id @default(uuid()) @db.Uuid
+  orgId       String   @db.Uuid
+  artifactId  String   @db.Uuid
+  requesterId String
+  createdAt   DateTime @default(now())
+
+  @@index([artifactId, createdAt])
+  @@index([orgId, createdAt])
+}
+
 // =========================
 // Legacy models still used by the live Fastify API
 // =========================

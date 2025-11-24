@@ -17,6 +17,7 @@ declare module '@prisma/client' {
   // Monitoring / evidence used in regulator routes
   type MonitoringSnapshot = any;
   type EvidenceArtifact = any;
+  type EvidenceAudit = any;
 
   // --- PrismaClient delegate augmentation ---------------------------------
   // The real PrismaClient is a generic class; we declare a matching generic
@@ -49,6 +50,7 @@ declare module '@prisma/client' {
     // From regulator
     monitoringSnapshot: any;
     evidenceArtifact: any;
+    evidenceAudit: any;
 
     // From compliance-proxy/regulator
     org: any;
