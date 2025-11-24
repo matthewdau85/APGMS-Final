@@ -1,6 +1,10 @@
 name: CI
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
   build:
@@ -21,6 +25,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Lint
+        run: pnpm lint
+
       - name: Install Playwright deps
         run: pnpm exec playwright install --with-deps
 
@@ -34,15 +41,18 @@ jobs:
         run: pnpm -r typecheck
 
       # 3. Tests + coverage gate
-      #    First run tests with coverage output...
-      - name: Test (with coverage)
-        run: pnpm -r test -- --coverage
+      #    Run all workspace tests, then collect coverage for the Jest suites and
+      #    enforce the coverage budget (>=85%).
+      - name: Test
+        run: pnpm -r test
 
-      #    ...then enforce coverage budget (>=85% lines, etc.).
-      #    check-coverage.mjs should read the coverage summary JSON and exit 1 if below threshold.
+      - name: Coverage (json-summary)
+        run: pnpm coverage
+
       - name: Enforce coverage >=85%
-        run: |
-          node ./scripts/check-coverage.mjs
+        env:
+          COVERAGE_THRESHOLD: "85"
+        run: node ./scripts/check-coverage.mjs
 
       # 4. Bring up API gateway and perf smoke it with k6
       - name: Install k6
