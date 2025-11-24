@@ -1,4 +1,4 @@
-﻿import assert from "node:assert/strict";
+import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import Fastify from "fastify";
 
@@ -13,7 +13,7 @@ import {
   type KeyManagementService,
   type TokenSaltProvider,
 } from "../src/lib/pii";
-import { isValidABN, isValidTFN } from "../src/lib/au";
+import { isValidABN, isValidTFN } from "../src/lib/au.js";
 
 const TEST_KEY = Buffer.alloc(32, 7);
 const TEST_SALT = Buffer.from("test-salt-secret", "utf8");
