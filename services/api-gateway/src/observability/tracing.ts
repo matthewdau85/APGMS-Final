@@ -1,7 +1,7 @@
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { FastifyInstrumentation } from "@opentelemetry/instrumentation-fastify";
-import { PrismaInstrumentation } from "@opentelemetry/instrumentation-prisma";
+import { PrismaInstrumentation } from "@prisma/instrumentation";
 
 let sdk: NodeSDK | null = null;
 
