@@ -27,8 +27,8 @@ services:
   tax-engine:
     image: apgms-tax-engine
     build:
-      context: .
-      dockerfile: services/tax-engine/Dockerfile
+      context: services/tax-engine
+      dockerfile: Dockerfile
     container_name: apgms-tax-engine
     restart: unless-stopped
     networks:
@@ -37,7 +37,7 @@ services:
   api-gateway:
     image: apgms-final-api-gateway
     build:
-      context: .
+      context: services/api-gateway
       dockerfile: Dockerfile
     container_name: apgms-api-gateway
     depends_on:
@@ -90,8 +90,8 @@ services:
   worker:
     image: apgms-final-worker
     build:
-      context: .
-      dockerfile: services/worker/Dockerfile
+      context: services/worker
+      dockerfile: Dockerfile
     container_name: apgms-worker
     depends_on:
       - db
