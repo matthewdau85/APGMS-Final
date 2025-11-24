@@ -8,14 +8,14 @@ import {
 } from "./api";
 import { useTheme, type ThemeName } from "./theme";
 
-const navItems: Array<{ to: string; label: string }> = [
-  { to: "/dashboard", label: "Dashboard" },
-  { to: "/feeds", label: "Payroll & GST Feeds" },
-  { to: "/alerts", label: "Alerts" },
-  { to: "/bas", label: "BAS Lodgment" },
-  { to: "/compliance", label: "Compliance" },
-  { to: "/demo", label: "Demo mode" },
-  { to: "/security", label: "Security / Access" },
+const navItems: Array<{ to: string; label: string; icon: string }> = [
+  { to: "/dashboard", label: "Dashboard", icon: "📊" },
+  { to: "/feeds", label: "Payroll & GST Feeds", icon: "🔁" },
+  { to: "/alerts", label: "Alerts", icon: "🚨" },
+  { to: "/bas", label: "BAS Lodgment", icon: "🧾" },
+  { to: "/compliance", label: "Compliance", icon: "🛡️" },
+  { to: "/demo", label: "Demo mode", icon: "🎛️" },
+  { to: "/security", label: "Security / Access", icon: "🔐" },
 ];
 
 export default function ProtectedLayout() {
@@ -150,7 +150,10 @@ export default function ProtectedLayout() {
                   fontWeight: isActive ? 700 : 500,
                 })}
               >
-                {item.label}
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <span aria-hidden>{item.icon}</span>
+                  <span>{item.label}</span>
+                </span>
               </NavLink>
             ))}
           </nav>

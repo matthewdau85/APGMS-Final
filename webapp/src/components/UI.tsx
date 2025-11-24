@@ -81,3 +81,41 @@ export function StatCard({
     </div>
   );
 }
+
+export function EmptyState({
+  title,
+  description,
+  actionLabel,
+  onAction,
+}: {
+  title: string;
+  description?: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <div
+      style={{
+        border: "1px dashed var(--border)",
+        borderRadius: 12,
+        padding: 16,
+        background: "var(--surface)",
+        display: "grid",
+        gap: 6,
+      }}
+    >
+      <div style={{ fontWeight: 700 }}>{title}</div>
+      {description && <div style={{ fontSize: 13, color: "var(--muted)" }}>{description}</div>}
+      {onAction && actionLabel && (
+        <button
+          type="button"
+          className="app-button ghost"
+          style={{ width: "fit-content", padding: "6px 12px", fontSize: 13 }}
+          onClick={onAction}
+        >
+          {actionLabel}
+        </button>
+      )}
+    </div>
+  );
+}

@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { fetchAlerts, resolveAlert, initiateMfa } from "./api";
 import { getToken, getSessionUser } from "./auth";
-import { ErrorState, SkeletonBlock, StatusChip } from "./components/UI";
+import { EmptyState, ErrorState, SkeletonBlock, StatusChip } from "./components/UI";
 
 type AlertRecord = Awaited<ReturnType<typeof fetchAlerts>>["alerts"][number];
 
@@ -14,24 +14,38 @@ export default function AlertsPage() {
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const loadAlerts = async () => {
-    if (!token) return;
-    setError(null);
-    try {
-      const result = await fetchAlerts(token);
-      setAlerts(result.alerts);
-    } catch (err) {
-      console.error(err);
-      setError("Unable to load alerts");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const loadAlerts = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!token) return;
+      if (!options?.silent) {
+        setLoading(true);
+      }
+      setError(null);
+      try {
+        const result = await fetchAlerts(token);
+        setAlerts(result.alerts);
+      } catch (err) {
+        console.error(err);
+        if (!options?.silent) {
+          setError("Unable to load alerts");
+        }
+      } finally {
+        if (!options?.silent) {
+          setLoading(false);
+        }
+      }
+    },
+    [token]
+  );
 
   useEffect(() => {
     if (!token) return;
     void loadAlerts();
-  }, [token]);
+    const interval = window.setInterval(() => {
+      void loadAlerts({ silent: true });
+    }, 15000);
+    return () => window.clearInterval(interval);
+  }, [token, loadAlerts]);
 
   async function handleResolve(alert: AlertRecord) {
     if (!token) return;
@@ -110,7 +124,12 @@ export default function AlertsPage() {
       {!loading && !error && (
         <section style={cardStyle}>
           {alerts.length === 0 ? (
-            <div style={infoTextStyle}>No alerts to display. Run a pre-check or ingest demo data to populate.</div>
+            <EmptyState
+              title="No open alerts"
+              description="Alerts refresh automatically every 15 seconds. Trigger a pre-check or ingest demo data to see the compliance rail light up."
+              actionLabel="Refresh now"
+              onAction={() => void loadAlerts()}
+            />
           ) : (
             <ul style={alertListStyle}>
               {alerts.map((alert) => (
@@ -121,7 +140,7 @@ export default function AlertsPage() {
                       <span style={alertTitleStyle}>{alert.message}</span>
                     </div>
                     <div style={metaTextStyle}>
-                      {alert.type} • {new Date(alert.createdAt).toLocaleString()}
+                      {alert.type} â€¢ {new Date(alert.createdAt).toLocaleString()}
                     </div>
                     {alert.resolutionNote && <div style={resolutionNoteStyle}>Note: {alert.resolutionNote}</div>}
                   </div>
@@ -206,11 +225,6 @@ const metaTextStyle: React.CSSProperties = {
   color: "#6b7280",
   textTransform: "uppercase",
   letterSpacing: "0.06em",
-};
-
-const infoTextStyle: React.CSSProperties = {
-  fontSize: "14px",
-  color: "#6b7280",
 };
 
 const successTextStyle: React.CSSProperties = {
