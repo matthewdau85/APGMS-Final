@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import type { FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import { helmetConfigFor } from "../src/security-headers";
@@ -42,31 +43,41 @@ const config: AppConfig = {
   nats: undefined,
 };
 
+const buildSecureApp = async (
+  registerRoutes: (app: FastifyInstance) => void | Promise<void>,
+) => {
+  const app = Fastify();
+  await app.register(cors, { origin: config.cors.allowedOrigins });
+  await app.register(helmet, helmetConfigFor(config));
+  await registerRoutes(app);
+  return app;
+};
+
 describe("security headers runtime", () => {
   it("applies CSP/frameguard/referrer-policy/HSTS", async () => {
-    const app = Fastify();
-    await app.register(cors, { origin: config.cors.allowedOrigins });
-    await app.register(helmet, helmetConfigFor(config));
-    app.get("/", async () => ({ ok: true }));
-    const res = await app.inject({ method: "GET", url: "/" });
-    expect(res.statusCode).toBe(200);
-    expect(res.headers["content-security-policy"]).toBeTruthy();
-    expect(res.headers["x-frame-options"]).toBe("DENY");
-    expect(res.headers["referrer-policy"]).toMatch(/no-referrer/i);
-    expect(res.headers["strict-transport-security"]).toBeTruthy();
+    const app = await buildSecureApp((instance) => {
+      instance.get("/", async () => ({ ok: true }));
+    });
+
+    try {
+      const res = await app.inject({ method: "GET", url: "/" });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers["content-security-policy"]).toBeTruthy();
+      expect(res.headers["x-frame-options"]).toBe("DENY");
+      expect(res.headers["referrer-policy"]).toMatch(/no-referrer/i);
+      expect(res.headers["strict-transport-security"]).toBeTruthy();
+    } finally {
+      await app.close();
+    }
   });
 
   it("applies CSP/frameguard/referrer-policy/HSTS on protected routes", async () => {
-    const app = Fastify();
-    await app.register(cors, { origin: config.cors.allowedOrigins });
-    await app.register(helmet, helmetConfigFor(config));
+    const app = await buildSecureApp((instance) => {
+      instance.addHook("onRequest", (req, _reply, done) => {
+        (req as any).user = { orgId: "org-123", sub: "user-123", role: "admin" };
+        done();
+      });
 
-    app.addHook("onRequest", (req, _reply, done) => {
-      (req as any).user = { orgId: "org-123", sub: "user-123", role: "admin" };
-      done();
-    });
-
-    await app.register(async (instance) => {
       instance.get("/bank-lines", async (request, reply) => {
         if (!(request as any).user) {
           reply.code(401).send({ error: "unauthenticated" });
@@ -76,12 +87,16 @@ describe("security headers runtime", () => {
       });
     });
 
-    const res = await app.inject({ method: "GET", url: "/bank-lines" });
+    try {
+      const res = await app.inject({ method: "GET", url: "/bank-lines" });
 
-    expect(res.statusCode).toBe(200);
-    expect(res.headers["content-security-policy"]).toBeTruthy();
-    expect(res.headers["x-frame-options"]).toBe("DENY");
-    expect(res.headers["referrer-policy"]).toMatch(/no-referrer/i);
-    expect(res.headers["strict-transport-security"]).toBeTruthy();
+      expect(res.statusCode).toBe(200);
+      expect(res.headers["content-security-policy"]).toBeTruthy();
+      expect(res.headers["x-frame-options"]).toBe("DENY");
+      expect(res.headers["referrer-policy"]).toMatch(/no-referrer/i);
+      expect(res.headers["strict-transport-security"]).toBeTruthy();
+    } finally {
+      await app.close();
+    }
   });
 });
