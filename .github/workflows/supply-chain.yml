@@ -8,7 +8,7 @@ on:
 
 permissions:
   contents: read
-  actions: write
+  actions: write # required for upload-artifact
 
 jobs:
   sbom:
