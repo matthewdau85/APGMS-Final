@@ -12,6 +12,8 @@ export type BankingProviderCapabilities = {
   maxWriteCents: number;
 };
 
+export type BankingProviderOverrides = Partial<BankingProviderCapabilities>;
+
 export type BankingProviderContext = {
   prisma: PrismaClient;
   orgId: string;
