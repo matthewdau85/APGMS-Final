@@ -5,6 +5,10 @@ import type { AppConfig } from "./config.js";
  * Extracted helmet configuration to keep security policy testable.
  */
 export function helmetConfigFor(cfg: AppConfig): FastifyHelmetOptions {
+  const connectSrc = Array.from(
+    new Set(["'self'", ...(cfg.cors.allowedOrigins ?? [])]),
+  );
+
   return {
     hidePoweredBy: true,
     frameguard: { action: "deny" },
@@ -12,7 +16,7 @@ export function helmetConfigFor(cfg: AppConfig): FastifyHelmetOptions {
       directives: {
         defaultSrc: ["'self'"],
         baseUri: ["'self'"],
-        connectSrc: ["'self'", ...cfg.cors.allowedOrigins],
+        connectSrc,
         scriptSrc: [
           "'self'",
           // Inline boot script hash – keep this in sync with the webapp if changed
