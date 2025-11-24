@@ -1,7 +1,7 @@
 // services/api-gateway/src/routes/regulator.ts
+import type { PrismaClient } from "@prisma/client";
 import type { JsonValue } from "@prisma/client/runtime/library.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import type { PrismaClient } from "@prisma/client";
 import { z } from "zod";
 
 import { prisma } from "../db.js";
@@ -14,8 +14,108 @@ type RegulatorRequest = FastifyRequest & {
 
 const MAX_SNAPSHOTS = 20;
 
+type FindMany<T> = (args: unknown) => Promise<T[]>;
+type FindFirst<T> = (args: unknown) => Promise<T | null>;
+type CountFn = (args: unknown) => Promise<number>;
+
+type BasCycleRecord = {
+  periodStart: Date;
+  periodEnd: Date;
+  lodgedAt: Date | null;
+  overallStatus: string;
+  paygwSecured?: unknown;
+  paygwRequired?: unknown;
+  gstSecured?: unknown;
+  gstRequired?: unknown;
+  orgId: string;
+};
+
+type PaymentPlanRecord = {
+  id: string;
+  basCycleId: string;
+  requestedAt: Date;
+  status: string;
+  reason: string | null;
+  detailsJson?: unknown;
+  resolvedAt: Date | null;
+};
+
+type AlertRecord = {
+  id: string;
+  type: string;
+  severity: string;
+  message: string;
+  createdAt: Date;
+  resolvedAt: Date | null;
+};
+
+type MonitoringSnapshotRecord = {
+  id: string;
+  type: string;
+  payload: unknown;
+  createdAt: Date;
+};
+
+type EvidenceArtifactRecord = {
+  id: string;
+  kind: string;
+  sha256: string;
+  wormUri: string | null;
+  createdAt: Date;
+  payload?: unknown;
+  orgId: string;
+};
+
+type BankLineRecord = {
+  id: string;
+  orgId: string;
+  date: Date;
+  createdAt?: Date;
+  amount: unknown;
+  narrative?: string | null;
+};
+
+type DesignatedAccountRecord = {
+  type: string;
+  balance?: unknown;
+};
+
+type AggregateResult = {
+  _count?: { id?: number | null } | null;
+  _sum?: { amount?: number | null } | null;
+};
+
+type RegulatorPrisma = {
+  basCycle: {
+    findMany: FindMany<BasCycleRecord>;
+    findFirst: FindFirst<BasCycleRecord>;
+  };
+  paymentPlanRequest: {
+    findMany: FindMany<PaymentPlanRecord>;
+  };
+  alert: {
+    count: CountFn;
+    findMany: FindMany<AlertRecord>;
+  };
+  designatedAccount?: {
+    findMany: FindMany<DesignatedAccountRecord>;
+  };
+  monitoringSnapshot: {
+    findMany: FindMany<MonitoringSnapshotRecord>;
+  };
+  evidenceArtifact: {
+    findMany: FindMany<EvidenceArtifactRecord>;
+    findUnique: (args: unknown) => Promise<EvidenceArtifactRecord | null>;
+  };
+  bankLine: {
+    aggregate: (args: unknown) => Promise<AggregateResult>;
+    findFirst: FindFirst<BankLineRecord>;
+    findMany: FindMany<BankLineRecord>;
+  };
+};
+
 type RegulatorRoutesDeps = {
-  prisma?: PrismaClient;
+  prisma?: RegulatorPrisma;
   auditLogger?: typeof recordAuditLog;
 };
 
@@ -62,7 +162,7 @@ export async function registerRegulatorRoutes(
   app: FastifyInstance,
   deps: RegulatorRoutesDeps = {},
 ) {
-  const db = deps.prisma ?? (prisma as any as PrismaClient);
+  const db: RegulatorPrisma = deps.prisma ?? prisma;
   const auditLogger = deps.auditLogger;
 
   app.get("/health", async (request: RegulatorRequest) => {
@@ -73,11 +173,9 @@ export async function registerRegulatorRoutes(
   app.get("/compliance/report", async (request: RegulatorRequest) => {
     const orgId = ensureOrgId(request);
 
-    const designatedAccountsPromise =
-      (db as any).designatedAccount &&
-      typeof (db as any).designatedAccount.findMany === "function"
-        ? (db as any).designatedAccount.findMany({ where: { orgId } })
-        : Promise.resolve([] as any[]);
+    const designatedAccountsPromise = db.designatedAccount
+      ? db.designatedAccount.findMany({ where: { orgId } })
+      : Promise.resolve<DesignatedAccountRecord[]>([]);
 
     const [
       basCycles,
@@ -106,7 +204,7 @@ export async function registerRegulatorRoutes(
       designatedAccountsPromise,
     ]);
 
-    const basHistory = (basCycles as any[]).map((cycle: any) => ({
+    const basHistory = basCycles.map((cycle: BasCycleRecord) => ({
       period: formatPeriod(cycle.periodStart, cycle.periodEnd),
       lodgedAt: cycle.lodgedAt?.toISOString() ?? null,
       status: cycle.overallStatus,
@@ -115,7 +213,7 @@ export async function registerRegulatorRoutes(
       )} · GST ${toNumber(cycle.gstSecured)} / ${toNumber(cycle.gstRequired)}`,
     }));
 
-    const paymentPlanHistory = (paymentPlans as any[]).map((plan: any) => ({
+    const paymentPlanHistory = paymentPlans.map((plan: PaymentPlanRecord) => ({
       id: plan.id,
       basCycleId: plan.basCycleId,
       requestedAt: plan.requestedAt.toISOString(),
@@ -125,8 +223,8 @@ export async function registerRegulatorRoutes(
       resolvedAt: plan.resolvedAt?.toISOString() ?? null,
     }));
 
-    const totals = (designatedAccounts as any[]).reduce(
-      (acc: { paygw: number; gst: number }, account: any) => {
+    const totals = designatedAccounts.reduce(
+      (acc: { paygw: number; gst: number }, account: DesignatedAccountRecord) => {
         if (account.type === "PAYGW") {
           acc.paygw += Number(account.balance ?? 0);
         } else if (account.type === "GST") {
@@ -167,7 +265,7 @@ export async function registerRegulatorRoutes(
 
   app.get("/alerts", async (request: RegulatorRequest) => {
     const orgId = ensureOrgId(request);
-    const alerts = await db.alert.findMany({
+    const alerts: AlertRecord[] = await db.alert.findMany({
       where: { orgId },
       orderBy: { createdAt: "desc" },
     });
@@ -180,7 +278,7 @@ export async function registerRegulatorRoutes(
     );
 
     return {
-      alerts: (alerts as any[]).map((alert: any) => ({
+      alerts: alerts.map((alert) => ({
         id: alert.id,
         type: alert.type,
         severity: alert.severity,
@@ -212,7 +310,7 @@ export async function registerRegulatorRoutes(
     }
     const limit = parsed.data.limit;
 
-    const snapshots = await db.monitoringSnapshot.findMany({
+    const snapshots: MonitoringSnapshotRecord[] = await db.monitoringSnapshot.findMany({
       where: { orgId },
       orderBy: { createdAt: "desc" },
       take: limit,
@@ -226,7 +324,7 @@ export async function registerRegulatorRoutes(
     );
 
     return {
-      snapshots: (snapshots as any[]).map((snapshot: any) => ({
+      snapshots: snapshots.map((snapshot) => ({
         id: snapshot.id,
         type: snapshot.type,
         createdAt: snapshot.createdAt.toISOString(),
@@ -237,7 +335,7 @@ export async function registerRegulatorRoutes(
 
   app.get("/evidence", async (request: RegulatorRequest) => {
     const orgId = ensureOrgId(request);
-    const artifacts = await db.evidenceArtifact.findMany({
+    const artifacts: EvidenceArtifactRecord[] = await db.evidenceArtifact.findMany({
       where: { orgId },
       orderBy: { createdAt: "desc" },
       take: 50,
@@ -251,7 +349,7 @@ export async function registerRegulatorRoutes(
     );
 
     return {
-      artifacts: (artifacts as any[]).map((artifact: any) => ({
+      artifacts: artifacts.map((artifact) => ({
         id: artifact.id,
         kind: artifact.kind,
         sha256: artifact.sha256,
@@ -302,7 +400,12 @@ export async function registerRegulatorRoutes(
 
   app.get("/bank-lines/summary", async (request: RegulatorRequest) => {
     const orgId = ensureOrgId(request);
-    const [aggregate, firstEntry, lastEntry, recent] = await Promise.all([
+    const [aggregate, firstEntry, lastEntry, recent]: [
+      Awaited<ReturnType<RegulatorPrisma["bankLine"]["aggregate"]>>,
+      BankLineRecord | null,
+      BankLineRecord | null,
+      BankLineRecord[],
+    ] = await Promise.all([
       db.bankLine.aggregate({
         where: { orgId },
         _count: { id: true },
@@ -326,18 +429,18 @@ export async function registerRegulatorRoutes(
     await logRegulatorAction(
       request,
       "regulator.bank.summary",
-      { entries: (aggregate as any)._count?.id ?? 0 },
+      { entries: aggregate._count?.id ?? 0 },
       auditLogger,
     );
 
     return {
       summary: {
-        totalEntries: (aggregate as any)._count?.id ?? 0,
-        totalAmount: Number((aggregate as any)._sum?.amount ?? 0),
-        firstEntryAt: (firstEntry as any)?.createdAt?.toISOString() ?? null,
-        lastEntryAt: (lastEntry as any)?.createdAt?.toISOString() ?? null,
+        totalEntries: aggregate._count?.id ?? 0,
+        totalAmount: Number(aggregate._sum?.amount ?? 0),
+        firstEntryAt: firstEntry?.createdAt?.toISOString() ?? null,
+        lastEntryAt: lastEntry?.createdAt?.toISOString() ?? null,
       },
-      recent: (recent as any[]).map((line: any) => ({
+      recent: recent.map((line: BankLineRecord) => ({
         id: line.id,
         date: line.date.toISOString(),
         amount: Number(line.amount),
