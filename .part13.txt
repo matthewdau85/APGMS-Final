@@ -1,0 +1,2651 @@
+﻿}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\security\webauthn.ts
+============================================================
+import {
+  generateRegistrationOptions,
+  verifyRegistrationResponse,
+  generateAuthenticationOptions,
+  verifyAuthenticationResponse,
+  type RegistrationResponseJSON,
+  type AuthenticationResponseJSON,
+  type WebAuthnCredential,
+} from "@simplewebauthn/server";
+
+import { config } from "../config.js";
+
+const CHALLENGE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+type ChallengeRecord = {
+  userId: string;
+  challenge: string;
+  expiresAt: number;
+  allowedCredentialIds?: Set<string>;
+};
+
+const registrationChallenges = new Map<string, ChallengeRecord>();
+const authenticationChallenges = new Map<string, ChallengeRecord>();
+
+const now = () => Date.now();
+
+function cleanup(store: Map<string, ChallengeRecord>): void {
+  const ts = now();
+  for (const [key, record] of store.entries()) {
+    if (record.expiresAt <= ts) {
+      store.delete(key);
+    }
+  }
+}
+
+function base64UrlToBase64(value: string): string {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padding = (4 - (normalized.length % 4)) % 4;
+  return normalized + "=".repeat(padding);
+}
+
+function extractChallengeFromClientData(
+  clientDataJSON: string | ArrayBuffer | Buffer | null | undefined,
+): string | null {
+  if (!clientDataJSON) {
+    return null;
+  }
+  let raw: string;
+  if (typeof clientDataJSON === "string") {
+    raw = clientDataJSON;
+  } else if (ArrayBuffer.isView(clientDataJSON)) {
+    raw = Buffer.from(clientDataJSON.buffer).toString("base64");
+  } else {
+    raw = Buffer.from(clientDataJSON).toString("base64");
+  }
+  try {
+    const decoded = Buffer.from(base64UrlToBase64(raw), "base64").toString("utf8");
+    const parsed = JSON.parse(decoded);
+    if (typeof parsed.challenge === "string") {
+      return parsed.challenge;
+    }
+  } catch {
+    // fall through
+  }
+  return null;
+}
+
+export async function createRegistrationOptions(options: {
+  userId: string;
+  username: string;
+  displayName: string;
+  excludeCredentialIds: string[];
+}) {
+  cleanup(registrationChallenges);
+
+  const registrationOptions = await generateRegistrationOptions({
+    rpName: config.webauthn.rpName,
+    rpID: config.webauthn.rpId,
+    userName: options.username,
+    userID: Buffer.from(options.userId, "utf8"),
+    userDisplayName: options.displayName,
+    attestationType: "none",
+    excludeCredentials: options.excludeCredentialIds.map((id) => ({ id })),
+    authenticatorSelection: {
+      residentKey: "preferred",
+      userVerification: "preferred",
+    },
+  });
+
+  registrationChallenges.set(registrationOptions.challenge, {
+    userId: options.userId,
+    challenge: registrationOptions.challenge,
+    expiresAt: now() + CHALLENGE_TTL_MS,
+  });
+
+  return registrationOptions;
+}
+
+export async function verifyPasskeyRegistration(
+  userId: string,
+  response: RegistrationResponseJSON,
+) {
+  const challengeKey = extractChallengeFromClientData(response.response.clientDataJSON);
+  if (!challengeKey) {
+    throw new Error("registration_challenge_missing");
+  }
+  const challenge = registrationChallenges.get(challengeKey);
+  if (!challenge || challenge.userId !== userId) {
+    throw new Error("registration_challenge_missing");
+  }
+  registrationChallenges.delete(challengeKey);
+
+  return verifyRegistrationResponse({
+    response,
+    expectedChallenge: challenge.challenge,
+    expectedOrigin: config.webauthn.origin,
+    expectedRPID: config.webauthn.rpId,
+    requireUserVerification: true,
+  });
+}
+
+export async function createAuthenticationOptions(options: {
+  userId: string;
+  allowCredentialIds: string[];
+}) {
+  cleanup(authenticationChallenges);
+
+  const authenticationOptions = await generateAuthenticationOptions({
+    rpID: config.webauthn.rpId,
+    userVerification: "preferred",
+    allowCredentials: options.allowCredentialIds.map((id) => ({ id })),
+  });
+
+  authenticationChallenges.set(authenticationOptions.challenge, {
+    userId: options.userId,
+    challenge: authenticationOptions.challenge,
+    expiresAt: now() + CHALLENGE_TTL_MS,
+    allowedCredentialIds: new Set(options.allowCredentialIds),
+  });
+
+  return authenticationOptions;
+}
+
+export async function verifyPasskeyAuthentication(
+  userId: string,
+  response: AuthenticationResponseJSON,
+  credential: WebAuthnCredential,
+) {
+  const challengeKey = extractChallengeFromClientData(response.response.clientDataJSON);
+  if (!challengeKey) {
+    throw new Error("authentication_challenge_missing");
+  }
+  const challenge = authenticationChallenges.get(challengeKey);
+  if (!challenge || challenge.userId !== userId) {
+    throw new Error("authentication_challenge_missing");
+  }
+  authenticationChallenges.delete(challengeKey);
+
+  if (challenge.allowedCredentialIds && !challenge.allowedCredentialIds.has(credential.id)) {
+    throw new Error("authentication_credential_mismatch");
+  }
+
+  return verifyAuthenticationResponse({
+    response,
+    credential,
+    expectedChallenge: challenge.challenge,
+    expectedOrigin: config.webauthn.origin,
+    expectedRPID: config.webauthn.rpId,
+    requireUserVerification: true,
+  });
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\security-headers.ts
+============================================================
+import type { FastifyHelmetOptions } from "@fastify/helmet";
+import type { AppConfig } from "./config";
+
+type CspDirectives = Record<string, string[]>;
+
+function buildCsp(config: AppConfig): CspDirectives {
+  const { allowedOrigins } = config.cors;
+
+  const connectSrc = ["'self'", ...allowedOrigins];
+
+  return {
+    defaultSrc: ["'self'"],
+    baseUri: ["'self'"],
+    connectSrc,
+    scriptSrc: ["'self'"],
+    styleSrc: ["'self'", "'unsafe-inline'"],
+    imgSrc: ["'self'", "data:"],
+    objectSrc: ["'none'"],
+    frameAncestors: ["'none'"],
+  };
+}
+
+/**
+ * Build a helmet configuration for the given app config.
+ * This is what the app and tests should use.
+ */
+export function helmetConfigFor(config: AppConfig): FastifyHelmetOptions {
+  const csp = buildCsp(config);
+
+  const enableIsolation = config.security.enableIsolation === true;
+
+  return {
+    contentSecurityPolicy: {
+      useDefaults: false,
+      directives: csp,
+    },
+    frameguard: {
+      action: "deny",
+    },
+    referrerPolicy: {
+      policy: "no-referrer",
+    },
+    hsts: {
+      maxAge: 60 * 60 * 24 * 180, // 180 days
+      includeSubDomains: true,
+      preload: false,
+    },
+    crossOriginEmbedderPolicy: enableIsolation,
+    crossOriginOpenerPolicy: enableIsolation
+      ? { policy: "same-origin" }
+      : { policy: "same-origin-allow-popups" },
+    crossOriginResourcePolicy: {
+      policy: "same-site",
+    },
+  };
+}
+
+/**
+ * Back-compat alias for older tests.
+ * test/regulator-compliance-summary.test.ts imports this by name.
+ */
+export function buildHelmetConfig(config: AppConfig): FastifyHelmetOptions {
+  return helmetConfigFor(config);
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\server.ts
+============================================================
+import { buildServer } from "./app.js";
+import { startTracing, stopTracing } from "./observability/tracing.js";
+
+const PORT = Number(process.env.PORT ?? "3000");
+const HOST = process.env.HOST ?? "0.0.0.0";
+
+async function main() {
+  await startTracing();
+
+  const app = await buildServer();
+  await app.listen({ port: PORT, host: HOST });
+
+  const shutdown = async () => {
+    try {
+      await app.close();
+    } finally {
+      await stopTracing();
+      process.exit(0);
+    }
+  };
+
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+}
+
+main().catch((err) => {
+  // eslint-disable-next-line no-console
+  console.error("Fatal boot error:", err);
+  process.exit(1);
+});
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\services\abr-stub.ts
+============================================================
+export type AbnTfnLookupInput = {
+  abn?: string;
+  tfn?: string;
+};
+
+export type AbnTfnLookupResult = {
+  abn?: string;
+  tfn?: string;
+  legalName: string;
+  obligations: Array<"GST" | "PAYGW" | "PAYGI">;
+};
+
+/**
+ * Placeholder ABN/TFN validator.
+ * Replace later with real ATO/ABR integration.
+ */
+export async function validateAbnOrTfnStub(
+  input: AbnTfnLookupInput,
+): Promise<AbnTfnLookupResult> {
+  const abn = input.abn ?? "00000000000";
+  const tfn = input.tfn;
+
+  const obligations: Array<"GST" | "PAYGW" | "PAYGI"> = ["GST", "PAYGW"];
+  if (Number(abn[abn.length - 1] ?? "0") % 2 === 0) {
+    obligations.push("PAYGI");
+  }
+
+  return {
+    abn,
+    tfn,
+    legalName: `Stubbed Entity ${abn.slice(-4)}`,
+    obligations,
+  };
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\services\forecasting.ts
+============================================================
+export type ObligationSample = {
+  period: string; // e.g. "2025-Q1" or "2025-05"
+  cents: number;
+};
+
+export type ForecastPoint = {
+  period: string;
+  meanCents: number;
+  lowerCents: number;
+  upperCents: number;
+};
+
+export type EwmaForecastOptions = {
+  alpha?: number; // smoothing factor
+  volatilityMultiplier?: number; // for confidence band
+};
+
+/**
+ * Simple EWMA forecaster for obligations.
+ */
+export function ewmaForecast(
+  history: ObligationSample[],
+  horizonPeriods: number,
+  options: EwmaForecastOptions = {},
+): ForecastPoint[] {
+  const alpha = options.alpha ?? 0.5;
+  const volMult = options.volatilityMultiplier ?? 2;
+
+  if (history.length === 0 || horizonPeriods <= 0) return [];
+
+  const sorted = [...history].sort((a, b) =>
+    a.period.localeCompare(b.period),
+  );
+
+  let mean = sorted[0]!.cents;
+  let variance = 0;
+
+  for (let i = 1; i < sorted.length; i += 1) {
+    const x = sorted[i]!.cents;
+    const prevMean = mean;
+    mean = alpha * x + (1 - alpha) * mean;
+    const diff = x - prevMean;
+    variance = alpha * diff * diff + (1 - alpha) * variance;
+  }
+
+  const stdDev = Math.sqrt(variance);
+  const points: ForecastPoint[] = [];
+
+  const lastPeriod = sorted[sorted.length - 1]!.period;
+  const [baseYearStr, baseSuffix] = lastPeriod.split("-");
+  const baseYear = Number(baseYearStr);
+
+  const nextPeriodLabel = (index: number): string => {
+    if (baseSuffix?.startsWith("Q")) {
+      const q = Number(baseSuffix.slice(1));
+      const totalQ = q + index;
+      const year = baseYear + Math.floor((totalQ - 1) / 4);
+      const qNum = ((totalQ - 1) % 4) + 1;
+      return `${year}-Q${qNum}`;
+    }
+    const baseMonth = Number(baseSuffix ?? "1");
+    const totalM = baseMonth + index;
+    const year = baseYear + Math.floor((totalM - 1) / 12);
+    const month = ((totalM - 1) % 12) + 1;
+    const mm = String(month).padStart(2, "0");
+    return `${year}-${mm}`;
+  };
+
+  for (let i = 1; i <= horizonPeriods; i += 1) {
+    const period = nextPeriodLabel(i);
+    const meanCents = Math.round(mean);
+    const delta = volMult * stdDev;
+    const lowerCents = Math.max(0, Math.round(mean - delta));
+    const upperCents = Math.round(mean + delta);
+    points.push({ period, meanCents, lowerCents, upperCents });
+  }
+
+  return points;
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\services\payto.ts
+============================================================
+import type { FastifyBaseLogger } from "fastify";
+
+export type PayToCreateMandateInput = {
+  orgId: string;
+  bsb: string;
+  accountNumber: string;
+  accountName: string;
+};
+
+export type PayToMandate = {
+  mandateId: string;
+  status: "PENDING" | "ACTIVE" | "FAILED";
+};
+
+export interface PayToProvider {
+  createMandate(input: PayToCreateMandateInput): Promise<PayToMandate>;
+  cancelMandate(mandateId: string): Promise<void>;
+}
+
+// Simple in-process stub providers. Replace with real bank APIs later.
+class BaseStubPayToProvider implements PayToProvider {
+  constructor(
+    private readonly bankCode: string,
+    private readonly log: FastifyBaseLogger,
+  ) {}
+
+  async createMandate(input: PayToCreateMandateInput): Promise<PayToMandate> {
+    const mandateId = `${this.bankCode}-${input.orgId}-${Date.now()}`;
+    this.log.info(
+      {
+        bank: this.bankCode,
+        orgId: input.orgId,
+        bsb: input.bsb,
+        accountNumber: input.accountNumber,
+      },
+      "payto_stub_create_mandate",
+    );
+    return { mandateId, status: "PENDING" };
+  }
+
+  async cancelMandate(mandateId: string): Promise<void> {
+    this.log.info(
+      { bank: this.bankCode, mandateId },
+      "payto_stub_cancel_mandate",
+    );
+  }
+}
+
+let cachedProviders: Record<string, PayToProvider> | null = null;
+
+export function initPayToProviders(
+  log: FastifyBaseLogger,
+): Record<string, PayToProvider> {
+  if (cachedProviders) return cachedProviders;
+
+  cachedProviders = {
+    cba: new BaseStubPayToProvider("cba", log),
+    nab: new BaseStubPayToProvider("nab", log),
+    anz: new BaseStubPayToProvider("anz", log),
+  };
+
+  return cachedProviders;
+}
+
+export function getPayToProvider(
+  bankCode: "cba" | "nab" | "anz",
+): PayToProvider {
+  if (!cachedProviders) {
+    throw new Error("payto_providers_not_initialised");
+  }
+  const provider = cachedProviders[bankCode];
+  if (!provider) {
+    throw new Error(`payto_provider_unsupported_${bankCode}`);
+  }
+  return provider;
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\services\stp-generator.ts
+============================================================
+// services/api-gateway/src/services/stp-generator.ts
+export type PayEventEmployee = {
+  taxFileNumber: string;
+  grossCents: number;
+  paygWithheldCents: number;
+};
+
+export type StpPayEvent = {
+  payerAbn: string;
+  payPeriodStart: string;
+  payPeriodEnd: string;
+  payDate: string;
+  employees: PayEventEmployee[];
+};
+
+/**
+ * Generates a minimal STP-style payload for PAYGW.
+ * This is intentionally not the full ATO XML schema â€“ it's a logical representation.
+ */
+export function generateStpPayload(event: StpPayEvent): unknown {
+  const totalGross = event.employees.reduce(
+    (sum, e) => sum + e.grossCents,
+    0,
+  );
+  const totalWithheld = event.employees.reduce(
+    (sum, e) => sum + e.paygWithheldCents,
+    0,
+  );
+
+  return {
+    version: "STP-APGMS-0.1",
+    payer: {
+      abn: event.payerAbn,
+    },
+    period: {
+      start: event.payPeriodStart,
+      end: event.payPeriodEnd,
+      payDate: event.payDate,
+    },
+    totals: {
+      grossCents: totalGross,
+      paygWithheldCents: totalWithheld,
+    },
+    employees: event.employees.map((e) => ({
+      tfn: e.taxFileNumber,
+      grossCents: e.grossCents,
+      paygWithheldCents: e.paygWithheldCents,
+    })),
+  };
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\types\fastify.d.ts
+============================================================
+import "fastify";
+
+declare module "fastify" {
+  interface FastifyInstance {
+    config: {
+      taxEngineUrl?: string;
+      [k: string]: unknown;
+    };
+    metrics?: {
+      recordSecurityEvent?: (code: string) => void;
+      httpRequestTotal?: any;
+      httpRequestDuration?: { startTimer: (labels?: Record<string,string>) => (labels?: Record<string,string>) => void };
+    };
+    isDraining?: () => boolean;
+    setDraining?: (v: boolean) => void;
+    providers?: {
+      redis?: { ping: () => Promise<string> } | null;
+      nats?: { flush: () => Promise<void> } | null;
+    };
+  }
+
+  interface FastifyRequest {
+    user?: {
+      sub: string;
+      orgId: string;
+      role: string;
+      mfaEnabled: boolean;
+    };
+  }
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\utils\orgScope.ts
+============================================================
+// services/api-gateway/src/utils/orgScope.ts
+import type { BankLine } from "@prisma/client";
+import type { FastifyReply, FastifyRequest } from "fastify";
+
+// roles you consider allowed to create/update bank lines
+const ALLOWED_ROLES_FOR_BANKLINES = ["owner", "admin", "accountant"] as const;
+type AllowedRole = (typeof ALLOWED_ROLES_FOR_BANKLINES)[number];
+
+export function assertOrgAccess(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  targetOrgId: string
+): boolean {
+  if (!request.user) {
+    reply.code(401).send({
+      error: { code: "unauthenticated", message: "Authentication required" }
+    });
+    return false;
+  }
+
+  // org mismatch
+  if (request.user.orgId !== targetOrgId) {
+    reply.code(403).send({
+      error: { code: "forbidden_wrong_org", message: "Organisation mismatch" }
+    });
+    return false;
+  }
+
+  return true;
+}
+
+export function assertRoleForBankLines(
+  request: FastifyRequest,
+  reply: FastifyReply
+): boolean {
+  if (!request.user) {
+    reply.code(401).send({
+      error: { code: "unauthenticated", message: "Authentication required" }
+    });
+    return false;
+  }
+
+  const userRole = request.user.role;
+  const ok = ALLOWED_ROLES_FOR_BANKLINES.includes(
+    userRole as AllowedRole
+  );
+
+  if (!ok) {
+    reply.code(403).send({
+      error: { code: "forbidden_role", message: "Insufficient role for bank lines" }
+    });
+    return false;
+  }
+
+  return true;
+}
+
+export type OrgContext = {
+  orgId: string;
+  actorId: string;
+  role: string;
+};
+
+function resolveUser(request: FastifyRequest): { orgId?: string; sub?: string; role?: string } | undefined {
+  return (request as any).user as { orgId?: string; sub?: string; role?: string } | undefined;
+}
+
+export function requireOrgContext(request: FastifyRequest, reply: FastifyReply): OrgContext | null {
+  const user = resolveUser(request);
+  if (!user?.orgId) {
+    reply.code(401).send({
+      error: { code: "unauthenticated", message: "Authentication required" }
+    });
+    return null;
+  }
+  if (!assertOrgAccess(request, reply, user.orgId)) {
+    return null;
+  }
+  if (!user.role) {
+    reply.code(403).send({ error: { code: "forbidden_role", message: "Role missing" } });
+    return null;
+  }
+  return {
+    orgId: user.orgId,
+    actorId: user.sub ?? "unknown",
+    role: user.role,
+  };
+}
+
+// Redact sensitive fields before sending DB rows out.
+// Adjust field names to match your Prisma model.
+export function redactBankLine(row: BankLine | null | undefined) {
+  if (!row) return row;
+
+  const amountValue = (row as any).amount;
+  const amount =
+    amountValue && typeof amountValue === "object" && typeof amountValue.toNumber === "function"
+      ? amountValue.toNumber()
+      : Number(amountValue);
+
+  return {
+    id: row.id,
+    orgId: row.orgId,
+    amount,
+    date: row.date,
+    createdAt: row.createdAt,
+  };
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\test\admin.data.delete.spec.js
+============================================================
+import assert from "node:assert/strict";
+import { afterEach, beforeEach, describe, it } from "node:test";
+import cors from "@fastify/cors";
+import Fastify from "fastify";
+import { registerAdminDataRoutes, } from "../src/routes/admin.data";
+import { adminDataDeleteResponseSchema } from "../src/schemas/admin.data";
+process.env.DATABASE_URL ??= "postgresql://user:pass@localhost:5432/test";
+process.env.SHADOW_DATABASE_URL ??= "postgresql://user:pass@localhost:5432/test-shadow";
+describe("POST /admin/data/delete", () => {
+    let app;
+    const prismaStub = {
+        user: {
+            findFirst: async () => null,
+            update: async (_args) => null,
+            delete: async (_args) => null,
+        },
+        bankLine: {
+            count: async (_args) => 0,
+        },
+    };
+    let securityLogs = [];
+    let authenticateImpl;
+    beforeEach(async () => {
+        app = Fastify({ logger: false });
+        await app.register(cors, { origin: true });
+        securityLogs = [];
+        authenticateImpl = async (_req, _reply, _roles) => ({
+            id: "principal",
+            orgId: defaultPayload.orgId,
+            roles: ["admin"],
+            token: "token",
+        });
+        prismaStub.user.findFirst = async () => null;
+        prismaStub.user.update = async () => null;
+        prismaStub.user.delete = async () => null;
+        prismaStub.bankLine.count = async () => 0;
+        await registerAdminDataRoutes(app, {
+            prisma: prismaStub,
+            authenticate: async (req, reply, roles) => authenticateImpl(req, reply, roles),
+            secLog: async (payload) => {
+                securityLogs.push(payload);
+            },
+        });
+        await app.ready();
+    });
+    afterEach(async () => {
+        await app.close();
+    });
+    const defaultPayload = {
+        orgId: "org-123",
+        email: "user@example.com",
+        confirm: "DELETE",
+    };
+    it("returns 401 without bearer token", async () => {
+        authenticateImpl = async (_req, reply, _roles) => {
+            void reply.code(401).send({ error: "unauthorized" });
+            return null;
+        };
+        const response = await app.inject({
+            method: "POST",
+            url: "/admin/data/delete",
+            payload: defaultPayload,
+        });
+        assert.equal(response.statusCode, 401);
+    });
+    it("rejects non-admin principals", async () => {
+        authenticateImpl = async (_req, reply, _roles) => {
+            void reply.code(403).send({ error: "forbidden" });
+            return null;
+        };
+        let findCalled = false;
+        prismaStub.user.findFirst = (async (...args) => {
+            findCalled = true;
+            return null;
+        });
+        const response = await app.inject({
+            method: "POST",
+            url: "/admin/data/delete",
+            payload: defaultPayload,
+        });
+        assert.equal(response.statusCode, 403);
+        assert.equal(findCalled, false);
+    });
+    it("validates confirm token", async () => {
+        authenticateImpl = async (_req, _reply, _roles) => ({
+            id: "principal",
+            orgId: defaultPayload.orgId,
+            roles: ["admin"],
+            token: "token",
+        });
+        const response = await app.inject({
+            method: "POST",
+            url: "/admin/data/delete",
+            payload: { ...defaultPayload, confirm: "nope" },
+        });
+        assert.equal(response.statusCode, 400);
+    });
+    it("returns 404 for unknown subject", async () => {
+        authenticateImpl = async (_req, _reply, _roles) => ({
+            id: "principal",
+            orgId: defaultPayload.orgId,
+            roles: ["admin"],
+            token: "token",
+        });
+        prismaStub.user.findFirst = async () => null;
+        const response = await app.inject({
+            method: "POST",
+            url: "/admin/data/delete",
+            payload: defaultPayload,
+        });
+        assert.equal(response.statusCode, 404);
+    });
+    it("anonymizes user with constraint risk", async () => {
+        authenticateImpl = async (_req, _reply, _roles) => ({
+            id: "admin-1",
+            orgId: defaultPayload.orgId,
+            roles: ["admin"],
+            token: "token",
+        });
+        const user = {
+            id: "user-1",
+            email: defaultPayload.email,
+            password: "secret",
+            createdAt: new Date(),
+            orgId: defaultPayload.orgId,
+        };
+        let findCalls = 0;
+        prismaStub.user.findFirst = async () => {
+            findCalls += 1;
+            return user;
+        };
+        const countCalls = [];
+        prismaStub.bankLine.count = async (args) => {
+            countCalls.push(args);
+            if (countCalls.length === 1) {
+                return 1;
+            }
+            return 0;
+        };
+        const updateCalls = [];
+        prismaStub.user.update = async (args) => {
+            updateCalls.push(args);
+            return { ...user, email: "deleted" };
+        };
+        let deleteCalled = false;
+        prismaStub.user.delete = async () => {
+            deleteCalled = true;
+            return user;
+        };
+        const response = await app.inject({
+            method: "POST",
+            url: "/admin/data/delete",
+            payload: defaultPayload,
+        });
+        assert.equal(response.statusCode, 202);
+        const body = response.json();
+        assert.doesNotThrow(() => adminDataDeleteResponseSchema.parse(body));
+        assert.equal(body.action, "anonymized");
+        assert.equal(body.userId, user.id);
+        assert.equal(typeof body.occurredAt, "string");
+        assert.equal(findCalls, 1);
+        assert.equal(countCalls.length, 1);
+        assert.deepEqual(countCalls[0].where, { orgId: defaultPayload.orgId });
+        assert.equal(deleteCalled, false);
+        assert.equal(updateCalls.length, 1);
+        const updateArgs = updateCalls[0];
+        assert.match(updateArgs.data.email, /^deleted\+[a-f0-9]{12}@example.com$/);
+        assert.match(updateArgs.data.password, /^\$argon2id\$/);
+        const lastLog = securityLogs[securityLogs.length - 1] ?? null;
+        assert.deepEqual(lastLog, {
+            event: "data_delete",
+            orgId: defaultPayload.orgId,
+            principal: "admin-1",
+            subjectUserId: user.id,
+            mode: "anonymized",
+        });
+    });
+    it("hard deletes user when no constraint risk", async () => {
+        const user = {
+            id: "user-2",
+            email: defaultPayload.email,
+            password: "secret",
+            createdAt: new Date(),
+            orgId: defaultPayload.orgId,
+        };
+        prismaStub.user.findFirst = async () => user;
+        prismaStub.bankLine.count = async () => 0;
+        let updateCalled = false;
+        prismaStub.user.update = async (args) => {
+            updateCalled = true;
+            return { ...user, email: args.data.email };
+        };
+        let deleteArgs = null;
+        prismaStub.user.delete = async (args) => {
+            deleteArgs = args;
+            return user;
+        };
+        const response = await app.inject({
+            method: "POST",
+            url: "/admin/data/delete",
+            payload: defaultPayload,
+        });
+        assert.equal(response.statusCode, 202);
+        const body = response.json();
+        assert.doesNotThrow(() => adminDataDeleteResponseSchema.parse(body));
+        assert.equal(body.action, "deleted");
+        assert.equal(body.userId, user.id);
+        assert.equal(updateCalled, false);
+        assert.deepEqual(deleteArgs, { where: { id: user.id } });
+        const lastLog = securityLogs[securityLogs.length - 1] ?? null;
+        assert.deepEqual(lastLog, {
+            event: "data_delete",
+            orgId: defaultPayload.orgId,
+            principal: "principal",
+            subjectUserId: user.id,
+            mode: "deleted",
+        });
+    });
+});
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\test\admin.data.delete.spec.ts
+============================================================
+import assert from "node:assert/strict";
+import { afterEach, beforeEach, describe, it } from "node:test";
+
+import cors from "@fastify/cors";
+import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
+
+import {
+  registerAdminDataRoutes,
+  type SecurityLogEntry,
+} from "../src/routes/admin.data";
+import { adminDataDeleteResponseSchema } from "../src/schemas/admin.data";
+import type { Principal } from "../src/lib/auth";
+
+process.env.DATABASE_URL ??= "postgresql://user:pass@localhost:5432/test";
+process.env.SHADOW_DATABASE_URL ??= "postgresql://user:pass@localhost:5432/test-shadow";
+
+type PrismaUser = {
+  id: string;
+  email: string;
+  password: string | null;
+  createdAt: Date;
+  orgId: string;
+};
+
+describe("POST /admin/data/delete", () => {
+  let app: ReturnType<typeof Fastify>;
+  const prismaStub = {
+    user: {
+      findFirst: async () => null as PrismaUser | null,
+      update: async (_args: any) => null as PrismaUser | null,
+      delete: async (_args: any) => null as PrismaUser | null,
+    },
+    bankLine: {
+      count: async (_args: any) => 0,
+    },
+  };
+  let securityLogs: SecurityLogEntry[] = [];
+  let authenticateImpl: AuthenticateFn;
+
+  beforeEach(async () => {
+    app = Fastify({ logger: false });
+    await app.register(cors, { origin: true });
+    securityLogs = [];
+    authenticateImpl = async (
+      _req: FastifyRequest,
+      _reply: FastifyReply,
+      _roles: ReadonlyArray<string>,
+    ) => ({
+      id: "principal",
+      orgId: defaultPayload.orgId,
+      roles: ["admin"],
+      token: "token",
+      mfaEnabled: true,
+    });
+
+    prismaStub.user.findFirst = async () => null;
+    prismaStub.user.update = async () => null;
+    prismaStub.user.delete = async () => null;
+    prismaStub.bankLine.count = async () => 0;
+
+    await registerAdminDataRoutes(app, {
+      prisma: prismaStub as any,
+      authenticate: async (
+        req: FastifyRequest,
+        reply: FastifyReply,
+        roles: ReadonlyArray<string>,
+      ) => authenticateImpl(req, reply, roles),
+      secLog: async (payload: SecurityLogEntry) => {
+        securityLogs.push(payload);
+      },
+    });
+
+    await app.ready();
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  const defaultPayload = {
+    orgId: "org-123",
+    email: "user@example.com",
+    confirm: "DELETE",
+  } as const;
+
+  it("returns 401 without bearer token", async () => {
+    authenticateImpl = async (
+      _req: FastifyRequest,
+      reply: FastifyReply,
+      _roles: ReadonlyArray<string>,
+    ) => {
+      void reply.code(401).send({ error: "unauthorized" });
+      return null;
+    };
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/admin/data/delete",
+      headers: { "x-correlation-id": "delete-anonymized" },
+      payload: defaultPayload,
+    });
+
+    assert.equal(response.statusCode, 401);
+  });
+
+  it("rejects non-admin principals", async () => {
+    authenticateImpl = async (
+      _req: FastifyRequest,
+      reply: FastifyReply,
+      _roles: ReadonlyArray<string>,
+    ) => {
+      void reply.code(403).send({ error: "forbidden" });
+      return null;
+    };
+
+    let findCalled = false;
+    prismaStub.user.findFirst = (async (...args: any[]) => {
+      findCalled = true;
+      return null;
+    }) as typeof prismaStub.user.findFirst;
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/admin/data/delete",
+      payload: defaultPayload,
+    });
+
+    assert.equal(response.statusCode, 403);
+    assert.equal(findCalled, false);
+  });
+
+  it("validates confirm token", async () => {
+    authenticateImpl = async (
+      _req: FastifyRequest,
+      _reply: FastifyReply,
+      _roles: ReadonlyArray<string>,
+    ) => ({
+      id: "principal",
+      orgId: defaultPayload.orgId,
+      roles: ["admin"],
+      token: "token",
+      mfaEnabled: true,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/admin/data/delete",
+      payload: { ...defaultPayload, confirm: "nope" },
+    });
+
+    assert.equal(response.statusCode, 400);
+  });
+
+  it("returns 404 for unknown subject", async () => {
+    authenticateImpl = async (
+      _req: FastifyRequest,
+      _reply: FastifyReply,
+      _roles: ReadonlyArray<string>,
+    ) => ({
+      id: "principal",
+      orgId: defaultPayload.orgId,
+      roles: ["admin"],
+      token: "token",
+      mfaEnabled: true,
+    });
+
+    prismaStub.user.findFirst = async () => null;
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/admin/data/delete",
+      payload: defaultPayload,
+    });
+
+    assert.equal(response.statusCode, 404);
+  });
+
+  it("anonymizes user with constraint risk", async () => {
+    authenticateImpl = async (
+      _req: FastifyRequest,
+      _reply: FastifyReply,
+      _roles: ReadonlyArray<string>,
+    ) => ({
+      id: "admin-1",
+      orgId: defaultPayload.orgId,
+      roles: ["admin"],
+      token: "token",
+      mfaEnabled: true,
+    });
+
+    const user: PrismaUser = {
+      id: "user-1",
+      email: defaultPayload.email,
+      password: "secret",
+      createdAt: new Date(),
+      orgId: defaultPayload.orgId,
+    };
+
+    let findCalls = 0;
+    prismaStub.user.findFirst = async () => {
+      findCalls += 1;
+      return user;
+    };
+
+    const countCalls: any[] = [];
+    prismaStub.bankLine.count = async (args: any) => {
+      countCalls.push(args);
+      if (countCalls.length === 1) {
+        return 1;
+      }
+      return 0;
+    };
+
+    const updateCalls: any[] = [];
+    prismaStub.user.update = async (args: any) => {
+      updateCalls.push(args);
+      return { ...user, email: "deleted" };
+    };
+
+    let deleteCalled = false;
+    prismaStub.user.delete = async () => {
+      deleteCalled = true;
+      return user;
+    };
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/admin/data/delete",
+      payload: defaultPayload,
+    });
+
+    assert.equal(response.statusCode, 202);
+    const body = response.json();
+    assert.doesNotThrow(() => adminDataDeleteResponseSchema.parse(body));
+    assert.equal(body.action, "anonymized");
+    assert.equal(body.userId, user.id);
+    assert.equal(typeof body.occurredAt, "string");
+
+    assert.equal(findCalls, 1);
+    assert.equal(countCalls.length, 1);
+    assert.deepEqual(countCalls[0].where, { orgId: defaultPayload.orgId });
+    assert.equal(deleteCalled, false);
+    assert.equal(updateCalls.length, 1);
+    const updateArgs = updateCalls[0];
+    assert.match(updateArgs.data.email, /^deleted\+[a-f0-9]{12}@example.com$/);
+    assert.match(updateArgs.data.password, /^\$argon2id\$/);
+
+    const logEntry = securityLogs[securityLogs.length - 1];
+    assert.equal(logEntry?.event, "data_delete");
+    assert.equal(logEntry?.mode, "anonymized");
+    assert.equal(logEntry?.orgId, defaultPayload.orgId);
+    assert.equal(logEntry?.principal, "admin-1");
+    assert.equal(logEntry?.subjectUserId, user.id);
+    assert.equal(logEntry?.subjectEmail, "[REDACTED:EMAIL]");
+    if (logEntry?.correlationId) {
+      assert.equal(logEntry.correlationId, "delete-anonymized");
+    }
+    assert.ok(logEntry?.occurredAt);
+  });
+
+  it("hard deletes user when no constraint risk", async () => {
+    const user: PrismaUser = {
+      id: "user-2",
+      email: defaultPayload.email,
+      password: "secret",
+      createdAt: new Date(),
+      orgId: defaultPayload.orgId,
+    };
+
+    prismaStub.user.findFirst = async () => user;
+    prismaStub.bankLine.count = async () => 0;
+
+    let updateCalled = false;
+    prismaStub.user.update = async (args: any) => {
+      updateCalled = true;
+      return { ...user, email: args.data.email };
+    };
+
+    let deleteArgs: any = null;
+    prismaStub.user.delete = async (args: any) => {
+      deleteArgs = args;
+      return user;
+    };
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/admin/data/delete",
+      headers: { "x-correlation-id": "delete-hard" },
+      payload: defaultPayload,
+    });
+
+    assert.equal(response.statusCode, 202);
+    const body = response.json();
+    assert.doesNotThrow(() => adminDataDeleteResponseSchema.parse(body));
+    assert.equal(body.action, "deleted");
+    assert.equal(body.userId, user.id);
+
+    assert.equal(updateCalled, false);
+    assert.deepEqual(deleteArgs, { where: { id: user.id } });
+
+    const logEntry = securityLogs[securityLogs.length - 1];
+    assert.equal(logEntry?.event, "data_delete");
+    assert.equal(logEntry?.mode, "deleted");
+    assert.equal(logEntry?.subjectUserId, user.id);
+    assert.equal(logEntry?.subjectEmail, "[REDACTED:EMAIL]");
+    if (logEntry?.correlationId) {
+      assert.equal(logEntry.correlationId, "delete-hard");
+    }
+    assert.ok(logEntry?.occurredAt);
+  });
+});
+
+type AuthenticateFn = (
+  req: FastifyRequest,
+  reply: FastifyReply,
+  roles: ReadonlyArray<string>,
+) => Promise<Principal | null>;
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\test\admin.data.export.spec.js
+============================================================
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import Fastify from "fastify";
+import adminDataRoutes from "../src/routes/admin.data";
+import { subjectDataExportResponseSchema } from "../src/schemas/admin.data";
+const buildTestDb = (overrides = {}) => ({
+    user: {
+        findFirst: overrides.userFindFirst ??
+            (async () => ({
+                id: "user-1",
+                email: "subject@example.com",
+                createdAt: new Date("2023-01-01T00:00:00.000Z"),
+                org: { id: "org-123", name: "Example Org" },
+            })),
+    },
+    bankLine: {
+        count: overrides.bankLineCount ?? (async () => 0),
+    },
+    accessLog: {
+        create: overrides.accessLogCreate ?? (async () => ({})),
+    },
+});
+const buildApp = async (db, authenticate, secLog = () => { }) => {
+    const app = Fastify();
+    app.decorate("db", db);
+    app.decorate("secLog", secLog);
+    app.decorate("adminDataAuth", authenticate);
+    await app.register(adminDataRoutes);
+    await app.ready();
+    return app;
+};
+test("401 without token", async () => {
+    const app = await buildApp(buildTestDb(), async (_req, reply) => {
+        void reply.code(401).send({ error: "unauthorized" });
+        return null;
+    });
+    const response = await app.inject({
+        method: "POST",
+        url: "/admin/data/export",
+        payload: { orgId: "org-123", email: "subject@example.com" },
+    });
+    assert.equal(response.statusCode, 401);
+    await app.close();
+});
+test("403 when principal is not admin", async () => {
+    const app = await buildApp(buildTestDb(), async (_req, reply) => {
+        void reply.code(403).send({ error: "forbidden" });
+        return null;
+    });
+    const response = await app.inject({
+        method: "POST",
+        url: "/admin/data/export",
+        payload: { orgId: "org-123", email: "subject@example.com" },
+    });
+    assert.equal(response.statusCode, 403);
+    await app.close();
+});
+test("404 when subject is missing", async () => {
+    const app = await buildApp(buildTestDb({
+        userFindFirst: async () => null,
+    }), async (_req, _reply, _roles) => ({
+        id: "admin-1",
+        orgId: "org-123",
+        roles: ["admin"],
+        token: "token",
+    }));
+    const response = await app.inject({
+        method: "POST",
+        url: "/admin/data/export",
+        payload: { orgId: "org-123", email: "missing@example.com" },
+    });
+    assert.equal(response.statusCode, 404);
+    await app.close();
+});
+test("200 returns expected export bundle", async () => {
+    const accessLogCalls = [];
+    const secLogCalls = [];
+    const app = await buildApp(buildTestDb({
+        bankLineCount: async () => 5,
+        userFindFirst: async () => ({
+            id: "user-99",
+            email: "subject@example.com",
+            createdAt: new Date("2022-05-05T00:00:00.000Z"),
+            org: { id: "org-123", name: "Example Org" },
+        }),
+        accessLogCreate: async (args) => {
+            accessLogCalls.push(args);
+            return {};
+        },
+    }), async (_req, _reply, _roles) => ({
+        id: "admin-1",
+        orgId: "org-123",
+        roles: ["admin"],
+        token: "token",
+    }), (entry) => {
+        secLogCalls.push(entry);
+    });
+    const response = await app.inject({
+        method: "POST",
+        url: "/admin/data/export",
+        payload: { orgId: "org-123", email: "subject@example.com" },
+    });
+    assert.equal(response.statusCode, 200);
+    const json = response.json();
+    const parsed = subjectDataExportResponseSchema.parse(json);
+    assert.equal(parsed.org.id, "org-123");
+    assert.equal(parsed.user.id, "user-99");
+    assert.equal(parsed.relationships.bankLinesCount, 5);
+    assert.ok(Date.parse(parsed.user.createdAt));
+    assert.ok(Date.parse(parsed.exportedAt));
+    assert.equal(accessLogCalls.length, 1);
+    assert.deepEqual(accessLogCalls[0], {
+        data: {
+            event: "data_export",
+            orgId: "org-123",
+            principalId: "admin-1",
+            subjectEmail: "subject@example.com",
+        },
+    });
+    assert.equal(secLogCalls.length, 1);
+    assert.deepEqual(secLogCalls[0], {
+        event: "data_export",
+        orgId: "org-123",
+        principal: "admin-1",
+        subjectEmail: "subject@example.com",
+    });
+    await app.close();
+});
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\test\admin.data.export.spec.ts
+============================================================
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
+import adminDataRoutes from "../src/routes/admin.data";
+import { subjectDataExportResponseSchema } from "../src/schemas/admin.data";
+import type { Principal } from "../src/lib/auth";
+
+type AuthenticateFn = (
+  req: FastifyRequest,
+  reply: FastifyReply,
+  roles: ReadonlyArray<string>,
+) => Promise<Principal | null>;
+
+type DbOverrides = {
+  userFindFirst?: DbClient["user"]["findFirst"];
+  bankLineCount?: DbClient["bankLine"]["count"];
+  accessLogCreate?: NonNullable<DbClient["accessLog"]>["create"];
+};
+
+type DbClient = {
+  user: {
+    findFirst: (args: {
+      where: { email: string; orgId: string };
+      select: {
+        id: true;
+        email: true;
+        createdAt: true;
+        org: { select: { id: true; name: true } };
+      };
+    }) => Promise<
+      |
+        {
+          id: string;
+          email: string;
+          createdAt: Date;
+          org: { id: string; name: string };
+        }
+      | null
+    >;
+  };
+  bankLine: {
+    count: (args: { where: { orgId: string } }) => Promise<number>;
+  };
+  accessLog: {
+    create: (args: {
+      data: {
+        event: string;
+        orgId: string;
+        principalId: string;
+        subjectEmail: string;
+      };
+    }) => Promise<unknown>;
+  };
+};
+
+const buildTestDb = (overrides: DbOverrides = {}): DbClient => ({
+  user: {
+    findFirst:
+      overrides.userFindFirst ??
+      (async () => ({
+        id: "user-1",
+        email: "subject@example.com",
+        createdAt: new Date("2023-01-01T00:00:00.000Z"),
+        org: { id: "org-123", name: "Example Org" },
+      })),
+  },
+  bankLine: {
+    count: overrides.bankLineCount ?? (async () => 0),
+  },
+  accessLog: {
+    create: overrides.accessLogCreate ?? (async () => ({})),
+  },
+});
+
+const buildApp = async (
+  db: DbClient,
+  authenticate: AuthenticateFn,
+  secLog: (entry: {
+    event: string;
+    orgId: string;
+    principal: string;
+    subjectEmail: string;
+  }) => void = () => {},
+) => {
+  const app = Fastify();
+  app.decorate("db", db);
+  app.decorate("secLog", secLog);
+  app.decorate("adminDataAuth", authenticate);
+  await app.register(adminDataRoutes);
+  await app.ready();
+  return app;
+};
+
+test("401 without token", async () => {
+  const app = await buildApp(
+    buildTestDb(),
+    async (_req: FastifyRequest, reply: FastifyReply) => {
+      void reply.code(401).send({ error: "unauthorized" });
+      return null;
+    },
+  );
+  const response = await app.inject({
+    method: "POST",
+    url: "/admin/data/export",
+    payload: { orgId: "org-123", email: "subject@example.com" },
+  });
+  assert.equal(response.statusCode, 401);
+  await app.close();
+});
+
+test("403 when principal is not admin", async () => {
+  const app = await buildApp(
+    buildTestDb(),
+    async (_req: FastifyRequest, reply: FastifyReply) => {
+      void reply.code(403).send({ error: "forbidden" });
+      return null;
+    },
+  );
+  const response = await app.inject({
+    method: "POST",
+    url: "/admin/data/export",
+    payload: { orgId: "org-123", email: "subject@example.com" },
+  });
+  assert.equal(response.statusCode, 403);
+  await app.close();
+});
+
+test("404 when subject is missing", async () => {
+  const app = await buildApp(
+    buildTestDb({
+      userFindFirst: async () => null,
+    }),
+    async (_req: FastifyRequest, _reply: FastifyReply, _roles: ReadonlyArray<string>) => ({
+      id: "admin-1",
+      orgId: "org-123",
+      roles: ["admin"],
+      token: "token",
+    }),
+  );
+  const response = await app.inject({
+    method: "POST",
+    url: "/admin/data/export",
+    payload: { orgId: "org-123", email: "missing@example.com" },
+  });
+  assert.equal(response.statusCode, 404);
+  await app.close();
+});
+
+test("200 returns expected export bundle", async () => {
+  const accessLogCalls: unknown[] = [];
+  const secLogCalls: unknown[] = [];
+  const app = await buildApp(
+    buildTestDb({
+      bankLineCount: async () => 5,
+      userFindFirst: async () => ({
+        id: "user-99",
+        email: "subject@example.com",
+        createdAt: new Date("2022-05-05T00:00:00.000Z"),
+        org: { id: "org-123", name: "Example Org" },
+      }),
+      accessLogCreate: async (args) => {
+        accessLogCalls.push(args);
+        return {};
+      },
+    }),
+    async (_req: FastifyRequest, _reply: FastifyReply, _roles: ReadonlyArray<string>) => ({
+      id: "admin-1",
+      orgId: "org-123",
+      roles: ["admin"],
+      token: "token",
+    }),
+    (entry) => {
+      secLogCalls.push(entry);
+    },
+  );
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/admin/data/export",
+    headers: { "x-correlation-id": "export-1" },
+    payload: { orgId: "org-123", email: "subject@example.com" },
+  });
+
+  assert.equal(response.statusCode, 200);
+  const json = response.json();
+  const parsed = subjectDataExportResponseSchema.parse(json);
+  assert.equal(parsed.org.id, "org-123");
+  assert.equal(parsed.user.id, "user-99");
+  assert.equal(parsed.relationships.bankLinesCount, 5);
+  assert.ok(Date.parse(parsed.user.createdAt));
+  assert.ok(Date.parse(parsed.exportedAt));
+  assert.equal(accessLogCalls.length, 1);
+  assert.deepEqual(accessLogCalls[0], {
+    data: {
+      event: "data_export",
+      orgId: "org-123",
+      principalId: "admin-1",
+      subjectEmail: "subject@example.com",
+    },
+  });
+  assert.equal(secLogCalls.length, 1);
+  const logEntry = secLogCalls[0] as { event: string; orgId: string; principal: string; subjectEmail: string; correlationId?: string; occurredAt?: string };
+  assert.equal(logEntry.event, "data_export");
+  assert.equal(logEntry.orgId, "org-123");
+  assert.equal(logEntry.principal, "admin-1");
+  assert.equal(logEntry.subjectEmail, "[REDACTED:EMAIL]");
+  assert.equal(logEntry.correlationId, "export-1");
+  assert.ok(typeof logEntry.occurredAt === "string");
+
+  await app.close();
+});
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\test\app.routes.spec.ts
+============================================================
+import assert from "node:assert/strict";
+import { after, afterEach, before, beforeEach, describe, it } from "node:test";
+
+import type { FastifyInstance } from "fastify";
+import jwt from "jsonwebtoken";
+import { Prisma } from "@prisma/client";
+
+import { buildServer } from "../src/app";
+import { createBankLinesPlugin } from "../src/routes/bank-lines";
+
+process.env.AUTH_DEV_SECRET ??= "local-dev-secret";
+process.env.AUTH_ISSUER ??= "urn:test:issuer";
+process.env.AUTH_AUDIENCE ??= "urn:test:aud";
+
+const SECRET = process.env.AUTH_DEV_SECRET!;
+process.env.AUTH_JWKS = JSON.stringify({
+  keys: [
+    {
+      kid: "local-dev",
+      kty: "oct",
+      alg: "HS256",
+      k: Buffer.from(SECRET, "utf8").toString("base64"),
+    },
+  ],
+});
+
+const ISSUER = process.env.AUTH_ISSUER!;
+const AUDIENCE = process.env.AUTH_AUDIENCE!;
+
+type StoredBankLine = {
+  id: string;
+  orgId: string;
+  idempotencyKey: string;
+  amount: number;
+  date: Date;
+  payeeCiphertext: string;
+  payeeKid: string;
+  descCiphertext: string;
+  descKid: string;
+  createdAt: Date;
+};
+
+function signToken({
+  sub = "user-1",
+  orgId = "org-test",
+  role = "admin",
+}: { sub?: string; orgId?: string; role?: string } = {}) {
+  return jwt.sign(
+    {
+      sub,
+      orgId,
+      role,
+      mfaEnabled: true,
+    },
+    SECRET,
+    {
+      algorithm: "HS256",
+      audience: AUDIENCE,
+      issuer: ISSUER,
+      expiresIn: "5m",
+      header: { kid: "local-dev" },
+    },
+  );
+}
+
+function buildBankLinePlugin(records: StoredBankLine[]) {
+  const prismaStub = {
+    bankLine: {
+      findUnique: async ({ where }: any) => {
+        const org = where?.orgId_idempotencyKey?.orgId as string | undefined;
+        const key = where?.orgId_idempotencyKey?.idempotencyKey as string | undefined;
+        if (!org || !key) return null;
+        return (
+          records.find(
+            (line) => line.orgId === org && line.idempotencyKey === key,
+          ) ?? null
+        );
+      },
+      create: async ({ data }: any) => {
+        const amountValue = data.amount as unknown;
+        const amount =
+          amountValue && typeof amountValue === "object" &&
+          typeof (amountValue as Prisma.Decimal).toNumber === "function"
+            ? (amountValue as Prisma.Decimal).toNumber()
+            : Number(amountValue);
+        const entry: StoredBankLine = {
+          id: data.id ?? `line-${records.length + 1}`,
+          orgId: data.orgId,
+          idempotencyKey: data.idempotencyKey,
+          amount,
+          date: new Date(data.date),
+          payeeCiphertext: data.payeeCiphertext,
+          payeeKid: data.payeeKid,
+          descCiphertext: data.descCiphertext,
+          descKid: data.descKid,
+          createdAt: data.createdAt ?? new Date(),
+        };
+        records.push(entry);
+        return entry;
+      },
+      findMany: async ({ where }: any = {}) => {
+        const orgId = where?.orgId as string | undefined;
+        return orgId ? records.filter((line) => line.orgId === orgId) : [...records];
+      },
+    },
+  };
+
+  return createBankLinesPlugin({ prisma: prismaStub as any });
+}
+
+const fetchCalls: string[] = [];
+const originalFetch = globalThis.fetch;
+
+before(() => {
+  globalThis.fetch = (async (url: any) => {
+    fetchCalls.push(String(url));
+    return new Response("ok", { status: 200 });
+  }) as typeof fetch;
+});
+
+after(() => {
+  if (originalFetch) {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+describe("buildServer domain wiring", () => {
+  let app: FastifyInstance | null = null;
+
+  afterEach(async () => {
+    if (app) {
+      await app.close();
+      app = null;
+    }
+  });
+
+  beforeEach(() => {
+    fetchCalls.length = 0;
+  });
+
+  it("rejects unauthenticated calls to /bank-lines", async () => {
+    const plugin = buildBankLinePlugin([]);
+    app = await buildServer({ bankLinesPlugin: plugin });
+    await app.ready();
+
+    const response = await app.inject({ method: "GET", url: "/bank-lines" });
+    assert.equal(response.statusCode, 401);
+  });
+
+  it("serves bank lines for authenticated callers", async () => {
+    const store: StoredBankLine[] = [
+      {
+        id: "line-1",
+        orgId: "org-test",
+        idempotencyKey: "alpha",
+        amount: 42,
+        date: new Date("2024-01-01"),
+        payeeCiphertext: "payee",
+        payeeKid: "kid",
+        descCiphertext: "desc",
+        descKid: "desc-kid",
+        createdAt: new Date("2024-01-02"),
+      },
+      {
+        id: "line-2",
+        orgId: "other-org",
+        idempotencyKey: "beta",
+        amount: 99,
+        date: new Date("2024-02-01"),
+        payeeCiphertext: "other",
+        payeeKid: "other-kid",
+        descCiphertext: "other-desc",
+        descKid: "other-desc-kid",
+        createdAt: new Date("2024-02-02"),
+      },
+    ];
+    const plugin = buildBankLinePlugin(store);
+    app = await buildServer({ bankLinesPlugin: plugin });
+    await app.ready();
+
+    const token = signToken({ orgId: "org-test" });
+    const response = await app.inject({
+      method: "GET",
+      url: "/bank-lines",
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = response.json() as { lines: Array<{ orgId: string }> };
+    assert.equal(body.lines.length, 1);
+    assert.equal(body.lines[0]?.orgId, "org-test");
+  });
+
+  it("requires auth on /admin/data", async () => {
+    const plugin = buildBankLinePlugin([]);
+    app = await buildServer({ bankLinesPlugin: plugin });
+    await app.ready();
+
+    const response = await app.inject({ method: "GET", url: "/admin/data" });
+    assert.equal(response.statusCode, 401);
+  });
+
+  it("returns admin data payloads for authenticated requests", async () => {
+    const plugin = buildBankLinePlugin([]);
+    app = await buildServer({ bankLinesPlugin: plugin });
+    await app.ready();
+
+    const token = signToken({ orgId: "org-test" });
+    const response = await app.inject({
+      method: "GET",
+      url: "/admin/data",
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = response.json() as { items: unknown[] };
+    assert.ok(Array.isArray(body.items));
+  });
+
+  it("wires /tax/health behind auth", async () => {
+    const plugin = buildBankLinePlugin([]);
+    app = await buildServer({ bankLinesPlugin: plugin });
+    await app.ready();
+
+    const token = signToken({ orgId: "org-test" });
+    const forbidden = await app.inject({ method: "GET", url: "/tax/health" });
+    assert.equal(forbidden.statusCode, 401);
+
+    const allowed = await app.inject({
+      method: "GET",
+      url: "/tax/health",
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    assert.equal(allowed.statusCode, 200);
+    assert.equal(fetchCalls.length, 1);
+  });
+
+  describe("/connectors/capture", () => {
+    const stubDeps = {
+      capturePayroll: async () => ({
+        transfer: { source: "PAYROLL_CAPTURE", amount: 100 },
+        artifact: { artifactId: "payroll-artifact", sha256: "abc", summary: { generatedAt: new Date().toISOString(), totals: { paygw: 1, gst: 0 }, movementsLast24h: [] } },
+      }),
+      capturePos: async () => ({
+        transfer: { source: "GST_CAPTURE", amount: 200 },
+        artifact: { artifactId: "pos-artifact", sha256: "def", summary: { generatedAt: new Date().toISOString(), totals: { paygw: 0, gst: 1 }, movementsLast24h: [] } },
+      }),
+    };
+
+    it("requires authentication", async () => {
+      const plugin = buildBankLinePlugin([]);
+      app = await buildServer({ bankLinesPlugin: plugin, connectorDeps: stubDeps });
+      await app.ready();
+
+      const response = await app.inject({ method: "POST", url: "/connectors/capture/payroll", payload: { orgId: "org-test", amount: 123 } });
+      assert.equal(response.statusCode, 401);
+    });
+
+    it("captures payroll with correct metadata", async () => {
+      const plugin = buildBankLinePlugin([]);
+      app = await buildServer({ bankLinesPlugin: plugin, connectorDeps: stubDeps });
+      await app.ready();
+
+      const token = signToken({ orgId: "org-test" });
+      const response = await app.inject({
+        method: "POST",
+        url: "/connectors/capture/payroll",
+        headers: { authorization: `Bearer ${token}` },
+        payload: { orgId: "org-test", amount: 99.5 },
+      });
+
+      assert.equal(response.statusCode, 200);
+      const body = response.json();
+      assert.equal(body.transfer.source, "PAYROLL_CAPTURE");
+      assert.equal(body.artifact.artifactId, "payroll-artifact");
+    });
+
+    it("captures POS transactions", async () => {
+      const plugin = buildBankLinePlugin([]);
+      app = await buildServer({ bankLinesPlugin: plugin, connectorDeps: stubDeps });
+      await app.ready();
+
+      const token = signToken({ orgId: "org-test" });
+      const response = await app.inject({
+        method: "POST",
+        url: "/connectors/capture/pos",
+        headers: { authorization: `Bearer ${token}` },
+        payload: { orgId: "org-test", amount: 200 },
+      });
+
+      assert.equal(response.statusCode, 200);
+      const body = response.json();
+      assert.equal(body.transfer.source, "GST_CAPTURE");
+      assert.equal(body.artifact.artifactId, "pos-artifact");
+    });
+  });
+});
+
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\test\auth.guard.spec.ts
+============================================================
+import assert from "node:assert/strict";
+import { after, before, describe, it } from "node:test";
+
+import Fastify from "fastify";
+import jwt from "jsonwebtoken";
+
+import { authGuard } from "../src/auth";
+
+const SECRET = process.env.AUTH_DEV_SECRET!;
+const ISSUER = process.env.AUTH_ISSUER!;
+const AUDIENCE = process.env.AUTH_AUDIENCE!;
+
+function signToken(overrides: Partial<jwt.JwtPayload> = {}, options: jwt.SignOptions = {}) {
+  const payload: jwt.JwtPayload = {
+    sub: "user-1",
+    orgId: "dev-org",
+    role: "admin",
+    mfaEnabled: true,
+    ...overrides,
+  };
+
+  return jwt.sign(payload, SECRET, {
+    algorithm: "HS256",
+    audience: AUDIENCE,
+    issuer: ISSUER,
+    expiresIn: "5m",
+    ...options,
+  });
+}
+
+describe("authGuard enforcement", () => {
+  let app: ReturnType<typeof Fastify>;
+
+  before(async () => {
+    app = Fastify();
+    app.addHook("onRequest", authGuard);
+    app.get("/secure", async (request) => ({
+      user: request.user,
+    }));
+    await app.ready();
+  });
+
+  after(async () => {
+    await app.close();
+  });
+
+  it("allows valid tokens and scopes user context", async () => {
+    const token = signToken();
+    const response = await app.inject({
+      method: "GET",
+      url: "/secure",
+      headers: {
+        authorization: `Bearer ${token}`,
+      },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = response.json() as { user: any };
+    assert.equal(body.user.sub, "user-1");
+    assert.equal(body.user.orgId, "dev-org");
+    assert.equal(body.user.role, "admin");
+    assert.equal(body.user.mfaEnabled, true);
+    assert.equal(body.user.regulator ?? false, false);
+  });
+
+  it("rejects tokens with wrong audience", async () => {
+    const token = signToken({}, { audience: "urn:other" });
+    const response = await app.inject({
+      method: "GET",
+      url: "/secure",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(response.statusCode, 401);
+  });
+
+  it("rejects tokens with wrong issuer", async () => {
+    const token = signToken({}, { issuer: "urn:wrong" });
+    const response = await app.inject({
+      method: "GET",
+      url: "/secure",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(response.statusCode, 401);
+  });
+
+  it("rejects expired tokens", async () => {
+    const past = Math.floor(Date.now() / 1000) - 60;
+    const token = jwt.sign(
+      {
+        sub: "user-1",
+        orgId: "dev-org",
+        role: "admin",
+        mfaEnabled: true,
+        exp: past,
+      },
+      SECRET,
+      {
+        algorithm: "HS256",
+        audience: AUDIENCE,
+        issuer: ISSUER,
+        noTimestamp: true,
+      },
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/secure",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(response.statusCode, 401);
+  });
+
+  it("rejects tokens not yet valid", async () => {
+    const token = jwt.sign(
+      {
+        sub: "user-1",
+        orgId: "dev-org",
+        role: "admin",
+        mfaEnabled: true,
+      },
+      SECRET,
+      {
+        algorithm: "HS256",
+        audience: AUDIENCE,
+        issuer: ISSUER,
+        notBefore: 120,
+        expiresIn: "5m",
+      },
+    );
+    const response = await app.inject({
+      method: "GET",
+      url: "/secure",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(response.statusCode, 401);
+  });
+
+  it("rejects tokens without org scope", async () => {
+    const token = jwt.sign(
+      {
+        sub: "user-1",
+        role: "admin",
+        mfaEnabled: true,
+      },
+      SECRET,
+      {
+        algorithm: "HS256",
+        audience: AUDIENCE,
+        issuer: ISSUER,
+        expiresIn: "5m",
+      },
+    );
+    const response = await app.inject({
+      method: "GET",
+      url: "/secure",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(response.statusCode, 401);
+  });
+});
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\test\bank-lines.routes.spec.ts
+============================================================
+import assert from "node:assert/strict";
+import { afterEach, beforeEach, describe, it } from "node:test";
+
+import Fastify, { type FastifyInstance } from "fastify";
+import jwt from "jsonwebtoken";
+
+import { createBankLinesPlugin } from "../src/routes/bank-lines";
+
+type StoredBankLine = {
+  id: string;
+  orgId: string;
+  idempotencyKey: string;
+  amount: number;
+  date: Date;
+  payeeCiphertext: string;
+  payeeKid: string;
+  descCiphertext: string;
+  descKid: string;
+  createdAt: Date;
+};
+
+process.env.AUTH_DEV_SECRET ??= "local-dev-secret";
+process.env.AUTH_ISSUER ??= "urn:test:issuer";
+process.env.AUTH_AUDIENCE ??= "urn:test:aud";
+process.env.AUTH_JWKS ??=
+  JSON.stringify({
+    keys: [
+      {
+        kid: "local-dev",
+        kty: "oct",
+        alg: "HS256",
+        k: Buffer.from(process.env.AUTH_DEV_SECRET!, "utf8").toString("base64"),
+      },
+    ],
+  });
+
+const SECRET = process.env.AUTH_DEV_SECRET!;
+const ISSUER = process.env.AUTH_ISSUER!;
+const AUDIENCE = process.env.AUTH_AUDIENCE!;
+const { authGuard } = await import("../src/auth.js");
+
+function signToken({
+  sub = "user-1",
+  orgId = "org-1",
+  role = "admin",
+}: { sub?: string; orgId?: string; role?: string } = {}) {
+  const payload: jwt.JwtPayload = {
+    sub,
+    orgId,
+    role,
+    mfaEnabled: true,
+  };
+
+  return jwt.sign(payload, SECRET, {
+    algorithm: "HS256",
+    audience: AUDIENCE,
+    issuer: ISSUER,
+    expiresIn: "5m",
+    header: { kid: "local-dev" },
+  });
+}
+
+describe("bank-lines routes", () => {
+  let app: FastifyInstance;
+  let bankLines: StoredBankLine[];
+
+  beforeEach(async () => {
+    bankLines = [];
+
+    const prismaStub = {
+      bankLine: {
+        findUnique: async ({ where }: any) => {
+          const { orgId, idempotencyKey } = where?.orgId_idempotencyKey ?? {};
+          return (
+            bankLines.find(
+              (line) => line.orgId === orgId && line.idempotencyKey === idempotencyKey,
+            ) ?? null
+          );
+        },
+        create: async ({ data }: any) => {
+          const amountInput = data.amount as any;
+          const record: StoredBankLine = {
+            id: data.id ?? `line-${bankLines.length + 1}`,
+            orgId: data.orgId,
+            idempotencyKey: data.idempotencyKey,
+            amount:
+              amountInput && typeof amountInput.toNumber === "function"
+                ? amountInput.toNumber()
+                : Number(amountInput),
+            date: new Date(data.date),
+            payeeCiphertext: data.payeeCiphertext,
+            payeeKid: data.payeeKid,
+            descCiphertext: data.descCiphertext,
+            descKid: data.descKid,
+            createdAt: data.createdAt ?? new Date(),
+          };
+          bankLines.push(record);
+          return record;
+        },
+        findMany: async ({ where, orderBy }: any = {}) => {
+          let results = [...bankLines];
+          if (where?.orgId) {
+            results = results.filter((line) => line.orgId === where.orgId);
+          }
+          if (orderBy?.createdAt === "desc") {
+            results.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+          }
+          return results;
+        },
+      },
+    };
+
+    app = Fastify();
+    app.addHook("onRequest", authGuard);
+    await app.register(createBankLinesPlugin({ prisma: prismaStub } as any));
+    await app.ready();
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it("rejects unauthenticated callers", async () => {
+    const response = await app.inject({ method: "GET", url: "/bank-lines" });
+    assert.equal(response.statusCode, 401);
+  });
+
+  it("creates bank lines for authorised roles", async () => {
+    const token = signToken();
+    const payload = {
+      orgId: "org-1",
+      idempotencyKey: "key-1",
+      amount: 125.75,
+      date: new Date().toISOString(),
+      payeeCiphertext: "payee", 
+      payeeKid: "payee-kid",
+      descCiphertext: "desc",
+      descKid: "desc-kid",
+    };
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/bank-lines",
+      headers: { authorization: `Bearer ${token}` },
+    payload,
+  });
+
+    assert.equal(response.statusCode, 201);
+    assert.equal(response.headers["idempotent-replay"], "false");
+
+    const body = response.json() as { amount: number; orgId: string; payeeCiphertext?: string };
+    assert.equal(body.orgId, "org-1");
+    assert.equal(body.amount, 125.75);
+    assert.ok(!Object.prototype.hasOwnProperty.call(body, "payeeCiphertext"));
+  });
+
+  it("replays the prior response when idempotency key is reused", async () => {
+    const token = signToken();
+    const payload = {
+      orgId: "org-1",
+      idempotencyKey: "replay-key",
+      amount: 99.5,
+      date: new Date().toISOString(),
+      payeeCiphertext: "payee", 
+      payeeKid: "payee-kid",
+      descCiphertext: "desc",
+      descKid: "desc-kid",
+    };
+
+    const first = await app.inject({
+      method: "POST",
+      url: "/bank-lines",
+      headers: { authorization: `Bearer ${token}` },
+      payload,
+    });
+    const second = await app.inject({
+      method: "POST",
+      url: "/bank-lines",
+      headers: { authorization: `Bearer ${token}` },
+      payload,
+    });
+
+    assert.equal(first.statusCode, 201);
+    assert.equal(second.statusCode, 201);
+    assert.equal(second.headers["idempotent-replay"], "true");
+    assert.deepEqual(second.json(), first.json());
+  });
+
+  it("rejects callers without sufficient role", async () => {
+    const token = signToken({ role: "viewer" });
+    const payload = {
+      orgId: "org-1",
+      idempotencyKey: "deny-role",
+      amount: 10,
+      date: new Date().toISOString(),
+      payeeCiphertext: "payee",
+      payeeKid: "payee-kid",
+      descCiphertext: "desc",
+      descKid: "desc-kid",
+    };
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/bank-lines",
+      headers: { authorization: `Bearer ${token}` },
+      payload,
+    });
+
+    assert.equal(response.statusCode, 403);
+    const body = response.json() as { error?: { code?: string } };
+    assert.equal(body.error?.code, "forbidden_role");
+  });
+
+  it("enforces organisation scope on writes", async () => {
+    const token = signToken({ orgId: "org-1" });
+    const payload = {
+      orgId: "different-org",
+      idempotencyKey: "wrong-org",
+      amount: 25,
+      date: new Date().toISOString(),
+      payeeCiphertext: "payee",
+      payeeKid: "payee-kid",
+      descCiphertext: "desc",
+      descKid: "desc-kid",
+    };
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/bank-lines",
+      headers: { authorization: `Bearer ${token}` },
+      payload,
+    });
+
+    assert.equal(response.statusCode, 403);
+    const body = response.json() as { error?: { code?: string } };
+    assert.equal(body.error?.code, "forbidden_wrong_org");
+  });
+
+  it("lists bank lines filtered to the caller's organisation", async () => {
+    const token = signToken({ orgId: "org-1" });
+
+    // seed one line for caller org and one for a different org
+    bankLines.push({
+      id: "line-1",
+      orgId: "org-1",
+      idempotencyKey: "list-1",
+      amount: 12,
+      date: new Date("2024-01-02"),
+      payeeCiphertext: "payee",
+      payeeKid: "payee-kid",
+      descCiphertext: "desc",
+      descKid: "desc-kid",
+      createdAt: new Date("2024-01-03"),
+    });
+    bankLines.push({
+      id: "line-2",
+      orgId: "other-org",
+      idempotencyKey: "list-2",
+      amount: 99,
+      date: new Date("2024-01-04"),
+      payeeCiphertext: "other",
+      payeeKid: "other-kid",
+      descCiphertext: "other-desc",
+      descKid: "other-desc-kid",
+      createdAt: new Date("2024-01-05"),
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/bank-lines",
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = response.json() as { lines: Array<{ orgId: string; amount: number }> };
+    assert.equal(body.lines.length, 1);
+    assert.equal(body.lines[0]?.orgId, "org-1");
+    assert.equal(body.lines[0]?.amount, 12);
+  });
+});
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\test\bank-lines.validation.test.ts
+============================================================
+import Fastify from "fastify";
+import { createBankLinesPlugin } from "../src/routes/bank-lines";
+
+const mockUser = { orgId: "org-1", sub: "user-1", role: "admin" };
+const makeApp = (user: any) => {
+  const prisma = {
+    bankLine: {
+      findUnique: jest.fn(),
+      create: jest.fn(),
+      findMany: jest.fn(),
+    },
+  };
+  const app = Fastify();
+  app.decorateRequest("user", null as any);
+  app.addHook("onRequest", (req, _rep, done) => {
+    (req as any).user = user;
+    done();
+  });
+  app.register(createBankLinesPlugin({ prisma } as any));
+  return { app, prisma };
+};
+
+describe("bank-lines validation/auth/idempotency", () => {
+  it("401 when unauthenticated", async () => {
+    const { app } = makeApp(null);
+    const res = await app.inject({ method: "POST", url: "/bank-lines", payload: {} });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("400 invalid body", async () => {
+    const { app } = makeApp(mockUser);
+    const res = await app.inject({
+      method: "POST",
+      url: "/bank-lines",
+      payload: { idempotencyKey: "", amount: "abc" },
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("idempotent replay returns header", async () => {
+    const { app, prisma } = makeApp(mockUser);
+    const payload = {
+      idempotencyKey: "idem-1",
+      amount: 123.45,
+      date: "2025-01-01",
+      payeeCiphertext: "c",
+      payeeKid: "k",
+      descCiphertext: "dc",
+      descKid: "dk",
+    };
+    prisma.bankLine.findUnique.mockResolvedValueOnce(null);
+    prisma.bankLine.create.mockResolvedValueOnce({ ...payload, id: "bl-1", orgId: "org-1", createdAt: new Date(), date: new Date() });
+    prisma.bankLine.findUnique.mockResolvedValueOnce({ ...payload, id: "bl-1", orgId: "org-1", createdAt: new Date(), date: new Date() });
+
+    const first = await app.inject({ method: "POST", url: "/bank-lines", payload });
+    expect(first.statusCode).toBe(201);
+    expect(first.headers["idempotent-replay"]).toBe("false");
+
+    const second = await app.inject({ method: "POST", url: "/bank-lines", payload });
+    expect(second.statusCode).toBe(201);
+    expect(second.headers["idempotent-replay"]).toBe("true");
+    await app.close();
+  });
+
+  it("403 when role not allowed", async () => {
+    const { app } = makeApp({ ...mockUser, role: "viewer" });
+    const res = await app.inject({
+      method: "POST",
+      url: "/bank-lines",
+      payload: {
+        idempotencyKey: "idem-2",
+        amount: 1,
+        date: "2025-01-01",
+        payeeCiphertext: "c",
+        payeeKid: "k",
+        descCiphertext: "dc",
+        descKid: "dk",
+      },
+    });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+});
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\test\config.spec.js
+============================================================
+import { afterEach, test } from "node:test";
+import assert from "node:assert/strict";
+import { loadConfig } from "../src/config";
+const REQUIRED_KEYS = [
+    "DATABASE_URL",
+    "SHADOW_DATABASE_URL",
+    "AUTH_AUDIENCE",
+    "AUTH_ISSUER",
+    "AUTH_JWKS",
+    "PII_KEYS",
+    "PII_ACTIVE_KEY",
+    "PII_SALTS",
+    "PII_ACTIVE_SALT",
+    "API_RATE_LIMIT_MAX",
+    "API_RATE_LIMIT_WINDOW",
+    "AUTH_FAILURE_THRESHOLD",
+    "TAX_ENGINE_URL",
+    "CORS_ALLOWED_ORIGINS",
+];
+const envBackup = new Map();
+const sampleKeyMaterial = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=";
+const sampleSaltMaterial = "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=";
+const sampleJwks = JSON.stringify({ keys: [{ kid: "local", alg: "RS256" }] });
+function stashEnv() {
+    envBackup.clear();
+    for (const key of REQUIRED_KEYS) {
+        envBackup.set(key, process.env[key]);
+    }
+}
+function restoreEnv() {
+    for (const [key, value] of envBackup.entries()) {
+        if (value === undefined) {
+            delete process.env[key];
+        }
+        else {
+            process.env[key] = value;
+        }
+    }
+}
+afterEach(() => {
+    restoreEnv();
+});
+test("loadConfig parses typed values and defaults", () => {
+    stashEnv();
+    process.env.DATABASE_URL = "postgresql://user:pass@localhost:5432/apgms?schema=public";
+    process.env.SHADOW_DATABASE_URL =
+        "postgresql://user:pass@localhost:5432/apgms_shadow?schema=public";
+    process.env.AUTH_AUDIENCE = "urn:test:aud";
+    process.env.AUTH_ISSUER = "urn:test:issuer";
+    process.env.AUTH_JWKS = sampleJwks;
+    process.env.PII_KEYS = JSON.stringify([{ kid: "local", material: sampleKeyMaterial }]);
+    process.env.PII_ACTIVE_KEY = "local";
+    process.env.PII_SALTS = JSON.stringify([{ sid: "local", secret: sampleSaltMaterial }]);
+    process.env.PII_ACTIVE_SALT = "local";
+    process.env.API_RATE_LIMIT_MAX = "42";
+    process.env.API_RATE_LIMIT_WINDOW = "2 minutes";
+    process.env.AUTH_FAILURE_THRESHOLD = "7";
+    process.env.TAX_ENGINE_URL = "http://tax-engine.internal:8080";
+    process.env.CORS_ALLOWED_ORIGINS = "https://app.example.com, https://admin.example.com";
+    const config = loadConfig();
+    assert.equal(config.databaseUrl, process.env.DATABASE_URL);
+    assert.equal(config.shadowDatabaseUrl, process.env.SHADOW_DATABASE_URL);
+    assert.equal(config.rateLimit.max, 42);
+    assert.equal(config.rateLimit.window, "2 minutes");
+    assert.equal(config.security.authFailureThreshold, 7);
+    assert.equal(config.taxEngineUrl, "http://tax-engine.internal:8080");
+    assert.deepEqual(config.cors.allowedOrigins, [
+        "https://app.example.com",
+        "https://admin.example.com",
+    ]);
+});
+test("loadConfig fails closed when secrets missing", () => {
+    stashEnv();
+    delete process.env.DATABASE_URL;
+    process.env.AUTH_AUDIENCE = "urn:test:aud";
+    process.env.AUTH_ISSUER = "urn:test:issuer";
+    process.env.AUTH_JWKS = sampleJwks;
+    process.env.PII_KEYS = JSON.stringify([{ kid: "local", material: sampleKeyMaterial }]);
+    process.env.PII_ACTIVE_KEY = "local";
+    process.env.PII_SALTS = JSON.stringify([{ sid: "local", secret: sampleSaltMaterial }]);
+    process.env.PII_ACTIVE_SALT = "local";
+    assert.throws(() => loadConfig(), /DATABASE_URL is required/);
+});
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\test\config.spec.ts
+============================================================
+import { afterEach, test } from "node:test";
+import assert from "node:assert/strict";
+
+import { loadConfig } from "../src/config";
+
+const REQUIRED_KEYS = [
+  "DATABASE_URL",
+  "SHADOW_DATABASE_URL",
+  "AUTH_AUDIENCE",
+  "AUTH_ISSUER",
+  "AUTH_JWKS",
+  "AUTH_DEV_SECRET",
+  "PII_KEYS",
+  "PII_ACTIVE_KEY",
+  "PII_SALTS",
+  "PII_ACTIVE_SALT",
+  "API_RATE_LIMIT_MAX",
+  "API_RATE_LIMIT_WINDOW",
+  "AUTH_FAILURE_THRESHOLD",
+  "TAX_ENGINE_URL",
+  "CORS_ALLOWED_ORIGINS",
+  "ENCRYPTION_MASTER_KEY",
+  "REGULATOR_ACCESS_CODE",
+  "REGULATOR_JWT_AUDIENCE",
+  "REGULATOR_SESSION_TTL_MINUTES",
+  "REQUIRE_TLS",
+  "WEBAUTHN_RP_ID",
+  "WEBAUTHN_RP_NAME",
+  "WEBAUTHN_ORIGIN",
+] as const;
+
+const envBackup = new Map<string, string | undefined>();
+
+const sampleKeyMaterial = "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=";
+const sampleSaltMaterial = "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=";
+const sampleJwks = JSON.stringify({ keys: [{ kid: "local", alg: "RS256" }] });
+
+function stashEnv() {
+  envBackup.clear();
+  for (const key of REQUIRED_KEYS) {
+    envBackup.set(key, process.env[key]);
+  }
+}
+
+function restoreEnv() {
+  for (const [key, value] of envBackup.entries()) {
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
+}
+
+afterEach(() => {
+  restoreEnv();
+});
+
+test("loadConfig parses typed values and defaults", () => {
+  stashEnv();
+  process.env.DATABASE_URL = "postgresql://user:pass@localhost:5432/apgms?schema=public";
+  process.env.SHADOW_DATABASE_URL =
+    "postgresql://user:pass@localhost:5432/apgms_shadow?schema=public";
+  process.env.AUTH_AUDIENCE = "urn:test:aud";
+  process.env.AUTH_ISSUER = "urn:test:issuer";
+  process.env.AUTH_JWKS = sampleJwks;
+  process.env.AUTH_DEV_SECRET = "local-dev-secret";
+  process.env.PII_KEYS = JSON.stringify([{ kid: "local", material: sampleKeyMaterial }]);
+  process.env.PII_ACTIVE_KEY = "local";
+  process.env.PII_SALTS = JSON.stringify([{ sid: "local", secret: sampleSaltMaterial }]);
+  process.env.PII_ACTIVE_SALT = "local";
+  process.env.API_RATE_LIMIT_MAX = "42";
+  process.env.API_RATE_LIMIT_WINDOW = "2 minutes";
+  process.env.AUTH_FAILURE_THRESHOLD = "7";
+  process.env.TAX_ENGINE_URL = "http://tax-engine.internal:8080";
+  process.env.CORS_ALLOWED_ORIGINS = "https://app.example.com, https://admin.example.com";
+  process.env.ENCRYPTION_MASTER_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+  process.env.REGULATOR_ACCESS_CODE = "code-123";
+  process.env.REGULATOR_JWT_AUDIENCE = "urn:test:reg";
+  process.env.REGULATOR_SESSION_TTL_MINUTES = "90";
+  process.env.REQUIRE_TLS = "true";
+  process.env.WEBAUTHN_RP_ID = "localhost";
+  process.env.WEBAUTHN_RP_NAME = "APGMS Admin";
+  process.env.WEBAUTHN_ORIGIN = "http://localhost:5173";
+
+  const config = loadConfig();
+
+  assert.equal(config.databaseUrl, process.env.DATABASE_URL);
+  assert.equal(config.shadowDatabaseUrl, process.env.SHADOW_DATABASE_URL);
+  assert.equal(config.rateLimit.max, 42);
+  assert.equal(config.rateLimit.window, "2 minutes");
+  assert.equal(config.security.authFailureThreshold, 7);
+  assert.equal(config.security.requireHttps, true);
+  assert.equal(config.taxEngineUrl, "http://tax-engine.internal:8080");
+  assert.deepEqual(config.cors.allowedOrigins, [
+    "https://app.example.com",
+    "https://admin.example.com",
+  ]);
+  assert.equal(config.encryption.masterKey.length, 32);
+  assert.equal(config.auth.devSecret, "local-dev-secret");
+  assert.equal(config.regulator.accessCode, "code-123");
+  assert.equal(config.regulator.jwtAudience, "urn:test:reg");
+  assert.equal(config.regulator.sessionTtlMinutes, 90);
+  assert.equal(config.webauthn.rpId, "localhost");
+  assert.equal(config.webauthn.origin, "http://localhost:5173");
+});
+
+test("loadConfig fails closed when secrets missing", () => {
+  stashEnv();
+  delete process.env.DATABASE_URL;
+  process.env.AUTH_AUDIENCE = "urn:test:aud";
+  process.env.AUTH_ISSUER = "urn:test:issuer";

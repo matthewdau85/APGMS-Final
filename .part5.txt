@@ -1,0 +1,2651 @@
+﻿   * Execute `/compliance/precheck`, resolve any alerts through `/compliance/alerts/:id/resolve`, and finally POST to `/compliance/transfer`.
+   * After the transfer, a pilot report (`artifacts/compliance/pilot-report-<timestamp>.json`) captures transfers, reminders, and alerts; send this file to your stakeholder for evidence.
+
+## Production run (stakeholder-ready deployment)
+
+1. **Stakeholder connection**
+   * Obtain the partner-approved `DESIGNATED_BANKING_URL`, token, and cert fingerprint from the contractual agreement.
+   * Fill `DSP_PRODUCT_ID` with the ATO-registered product identifier used for the deployment.
+   * Ensure the FS repository includes the signed OSF questionnaire, AUSTRAC/ASIC/AFSL documents, and any pilot summaries in `artifacts/compliance/`.
+2. **Customization**
+   * Update `docs/runbooks/admin-controls.md` to reflect the formal status (application dates, product IDs, partner contact).
+   * Use the `/compliance/status` and `/compliance/reminders` endpoints to populate dashboards that show buffer tiers plus upcoming BAS deadlines before each lodgment.
+   * Share the pilot report JSON plus partner metadata file with compliance/security stakeholders; they can now verify the wallet balance, tier status, and shortfall alerts triggered during the last pilot.
+
+## Maintenance & evidence
+
+- Keep each pilotâ€™s JSON output and partner metadata file inside `artifacts/compliance/`; auditors can use them to verify that the vertical slice (ingest â†’ ledger â†’ precheck â†’ transfer â†’ alert) actually produced a transfer ID.
+- Document any change to the partner URL/token or DSP product ID in this file and the OPS runbook so future runs continue to operate under the correct legal composite.
+
+
+
+============================================================
+FILE: C:\src\apgms-final\docs\security\ASVS-mapping.md
+============================================================
+# OWASP ASVS L2 Mapping
+
+## V1: Architecture, Design and Threat Modelling
+- Fastify `authGuard` verifies HS256 JWTs with issuer/audience checks before attaching `request.user`, and `buildServer` registers all PAYGW/GST routers behind that guard (`services/api-gateway/src/auth.ts`, `services/api-gateway/src/app.ts`).
+- Configuration loading fails closed when required env vars, URLs, or key material are missing or malformed, preventing the gateway from starting with partial secrets (`services/api-gateway/src/config.ts`).
+
+## V2: Authentication
+- Administrative sign-in flows hash credentials with bcrypt and compare using constant-time checks; bearer tokens are validated on every request via `authGuard` plus per-route MFA/session guards (`services/api-gateway/src/auth.ts`).
+- Regulator auth routes reuse the same JWT validation pipeline and insert regulator session metadata before downstream handlers (`services/api-gateway/src/routes/regulator-auth.ts`).
+
+## V3: Session Management
+- `/bank-lines` enforces org-scoped idempotency keys and sends `idempotent-replay` headers so clients can safely retry writes without duplication (`services/api-gateway/src/routes/bank-lines.ts`).
+- Graceful shutdown toggles a draining flag so `/ready` returns 503 before the process closes, ensuring no new traffic is routed to a terminating instance (`services/api-gateway/src/index.ts`, `services/api-gateway/src/app.ts`).
+
+## V4: Access Control
+- `assertOrgAccess` and `assertRoleForBankLines` gate domain routes by org and approved roles, returning explicit 401/403 responses for callers outside their scope (`services/api-gateway/src/utils/orgScope.ts`).
+- Admin/tax routers run under the same authenticated scope, reusing `authGuard` to guarantee requests include verified identity context before their own role checks (`services/api-gateway/src/app.ts`).
+
+## V6: Cryptography
+- Bank-line payloads keep ciphertext-only fields and key identifiers so decryption happens outside the gateway; the API never emits decrypted payee or description data (`services/api-gateway/src/routes/bank-lines.ts`).
+- Encryption and JWT key material is loaded from environment variables and validated for length/encoding at startup (`services/api-gateway/src/config.ts`).
+
+## V7: Error Handling and Logging
+- A central error handler maps domain errors to structured JSON without leaking stack traces, and warnings/errors are logged with trace IDs when available (`services/api-gateway/src/app.ts`).
+- `recordAuditLog` persists actor/action metadata for auth, regulator, and security-sensitive flows, supporting tamper-resistant evidence trails (`services/api-gateway/src/lib/audit.ts`).
+- `shared/src/security-log.ts` builds redacted `SecurityLogEntry` records, attaches correlation IDs from `x-correlation-id`/Fastify `request.id`, and the admin routes call `logSecurityEvent` so `security_event` entries include the same fields as the audit log chain (`services/api-gateway/src/routes/admin.data.js`).
+
+## V10: Malicious Input Handling
+- Public routes such as `/bank-lines` validate payloads with Zod schemas and return consistent 4xx responses when validation fails (`services/api-gateway/src/routes/bank-lines.ts`).
+- Auth/registration flows call `parseWithSchema` helpers at the transport edge before touching downstream systems (`services/api-gateway/src/app.ts`, `services/api-gateway/src/routes/auth.ts`).
+
+## V14: Configuration
+- `.env` requirements are documented in `config.ts` and enforced via helper validators that reject empty values, invalid URLs, or non-base64 keys.
+- CI runs Prisma migrate status and fails when schema drift or missing migrations are detected, preventing mismatched deployments (`.github/workflows/ci.yml`).
+
+
+
+============================================================
+FILE: C:\src\apgms-final\docs\security\TFN-SOP.md
+============================================================
+# TFN Handling SOP
+
+## Storage & Encryption
+- TFNs are tokenised with per-environment salts and stored as HMAC digests (services/api-gateway/src/lib/pii.ts:33).
+- Any raw TFN temporarily processed is encrypted with AES-256-GCM envelope keys provided by the KMS configuration (services/api-gateway/src/security/providers.ts:12).
+
+## Access Controls
+- Only users with admin role and matching orgId can request decrypt operations; JWT authentication and anomaly counters enforce rate limits (services/api-gateway/src/app.ts:73).
+- Every decrypt/export request triggers an audit log entry and Prometheus security event for downstream alerting (services/api-gateway/src/app.ts:160).
+- Admin delete/export flows also emit sanitized `security_event` log entries enriched with `correlationId` so you can trace them through `docs/runbooks/admin-controls.md` before matching against the audit log hash.
+
+## Key Rotation Procedure
+1. Run `pnpm security:rotate-keys --write-env .env` to generate new JWT/PII key material (dry-run prints to stdout).
+2. Securely store the printed private key material and distribute to signing services.
+3. Commit and deploy the updated env secrets, then trigger a controlled decrypt/export to confirm Prometheus counters increment.
+
+## Incident Response
+- On suspected TFN leak, revoke JWT credentials, rotate KMS keys, and inspect AuditLog records for the time window (shared/prisma/schema.prisma:47).
+- Run security workflow manually to regenerate SBOM and ensure dependencies remain patched (.github/workflows/security.yml:16).
+
+## Review
+- SOP reviewed quarterly or after any schema changes to TFN-bearing tables (shared/prisma/schema.prisma:33).
+
+
+
+============================================================
+FILE: C:\src\apgms-final\docs\success\playbooks.md
+============================================================
+# Customer Success playbooks
+
+
+
+============================================================
+FILE: C:\src\apgms-final\export-apgms-code.ps1
+============================================================
+# export-apgms-code.ps1
+# Scan the entire repo (all folders) and dump all code files into one text file.
+# Exclusions:
+# - node_modules
+# - .git
+# - dist
+# - the output file itself (combined-code-export.txt)
+
+# Detect repo root as the folder this script lives in
+$root = $PSScriptRoot
+if (-not $root) {
+    # Fallback for older PowerShell versions
+    $root = Split-Path -Parent $MyInvocation.MyCommand.Path
+}
+
+$output = Join-Path $root 'combined-code-export.txt'
+
+Write-Host "Repo root detected as: $root"
+Write-Host "Output file will be:   $output"
+Write-Host ""
+
+# File extensions we consider "code/text"
+$codeExtensions = @(
+    '.ts', '.tsx',
+    '.js', '.jsx',
+    '.mjs', '.cjs',
+    '.json',
+    '.prisma',
+    '.sql',
+    '.yml', '.yaml',
+    '.md',
+    '.ps1',
+    '.html', '.css'
+)
+
+$allFiles = Get-ChildItem -Path $root -Recurse -File -ErrorAction SilentlyContinue |
+    Where-Object {
+        $full = $_.FullName
+        ($full -notmatch '\\node_modules\\') -and
+        ($full -notmatch '\\\.git\\') -and
+        ($full -notmatch '\\dist\\') -and
+        ($full -ne $output) -and
+        ($codeExtensions -contains $_.Extension.ToLower())
+    } |
+    Select-Object -ExpandProperty FullName |
+    Sort-Object -Unique
+
+# Start the output file
+"Code export generated on $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" |
+    Set-Content -Path $output -Encoding UTF8
+
+foreach ($file in $allFiles) {
+    Add-Content -Path $output -Value '============================================================'
+    Add-Content -Path $output -Value "FILE: $file"
+    Add-Content -Path $output -Value '============================================================'
+    Get-Content -Path $file -Raw | Add-Content -Path $output
+    Add-Content -Path $output -Value ''
+    Add-Content -Path $output -Value ''
+}
+
+Write-Host ""
+Write-Host "Exported $($allFiles.Count) files to:"
+Write-Host "  $output"
+
+
+
+============================================================
+FILE: C:\src\apgms-final\Export-APGMS-ReviewPack.ps1
+============================================================
+Param(
+    [string]$OutputFile = "apgms-review-pack.txt",
+    [string]$MissingFileReport = "apgms-review-missing.txt"
+)
+
+# Resolve repo root to the folder where the script lives
+$repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+Write-Host "Repo root: $repoRoot"
+
+# List of *paths relative to repo root* that we want to collect
+# Files OR directories. Directories will be walked recursively.
+$targets = @(
+    # --- API gateway core ---
+    "services/api-gateway/package.json",
+    "services/api-gateway/src/app.ts",
+    "services/api-gateway/src/config.ts",
+
+    # --- API routes ---
+    "services/api-gateway/src/routes/onboarding.ts",
+    "services/api-gateway/src/routes/forecast.ts",
+    "services/api-gateway/src/routes/compliance-monitor.ts",
+
+    # --- API helpers & services ---
+    "services/api-gateway/src/lib/errors.ts",
+    "services/api-gateway/src/lib/retry.ts",
+    "services/api-gateway/src/lib/secrets.ts",
+    "services/api-gateway/src/services",
+
+    # --- DB / Prisma ---
+    "services/api-gateway/db/schema.prisma",
+    "services/api-gateway/db/migrations",
+
+    # --- Webapp / GUI ---
+    "webapp/package.json",
+    "webapp/src/App.tsx",
+    "webapp/src/router.tsx",
+    "webapp/src/pages/OnboardingWizard.tsx",
+    "webapp/src/routes"
+)
+
+# Resolve full paths
+$targets = $targets | ForEach-Object { Join-Path $repoRoot $_ }
+
+# Clear old outputs if they exist
+$fullOutputPath = Join-Path $repoRoot $OutputFile
+$missingReportPath = Join-Path $repoRoot $MissingFileReport
+
+if (Test-Path $fullOutputPath) {
+    Remove-Item $fullOutputPath -Force
+}
+if (Test-Path $missingReportPath) {
+    Remove-Item $missingReportPath -Force
+}
+
+$missing = @()
+
+function Add-FileToOutput {
+    param(
+        [string]$FilePath
+    )
+
+    $relativePath = Resolve-Path $FilePath -Relative
+
+    # Header
+    "===== FILE: $relativePath =====" | Out-File -FilePath $fullOutputPath -Encoding utf8 -Append
+    "" | Out-File -FilePath $fullOutputPath -Encoding utf8 -Append
+
+    # Content
+    try {
+        Get-Content $FilePath -Raw | Out-File -FilePath $fullOutputPath -Encoding utf8 -Append
+    } catch {
+        "# ERROR: Failed to read file $relativePath : $($_.Exception.Message)" |
+            Out-File -FilePath $fullOutputPath -Encoding utf8 -Append
+    }
+
+    "" | Out-File -FilePath $fullOutputPath -Encoding utf8 -Append
+}
+
+foreach ($target in $targets) {
+    if (-not (Test-Path $target)) {
+        $rel = $target.Replace($repoRoot + [System.IO.Path]::DirectorySeparatorChar, "")
+        Write-Warning "Missing: $rel"
+        $missing += $rel
+        continue
+    }
+
+    $item = Get-Item $target
+
+    if ($item.PSIsContainer) {
+        # Directory â€“ walk all files recursively
+        Write-Host "Collecting from directory: $($item.FullName)"
+        Get-ChildItem $item.FullName -Recurse -File | ForEach-Object {
+            Add-FileToOutput -FilePath $_.FullName
+        }
+    } else {
+        # Single file
+        Write-Host "Collecting file: $($item.FullName)"
+        Add-FileToOutput -FilePath $item.FullName
+    }
+}
+
+# Write missing report if any
+if ($missing.Count -gt 0) {
+    "The following expected files/directories were NOT found:" | Out-File -FilePath $missingReportPath -Encoding utf8
+    "" | Out-File -FilePath $missingReportPath -Encoding utf8 -Append
+    $missing | Out-File -FilePath $missingReportPath -Encoding utf8 -Append
+
+    Write-Host ""
+    Write-Host "Some items were missing. See: $missingReportPath" -ForegroundColor Yellow
+} else {
+    Write-Host ""
+    Write-Host "All target files/directories were found." -ForegroundColor Green
+}
+
+Write-Host ""
+Write-Host "Review pack written to: $fullOutputPath" -ForegroundColor Cyan
+
+
+
+============================================================
+FILE: C:\src\apgms-final\infra\observability\grafana\dashboards.json
+============================================================
+{}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\jest.config.js
+============================================================
+/** @type {import('jest').Config} */
+export default {
+  preset: "ts-jest/presets/default-esm",
+  testEnvironment: "node",
+  moduleFileExtensions: ["ts", "tsx", "js"],
+
+  // Your tests live in:
+  // - packages/**/tests
+  // - services/api-gateway/test
+  roots: [
+    "<rootDir>/packages",
+    "<rootDir>/services/api-gateway/test",
+  ],
+
+  setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
+  extensionsToTreatAsEsm: [".ts"],
+
+  transform: {
+    "^.+\\.(ts|tsx)$": [
+      "ts-jest",
+      {
+        useESM: true,
+        tsconfig: "<rootDir>/tsconfig.json",
+      },
+    ],
+  },
+
+  testMatch: ["**/?(*.)+(test).[tj]s?(x)"],
+
+  // Resolve monorepo imports like @apgms/shared
+  moduleNameMapper: {
+    "^(\\.{1,2}/.*)\\.js$": "$1",
+    "^@apgms/shared$": "<rootDir>/shared/src/index.ts",
+    "^@apgms/shared/(.*)$": "<rootDir>/shared/src/$1",
+    "^@apgms/(.*)$": "<rootDir>/packages/$1/src",
+  },
+
+  collectCoverageFrom: [
+    "packages/**/src/**/*.ts",
+    "services/api-gateway/src/**/*.ts",
+  ],
+};
+
+
+
+============================================================
+FILE: C:\src\apgms-final\jest.setup.ts
+============================================================
+
+import '@jest/globals';
+
+
+
+
+============================================================
+FILE: C:\src\apgms-final\k6\bas-compile.js
+============================================================
+// k6
+
+
+
+============================================================
+FILE: C:\src\apgms-final\k6\debit-path.js
+============================================================
+// k6
+
+
+
+============================================================
+FILE: C:\src\apgms-final\k6\smoke.js
+============================================================
+import http from "k6/http";
+import { check, sleep } from "k6";
+
+export const options = {
+  vus: 2,
+  duration: "1m",
+  thresholds: {
+    http_req_duration: ["p(95)<500"],
+    checks: ["rate>0.99"],
+  },
+};
+
+const BASE_URL = __ENV.BASE_URL ?? "http://localhost:3000";
+const READY_URL = `${BASE_URL}/ready`;
+const HEALTH_URL = `${BASE_URL}/health`;
+
+export default function () {
+  const health = http.get(HEALTH_URL);
+  check(health, {
+    "health responds 200": (res) => res.status === 200,
+    "health body ok": (res) => res.json("ok") === true,
+  });
+
+  const ready = http.get(READY_URL);
+  check(ready, {
+    "ready responds 200": (res) => res.status === 200,
+    "ready payload ok": (res) => res.json("ok") === true,
+  });
+
+  sleep(1);
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\lighthouserc.json
+============================================================
+{
+  "ci": {
+    "collect": {
+      "staticDistDir": "webapp/dist",
+      "numberOfRuns": 1
+    },
+    "assert": {
+      "preset": "lighthouse:recommended"
+    },
+    "upload": {
+      "target": "temporary-public-storage"
+    },
+    "budgets": [
+      {
+        "path": "/",
+        "timings": [
+          {
+            "metric": "first-contentful-paint",
+            "budget": 2000
+          },
+          {
+            "metric": "total-blocking-time",
+            "budget": 200
+          }
+        ]
+      },
+      {
+        "path": "/bank-lines",
+        "timings": [
+          {
+            "metric": "first-contentful-paint",
+            "budget": 2000
+          },
+          {
+            "metric": "total-blocking-time",
+            "budget": 200
+          }
+        ]
+      }
+    ]
+  }
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\package.json
+============================================================
+{
+    "name": "apgms",
+    "type": "module",
+    "private": true,
+    "version": "0.1.0",
+    "workspaces": [
+        "services/*",
+        "webapp",
+        "shared",
+        "worker",
+        "apps/*",
+        "packages/*"
+    ],
+    "scripts": {
+        "db:migrate": "pnpm --filter @apgms/shared exec prisma migrate dev --schema prisma/schema.prisma",
+        "db:deploy": "pnpm --filter @apgms/shared exec prisma migrate deploy --schema prisma/schema.prisma",
+        "db:gen": "pnpm --filter @apgms/shared exec prisma generate --schema prisma/schema.prisma",
+        "build:api-gateway": "pnpm --filter @apgms/shared build && pnpm --filter @apgms/domain-policy build && pnpm --filter @apgms/api-gateway build",
+        "test": "pnpm -r test",
+        "test:e2e": "pnpm exec playwright test",
+        "jest": "jest",
+        "build": "pnpm -r build",
+        "typecheck": "pnpm -r typecheck",
+        "lint": "pnpm lint:markdown",
+        "coverage": "pnpm jest --coverage",
+        "sbom": "pnpm exec cyclonedx-npm --json --output-file artifacts/sbom.json",
+        "sca": "pnpm audit --prod --audit-level=high",
+        "secrets": "pnpm exec gitleaks detect --no-banner --redact",
+        "trivy": "pnpm exec trivy fs --quiet --exit-code 1 .",
+        "a11y": "pnpm exec playwright test --grep \"@a11y\"",
+        "migrate:status": "pnpm --filter @apgms/shared exec prisma migrate status",
+        "verify:no-conflicts": "node scripts/verify-no-conflicts.mjs",
+        "k6:smoke": "pnpm exec k6 run k6/smoke.js",
+        "smoke:regulator": "node scripts/regulator-smoke.mjs",
+        "lint:markdown": "pnpm exec markdownlint **/*.md",
+        "compliance:evidence": "node scripts/collect-evidence.mjs",
+        "security:rotate-keys": "node scripts/rotate-pii-keys.mjs",
+        "backup:evidence-pack": "tsx scripts/export-evidence-pack.ts"
+    },
+    "devDependencies": {
+        "@axe-core/playwright": "^4.9.2",
+        "@cyclonedx/cyclonedx-npm": "^4.0.3",
+        "@playwright/test": "^1.48.0",
+        "@types/jest": "^29.5.12",
+        "@types/node": "^24.7.1",
+        "bcryptjs": "^3.0.3",
+        "jest": "^29.7.0",
+        "prisma": "6.19.0",
+        "ts-jest": "^29.2.5",
+        "ts-node": "^10.9.2",
+        "tsx": "^4.20.6",
+        "typescript": "^5.9.3"
+    },
+    "dependencies": {
+        "@fastify/cors": "^11.1.0",
+        "@prisma/client": "6.19.0",
+        "argon2": "^0.41.1",
+        "fastify": "^5.6.1",
+        "nats": "^2.18.0",
+        "uuid": "^10.0.0",
+        "zod": "^4.1.12"
+    }
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\domain-policy\package.json
+============================================================
+{
+  "name": "@apgms/domain-policy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.0"
+  },
+  "devDependencies": {
+    "@apgms/shared": "workspace:*"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "jest --config ../../jest.config.js packages/domain-policy/tests"
+  }
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\domain-policy\src\au-tax\bas-lodgment.ts
+============================================================
+import type { BasPeriodId } from "./bas-types";
+import type { BasReconciliationService } from "./bas-reconciliation";
+import type { JournalWriter } from "@apgms/ledger";
+import type { DesignatedAccountMappingRepository } from "../designated-accounts/mappings";
+import { assertDesignatedAccountMovementAllowed } from "../designated-accounts/guards";
+
+export interface BasLodgmentInput {
+  orgId: string;
+  basPeriodId: BasPeriodId;
+  actorUserId: string;
+}
+
+export interface BasLodgmentResult {
+  basPeriodId: BasPeriodId;
+  paygwCents: number;
+  gstCents: number;
+  journalId: string;
+}
+
+export class BasLodgmentService {
+  constructor(
+    private readonly reconciliationService: BasReconciliationService,
+    private readonly journalWriter: JournalWriter,
+    private readonly mappings: DesignatedAccountMappingRepository
+  ) {}
+
+  async lodge(input: BasLodgmentInput): Promise<BasLodgmentResult> {
+    const reco = await this.reconciliationService.reconcile({
+      orgId: input.orgId,
+      basPeriodId: input.basPeriodId,
+    });
+
+    if (reco.overallStatus === "SHORTFALL") {
+      throw new Error("Cannot lodge BAS: shortfall in designated accounts");
+    }
+
+    const paygw = reco.lines.find(l => l.type === "PAYGW");
+    const gst = reco.lines.find(l => l.type === "GST");
+
+    const paygwMapping = paygw
+      ? await this.mappings.getForOrgAndType(input.orgId, "PAYGW")
+      : null;
+    const gstMapping = gst
+      ? await this.mappings.getForOrgAndType(input.orgId, "GST")
+      : null;
+
+    const entries: Array<{ accountId: string; type: "DEBIT" | "CREDIT"; amountCents: number }> = [];
+
+    if (paygw && paygwMapping) {
+      entries.push(
+        {
+          accountId: paygwMapping.designatedAccountId,
+          type: "DEBIT",
+          amountCents: paygw.designatedBalanceCents,
+        },
+        {
+          accountId: "ATO_PAYGW_CLEARING",
+          type: "CREDIT",
+          amountCents: paygw.designatedBalanceCents,
+        }
+      );
+    }
+
+    if (gst && gstMapping) {
+      entries.push(
+        {
+          accountId: gstMapping.designatedAccountId,
+          type: "DEBIT",
+          amountCents: gst.designatedBalanceCents,
+        },
+        {
+          accountId: "ATO_GST_CLEARING",
+          type: "CREDIT",
+          amountCents: gst.designatedBalanceCents,
+        }
+      );
+    }
+
+    const journalId = await this.journalWriter.writeJournal({
+      orgId: input.orgId,
+      basPeriodId: input.basPeriodId,
+      entries,
+      meta: {
+        kind: "BAS_LODGMENT",
+        actorUserId: input.actorUserId,
+      },
+    });
+
+    return {
+      basPeriodId: input.basPeriodId,
+      paygwCents: paygw?.designatedBalanceCents ?? 0,
+      gstCents: gst?.designatedBalanceCents ?? 0,
+      journalId,
+    };
+  }
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\domain-policy\src\au-tax\bas-reconciliation.ts
+============================================================
+import type { BasPeriodId, TaxObligationType } from "./bas-types";
+import type { DesignatedAccountMappingRepository } from "../designated-accounts/mappings";
+import { assertDesignatedAccountMovementAllowed } from "../designated-accounts/guards";
+
+import type { LedgerReader } from "@apgms/ledger";
+
+export type BasReconciliationStatus = "OK" | "SHORTFALL" | "SURPLUS";
+
+export interface BasReconciliationInput {
+  orgId: string;
+  basPeriodId: BasPeriodId;
+}
+
+export interface BasReconciliationLine {
+  type: TaxObligationType;
+  obligationCents: number;
+  designatedBalanceCents: number;
+  status: BasReconciliationStatus;
+  shortfallOrSurplusCents: number;
+}
+
+export interface BasReconciliationResult {
+  orgId: string;
+  basPeriodId: BasPeriodId;
+  lines: BasReconciliationLine[];
+  overallStatus: BasReconciliationStatus;
+}
+
+export class BasReconciliationService {
+  constructor(
+    private readonly mappingRepo: DesignatedAccountMappingRepository,
+    private readonly ledgerReader: LedgerReader
+  ) {}
+
+  async reconcile(input: BasReconciliationInput): Promise<BasReconciliationResult> {
+    const types: TaxObligationType[] = ["PAYGW", "GST"];
+    const lines: BasReconciliationLine[] = [];
+
+    for (const type of types) {
+      const mapping = await this.mappingRepo.getForOrgAndType(input.orgId, type);
+      if (!mapping) continue;
+
+      const obligationCents = await this.ledgerReader.sumObligationsForPeriod({
+        orgId: input.orgId,
+        basPeriodId: input.basPeriodId,
+        type,
+      });
+
+      const designatedBalanceCents = await this.ledgerReader.getDesignatedAccountBalance({
+        accountId: mapping.designatedAccountId,
+        basPeriodId: input.basPeriodId,
+      });
+
+      const diff = designatedBalanceCents - obligationCents;
+      let status: BasReconciliationStatus = "OK";
+      if (diff < 0) status = "SHORTFALL";
+      if (diff > 0) status = "SURPLUS";
+
+      lines.push({
+        type,
+        obligationCents,
+        designatedBalanceCents,
+        status,
+        shortfallOrSurplusCents: diff,
+      });
+    }
+
+    const overallStatus =
+      lines.some(l => l.status === "SHORTFALL") ? "SHORTFALL" :
+      lines.some(l => l.status === "SURPLUS") ? "SURPLUS" :
+      "OK";
+
+    return {
+      orgId: input.orgId,
+      basPeriodId: input.basPeriodId,
+      lines,
+      overallStatus,
+    };
+  }
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\domain-policy\src\au-tax\bas-types.ts
+============================================================
+export type BasPeriodId = string; // e.g. "2024-Q1", "2024-07"
+
+export type BasFrequency = "monthly" | "quarterly" | "annual";
+
+export interface BasPeriod {
+  id: BasPeriodId;
+  orgId: string;
+  frequency: BasFrequency;
+  startDate: Date;
+  endDate: Date;
+  lodgmentDueDate: Date;
+}
+
+export type TaxObligationType = "PAYGW" | "GST";
+
+export interface TaxObligation {
+  id: string;
+  orgId: string;
+  basPeriodId: BasPeriodId;
+  type: TaxObligationType;
+  amountCents: number;
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\domain-policy\src\au-tax\gst-engine.ts
+============================================================
+import type { BasPeriodId } from "./bas-types";
+
+export interface GstConfig {
+  rateMilli: number; // 10000 = 10% for 10%
+}
+
+export interface PosTransaction {
+  orgId: string;
+  basPeriodId: BasPeriodId;
+  txId: string;
+  txDate: Date;
+  grossCents: number;
+  taxable: boolean;
+}
+
+export interface GstCalculationResult {
+  txId: string;
+  gstCents: number;
+}
+
+export class GstEngine {
+  constructor(private readonly config: GstConfig) {}
+
+  calculate(tx: PosTransaction): GstCalculationResult {
+    if (!tx.taxable) {
+      return { txId: tx.txId, gstCents: 0 };
+    }
+    const gstCents = Math.floor((tx.grossCents * this.config.rateMilli) / 100_000);
+    return { txId: tx.txId, gstCents };
+  }
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\domain-policy\src\au-tax\gst-settlement.ts
+============================================================
+import { GstEngine, PosTransaction } from "./gst-engine";
+import type { DesignatedAccountMappingRepository } from "../designated-accounts/mappings";
+import { assertDesignatedAccountMovementAllowed } from "../designated-accounts/guards";
+import type { JournalWriter } from "@apgms/ledger";
+
+export interface GstBatch {
+  orgId: string;
+  transactions: PosTransaction[];
+}
+
+export interface GstSettlementResult {
+  totalGstCents: number;
+  journalId: string;
+}
+
+export class GstSettlementService {
+  constructor(
+    private readonly engine: GstEngine,
+    private readonly mappingRepo: DesignatedAccountMappingRepository,
+    private readonly journalWriter: JournalWriter
+  ) {}
+
+  async settleBatch(batch: GstBatch): Promise<GstSettlementResult> {
+    const mapping = await this.mappingRepo.getForOrgAndType(batch.orgId, "GST");
+    if (!mapping) {
+      throw new Error(`No GST designated account mapping for org ${batch.orgId}`);
+    }
+
+    let totalGstCents = 0;
+
+    for (const tx of batch.transactions) {
+      const { gstCents } = this.engine.calculate(tx);
+      totalGstCents += gstCents;
+    }
+
+    await assertDesignatedAccountMovementAllowed({
+      accountId: mapping.designatedAccountId,
+      movementType: "DEPOSIT",
+      amountCents: totalGstCents,
+    });
+
+    const journalId = await this.journalWriter.writeJournal({
+      orgId: batch.orgId,
+      basPeriodId: batch.transactions[0]?.basPeriodId,
+      entries: [
+        {
+          accountId: mapping.designatedAccountId,
+          type: "CREDIT",
+          amountCents: totalGstCents,
+        },
+        {
+          accountId: "MAIN_OPERATING", // TODO real account
+          type: "DEBIT",
+          amountCents: totalGstCents,
+        },
+      ],
+      meta: {
+        kind: "GST_SETTLEMENT",
+        txCount: batch.transactions.length,
+      },
+    });
+
+    return { totalGstCents, journalId };
+  }
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\domain-policy\src\au-tax\paygw-engine.ts
+============================================================
+// packages/domain-policy/src/au-tax/paygw-engine.ts
+
+import {
+  JurisdictionCode,
+  PaygwBracket,
+  PaygwConfig,
+  TaxConfigRepository,
+  TaxType,
+} from "./types";
+
+export type PayPeriod =
+  | "weekly"
+  | "fortnightly"
+  | "monthly"
+  | "quarterly"
+  | "annual";
+
+export interface PaygwCalculationInput {
+  jurisdiction: JurisdictionCode; // "AU"
+  paymentDate: Date;
+  // Gross pay for the period in whole cents.
+  grossCents: number;
+  // Periodicity, used only to resolve the right AU tax table in data.
+  payPeriod: PayPeriod;
+  // Optional flags for HELP/STSL etc. These must be interpreted via config flags.
+  flags?: Record<string, boolean | string | number | undefined>;
+}
+
+export interface PaygwCalculationResult {
+  withholdingCents: number;
+  // Trace of which bracket and parameter set was used.
+  parameterSetId: string;
+  bracketIndex: number;
+}
+
+/**
+ * AU PAYGW engine that is entirely driven by TaxParameterSet and
+ * TaxRateSchedule rows in the database.
+ *
+ * No numeric rates or thresholds are hard-coded here.
+ */
+export class PaygwEngine {
+  constructor(private readonly configRepo: TaxConfigRepository) {}
+
+  async calculate(
+    input: PaygwCalculationInput
+  ): Promise<PaygwCalculationResult> {
+    const { jurisdiction, paymentDate, grossCents } = input;
+
+    const config = await this.configRepo.getActiveConfig({
+      jurisdiction,
+      taxType: TaxType.PAYGW,
+      onDate: paymentDate,
+    });
+
+    const paygwConfig = this.assertPaygwConfig(config);
+
+    const bracketIndex = this.findBracketIndex(
+      paygwConfig.brackets,
+      grossCents
+    );
+
+    if (bracketIndex < 0) {
+      throw new Error(
+        `No PAYGW bracket found for grossCents=${grossCents} in parameter set ${paygwConfig.meta.id}`
+      );
+    }
+
+    const bracket = paygwConfig.brackets[bracketIndex];
+    const withholdingCents = this.applyBracket(bracket, grossCents);
+
+    return {
+      withholdingCents,
+      parameterSetId: paygwConfig.meta.id,
+      bracketIndex,
+    };
+  }
+
+  private assertPaygwConfig(config: unknown): PaygwConfig {
+    const typed = config as PaygwConfig;
+    if (!typed?.meta || !Array.isArray(typed.brackets)) {
+      throw new Error("Invalid PAYGW config returned from repository");
+    }
+    return typed;
+  }
+
+  private findBracketIndex(
+    brackets: ReadonlyArray<PaygwBracket>,
+    grossCents: number
+  ): number {
+    // Brackets are expected to be sorted ascending by thresholdCents.
+    let index = -1;
+    for (let i = 0; i < brackets.length; i += 1) {
+      if (grossCents >= brackets[i].thresholdCents) {
+        index = i;
+      } else {
+        break;
+      }
+    }
+    return index;
+  }
+
+  private applyBracket(bracket: PaygwBracket, grossCents: number): number {
+    const excessCents = Math.max(0, grossCents - bracket.thresholdCents);
+
+    // milli-rate is rate * 1000, so divide by 1000 to obtain the fractional rate.
+    const variableComponent = Math.floor(
+      (excessCents * bracket.marginalRateMilli) / 1000
+    );
+
+    const rawWithholding = bracket.baseWithholdingCents + variableComponent;
+
+    // ATO tables typically round to whole dollars in the published schedule, but
+    // this should be reflected in the schedule itself, not hard-coded here.
+    return Math.max(0, rawWithholding);
+  }
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\domain-policy\src\au-tax\paygw-settlement.ts
+============================================================
+import { PaygwEngine } from "./paygw-engine";
+import type { BasPeriodId } from "./bas-types";
+import type { DesignatedAccountMappingRepository } from "../designated-accounts/mappings";
+import { assertDesignatedAccountMovementAllowed } from "../designated-accounts/guards";
+
+
+export interface PayrollLine {
+  employeeId: string;
+  grossCents: number;
+  payDate: Date;
+  payPeriod: "weekly" | "fortnightly" | "monthly";
+}
+
+export interface PayrollBatch {
+  orgId: string;
+  basPeriodId: BasPeriodId;
+  lines: PayrollLine[];
+}
+
+export interface PaygwSettlementResult {
+  totalPaygwCents: number;
+  journalId: string;
+}
+
+export class PaygwSettlementService {
+  constructor(
+    private readonly engine: PaygwEngine,
+    private readonly mappingRepo: DesignatedAccountMappingRepository,
+    private readonly journalWriter: JournalWriter
+  ) {}
+
+  async settleBatch(batch: PayrollBatch): Promise<PaygwSettlementResult> {
+    const mapping = await this.mappingRepo.getForOrgAndType(batch.orgId, "PAYGW");
+    if (!mapping) {
+      throw new Error(`No PAYGW designated account mapping for org ${batch.orgId}`);
+    }
+
+    let totalPaygwCents = 0;
+
+    for (const line of batch.lines) {
+      const result = await this.engine.calculate({
+        jurisdiction: "AU",
+        paymentDate: line.payDate,
+        grossCents: line.grossCents,
+        payPeriod: line.payPeriod,
+        flags: {},
+      });
+
+      totalPaygwCents += result.withholdingCents;
+    }
+
+    await assertDesignatedAccountMovementAllowed({
+      accountId: mapping.designatedAccountId,
+      movementType: "DEPOSIT",
+      amountCents: totalPaygwCents,
+    });
+
+    const journalId = await this.journalWriter.writeJournal({
+      orgId: batch.orgId,
+      basPeriodId: batch.basPeriodId,
+      entries: [
+        {
+          accountId: mapping.designatedAccountId,
+          type: "CREDIT",
+          amountCents: totalPaygwCents,
+        },
+        {
+          accountId: "MAIN_OPERATING", // TODO: use real account ID
+          type: "DEBIT",
+          amountCents: totalPaygwCents,
+        },
+      ],
+      meta: {
+        kind: "PAYGW_SETTLEMENT",
+        linesCount: batch.lines.length,
+      },
+    });
+
+    return { totalPaygwCents, journalId };
+  }
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\domain-policy\src\au-tax\prisma-repository.ts
+============================================================
+// packages/domain-policy/src/au-tax/prisma-repository.ts
+
+import type { PrismaClient } from "@prisma/client";
+import type {
+  AuTaxConfig,
+  JurisdictionCode,
+  TaxConfigRepository,
+  TaxType,
+} from "./types";
+
+/**
+ * Temporary stub of TaxConfigRepository backed by Prisma.
+ *
+ * This is here so the domain-policy package compiles cleanly while
+ * the actual Prisma schema for AU tax tables is being finalised.
+ *
+ * Once your Prisma models are settled (AuTaxParameterSet, AuTaxRateSchedule,
+ * etc.), we can replace this with a real implementation that:
+ *   - queries those tables
+ *   - enforces non-overlapping effective windows
+ *   - maps rows into PaygwConfig / GstConfig.
+ */
+export class PrismaTaxConfigRepository implements TaxConfigRepository {
+  private readonly prisma: PrismaClient;
+
+  constructor(prisma: PrismaClient) {
+    this.prisma = prisma;
+  }
+
+  async getActiveConfig(params: {
+    jurisdiction: JurisdictionCode;
+    taxType: TaxType;
+    onDate: Date;
+  }): Promise<AuTaxConfig> {
+    // eslint-disable-next-line no-console
+    console.warn(
+      "[PrismaTaxConfigRepository] getActiveConfig called, but this is currently a stub. " +
+        "Wire this up to your real Prisma models before using in production.",
+      {
+        jurisdiction: params.jurisdiction,
+        taxType: params.taxType,
+        onDate: params.onDate.toISOString(),
+      }
+    );
+
+    throw new Error(
+      "PrismaTaxConfigRepository.getActiveConfig is not implemented for your Prisma schema yet."
+    );
+  }
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\domain-policy\src\au-tax\types.ts
+============================================================
+// packages/domain-policy/src/au-tax/types.ts
+
+export type JurisdictionCode = "AU";
+
+export enum TaxType {
+  PAYGW = "PAYGW",
+  GST = "GST",
+  PAYGI = "PAYGI",
+  FBT = "FBT",
+  COMPANY_TAX = "COMPANY_TAX",
+  OTHER = "OTHER",
+}
+
+export interface TaxParameterSetMeta {
+  id: string;
+  jurisdiction: JurisdictionCode;
+  taxType: TaxType;
+  // Australian financial year, e.g. "2024-2025"
+  financialYear: string;
+  validFrom: Date;
+  validTo: Date | null;
+  description?: string;
+  versionTag?: string;
+}
+
+export interface PaygwBracket {
+  // Threshold at and above which this bracket applies, in whole cents.
+  thresholdCents: number;
+  // Base withholding amount for this bracket, in whole cents (ATO style).
+  baseWithholdingCents: number;
+  // Marginal rate above the threshold, expressed in milli-rate (e.g. 325 = 32.5%).
+  marginalRateMilli: number;
+}
+
+export interface PaygwConfig {
+  meta: TaxParameterSetMeta;
+  brackets: ReadonlyArray<PaygwBracket>;
+  // Optional additional AU flags, e.g. Medicare levy switches, STSL flags, etc.
+  flags?: Record<string, boolean | string | number>;
+}
+
+export interface GstConfig {
+  meta: TaxParameterSetMeta;
+  // Rate in basis points, e.g. 1000 = 10.00%
+  gstRateBps: number;
+  // Future extension: reduced rates, exemptions, etc.
+  flags?: Record<string, boolean | string | number>;
+}
+
+/**
+ * Union view over AU tax config.
+ * Engines should downcast based on taxType.
+ */
+export type AuTaxConfig = PaygwConfig | GstConfig;
+
+/**
+ * Repository interface used by engines to load AU tax configuration.
+ */
+export interface TaxConfigRepository {
+  /**
+   * Resolve the AU tax parameter set in effect for the given date and tax type.
+   * Must enforce non-overlapping validity windows at the storage layer.
+   */
+  getActiveConfig(params: {
+    jurisdiction: JurisdictionCode;
+    taxType: TaxType;
+    onDate: Date;
+  }): Promise<AuTaxConfig>;
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\domain-policy\src\banking\provider.ts
+============================================================
+export interface TransferRequest {
+  fromAccountId: string;
+  toAccountId: string;
+  amountCents: number;
+  reference: string;
+}
+
+export interface TransferResult {
+  id: string;
+  status: "PENDING" | "SETTLED" | "FAILED";
+  providerCode?: string;
+}
+
+export interface BankingProvider {
+  transfer(req: TransferRequest): Promise<TransferResult>;
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\domain-policy\src\designated-accounts.ts
+============================================================
+// Domain policy should not depend on the concrete Prisma client type.
+// Use a loose placeholder so any DB client shape will work here.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type PrismaClient = any;
+
+/**
+ * Source of a designated-account transfer.
+ *
+ * We keep the original intent ("PAYROLL_CAPTURE" | "GST_CAPTURE" | "BAS_ESCROW")
+ * but allow any string so that upstream callers which still pass a plain
+ * string won't break type-checking.
+ */
+export type DesignatedTransferSource =
+  | "PAYROLL_CAPTURE"
+  | "GST_CAPTURE"
+  | "BAS_ESCROW"
+  | (string & {});
+
+/**
+ * Minimal audit logger interface used by the ledger layer.
+ * The shared package only needs to be able to pass this through.
+ */
+export interface AuditLogger {
+  log: (event: {
+    type: string;
+    orgId: string;
+    accountId: string;
+    amount: number;
+    source: DesignatedTransferSource;
+    actorId?: string;
+    transferId: string;
+    newBalance: number;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    [key: string]: any;
+  }) => Promise<void> | void;
+}
+
+export interface ApplyDesignatedTransferContext {
+  prisma: PrismaClient;
+  auditLogger?: AuditLogger;
+}
+
+export interface ApplyDesignatedTransferInput {
+  orgId: string;
+  accountId: string;
+  amount: number;
+  source: DesignatedTransferSource | string;
+  actorId?: string;
+}
+
+export interface ApplyDesignatedTransferResult {
+  accountId: string;
+  newBalance: number;
+  transferId: string;
+  source: DesignatedTransferSource;
+}
+
+/**
+ * Apply a transfer into a designated account (PAYGW / GST buffer / BAS escrow).
+ *
+ * This implementation is deliberately defensive:
+ *  - It uses `any` around Prisma models so schema tweaks don't break compilation.
+ *  - It works even if `designatedAccount` / `designatedTransfer` models
+ *    are missing â€“ in that case it just returns a synthetic transferId and
+ *    does not touch the database.
+ *
+ * Itâ€™s enough to let the rest of the stack (shared ledger, api-gateway)
+ * compile and run while you iterate on the actual policy logic.
+ */
+export async function applyDesignatedAccountTransfer(
+  context: ApplyDesignatedTransferContext,
+  input: ApplyDesignatedTransferInput,
+): Promise<ApplyDesignatedTransferResult> {
+  const { prisma, auditLogger } = context;
+  const { orgId, accountId, amount, source, actorId } = input;
+
+  const db = prisma as any;
+
+  // 1. Load current account (if the model exists)
+  let currentBalance = 0;
+  let account: any = null;
+
+  if (db?.designatedAccount?.findUnique) {
+    account = await db.designatedAccount.findUnique({
+      where: { id: accountId },
+    });
+
+    if (account && account.balance != null) {
+      currentBalance = Number(account.balance);
+    }
+  }
+
+  const newBalance = currentBalance + amount;
+
+  // 2. Persist updated balance if possible
+  if (db?.designatedAccount?.update) {
+    account = await db.designatedAccount.update({
+      where: { id: accountId },
+      data: { balance: newBalance },
+    });
+  }
+
+  // 3. Create a transfer record if the model exists
+  let transferId = `shim-${Date.now().toString(36)}`;
+
+  if (db?.designatedTransfer?.create) {
+    const transfer = await db.designatedTransfer.create({
+      data: {
+        orgId,
+        accountId,
+        amount,
+        source,
+        actorId: actorId ?? "system",
+      },
+    });
+
+    if (transfer?.id != null) {
+      transferId = String(transfer.id);
+    }
+  }
+
+  // 4. Emit audit log if a logger is wired in
+  await auditLogger?.log({
+    type: "DESIGNATED_ACCOUNT_TRANSFER",
+    orgId,
+    accountId,
+    amount,
+    source: source as DesignatedTransferSource,
+    actorId,
+    transferId,
+    newBalance,
+  });
+
+  return {
+    accountId,
+    newBalance,
+    transferId,
+    source: source as DesignatedTransferSource,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Reconciliation types & stub implementation
+// ---------------------------------------------------------------------------
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type DesignatedReconciliationSummary = {
+  orgId: string;
+  accountId: string;
+  asOfDate: string;
+  status: "BALANCED" | "MISMATCH" | "NOT_IMPLEMENTED";
+  openingBalance?: number;
+  closingBalance?: number;
+  totalCredits?: number;
+  totalDebits?: number;
+  // Allow extra fields so callers can extend this without breaking
+  [key: string]: any;
+};
+
+export type DesignatedAccountReconciliationArtifact = {
+  artifactId: string;
+  sha256: string;
+  summary: DesignatedReconciliationSummary;
+};
+
+// Very loose ctx on purpose for now; connectors only cares that this
+// function exists and returns { artifactId, sha256, summary }.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function generateDesignatedAccountReconciliationArtifact(
+  _ctx: any,
+): Promise<DesignatedAccountReconciliationArtifact> {
+  const artifactId = `recon-${Date.now().toString(36)}`;
+
+  const summary: DesignatedReconciliationSummary = {
+    orgId: "",
+    accountId: "",
+    asOfDate: new Date().toISOString(),
+    status: "NOT_IMPLEMENTED",
+  };
+
+  // Stub hash â€“ you can replace with real sha256 later.
+  const sha256 = `stub-${artifactId}`;
+
+  return { artifactId, sha256, summary };
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\domain-policy\src\designated-accounts\guards.test.ts
+============================================================
+// packages/domain-policy/src/designated-accounts/guards.test.ts
+
+import {
+  assertDesignatedAccountMovementAllowed,
+  assertDesignatedAccountTypeIsSupported,
+  DesignatedAccountOperation,
+  DesignatedAccountRuleError,
+  isActiveForNewDesignations,
+} from "./guards";
+import {
+  DesignatedAccountLifecycle,
+  DesignatedAccountType,
+  type DesignatedAccount,
+} from "./types";
+
+function makeAccount(
+  overrides: Partial<DesignatedAccount> = {},
+): DesignatedAccount {
+  const now = new Date("2024-08-01T00:00:00Z");
+  return {
+    id: "acc-1",
+    orgId: "org-1",
+    type: DesignatedAccountType.PAYGW,
+    lifecycle: DesignatedAccountLifecycle.ACTIVE,
+    bankingProviderAccountId: "bank-acc-1",
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  };
+}
+
+describe("assertDesignatedAccountMovementAllowed", () => {
+  it("allows deposits into ACTIVE accounts", () => {
+    const account = makeAccount({
+      lifecycle: DesignatedAccountLifecycle.ACTIVE,
+    });
+
+    expect(() =>
+      assertDesignatedAccountMovementAllowed({
+        account,
+        operation: DesignatedAccountOperation.DEPOSIT,
+        amountCents: 10_00,
+      }),
+    ).not.toThrow();
+  });
+
+  it("rejects zero or negative amounts", () => {
+    const account = makeAccount();
+
+    expect(() =>
+      assertDesignatedAccountMovementAllowed({
+        account,
+        operation: DesignatedAccountOperation.DEPOSIT,
+        amountCents: 0,
+      }),
+    ).toThrow(DesignatedAccountRuleError);
+
+    expect(() =>
+      assertDesignatedAccountMovementAllowed({
+        account,
+        operation: DesignatedAccountOperation.DEPOSIT,
+        amountCents: -100,
+      }),
+    ).toThrow(DesignatedAccountRuleError);
+  });
+
+  it("rejects movements for PENDING_ACTIVATION and CLOSED accounts", () => {
+    const pending = makeAccount({
+      lifecycle: DesignatedAccountLifecycle.PENDING_ACTIVATION,
+    });
+    const closed = makeAccount({
+      lifecycle: DesignatedAccountLifecycle.CLOSED,
+    });
+
+    expect(() =>
+      assertDesignatedAccountMovementAllowed({
+        account: pending,
+        operation: DesignatedAccountOperation.DEPOSIT,
+        amountCents: 10_00,
+      }),
+    ).toThrow(DesignatedAccountRuleError);
+
+    expect(() =>
+      assertDesignatedAccountMovementAllowed({
+        account: closed,
+        operation: DesignatedAccountOperation.DEPOSIT,
+        amountCents: 10_00,
+      }),
+    ).toThrow(DesignatedAccountRuleError);
+  });
+
+  it("allows only deposits for SUNSETTING accounts", () => {
+    const sunsetting = makeAccount({
+      lifecycle: DesignatedAccountLifecycle.SUNSETTING,
+    });
+
+    // Deposit is allowed
+    expect(() =>
+      assertDesignatedAccountMovementAllowed({
+        account: sunsetting,
+        operation: DesignatedAccountOperation.DEPOSIT,
+        amountCents: 10_00,
+      }),
+    ).not.toThrow();
+
+    // Withdrawal is not allowed
+    expect(() =>
+      assertDesignatedAccountMovementAllowed({
+        account: sunsetting,
+        operation: DesignatedAccountOperation.WITHDRAWAL,
+        amountCents: 10_00,
+      }),
+    ).toThrow(DesignatedAccountRuleError);
+
+    // Internal transfer is not allowed
+    expect(() =>
+      assertDesignatedAccountMovementAllowed({
+        account: sunsetting,
+        operation: DesignatedAccountOperation.INTERNAL_TRANSFER,
+        amountCents: 10_00,
+      }),
+    ).toThrow(DesignatedAccountRuleError);
+  });
+
+  it("rejects any non-deposit operation on ACTIVE accounts", () => {
+    const account = makeAccount({
+      lifecycle: DesignatedAccountLifecycle.ACTIVE,
+    });
+
+    expect(() =>
+      assertDesignatedAccountMovementAllowed({
+        account,
+        operation: DesignatedAccountOperation.WITHDRAWAL,
+        amountCents: 10_00,
+      }),
+    ).toThrow(DesignatedAccountRuleError);
+
+    expect(() =>
+      assertDesignatedAccountMovementAllowed({
+        account,
+        operation: DesignatedAccountOperation.INTERNAL_TRANSFER,
+        amountCents: 10_00,
+      }),
+    ).toThrow(DesignatedAccountRuleError);
+  });
+});
+
+describe("isActiveForNewDesignations", () => {
+  it("returns true only for ACTIVE accounts", () => {
+    expect(
+      isActiveForNewDesignations(
+        makeAccount({
+          lifecycle: DesignatedAccountLifecycle.ACTIVE,
+        }),
+      ),
+    ).toBe(true);
+
+    expect(
+      isActiveForNewDesignations(
+        makeAccount({
+          lifecycle: DesignatedAccountLifecycle.PENDING_ACTIVATION,
+        }),
+      ),
+    ).toBe(false);
+
+    expect(
+      isActiveForNewDesignations(
+        makeAccount({
+          lifecycle: DesignatedAccountLifecycle.SUNSETTING,
+        }),
+      ),
+    ).toBe(false);
+
+    expect(
+      isActiveForNewDesignations(
+        makeAccount({
+          lifecycle: DesignatedAccountLifecycle.CLOSED,
+        }),
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("assertDesignatedAccountTypeIsSupported", () => {
+  it("accepts all known AU tax account types", () => {
+    const lifecycles = [
+      DesignatedAccountType.PAYGW,
+      DesignatedAccountType.GST,
+      DesignatedAccountType.PAYGI,
+      DesignatedAccountType.FBT,
+      DesignatedAccountType.OTHER,
+    ];
+
+    for (const type of lifecycles) {
+      const account = makeAccount({ type });
+      expect(() =>
+        assertDesignatedAccountTypeIsSupported(account),
+      ).not.toThrow();
+    }
+  });
+
+  it("rejects unsupported account types", () => {
+    const bogusAccount: DesignatedAccount = {
+      ...makeAccount(),
+      // Force an invalid runtime value while satisfying TypeScript
+      type: "SOMETHING_ELSE" as unknown as DesignatedAccountType,
+    };
+
+    expect(() =>
+      assertDesignatedAccountTypeIsSupported(bogusAccount),
+    ).toThrow(DesignatedAccountRuleError);
+  });
+});
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\domain-policy\src\designated-accounts\guards.ts
+============================================================
+// packages/domain-policy/src/designated-accounts/guards.ts
+
+import {
+  DesignatedAccount,
+  DesignatedAccountLifecycle,
+  DesignatedAccountType,
+} from "./types";
+
+export enum DesignatedAccountOperation {
+  DEPOSIT = "DEPOSIT",
+  WITHDRAWAL = "WITHDRAWAL",
+  INTERNAL_TRANSFER = "INTERNAL_TRANSFER",
+}
+
+export interface DesignatedAccountMovement {
+  account: DesignatedAccount;
+  operation: DesignatedAccountOperation;
+  amountCents: number;
+  // Optional metadata: who initiated, payment intent ID, etc.
+  metadata?: Record<string, unknown>;
+}
+
+export class DesignatedAccountRuleError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DesignatedAccountRuleError";
+  }
+}
+
+/**
+ * Enforce that one-way designated accounts:
+ *   - Only accept deposits (no withdrawals) at the application level.
+ *   - Obey lifecycle semantics (ACTIVE vs SUNSETTING vs CLOSED).
+ *
+ * This guard should be invoked before any ledger postings or banking
+ * provider calls are executed.
+ */
+export function assertDesignatedAccountMovementAllowed(
+  movement: DesignatedAccountMovement
+): void {
+  const { account, operation, amountCents } = movement;
+
+  if (amountCents <= 0) {
+    throw new DesignatedAccountRuleError(
+      "Designated account movement amount must be positive"
+    );
+  }
+
+  if (
+    account.lifecycle === DesignatedAccountLifecycle.CLOSED ||
+    account.lifecycle === DesignatedAccountLifecycle.PENDING_ACTIVATION
+  ) {
+    throw new DesignatedAccountRuleError(
+      `Movements are not permitted for designated account ${account.id} in lifecycle state ${account.lifecycle}`
+    );
+  }
+
+  if (
+    account.lifecycle === DesignatedAccountLifecycle.SUNSETTING &&
+    operation !== DesignatedAccountOperation.DEPOSIT
+  ) {
+    throw new DesignatedAccountRuleError(
+      `Only deposits are permitted for SUNSETTING designated account ${account.id}`
+    );
+  }
+
+  if (operation !== DesignatedAccountOperation.DEPOSIT) {
+    throw new DesignatedAccountRuleError(
+      `Operation ${operation} is not permitted on one-way designated account ${account.id}`
+    );
+  }
+}
+
+/**
+ * Helper for checking if an account is currently usable for new deposits.
+ * SUNSETTING accounts may or may not be allowed depending on policy;
+ * this function restricts to ACTIVE only for new designations.
+ */
+export function isActiveForNewDesignations(
+  account: DesignatedAccount
+): boolean {
+  return account.lifecycle === DesignatedAccountLifecycle.ACTIVE;
+}
+
+/**
+ * Helper to express AU-specific semantics for tax account types.
+ * For example, we may want additional checks around PAYGW vs GST later.
+ */
+export function assertDesignatedAccountTypeIsSupported(
+  account: DesignatedAccount
+): void {
+  switch (account.type) {
+    case DesignatedAccountType.PAYGW:
+    case DesignatedAccountType.GST:
+    case DesignatedAccountType.PAYGI:
+    case DesignatedAccountType.FBT:
+    case DesignatedAccountType.OTHER:
+      return;
+    default:
+      throw new DesignatedAccountRuleError(
+        `Unsupported designated account type: ${String(account.type)}`
+      );
+  }
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\domain-policy\src\designated-accounts\mappings.ts
+============================================================
+import type { TaxObligationType } from "../au-tax/bas-types";
+
+export interface DesignatedAccountMapping {
+  orgId: string;
+  type: TaxObligationType; // "PAYGW" | "GST"
+  designatedAccountId: string;
+}
+
+export interface DesignatedAccountMappingRepository {
+  getForOrgAndType(
+    orgId: string,
+    type: TaxObligationType
+  ): Promise<DesignatedAccountMapping | null>;
+
+  setForOrgAndType(mapping: DesignatedAccountMapping): Promise<void>;
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\domain-policy\src\designated-accounts\types.ts
+============================================================
+// packages/domain-policy/src/designated-accounts/types.ts
+
+export enum DesignatedAccountType {
+  PAYGW = "PAYGW",
+  GST = "GST",
+  PAYGI = "PAYGI",
+  FBT = "FBT",
+  OTHER = "OTHER",
+}
+
+export enum DesignatedAccountLifecycle {
+  PENDING_ACTIVATION = "PENDING_ACTIVATION",
+  ACTIVE = "ACTIVE",
+  SUNSETTING = "SUNSETTING",
+  CLOSED = "CLOSED",
+}
+
+/**
+ * A designated one-way account is an application-level abstraction.
+ * The underlying bank account is managed via providers; this type
+ * represents the compliance semantics we must enforce.
+ */
+export interface DesignatedAccount {
+  id: string;
+  orgId: string;
+  type: DesignatedAccountType;
+  lifecycle: DesignatedAccountLifecycle;
+  bankingProviderAccountId: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\domain-policy\src\index.ts
+============================================================
+// packages/domain-policy/src/index.ts
+
+// ---------------------------------------------------------------------------
+// Designated one-way account domain â€“ top-level helpers
+// ---------------------------------------------------------------------------
+export * from "./au-tax/bas-types";
+export * from "./au-tax/gst-engine";
+export * from "./au-tax/paygw-settlement";
+export * from "./au-tax/gst-settlement";
+export * from "./au-tax/bas-reconciliation";
+export * from "./au-tax/bas-lodgment";
+
+export {
+  applyDesignatedAccountTransfer,
+  generateDesignatedAccountReconciliationArtifact,
+} from "./designated-accounts.js";
+
+export type {
+  PrismaClient,
+  DesignatedTransferSource,
+  AuditLogger,
+  ApplyDesignatedTransferContext,
+  ApplyDesignatedTransferInput,
+  ApplyDesignatedTransferResult,
+  DesignatedReconciliationSummary,
+  DesignatedAccountReconciliationArtifact,
+} from "./designated-accounts";
+
+// If you still want the sub-modules exposed, keep them but split
+// runtime vs type-only exports cleanly:
+
+// Designated one-way account domain
+export * from "./designated-accounts/guards.js";
+export type * from "./designated-accounts/types.js";
+
+// AU tax configuration + engines
+export type * from "./au-tax/types.js";
+export * from "./au-tax/paygw-engine.js";
+export * from "./au-tax/prisma-repository.js";
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\domain-policy\tests\paygw-engine.test.ts
+============================================================
+// packages/domain-policy/tests/paygw-engine.test.ts
+
+import {
+  PaygwEngine,
+  type PaygwCalculationInput,
+} from "../src/au-tax/paygw-engine";
+
+import {
+  TaxType,
+  type JurisdictionCode,
+  type PaygwBracket,
+  type PaygwConfig,
+  type TaxConfigRepository,
+  type TaxParameterSetMeta,
+  type AuTaxConfig,
+} from "../src/au-tax/types";
+
+
+const JURISDICTION_AU: JurisdictionCode = "AU";
+
+const baseMeta: TaxParameterSetMeta = {
+  id: "PAYGW_TEST",
+  jurisdiction: JURISDICTION_AU,
+  taxType: TaxType.PAYGW,
+  financialYear: "2024-2025",
+  validFrom: new Date("2024-07-01T00:00:00Z"),
+  validTo: null,
+  description: "Test PAYGW schedule",
+  versionTag: "v1",
+};
+
+const testBrackets: PaygwBracket[] = [
+  // 0â€“99.99: no withholding
+  {
+    thresholdCents: 0,
+    baseWithholdingCents: 0,
+    marginalRateMilli: 0,
+  },
+  // 100.00â€“199.99: $10 base + 10% above 100
+  {
+    thresholdCents: 100_00,
+    baseWithholdingCents: 10_00,
+    marginalRateMilli: 100, // 10%
+  },
+  // 200.00+: $20 base + 20% above 200
+  {
+    thresholdCents: 200_00,
+    baseWithholdingCents: 20_00,
+    marginalRateMilli: 200, // 20%
+  },
+];
+
+class InMemoryTaxConfigRepository implements TaxConfigRepository {
+  // In these tests we only care about PAYGW â€“ we just switch the
+  // returned config based on the test setup.
+  private readonly config: AuTaxConfig;
+
+  constructor(config: AuTaxConfig) {
+    this.config = config;
+  }
+
+  async getActiveConfig(): Promise<AuTaxConfig> {
+    return this.config;
+  }
+}
+
+function makeEngineWithBrackets(
+  brackets: PaygwBracket[],
+): PaygwEngine {
+  const config: PaygwConfig = {
+    meta: baseMeta,
+    brackets,
+    flags: {},
+  };
+  const repo = new InMemoryTaxConfigRepository(config);
+  return new PaygwEngine(repo);
+}
+
+function makeInput(
+  overrides: Partial<PaygwCalculationInput> = {},
+): PaygwCalculationInput {
+  return {
+    jurisdiction: JURISDICTION_AU,
+    paymentDate: new Date("2024-08-01T00:00:00Z"),
+    grossCents: 0,
+    payPeriod: "weekly",
+    flags: {},
+    ...overrides,
+  };
+}
+
+describe("PaygwEngine", () => {
+  it("returns zero withholding when gross is zero", async () => {
+    const engine = makeEngineWithBrackets(testBrackets);
+
+    const result = await engine.calculate(
+      makeInput({ grossCents: 0 }),
+    );
+
+    expect(result.withholdingCents).toBe(0);
+    expect(result.parameterSetId).toBe(baseMeta.id);
+    expect(result.bracketIndex).toBe(0);
+  });
+
+  it("uses the correct bracket and formula for mid-bracket income", async () => {
+    // 150.00: in the second bracket
+    // excess = 150.00 - 100.00 = 50.00
+    // variable = floor(50.00 * 10%) = 5.00
+    // withholding = 10.00 + 5.00 = 15.00
+    const engine = makeEngineWithBrackets(testBrackets);
+
+    const result = await engine.calculate(
+      makeInput({ grossCents: 150_00 }),
+    );
+
+    expect(result.bracketIndex).toBe(1);
+    expect(result.withholdingCents).toBe(15_00);
+  });
+
+  it("uses the highest bracket and formula for high income", async () => {
+    // 250.00: in the third bracket
+    // excess = 250.00 - 200.00 = 50.00
+    // variable = floor(50.00 * 20%) = 10.00
+    // withholding = 20.00 + 10.00 = 30.00
+    const engine = makeEngineWithBrackets(testBrackets);
+
+    const result = await engine.calculate(
+      makeInput({ grossCents: 250_00 }),
+    );
+
+    expect(result.bracketIndex).toBe(2);
+    expect(result.withholdingCents).toBe(30_00);
+  });
+
+  it("throws if no brackets are configured", async () => {
+    const engine = makeEngineWithBrackets([]);
+
+    await expect(
+      engine.calculate(makeInput({ grossCents: 100_00 })),
+    ).rejects.toThrow(/No PAYGW bracket found/);
+  });
+});
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\domain-policy\tsconfig.json
+============================================================
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": false,
+    "composite": false
+  },
+  "include": ["src"]
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\ledger\package.json
+============================================================
+{
+  "name": "@apgms/ledger",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint . --ext .ts",
+    "test": "pnpm exec jest --config ../../jest.config.js --runTestsByPath ../../packages/ledger/tests/journalWriter.test.ts --coverage"
+  },
+  "dependencies": {
+    "@apgms/shared": "workspace:*",
+    "@prisma/client": "^6.17.1",
+    "uuid": "^10.0.0"
+  }
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\ledger\src\index.js
+============================================================
+export * from "./journalWriter";
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\ledger\src\index.ts
+============================================================
+export * from "./journalWriter";
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\ledger\src\journalWriter.js
+============================================================
+import { createHash } from "node:crypto";
+export class JournalWriter {
+    constructor(prisma) {
+        this.prisma = prisma;
+    }
+    async write(input) {
+        if (input.postings.length === 0) {
+            throw new UnbalancedJournalError("journal requires at least one posting");
+        }
+        const total = input.postings.reduce((sum, posting) => sum + BigInt(posting.amountCents), BigInt(0));
+        if (total !== BigInt(0)) {
+            throw new UnbalancedJournalError("journal postings must balance to zero");
+        }
+        const result = await this.prisma.$transaction(async (tx) => {
+            const last = await tx.journal.findFirst({
+                where: { orgId: input.orgId },
+                orderBy: { seq: "desc" },
+                select: { seq: true, hash: true },
+            });
+            const nextSeq = (last?.seq ?? BigInt(0)) + BigInt(1);
+            const prevHash = last?.hash ?? null;
+            const hash = computeHash(prevHash, input);
+            try {
+                const createdJournal = await tx.journal.create({
+                    data: {
+                        orgId: input.orgId,
+                        seq: nextSeq,
+                        type: input.type,
+                        eventId: input.eventId,
+                        dedupeId: input.dedupeId,
+                        occurredAt: input.occurredAt,
+                        source: input.source,
+                        description: input.description,
+                        hash,
+                        prevHash,
+                        postings: {
+                            create: input.postings.map((posting) => ({
+                                orgId: input.orgId,
+                                accountId: posting.accountId,
+                                amountCents: BigInt(posting.amountCents),
+                                memo: posting.memo,
+                            })),
+                        },
+                    },
+                    include: { postings: true },
+                });
+                return { journal: createdJournal, created: true };
+            }
+            catch (error) {
+                if (isUniqueViolation(error)) {
+                    const existing = await tx.journal.findFirst({
+                        where: { orgId: input.orgId, dedupeId: input.dedupeId },
+                        include: { postings: true },
+                    });
+                    if (existing) {
+                        return { journal: existing, created: false };
+                    }
+                }
+                throw error;
+            }
+        });
+        return result;
+    }
+}
+export class UnbalancedJournalError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = "UnbalancedJournalError";
+    }
+}
+function computeHash(prevHash, input) {
+    const hasher = createHash("sha256");
+    if (prevHash) {
+        hasher.update(prevHash);
+    }
+    hasher.update(input.orgId);
+    hasher.update(input.eventId);
+    hasher.update(input.dedupeId);
+    hasher.update(input.type);
+    hasher.update(input.occurredAt.toISOString());
+    hasher.update(input.source);
+    for (const posting of input.postings) {
+        hasher.update(posting.accountId);
+        hasher.update(BigInt(posting.amountCents).toString());
+        hasher.update(posting.memo ?? "");
+    }
+    return hasher.digest("hex");
+}
+function isUniqueViolation(error) {
+    const candidate = error;
+    return candidate?.code === "P2002";
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\ledger\src\journalWriter.ts
+============================================================
+import { createHash } from "node:crypto";
+
+type BigIntLike = bigint | number;
+
+/**
+ * Minimal Prisma-like interface for the parts of the client we use here.
+ * This avoids needing the PrismaClient type from @prisma/client directly,
+ * which was causing the TS2305 error in the ledger build.
+ */
+export interface PrismaJournalClient {
+  journal: {
+    findFirst(args: any): Promise<{ seq: bigint; hash: string | null } | null>;
+    create(args: any): Promise<any>;
+  };
+  $transaction<T>(fn: (tx: PrismaJournalClient) => Promise<T>): Promise<T>;
+}
+
+export interface PostingInput {
+  accountId: string;
+  amountCents: BigIntLike;
+  memo?: string;
+}
+
+export interface JournalWriteInput {
+  orgId: string;
+  eventId: string;
+  dedupeId: string;
+  type: string;
+  occurredAt: Date;
+  source: string;
+  description?: string;
+  postings: ReadonlyArray<PostingInput>;
+}
+
+export interface JournalWriteResult {
+  journal: any;
+  created: boolean;
+}
+
+export class JournalWriter {
+  constructor(private readonly prisma: PrismaJournalClient) {}
+
+  async write(input: JournalWriteInput): Promise<JournalWriteResult> {
+    if (input.postings.length === 0) {
+      throw new UnbalancedJournalError("journal requires at least one posting");
+    }
+
+    const total = input.postings.reduce<bigint>(
+      (sum, posting) => sum + BigInt(posting.amountCents),
+      BigInt(0),
+    );
+
+    if (total !== BigInt(0)) {
+      throw new UnbalancedJournalError("journal postings must balance to zero");
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const last = await tx.journal.findFirst({
+        where: { orgId: input.orgId },
+        orderBy: { seq: "desc" },
+        select: { seq: true, hash: true },
+      });
+
+      const nextSeq = (last?.seq ?? BigInt(0)) + BigInt(1);
+      const prevHash = last?.hash ?? null;
+      const hash = computeHash(prevHash, input);
+
+      try {
+        const createdJournal = await tx.journal.create({
+          data: {
+            orgId: input.orgId,
+            seq: nextSeq,
+            type: input.type,
+            eventId: input.eventId,
+            dedupeId: input.dedupeId,
+            occurredAt: input.occurredAt,
+            source: input.source,
+            description: input.description,
+            hash,
+            prevHash,
+            postings: {
+              create: input.postings.map((posting) => ({
+                orgId: input.orgId,
+                accountId: posting.accountId,
+                amountCents: BigInt(posting.amountCents),
+                memo: posting.memo,
+              })),
+            },
+          },
+          include: { postings: true },
+        });
+
+        return { journal: createdJournal, created: true };
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          const existing = await tx.journal.findFirst({
+            where: { orgId: input.orgId, dedupeId: input.dedupeId },
+            include: { postings: true },
+          });
+          if (existing) {
+            return { journal: existing, created: false };
+          }
+        }
+        throw error;
+      }
+    });
+
+    return result;
+  }
+}
+
+export class UnbalancedJournalError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UnbalancedJournalError";
+  }
+}
+
+function computeHash(prevHash: string | null, input: JournalWriteInput): string {
+  const hasher = createHash("sha256");
+
+  if (prevHash) {
+    hasher.update(prevHash);
+  }
+
+  hasher.update(input.orgId);
+  hasher.update(input.eventId);
+  hasher.update(input.dedupeId);
+  hasher.update(input.type);
+  hasher.update(input.occurredAt.toISOString());
+  hasher.update(input.source);
+
+  for (const posting of input.postings) {
+    hasher.update(posting.accountId);
+    hasher.update(BigInt(posting.amountCents).toString());
+    hasher.update(posting.memo ?? "");
+  }
+
+  return hasher.digest("hex");
+}
+
+function isUniqueViolation(error: unknown): error is { code: string } {
+  const candidate = error as { code?: string } | undefined;
+  return candidate?.code === "P2002";
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\ledger\src\reader.ts
+============================================================
+import type { TaxObligationType, BasPeriodId } from "@apgms/domain-policy"; // adjust path
+
+export interface SumObligationsForPeriodInput {
+  orgId: string;
+  basPeriodId: BasPeriodId;
+  type: TaxObligationType;
+}
+
+export interface GetDesignatedBalanceInput {
+  accountId: string;
+  basPeriodId: BasPeriodId;
+}
+
+export interface LedgerReader {
+  sumObligationsForPeriod(
+    input: SumObligationsForPeriodInput
+  ): Promise<number>;
+
+  getDesignatedAccountBalance(
+    input: GetDesignatedBalanceInput
+  ): Promise<number>;
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\ledger\tests\journalWriter.test.ts
+============================================================
+
+
+import type { PrismaClient } from "@prisma/client";
+
+import { JournalWriter, UnbalancedJournalError } from "../src/journalWriter";
+
+type JournalRecord = {
+  id: string;
+  orgId: string;
+  seq: bigint;
+  type: string;
+  eventId: string;
+  dedupeId: string;
+  occurredAt: Date;
+  source: string;
+  description?: string | null;
+  hash?: string | null;
+  prevHash?: string | null;
+};
+
+type PostingRecord = {
+  id: string;
+  orgId: string;
+  journalId: string;
+  accountId: string;
+  amountCents: bigint;
+  memo?: string | null;
+};
+
+const now = () => new Date("2025-10-24T00:00:00Z");
+
+describe("JournalWriter", () => {
+  it("throws when postings are unbalanced", async () => {
+    const prisma = createFakePrisma();
+    const writer = new JournalWriter(prisma as unknown as PrismaClient);
+
+    await expect(
+      writer.write({
+        orgId: "org-1",
+        eventId: "event-1",
+        dedupeId: "dup-1",
+        type: "PAYROLL_HOLD",
+        occurredAt: now(),
+        source: "test",
+        postings: [
+          { accountId: "acct-a", amountCents: 100n },
+          { accountId: "acct-b", amountCents: 10n },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(UnbalancedJournalError);
+  });
+
+  it("persists balanced journals and increments sequence", async () => {
+    const prisma = createFakePrisma();
+    const writer = new JournalWriter(prisma as unknown as PrismaClient);
+
+    const first = await writer.write({
+      orgId: "org-1",
+      eventId: "event-1",
+      dedupeId: "dup-1",
+      type: "PAYROLL_HOLD",
+      occurredAt: now(),
+      source: "test",
+      postings: [
+        { accountId: "acct-a", amountCents: 100n },
+        { accountId: "acct-b", amountCents: -100n },
+      ],
+    });
+
+    expect(first.created).toBe(true);
+    expect(first.journal.seq).toBe(1n);
+    expect(first.journal.postings).toHaveLength(2);
+
+    const second = await writer.write({
+      orgId: "org-1",
+      eventId: "event-2",
+      dedupeId: "dup-2",
+      type: "PAYROLL_HOLD",
+      occurredAt: now(),
+      source: "test",
+      postings: [
+        { accountId: "acct-a", amountCents: 50n },
+        { accountId: "acct-b", amountCents: -50n },
+      ],
+    });
+
+    expect(second.created).toBe(true);
+    expect(second.journal.seq).toBe(2n);
+  });
+
+  it("returns existing journal on idempotent retry", async () => {
+    const prisma = createFakePrisma();
+    const writer = new JournalWriter(prisma as unknown as PrismaClient);
+
+    const first = await writer.write({
+      orgId: "org-1",
+      eventId: "event-1",
+      dedupeId: "dup-1",
+      type: "PAYROLL_HOLD",
+      occurredAt: now(),
+      source: "test",
+      postings: [
+        { accountId: "acct-a", amountCents: 10n },
+        { accountId: "acct-b", amountCents: -10n },
+      ],
+    });
+    const second = await writer.write({
+      orgId: "org-1",
+      eventId: "event-1",
+      dedupeId: "dup-1",
+      type: "PAYROLL_HOLD",
+      occurredAt: now(),
+      source: "test",
+      postings: [
+        { accountId: "acct-a", amountCents: 10n },
+        { accountId: "acct-b", amountCents: -10n },
+      ],
+    });
+
+    expect(second.created).toBe(false);
+    expect(second.journal.id).toEqual(first.journal.id);
+  });
+});
+
+function createFakePrisma() {
+  const journals: JournalRecord[] = [];
+  const postings: PostingRecord[] = [];
+
+  const prisma = {
+    journal: {
+      findFirst: async (args: any) => {
+        const filtered = journals
+          .filter((j) => j.orgId === args.where.orgId)
+          .sort((a, b) => Number(b.seq - a.seq));
+        if (args.orderBy?.seq === "desc") {
+          return filtered[0] ?? null;
+        }
+        if (args.where?.dedupeId) {
+          return (
+            journals
+              .filter((j) => j.orgId === args.where.orgId && j.dedupeId === args.where.dedupeId)
+              .map((j) => ({
+                ...j,
+                postings: postings.filter((p) => p.journalId === j.id),
+              }))[0] ?? null
+          );
+        }
+        return filtered[0] ?? null;
+      },
+      create: async (args: any) => {
+        const { data, include } = args;
+
+        if (journals.some((j) => j.orgId === data.orgId && j.dedupeId === data.dedupeId)) {
+          const error = new Error("duplicate") as any;
+          error.code = "P2002";
+          error.meta = { target: ["orgId", "dedupeId"] };
+          throw error;
+        }
+
+        const journal: JournalRecord = {
+          id: `journal-${journals.length + 1}`,
+          orgId: data.orgId,
+          seq: BigInt(data.seq),
+          type: data.type,
+          eventId: data.eventId,
+          dedupeId: data.dedupeId,
+          occurredAt: data.occurredAt,
+          source: data.source,
+          description: data.description ?? null,
+          hash: data.hash ?? null,
+          prevHash: data.prevHash ?? null,
+        };
+        journals.push(journal);
+
+        const createdPostings: PostingRecord[] = (data.postings?.create ?? []).map((p: any, index: number) => {
+          const posting: PostingRecord = {
+            id: `posting-${journals.length}-${index}`,
+            orgId: p.orgId,
+            journalId: journal.id,
+            accountId: p.accountId,
+            amountCents: BigInt(p.amountCents),
+            memo: p.memo ?? null,
+          };
+          postings.push(posting);
+          return posting;
+        });
+
+        if (include?.postings) {
+          return { ...journal, postings: createdPostings };
+        }
+        return journal;
+      },
+    },
+    $transaction: async (handler: any) => handler(prisma),
+  };
+
+  return prisma;
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\ledger\tsconfig.json
+============================================================
+{
+   "extends": "../../tsconfig.json",
+    "compilerOptions":  {
+                            "outDir":  "./dist",
+                            "rootDir":  "./src",
+                            "module":  "ESNext",
+                            "moduleResolution":  "Node",
+                            "declaration":  true
+                        },
+    "include":  [
+                    "src/**/*.ts"
+                ],
+    "exclude":  [
+                    "dist",
+                    "tests"
+                ]
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\packages\shared\scripts\prisma-generate.ts
+============================================================
+# Dockerfile â€“ monorepo build for @apgms/api-gateway
+
+FROM node:20 AS build
+
+WORKDIR /app
+
+# We keep the Prisma checksum relax, but DO NOT skip prisma generate
+ENV NODE_ENV=production \
+    PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1
+
+# Enable corepack so pnpm works
+RUN corepack enable
+
+# -----------------------------------------------------------------------------
+# 1. Copy only manifest files first for better caching of `pnpm install`
+# -----------------------------------------------------------------------------
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+
+# Workspace package manifests (adjusted to your actual structure)
+COPY shared/package.json ./shared/package.json
+COPY packages/domain-policy/package.json ./packages/domain-policy/package.json
+COPY services/api-gateway/package.json ./services/api-gateway/package.json
+COPY services/connectors/package.json ./services/connectors/package.json
+
+# Install dependencies for the whole workspace
+RUN pnpm install --frozen-lockfile
+
+# -----------------------------------------------------------------------------
+# 2. Now copy the full source tree
+# -----------------------------------------------------------------------------
+COPY . .
+
+# -----------------------------------------------------------------------------
+# 3. Build all workspace packages (same idea as your local build)
+#    This ensures:
+#    - @apgms/shared, @apgms/domain-policy, @apgms/connectors are built
+#    - Prisma client is generated in the container
+# -----------------------------------------------------------------------------
+RUN pnpm -r build
+
+# -----------------------------------------------------------------------------
+# 4. Runtime image
+#    We keep it simple and use pnpm to start the api-gateway package.
+# -----------------------------------------------------------------------------
+FROM node:20-slim AS runtime
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+RUN corepack enable
+
+# Bring over node_modules and repo metadata
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/package.json ./package.json
+COPY --from=build /app/pnpm-workspace.yaml ./pnpm-workspace.yaml
+
+# Bring over built services + packages needed at runtime
+COPY --from=build /app/services/api-gateway ./services/api-gateway
+COPY --from=build /app/shared ./shared
+COPY --from=build /app/packages ./packages
+
+# Expose whatever port api-gateway listens on
+EXPOSE 8080
+
+# Use the package.json scripts for @apgms/api-gateway
+# (this assumes "start" is defined there and points at the built JS)
+CMD ["pnpm", "--filter", "@apgms/api-gateway", "start"]
+
+
+
+============================================================
+FILE: C:\src\apgms-final\playwright.config.ts
+============================================================
+import { defineConfig } from '@playwright/test';
+import path from 'node:path';
+
+const testDir = path.join(__dirname, 'webapp', 'tests');
+
+export default defineConfig({
+  testDir,
+  retries: process.env.CI ? 2 : 0,
+  timeout: 60_000,

@@ -1,0 +1,2651 @@
+﻿  process.env.AUTH_JWKS = sampleJwks;
+  process.env.AUTH_DEV_SECRET = "local-dev-secret";
+  process.env.PII_KEYS = JSON.stringify([{ kid: "local", material: sampleKeyMaterial }]);
+  process.env.PII_ACTIVE_KEY = "local";
+  process.env.PII_SALTS = JSON.stringify([{ sid: "local", secret: sampleSaltMaterial }]);
+  process.env.PII_ACTIVE_SALT = "local";
+  process.env.ENCRYPTION_MASTER_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+  process.env.REGULATOR_ACCESS_CODE = "code-123";
+  process.env.REGULATOR_JWT_AUDIENCE = "urn:test:reg";
+  process.env.REGULATOR_SESSION_TTL_MINUTES = "90";
+  process.env.REQUIRE_TLS = "false";
+  process.env.WEBAUTHN_RP_ID = "localhost";
+  process.env.WEBAUTHN_RP_NAME = "APGMS Admin";
+  process.env.WEBAUTHN_ORIGIN = "http://localhost:5173";
+
+  assert.throws(() => loadConfig(), /DATABASE_URL is required/);
+});
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\test\designated.policy.spec.ts
+============================================================
+import assert from "node:assert/strict";
+import { test } from "node:test";
+
+import { Prisma } from "@prisma/client";
+
+import { AppError } from "@apgms/shared";
+import {
+  applyDesignatedAccountTransfer,
+  generateDesignatedAccountReconciliationArtifact,
+} from "@apgms/domain-policy";
+import { createBankingProvider } from "../../../providers/banking/index.js";
+
+type DesignatedAccountState = {
+  id: string;
+  orgId: string;
+  type: string;
+  balance: Prisma.Decimal;
+  updatedAt: Date;
+};
+
+type DesignatedTransferState = {
+  id: string;
+  orgId: string;
+  accountId: string;
+  amount: Prisma.Decimal;
+  source: string;
+  createdAt: Date;
+};
+
+type AlertState = {
+  id: string;
+  orgId: string;
+  type: string;
+  severity: string;
+  message: string;
+  createdAt: Date;
+  resolvedAt: Date | null;
+};
+
+type EvidenceArtifactState = {
+  id: string;
+  orgId: string;
+  kind: string;
+  sha256: string;
+  wormUri: string;
+  payload: unknown;
+  createdAt: Date;
+};
+
+type AuditEntry = {
+  id: string;
+  orgId: string;
+  actorId: string;
+  action: string;
+  metadata: Record<string, unknown>;
+  createdAt: Date;
+};
+
+type InMemoryState = {
+  designatedAccounts: DesignatedAccountState[];
+  designatedTransfers: DesignatedTransferState[];
+  alerts: AlertState[];
+  evidenceArtifacts: EvidenceArtifactState[];
+  auditLogs: AuditEntry[];
+};
+
+const randomId = () => `id-${Math.random().toString(16).slice(2, 10)}`;
+
+function createInMemoryPrisma(): { prisma: any; state: InMemoryState } {
+  const state: InMemoryState = {
+    designatedAccounts: [],
+    designatedTransfers: [],
+    alerts: [],
+    evidenceArtifacts: [],
+    auditLogs: [],
+  };
+
+  const prisma = {
+    alert: {
+      findFirst: async ({ where }: any) => {
+        const match = state.alerts.find((alert) => {
+          if (alert.orgId !== where.orgId) return false;
+          if (where.type && alert.type !== where.type) return false;
+          if (where.severity && alert.severity !== where.severity) return false;
+          if (where.resolvedAt?.equals === null && alert.resolvedAt !== null) {
+            return false;
+          }
+          return true;
+        });
+        return match ? { ...match } : null;
+      },
+      create: async ({ data }: any) => {
+        const alert: AlertState = {
+          id: data.id ?? randomId(),
+          orgId: data.orgId,
+          type: data.type,
+          severity: data.severity,
+          message: data.message,
+          createdAt: data.createdAt ?? new Date(),
+          resolvedAt: data.resolvedAt ?? null,
+        };
+        state.alerts.push(alert);
+        return { ...alert };
+      },
+    },
+    designatedAccount: {
+      findUnique: async ({ where }: any) => {
+        const account = state.designatedAccounts.find(
+          (entry) => entry.id === where.id,
+        );
+        return account ? { ...account } : null;
+      },
+      update: async ({ where, data }: any) => {
+        const account = state.designatedAccounts.find(
+          (entry) => entry.id === where.id,
+        );
+        if (!account) {
+          throw new Error("account not found");
+        }
+        if (data.balance) {
+          account.balance = data.balance;
+        }
+        if (data.updatedAt) {
+          account.updatedAt = data.updatedAt;
+        }
+        return { ...account };
+      },
+      findMany: async ({ where, include }: any) => {
+        const accounts = state.designatedAccounts.filter(
+          (entry) => entry.orgId === where.orgId,
+        );
+        if (!include?.transfers) {
+          return accounts.map((entry) => ({ ...entry }));
+        }
+        return accounts.map((entry) => {
+          const transfers = state.designatedTransfers.filter(
+            (transfer) => transfer.accountId === entry.id,
+          );
+          return {
+            ...entry,
+            transfers: transfers
+              .filter((transfer) => {
+                const gte = include.transfers.where?.createdAt?.gte;
+                if (gte && transfer.createdAt < gte) return false;
+                return true;
+              })
+              .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()),
+          };
+        });
+      },
+    },
+    designatedTransfer: {
+      create: async ({ data }: any) => {
+        const transfer: DesignatedTransferState = {
+          id: data.id ?? randomId(),
+          orgId: data.orgId,
+          accountId: data.accountId,
+          amount: data.amount,
+          source: data.source,
+          createdAt: data.createdAt ?? new Date(),
+        };
+        state.designatedTransfers.push(transfer);
+        return { ...transfer };
+      },
+    },
+    evidenceArtifact: {
+      create: async ({ data }: any) => {
+        const artifact: EvidenceArtifactState = {
+          id: data.id ?? randomId(),
+          orgId: data.orgId,
+          kind: data.kind,
+          sha256: data.sha256,
+          wormUri: data.wormUri,
+          payload: data.payload,
+          createdAt: data.createdAt ?? new Date(),
+        };
+        state.evidenceArtifacts.push(artifact);
+        return { ...artifact };
+      },
+      update: async ({ where, data }: any) => {
+        const artifact = state.evidenceArtifacts.find(
+          (entry) => entry.id === where.id,
+        );
+        if (!artifact) {
+          throw new Error("artifact not found");
+        }
+        if (data.wormUri) {
+          artifact.wormUri = data.wormUri;
+        }
+        return { ...artifact };
+      },
+      findMany: async ({ where }: any) => {
+        const matches = state.evidenceArtifacts.filter(
+          (entry) => entry.orgId === where.orgId,
+        );
+        return matches.map((entry) => ({ ...entry }));
+      },
+    },
+    auditLog: {
+      create: async ({ data }: any) => {
+        const entry: AuditEntry = {
+          id: data.id ?? randomId(),
+          orgId: data.orgId,
+          actorId: data.actorId,
+          action: data.action,
+          metadata: data.metadata ?? {},
+          createdAt: data.createdAt ?? new Date(),
+        };
+        state.auditLogs.push(entry);
+        return { ...entry };
+      },
+    },
+    $transaction: async (callback: (tx: any) => Promise<any>) =>
+      callback(prisma),
+  };
+
+  return { prisma, state };
+}
+
+test("mock banking provider credit exercises the shared policy surface", async () => {
+  const { prisma, state } = createInMemoryPrisma();
+
+  state.designatedAccounts.push({
+    id: "acct-paygw",
+    orgId: "org-1",
+    type: "PAYGW",
+    balance: new Prisma.Decimal(0),
+    updatedAt: new Date(),
+  });
+
+  const provider = createBankingProvider("mock");
+
+  assert.equal(provider.capabilities.maxWriteCents, 1_000_000);
+  assert.equal(provider.capabilities.maxReadTransactions, 200);
+
+  const context = {
+    prisma,
+    orgId: "org-1",
+    actorId: "system",
+    auditLogger: async (entry: any) => {
+      await prisma.auditLog.create({ data: entry });
+    },
+  };
+
+  const result = await provider.creditDesignatedAccount(context, {
+    accountId: "acct-paygw",
+    amount: 1200,
+    source: "PAYROLL_CAPTURE",
+  });
+
+  assert.equal(result.accountId, "acct-paygw");
+  assert.equal(result.newBalance, 1200);
+  assert.equal(result.source, "PAYROLL_CAPTURE");
+  assert.equal(state.designatedTransfers.length, 1);
+  assert.equal(state.alerts.length, 0);
+});
+
+test("banking provider enforces per-adapter write cap", async () => {
+  const { prisma, state } = createInMemoryPrisma();
+
+  state.designatedAccounts.push({
+    id: "acct-paygw",
+    orgId: "org-1",
+    type: "PAYGW",
+    balance: new Prisma.Decimal(0),
+    updatedAt: new Date(),
+  });
+
+  const provider = createBankingProvider("mock");
+
+  const context = {
+    prisma,
+    orgId: "org-1",
+    actorId: "system",
+    auditLogger: async (entry: any) => {
+      await prisma.auditLog.create({ data: entry });
+    },
+  };
+
+  await assert.rejects(
+    () =>
+      provider.creditDesignatedAccount(context, {
+        accountId: "acct-paygw",
+        amount: provider.capabilities.maxWriteCents + 1,
+        source: "PAYROLL_CAPTURE",
+      }),
+    (error: unknown) => error instanceof AppError && error.code === "banking_write_cap_exceeded",
+  );
+
+  assert.equal(state.designatedTransfers.length, 0);
+});
+
+test("createBankingProvider defaults to mock for unknown adapters", () => {
+  const provider = createBankingProvider("new-provider");
+  assert.equal(provider.id, "mock");
+});
+
+test("designated accounts block debit attempts and raise alerts", async () => {
+  const { prisma, state } = createInMemoryPrisma();
+
+  state.designatedAccounts.push({
+    id: "acct-paygw",
+    orgId: "org-1",
+    type: "PAYGW",
+    balance: new Prisma.Decimal(12000),
+    updatedAt: new Date(),
+  });
+
+  const provider = createBankingProvider("mock");
+
+  const context = {
+    prisma,
+    orgId: "org-1",
+    actorId: "system",
+    auditLogger: async (entry: any) => {
+      await prisma.auditLog.create({ data: entry });
+    },
+  };
+
+  await assert.rejects(
+    () =>
+      provider.simulateDebitAttempt(context, {
+        accountId: "acct-paygw",
+        amount: 500,
+        source: "PAYROLL_CAPTURE",
+      }),
+    (error: any) => Boolean(error && error.code === "designated_withdrawal_attempt"),
+  );
+  assert.equal(state.alerts.length, 1);
+  assert.equal(state.alerts[0].type, "DESIGNATED_WITHDRAWAL_ATTEMPT");
+  assert.equal(state.auditLogs.some((entry) => entry.action === "designatedAccount.violation"), true);
+});
+
+test("deposit-only violations keep the documented message", async () => {
+  const { prisma, state } = createInMemoryPrisma();
+
+  state.designatedAccounts.push({
+    id: "acct-paygw",
+    orgId: "org-1",
+    type: "PAYGW",
+    balance: new Prisma.Decimal(500),
+    updatedAt: new Date(),
+  });
+
+  const provider = createBankingProvider("mock");
+
+  const context = {
+    prisma,
+    orgId: "org-1",
+    actorId: "system",
+    auditLogger: async (entry: any) => {
+      await prisma.auditLog.create({ data: entry });
+    },
+  };
+
+  await assert.rejects(
+    () =>
+      provider.simulateDebitAttempt(context, {
+        accountId: "acct-paygw",
+        amount: 250,
+        source: "PAYROLL_CAPTURE",
+      }),
+    (error: unknown) =>
+      error instanceof AppError && error.code === "designated_withdrawal_attempt",
+  );
+
+  assert.equal(state.alerts[0].message, "Designated accounts are deposit-only; debits are prohibited");
+  assert.equal(state.alerts[0].severity, "HIGH");
+});
+
+test("untrusted sources raise alerts with metadata", async () => {
+  const { prisma, state } = createInMemoryPrisma();
+
+  state.designatedAccounts.push({
+    id: "acct-paygw",
+    orgId: "org-1",
+    type: "PAYGW",
+    balance: new Prisma.Decimal(100),
+    updatedAt: new Date(),
+  });
+
+  const context = {
+    prisma,
+    orgId: "org-1",
+    actorId: "system",
+    auditLogger: async (entry: any) => {
+      await prisma.auditLog.create({ data: entry });
+    },
+  };
+
+  await assert.rejects(
+    () =>
+      applyDesignatedAccountTransfer(
+        {
+          prisma: context.prisma,
+          auditLogger: context.auditLogger,
+        },
+        {
+          orgId: context.orgId,
+          accountId: "acct-paygw",
+          amount: 500,
+          source: "SKETCHY_SOURCE",
+          actorId: context.actorId,
+        },
+      ),
+    (error: unknown) =>
+      error instanceof AppError && error.code === "designated_untrusted_source",
+  );
+
+  assert.equal(
+    state.alerts[0].message,
+    "Designated account funding source 'SKETCHY_SOURCE' is not whitelisted",
+  );
+  assert.equal(state.auditLogs[0].metadata.violation, "designated_untrusted_source");
+});
+
+test("designated account reconciliation emits evidence artefact", async () => {
+  const { prisma, state } = createInMemoryPrisma();
+
+  state.designatedAccounts.push(
+    {
+      id: "acct-paygw",
+      orgId: "org-1",
+      type: "PAYGW",
+      balance: new Prisma.Decimal(0),
+      updatedAt: new Date(),
+    },
+    {
+      id: "acct-gst",
+      orgId: "org-1",
+      type: "GST",
+      balance: new Prisma.Decimal(0),
+      updatedAt: new Date(),
+    },
+  );
+
+  await applyDesignatedAccountTransfer(
+    {
+      prisma,
+      auditLogger: async (entry: any) => {
+        await prisma.auditLog.create({ data: entry });
+      },
+    },
+    {
+      orgId: "org-1",
+      accountId: "acct-paygw",
+      amount: 1500,
+      source: "PAYROLL_CAPTURE",
+      actorId: "system",
+    },
+  );
+
+  await applyDesignatedAccountTransfer(
+    {
+      prisma,
+      auditLogger: async (entry: any) => {
+        await prisma.auditLog.create({ data: entry });
+      },
+    },
+    {
+      orgId: "org-1",
+      accountId: "acct-gst",
+      amount: 800,
+      source: "GST_CAPTURE",
+      actorId: "system",
+    },
+  );
+
+  const { summary, artifactId, sha256 } =
+    await generateDesignatedAccountReconciliationArtifact(
+      {
+        prisma,
+        auditLogger: async (entry: any) => {
+          await prisma.auditLog.create({ data: entry });
+        },
+      },
+      "org-1",
+      "system",
+    );
+
+  assert.ok(artifactId.length > 0);
+  assert.ok(sha256.length === 64);
+  assert.equal(summary.totals.paygw, 1500);
+  assert.equal(summary.totals.gst, 800);
+  assert.equal(state.evidenceArtifacts.length, 1);
+  assert.equal(
+    state.evidenceArtifacts[0].kind,
+    "designated-reconciliation",
+  );
+  assert.equal(
+    state.auditLogs.some(
+      (entry) => entry.action === "designatedAccount.reconciliation",
+    ),
+    true,
+  );
+});
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\test\health-ready.test.ts
+============================================================
+import type { FastifyInstance } from "fastify";
+import type { AppConfig } from "../src/config";
+
+// --- Mocks -------------------------------------------------------------------
+const fakeConfig: AppConfig = {
+  env: "test",
+  databaseUrl: "postgres://localhost:5432/apgms",
+  shadowDatabaseUrl: undefined,
+  rateLimit: { max: 100, window: "1 minute" },
+  security: {
+    authFailureThreshold: 5,
+    kmsKeysetLoaded: true,
+    requireHttps: false,
+  },
+  cors: {
+    allowedOrigins: ["http://localhost:5173"],
+  },
+  taxEngineUrl: "https://tax.localhost",
+  auth: {
+    audience: "aud",
+    issuer: "iss",
+    devSecret: "dev-secret",
+  },
+  regulator: {
+    accessCode: "code",
+    jwtAudience: "reg-aud",
+    sessionTtlMinutes: 60,
+  },
+  encryption: { masterKey: Buffer.alloc(32, 1) },
+  webauthn: {
+    rpId: "localhost",
+    rpName: "APGMS",
+    origin: "http://localhost:5173",
+  },
+  banking: {
+    providerId: "mock",
+    maxReadTransactions: 100,
+    maxWriteCents: 1_000_000,
+  },
+  redis: undefined,
+  nats: undefined,
+};
+
+const mockPrisma = {
+  $queryRaw: jest.fn().mockResolvedValue([1]),
+};
+
+const mockProviders = {
+  redis: {
+    ping: jest.fn().mockResolvedValue("PONG"),
+  },
+  nats: {
+    flush: jest.fn().mockResolvedValue(undefined),
+  },
+};
+
+const noopPlugin = async () => {};
+const securedRoutePlugin = async (app: FastifyInstance) => {
+  app.get("/bank-lines", async () => ({ ok: true }));
+};
+
+jest.mock("../src/config", () => ({
+  config: fakeConfig,
+}));
+
+jest.mock("../src/db", () => ({
+  prisma: mockPrisma,
+}));
+
+jest.mock("../src/providers", () => ({
+  initProviders: jest.fn(async () => mockProviders),
+  closeProviders: jest.fn(async () => {}),
+}));
+
+jest.mock("../src/auth", () => {
+  const authGuard = (request: any, reply: any, done: () => void) => {
+    if (!request.headers.authorization) {
+      reply.code(401).send({ error: { code: "unauthorized" } });
+      return;
+    }
+    done();
+  };
+  return {
+    authGuard,
+    createAuthGuard: () => authGuard,
+    REGULATOR_AUDIENCE: "reg-aud",
+  };
+});
+
+jest.mock("../src/plugins/rate-limit", () => ({
+  __esModule: true,
+  default: async () => {},
+}));
+
+jest.mock("../src/routes/auth", () => ({
+  registerAuthRoutes: noopPlugin,
+}));
+jest.mock("../src/routes/regulator-auth", () => ({
+  registerRegulatorAuthRoutes: noopPlugin,
+}));
+jest.mock("../src/routes/regulator", () => ({
+  registerRegulatorRoutes: noopPlugin,
+}));
+jest.mock("../src/routes/admin.data", () => ({
+  registerAdminDataRoutes: noopPlugin,
+}));
+jest.mock("../src/routes/bank-lines", () => ({
+  registerBankLinesRoutes: securedRoutePlugin,
+}));
+jest.mock("../src/routes/tax", () => ({
+  registerTaxRoutes: noopPlugin,
+}));
+jest.mock("../src/routes/connectors", () => ({
+  __esModule: true,
+  default: noopPlugin,
+}));
+jest.mock("../src/routes/bas", () => ({
+  registerBasRoutes: noopPlugin,
+}));
+jest.mock("../src/routes/transfers", () => ({
+  registerTransferRoutes: noopPlugin,
+}));
+jest.mock("../src/routes/integration-events", () => ({
+  registerIntegrationEventRoutes: noopPlugin,
+}));
+jest.mock("../src/routes/payment-plans", () => ({
+  registerPaymentPlanRoutes: noopPlugin,
+}));
+jest.mock("../src/routes/ato", () => ({
+  registerAtoRoutes: noopPlugin,
+}));
+jest.mock("../src/routes/monitoring", () => ({
+  registerMonitoringRoutes: noopPlugin,
+}));
+jest.mock("../src/routes/risk", () => ({
+  registerRiskRoutes: noopPlugin,
+}));
+jest.mock("../src/routes/demo", () => ({
+  registerDemoRoutes: noopPlugin,
+}));
+jest.mock("../src/routes/compliance-proxy", () => ({
+  registerComplianceProxy: async () => {},
+}));
+jest.mock("../src/routes/compliance-monitor", () => ({
+  registerComplianceMonitorRoutes: noopPlugin,
+}));
+jest.mock("../src/routes/onboarding", () => ({
+  registerOnboardingRoutes: noopPlugin,
+}));
+jest.mock("../src/routes/forecast", () => ({
+  registerForecastRoutes: noopPlugin,
+}));
+jest.mock("../src/lib/regulator-session", () => ({
+  ensureRegulatorSessionActive: jest.fn(async () => ({ id: "sess-1" })),
+}));
+jest.mock("@apgms/shared", () => {
+  class AppError extends Error {
+    status: number;
+    code: string;
+    fields?: any;
+    constructor(message = "error", status = 400, code = "app_error", fields?: any) {
+      super(message);
+      this.status = status;
+      this.code = code;
+      this.fields = fields;
+    }
+  }
+  const make = (code: string, status: number) => (message = code, fields?: any) =>
+    new AppError(message, status, code, fields);
+  return {
+    AppError,
+    badRequest: make("bad_request", 400),
+    conflict: make("conflict", 409),
+    forbidden: make("forbidden", 403),
+    notFound: make("not_found", 404),
+    unauthorized: make("unauthorized", 401),
+  };
+});
+
+// --- Tests -------------------------------------------------------------------
+import { buildServer } from "../src/app";
+
+describe("health and readiness routes", () => {
+  let app: FastifyInstance;
+
+  beforeAll(async () => {
+    app = await buildServer();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it("/health returns ok", async () => {
+    const res = await app.inject({ method: "GET", url: "/health" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true, service: "api-gateway" });
+  });
+
+  it("/ready returns ok when providers succeed", async () => {
+    const res = await app.inject({ method: "GET", url: "/ready" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      ok: true,
+      components: { db: true, redis: true, nats: true },
+    });
+  });
+
+  it("auth guard returns 401 on secured routes without auth", async () => {
+    const res = await app.inject({ method: "GET", url: "/bank-lines" });
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({ error: { code: "unauthorized" } });
+  });
+});
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\test\pii.spec.js
+============================================================
+import assert from "node:assert/strict";
+import { afterEach, beforeEach, describe, it } from "node:test";
+import Fastify from "fastify";
+import { configurePIIProviders, decryptPII, encryptPII, registerPIIRoutes, tokenizeTFN, } from "../src/lib/pii";
+import { isValidABN } from "@apgms/shared-au/abn";
+import { isValidTFN } from "@apgms/shared-au/tfn";
+const TEST_KEY = Buffer.alloc(32, 7);
+const TEST_SALT = Buffer.from("test-salt-secret", "utf8");
+const kms = {
+    getActiveKey: () => ({ kid: "test-kid", material: TEST_KEY }),
+    getKeyById: (kid) => (kid === "test-kid" ? { kid, material: TEST_KEY } : undefined),
+};
+const saltProvider = {
+    getActiveSalt: () => ({ sid: "salt-v1", secret: TEST_SALT }),
+    getSaltById: (sid) => (sid === "salt-v1" ? { sid, secret: TEST_SALT } : undefined),
+};
+const events = [];
+function setupProviders() {
+    events.length = 0;
+    const auditLogger = {
+        record: (event) => {
+            events.push(event);
+        },
+    };
+    configurePIIProviders({ kms, saltProvider, auditLogger });
+}
+beforeEach(() => {
+    setupProviders();
+});
+afterEach(() => {
+    events.length = 0;
+});
+describe("ABN validation", () => {
+    it("accepts known valid ABNs", () => {
+        const valid = ["51824753556", "51 824 753 556", "10 000 000 032"];
+        for (const abn of valid) {
+            assert.equal(isValidABN(abn), true);
+        }
+    });
+    it("rejects invalid ABNs", () => {
+        const invalid = ["51824753555", "1234567890", "ABCDEFGHIJK", "00 000 000 000", "83 004 085 616"];
+        for (const abn of invalid) {
+            assert.equal(isValidABN(abn), false);
+        }
+    });
+});
+describe("TFN handling", () => {
+    it("never exposes the original TFN", () => {
+        const tfn = "123 456 788";
+        assert.equal(isValidTFN(tfn), true);
+        const token = tokenizeTFN(tfn);
+        assert.equal(token.includes("123456788"), false);
+        assert.equal(token.startsWith("salt-v1."), true);
+        assert.throws(() => decryptPII({ ciphertext: token, kid: "test-kid" }));
+    });
+});
+describe("admin decryption", () => {
+    it("emits an audit event when decryption succeeds", async () => {
+        const app = Fastify();
+        registerPIIRoutes(app, () => ({ allowed: true, actorId: "admin-user" }));
+        await app.ready();
+        const secret = encryptPII("sensitive payload");
+        const response = await app.inject({
+            method: "POST",
+            url: "/admin/pii/decrypt",
+            payload: secret,
+        });
+        assert.equal(response.statusCode, 200);
+        const body = response.json();
+        assert.equal(body.value, "sensitive payload");
+        assert.equal(events.length, 1);
+        assert.deepEqual(events[0], {
+            actorId: "admin-user",
+            action: "pii.decrypt",
+            timestamp: events[0].timestamp,
+            metadata: { kid: secret.kid },
+        });
+        assert.equal(JSON.stringify(events[0]).includes("sensitive payload"), false);
+        await app.close();
+    });
+    it("denies non-admin access", async () => {
+        const app = Fastify();
+        registerPIIRoutes(app, () => ({ allowed: false, actorId: "guest" }));
+        await app.ready();
+        const secret = encryptPII("payload");
+        const response = await app.inject({
+            method: "POST",
+            url: "/admin/pii/decrypt",
+            payload: secret,
+        });
+        assert.equal(response.statusCode, 403);
+        assert.equal(events.length, 0);
+        await app.close();
+    });
+});
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\test\pii.spec.ts
+============================================================
+import assert from "node:assert/strict";
+import { afterEach, beforeEach, describe, it } from "node:test";
+import Fastify from "fastify";
+
+import {
+  configurePIIProviders,
+  decryptPII,
+  encryptPII,
+  registerPIIRoutes,
+  tokenizeTFN,
+  type AuditEvent,
+  type AuditLogger,
+  type KeyManagementService,
+  type TokenSaltProvider,
+} from "../src/lib/pii";
+import { isValidABN } from "@apgms/shared-au/abn";
+import { isValidTFN } from "@apgms/shared-au/tfn";
+
+const TEST_KEY = Buffer.alloc(32, 7);
+const TEST_SALT = Buffer.from("test-salt-secret", "utf8");
+
+const kms: KeyManagementService = {
+  getActiveKey: () => ({ kid: "test-kid", material: TEST_KEY }),
+  getKeyById: (kid) => (kid === "test-kid" ? { kid, material: TEST_KEY } : undefined),
+};
+
+const saltProvider: TokenSaltProvider = {
+  getActiveSalt: () => ({ sid: "salt-v1", secret: TEST_SALT }),
+  getSaltById: (sid) => (sid === "salt-v1" ? { sid, secret: TEST_SALT } : undefined),
+};
+
+const events: AuditEvent[] = [];
+
+function setupProviders() {
+  events.length = 0;
+  const auditLogger: AuditLogger = {
+    record: (event) => {
+      events.push(event);
+    },
+  };
+  configurePIIProviders({ kms, saltProvider, auditLogger });
+}
+
+beforeEach(() => {
+  setupProviders();
+});
+
+afterEach(() => {
+  events.length = 0;
+});
+
+describe("ABN validation", () => {
+  it("accepts known valid ABNs", () => {
+    const valid = ["51824753556", "51 824 753 556", "10 000 000 032"];
+    for (const abn of valid) {
+      assert.equal(isValidABN(abn), true);
+    }
+  });
+
+  it("rejects invalid ABNs", () => {
+    const invalid = ["51824753555", "1234567890", "ABCDEFGHIJK", "00 000 000 000", "83 004 085 616"];
+    for (const abn of invalid) {
+      assert.equal(isValidABN(abn), false);
+    }
+  });
+});
+
+describe("TFN handling", () => {
+  it("never exposes the original TFN", () => {
+    const tfn = "123 456 788";
+    assert.equal(isValidTFN(tfn), true);
+
+    const token = tokenizeTFN(tfn);
+    assert.equal(token.includes("123456788"), false);
+    assert.equal(token.startsWith("salt-v1."), true);
+
+    assert.throws(() => decryptPII({ ciphertext: token, kid: "test-kid" }));
+  });
+});
+
+describe("admin decryption", () => {
+  it("emits an audit event when decryption succeeds", async () => {
+    const app = Fastify();
+    registerPIIRoutes(app, () => ({ allowed: true, actorId: "admin-user" }));
+    await app.ready();
+
+    const secret = encryptPII("sensitive payload");
+    const response = await app.inject({
+      method: "POST",
+      url: "/admin/pii/decrypt",
+      payload: secret,
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = response.json() as { value: string };
+    assert.equal(body.value, "sensitive payload");
+
+    assert.equal(events.length, 1);
+    assert.deepEqual(events[0], {
+      actorId: "admin-user",
+      action: "pii.decrypt",
+      timestamp: events[0].timestamp,
+      metadata: { kid: secret.kid },
+    });
+    assert.equal(JSON.stringify(events[0]).includes("sensitive payload"), false);
+
+    await app.close();
+  });
+
+  it("denies non-admin access", async () => {
+    const app = Fastify();
+    registerPIIRoutes(app, () => ({ allowed: false, actorId: "guest" }));
+    await app.ready();
+
+    const secret = encryptPII("payload");
+    const response = await app.inject({
+      method: "POST",
+      url: "/admin/pii/decrypt",
+      payload: secret,
+    });
+
+    assert.equal(response.statusCode, 403);
+    assert.equal(events.length, 0);
+
+    await app.close();
+  });
+});
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\test\privacy.spec.js
+============================================================
+import assert from "node:assert/strict";
+import { afterEach, beforeEach, test } from "node:test";
+import { randomUUID } from "node:crypto";
+import { SignJWT, exportJWK, generateKeyPair } from "jose";
+import { configurePIIProviders, encryptPII } from "../src/lib/pii";
+import { hashIdentifier } from "../src/lib/auth";
+import { createKeyManagementService, createSaltProvider } from "../src/security/providers";
+const runPrivacySuite = process.env.RUN_PRIVACY_SUITE === "true";
+if (!runPrivacySuite) {
+    test.skip("Privacy integration suite requires RUN_PRIVACY_SUITE=true", () => { });
+}
+else {
+    const { createApp } = await import("../src/app");
+    const JWT_AUDIENCE = "urn:apgms:test";
+    const JWT_ISSUER = "urn:apgms:issuer";
+    const { publicKey, privateKey } = await generateKeyPair("RS256");
+    const publicJwk = await exportJWK(publicKey);
+    publicJwk.kid = "test-key";
+    publicJwk.alg = "RS256";
+    process.env.AUTH_AUDIENCE = JWT_AUDIENCE;
+    process.env.AUTH_ISSUER = JWT_ISSUER;
+    process.env.AUTH_JWKS = JSON.stringify({ keys: [publicJwk] });
+    process.env.API_RATE_LIMIT_MAX = "250";
+    process.env.API_RATE_LIMIT_WINDOW = "1 minute";
+    const piiKeyMaterial = Buffer.alloc(32, 3).toString("base64");
+    const piiSaltMaterial = Buffer.alloc(32, 4).toString("base64");
+    process.env.PII_KEYS = JSON.stringify([{ kid: "test-pii", material: piiKeyMaterial }]);
+    process.env.PII_ACTIVE_KEY = "test-pii";
+    process.env.PII_SALTS = JSON.stringify([{ sid: "test-salt", secret: piiSaltMaterial }]);
+    process.env.PII_ACTIVE_SALT = "test-salt";
+    const kms = await createKeyManagementService();
+    const saltProvider = await createSaltProvider();
+    configurePIIProviders({
+        kms,
+        saltProvider,
+        auditLogger: { record: async () => { } },
+    });
+    const signToken = async ({ sub, orgId, roles, expiresIn = "1h", }) => new SignJWT({
+        org: orgId,
+        roles,
+    })
+        .setProtectedHeader({ alg: "RS256", kid: publicJwk.kid })
+        .setIssuedAt()
+        .setNotBefore("0s")
+        .setExpirationTime(expiresIn)
+        .setAudience(JWT_AUDIENCE)
+        .setIssuer(JWT_ISSUER)
+        .setSubject(sub)
+        .sign(privateKey);
+    let app;
+    let stub;
+    beforeEach(async () => {
+        stub = createPrismaStub();
+        app = await createApp({ prisma: stub.client });
+        await app.ready();
+    });
+    afterEach(async () => {
+        await app.close();
+    });
+    test("admin export requires a valid admin token", async () => {
+        const response = await app.inject({
+            method: "GET",
+            url: "/admin/export/example-org",
+        });
+        assert.equal(response.statusCode, 401);
+    });
+    test("admin export rejects non-matching org access", async () => {
+        const token = await signToken({
+            sub: "admin-user",
+            orgId: "org-abc",
+            roles: ["admin"],
+        });
+        const response = await app.inject({
+            method: "GET",
+            url: "/admin/export/org-other",
+            headers: { authorization: `Bearer ${token}` },
+        });
+        assert.equal(response.statusCode, 403);
+    });
+    test("admin export returns organisation data without secrets", async () => {
+        seedOrgWithData(stub.state, {
+            orgId: "org-123",
+            userId: "user-456",
+            lineId: "line-789",
+        });
+        const token = await signToken({
+            sub: "admin-1",
+            orgId: "org-123",
+            roles: ["admin"],
+        });
+        const response = await app.inject({
+            method: "GET",
+            url: "/admin/export/org-123",
+            headers: { authorization: `Bearer ${token}` },
+        });
+        assert.equal(response.statusCode, 200);
+        const body = response.json();
+        assert.equal(body.export.bankLines[0]?.payee, "Vendor");
+        assert.ok(stub.state.auditLogs.some((entry) => entry.action === "admin.org.export"));
+    });
+    test("GET /users requires an authenticated admin principal", async () => {
+        const noAuth = await app.inject({ method: "GET", url: "/users" });
+        assert.equal(noAuth.statusCode, 401);
+        const token = await signToken({
+            sub: "user-1",
+            orgId: "org-123",
+            roles: ["user"],
+        });
+        const response = await app.inject({
+            method: "GET",
+            url: "/users",
+            headers: { authorization: `Bearer ${token}` },
+        });
+        assert.equal(response.statusCode, 403);
+    });
+    test("GET /users rejects expired tokens", async () => {
+        const epoch = Math.floor(Date.now() / 1000);
+        const expired = await new SignJWT({
+            org: "org-expired",
+            roles: ["admin"],
+        })
+            .setProtectedHeader({ alg: "RS256", kid: publicJwk.kid })
+            .setIssuedAt(epoch - 7200)
+            .setNotBefore(epoch - 7200)
+            .setExpirationTime(epoch - 3600)
+            .setAudience(JWT_AUDIENCE)
+            .setIssuer(JWT_ISSUER)
+            .setSubject("expired-user")
+            .sign(privateKey);
+        const response = await app.inject({
+            method: "GET",
+            url: "/users",
+            headers: { authorization: `Bearer ${expired}` },
+        });
+        assert.equal(response.statusCode, 401);
+    });
+    test("GET /users scopes results to the caller's organisation and masks data", async () => {
+        seedOrgWithData(stub.state, {
+            orgId: "org-a",
+            userId: "user-a",
+            lineId: "line-a",
+        });
+        seedOrgWithData(stub.state, {
+            orgId: "org-b",
+            userId: "user-b",
+            lineId: "line-b",
+        });
+        const token = await signToken({
+            sub: "admin-1",
+            orgId: "org-a",
+            roles: ["admin"],
+        });
+        const response = await app.inject({
+            method: "GET",
+            url: "/users",
+            headers: { authorization: `Bearer ${token}` },
+        });
+        assert.equal(response.statusCode, 200);
+        const body = response.json();
+        assert.equal(body.users.length, 1);
+        assert.equal(body.users[0].userId, hashIdentifier("org-a:user-a"));
+        assert.equal(body.users[0].email, "so*****@example.com");
+        assert.ok(stub.state.auditLogs.some((entry) => entry.action === "users.list"));
+    });
+    test("GET /bank-lines requires an authenticated finance principal", async () => {
+        const noAuth = await app.inject({ method: "GET", url: "/bank-lines" });
+        assert.equal(noAuth.statusCode, 401);
+        const forbiddenToken = await signToken({
+            sub: "member-1",
+            orgId: "org-a",
+            roles: ["user"],
+        });
+        const forbidden = await app.inject({
+            method: "GET",
+            url: "/bank-lines",
+            headers: { authorization: `Bearer ${forbiddenToken}` },
+        });
+        assert.equal(forbidden.statusCode, 403);
+    });
+    test("GET /bank-lines only returns records for the caller's organisation", async () => {
+        seedOrgWithData(stub.state, {
+            orgId: "org-a",
+            userId: "user-a",
+            lineId: "line-a",
+        });
+        const altPayee = encryptPII("Different Vendor");
+        const altDesc = encryptPII("Other org purchase");
+        stub.state.bankLines.push({
+            id: "line-b",
+            orgId: "org-b",
+            date: new Date("2024-03-01T00:00:00Z"),
+            amount: 500,
+            payeeCiphertext: altPayee.ciphertext,
+            payeeKid: altPayee.kid,
+            descCiphertext: altDesc.ciphertext,
+            descKid: altDesc.kid,
+            createdAt: new Date("2024-03-02T00:00:00Z"),
+        });
+        const token = await signToken({
+            sub: "finance-1",
+            orgId: "org-a",
+            roles: ["analyst"],
+        });
+        const response = await app.inject({
+            method: "GET",
+            url: "/bank-lines",
+            headers: { authorization: `Bearer ${token}` },
+        });
+        assert.equal(response.statusCode, 200);
+        const body = response.json();
+        assert.equal(body.lines.length, 1);
+        assert.equal(body.lines[0].id, hashIdentifier("line-a"));
+        assert.equal(body.lines[0].description, "Invoice");
+        assert.ok(stub.state.auditLogs.some((entry) => entry.action === "bank-lines.list"));
+    });
+    test("POST /bank-lines rejects mismatched claims", async () => {
+        const token = await signToken({
+            sub: "admin-1",
+            orgId: "org-123",
+            roles: ["admin"],
+        });
+        const response = await app.inject({
+            method: "POST",
+            url: "/bank-lines",
+            payload: {
+                date: "2024-01-01T00:00:00.000Z",
+                amount: "100.00",
+                payee: "Acme",
+                desc: "Test line",
+                orgId: "org-other",
+            },
+            headers: {
+                authorization: `Bearer ${token}`,
+            },
+        });
+        assert.equal(response.statusCode, 400);
+        const json = response.json();
+        assert.equal(json.error.code, "invalid_body");
+    });
+    test("POST /bank-lines inserts a new line scoped to the principal", async () => {
+        const token = await signToken({
+            sub: "admin-1",
+            orgId: "org-123",
+            roles: ["admin"],
+        });
+        const response = await app.inject({
+            method: "POST",
+            url: "/bank-lines",
+            payload: {
+                date: "2024-01-01T00:00:00.000Z",
+                amount: "150.50",
+                payee: "Acme",
+                desc: "Consulting",
+            },
+            headers: { authorization: `Bearer ${token}` },
+        });
+        assert.equal(response.statusCode, 201);
+        const body = response.json();
+        assert.equal(typeof body.line.id, "string");
+        assert.equal(body.line.id.length, 16);
+        assert.equal(body.line.amount, 150.5);
+        assert.equal(body.line.description, "Consulting");
+        assert.ok(stub.state.auditLogs.some((entry) => entry.action === "bank-lines.create"));
+    });
+    test("metrics endpoint exposes Prometheus counters", async () => {
+        const response = await app.inject({ method: "GET", url: "/metrics" });
+        assert.equal(response.statusCode, 200);
+        assert.match(response.body, /http_requests_total/);
+    });
+    test("deleting an organisation requires matching admin role and audits the action", async () => {
+        seedOrgWithData(stub.state, {
+            orgId: "delete-me",
+            userId: "delete-user",
+            lineId: "delete-line",
+        });
+        const token = await signToken({
+            sub: "admin-1",
+            orgId: "delete-me",
+            roles: ["admin"],
+        });
+        const response = await app.inject({
+            method: "DELETE",
+            url: "/admin/delete/delete-me",
+            headers: { authorization: `Bearer ${token}` },
+        });
+        assert.equal(response.statusCode, 200);
+        const payload = response.json();
+        assert.equal(payload.status, "deleted");
+        assert.ok(Date.parse(payload.deletedAt));
+        assert.ok(stub.state.auditLogs.some((entry) => entry.action === "admin.org.delete"));
+    });
+    function createPrismaStub(initial) {
+        const state = {
+            orgs: initial?.orgs ?? [],
+            users: initial?.users ?? [],
+            bankLines: initial?.bankLines ?? [],
+            tombstones: initial?.tombstones ?? [],
+            auditLogs: initial?.auditLogs ?? [],
+        };
+        const client = {
+            org: {
+                findUnique: async (args) => {
+                    const { where, include } = args ?? {};
+                    const org = state.orgs.find((o) => o.id === where.id);
+                    if (!org)
+                        return null;
+                    if (include?.users || include?.lines) {
+                        return {
+                            ...org,
+                            users: state.users.filter((user) => user.orgId === org.id),
+                            lines: state.bankLines.filter((line) => line.orgId === org.id),
+                        };
+                    }
+                    return { ...org };
+                },
+                update: async (args) => {
+                    const { where, data } = args ?? {};
+                    const org = state.orgs.find((o) => o.id === where.id);
+                    if (!org)
+                        throw new Error("Org not found");
+                    Object.assign(org, data);
+                    return { ...org };
+                },
+            },
+            user: {
+                findMany: async ({ select, orderBy, where } = {}) => {
+                    let users = [...state.users];
+                    if (where?.orgId) {
+                        users = users.filter((user) => user.orgId === where.orgId);
+                    }
+                    if (orderBy?.createdAt === "desc") {
+                        users.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+                    }
+                    if (select) {
+                        return users.map((user) => pick(user, select));
+                    }
+                    return users;
+                },
+                deleteMany: async (args) => {
+                    const { where } = args ?? {};
+                    const initialLength = state.users.length;
+                    state.users = state.users.filter((user) => user.orgId !== where?.orgId);
+                    return { count: initialLength - state.users.length };
+                },
+            },
+            bankLine: {
+                findMany: async ({ orderBy, take, where, select } = {}) => {
+                    let lines = [...state.bankLines];
+                    if (where?.orgId) {
+                        lines = lines.filter((line) => line.orgId === where.orgId);
+                    }
+                    if (orderBy?.date === "desc") {
+                        lines.sort((a, b) => b.date.getTime() - a.date.getTime());
+                    }
+                    if (typeof take === "number") {
+                        lines = lines.slice(0, take);
+                    }
+                    if (select) {
+                        return lines.map((line) => pick(line, select));
+                    }
+                    return lines;
+                },
+                create: async ({ data, select }) => {
+                    const created = {
+                        id: data.id ?? randomUUID(),
+                        orgId: data.orgId,
+                        date: data.date,
+                        amount: data.amount,
+                        payeeCiphertext: data.payeeCiphertext,
+                        payeeKid: data.payeeKid,
+                        descCiphertext: data.descCiphertext,
+                        descKid: data.descKid,
+                        createdAt: data.createdAt ?? new Date(),
+                        idempotencyKey: data.idempotencyKey ?? null,
+                    };
+                    state.bankLines.push(created);
+                    return select ? pick(created, select) : created;
+                },
+                createMany: async ({ data }) => {
+                    for (const entry of data) {
+                        const created = {
+                            id: entry.id ?? randomUUID(),
+                            orgId: entry.orgId,
+                            date: entry.date,
+                            amount: entry.amount,
+                            payeeCiphertext: entry.payeeCiphertext,
+                            payeeKid: entry.payeeKid,
+                            descCiphertext: entry.descCiphertext,
+                            descKid: entry.descKid,
+                            createdAt: entry.createdAt ?? new Date(),
+                            idempotencyKey: entry.idempotencyKey ?? null,
+                        };
+                        state.bankLines.push(created);
+                    }
+                    return { count: data.length };
+                },
+                deleteMany: async (args) => {
+                    const { where } = args ?? {};
+                    const initialLength = state.bankLines.length;
+                    state.bankLines = state.bankLines.filter((line) => line.orgId !== where?.orgId);
+                    return { count: initialLength - state.bankLines.length };
+                },
+                upsert: async ({ where, create, select }) => {
+                    const existing = state.bankLines.find((line) => line.orgId === where.orgId_idempotencyKey.orgId &&
+                        line.idempotencyKey === where.orgId_idempotencyKey.idempotencyKey);
+                    if (existing) {
+                        return select ? pick(existing, select) : existing;
+                    }
+                    const created = {
+                        id: create.id ?? randomUUID(),
+                        orgId: create.orgId,
+                        date: create.date,
+                        amount: create.amount,
+                        payeeCiphertext: create.payeeCiphertext,
+                        payeeKid: create.payeeKid,
+                        descCiphertext: create.descCiphertext,
+                        descKid: create.descKid,
+                        createdAt: create.createdAt ?? new Date(),
+                        idempotencyKey: create.idempotencyKey,
+                    };
+                    state.bankLines.push(created);
+                    return select ? pick(created, select) : created;
+                },
+            },
+            orgTombstone: {
+                create: async (args) => {
+                    const { data } = args ?? {};
+                    const record = {
+                        id: data.id ?? randomUUID(),
+                        orgId: data.orgId,
+                        payload: data.payload,
+                        createdAt: data.createdAt ?? new Date(),
+                    };
+                    state.tombstones.push(record);
+                    return record;
+                },
+            },
+            auditLog: {
+                create: async (args) => {
+                    const { data } = args ?? {};
+                    const entry = {
+                        id: data.id ?? randomUUID(),
+                        orgId: data.orgId,
+                        actorId: data.actorId,
+                        action: data.action,
+                        metadata: (data.metadata ?? {}),
+                        createdAt: data.createdAt ?? new Date(),
+                    };
+                    state.auditLogs.push(entry);
+                    return entry;
+                },
+            },
+            $transaction: async (callback) => {
+                return callback(client);
+            },
+        };
+        return { client, state };
+    }
+    function seedOrgWithData(state, ids) {
+        const createdAt = new Date("2024-01-01T00:00:00Z");
+        state.orgs.push({
+            id: ids.orgId,
+            name: "Example Org",
+            createdAt,
+            deletedAt: null,
+        });
+        state.users.push({
+            id: ids.userId,
+            email: "someone@example.com",
+            password: "hashed-password",
+            orgId: ids.orgId,
+            createdAt,
+        });
+        const payee = encryptPII("Vendor");
+        const desc = encryptPII("Invoice");
+        state.bankLines.push({
+            id: ids.lineId,
+            orgId: ids.orgId,
+            date: new Date("2024-02-02T00:00:00Z"),
+            amount: 1200,
+            payeeCiphertext: payee.ciphertext,
+            payeeKid: payee.kid,
+            descCiphertext: desc.ciphertext,
+            descKid: desc.kid,
+            createdAt,
+        });
+    }
+    function pick(value, select) {
+        const result = {};
+        for (const [key, include] of Object.entries(select)) {
+            if (include && key in value) {
+                result[key] = value[key];
+            }
+        }
+        return result;
+    }
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\test\privacy.spec.ts
+============================================================
+import assert from "node:assert/strict";
+import { afterEach, beforeEach, test } from "node:test";
+import { randomUUID } from "node:crypto";
+
+import { SignJWT, exportJWK, generateKeyPair } from "jose";
+import type { FastifyInstance } from "fastify";
+
+import { configurePIIProviders, encryptPII } from "../src/lib/pii";
+import { hashIdentifier } from "../src/lib/auth";
+import { createKeyManagementService, createSaltProvider } from "../src/security/providers";
+
+const runPrivacySuite = process.env.RUN_PRIVACY_SUITE === "true";
+
+if (!runPrivacySuite) {
+  test.skip("Privacy integration suite requires RUN_PRIVACY_SUITE=true", () => {});
+} else {
+  const { createApp } = await import("../src/app");
+  type AdminOrgExport = import("../src/app").AdminOrgExport;
+  type Org = {
+    id: string;
+    name: string;
+    createdAt: Date;
+    deletedAt: Date | null;
+  };
+  type User = {
+    id: string;
+    email: string;
+    createdAt: Date;
+    orgId: string;
+  };
+  type BankLine = {
+    id: string;
+    orgId: string;
+    date: Date;
+    amount: number;
+    payeeCiphertext: string;
+    payeeKid: string;
+    descCiphertext: string;
+    descKid: string;
+    createdAt: Date;
+  };
+
+const JWT_AUDIENCE = "urn:apgms:test";
+const JWT_ISSUER = "urn:apgms:issuer";
+
+const { publicKey, privateKey } = await generateKeyPair("RS256");
+const publicJwk = await exportJWK(publicKey);
+publicJwk.kid = "test-key";
+publicJwk.alg = "RS256";
+
+process.env.AUTH_AUDIENCE = JWT_AUDIENCE;
+process.env.AUTH_ISSUER = JWT_ISSUER;
+process.env.AUTH_JWKS = JSON.stringify({ keys: [publicJwk] });
+process.env.API_RATE_LIMIT_MAX = "250";
+process.env.API_RATE_LIMIT_WINDOW = "1 minute";
+
+const piiKeyMaterial = Buffer.alloc(32, 3).toString("base64");
+const piiSaltMaterial = Buffer.alloc(32, 4).toString("base64");
+process.env.PII_KEYS = JSON.stringify([{ kid: "test-pii", material: piiKeyMaterial }]);
+process.env.PII_ACTIVE_KEY = "test-pii";
+process.env.PII_SALTS = JSON.stringify([{ sid: "test-salt", secret: piiSaltMaterial }]);
+process.env.PII_ACTIVE_SALT = "test-salt";
+
+const kms = await createKeyManagementService();
+const saltProvider = await createSaltProvider();
+configurePIIProviders({
+  kms,
+  saltProvider,
+  auditLogger: { record: async () => {} },
+});
+
+const signToken = async ({
+  sub,
+  orgId,
+  roles,
+  expiresIn = "1h",
+}: {
+  sub: string;
+  orgId: string;
+  roles: string[];
+  expiresIn?: string;
+}) =>
+  new SignJWT({
+    org: orgId,
+    roles,
+  })
+    .setProtectedHeader({ alg: "RS256", kid: publicJwk.kid! })
+    .setIssuedAt()
+    .setNotBefore("0s")
+    .setExpirationTime(expiresIn)
+    .setAudience(JWT_AUDIENCE)
+    .setIssuer(JWT_ISSUER)
+    .setSubject(sub)
+    .sign(privateKey);
+
+type OrgState = Org & { deletedAt: Date | null };
+
+type AuditEntry = {
+  id: string;
+  orgId: string;
+  actorId: string;
+  action: string;
+  metadata: Record<string, unknown>;
+  createdAt: Date;
+};
+
+type IdempotencyRecord = {
+  id: string;
+  orgId: string;
+  actorId: string;
+  key: string;
+  requestHash: string;
+  responseHash: string;
+  statusCode: number;
+  responsePayload: unknown;
+  resource: string | null;
+  resourceId: string | null;
+  createdAt: Date;
+};
+
+type State = {
+  orgs: OrgState[];
+  users: User[];
+  bankLines: BankLine[];
+  tombstones: Array<{ id: string; orgId: string; payload: AdminOrgExport; createdAt: Date }>;
+  auditLogs: AuditEntry[];
+  idempotencyEntries: IdempotencyRecord[];
+};
+
+type TransactionCallback<T> = (tx: PrismaLike) => Promise<T>;
+
+type PrismaLike = Record<string, any>;
+
+type Stub = {
+  client: PrismaLike;
+  state: State;
+};
+
+let app: FastifyInstance;
+let stub: Stub;
+
+beforeEach(async () => {
+  stub = createPrismaStub();
+  app = await createApp({ prisma: stub.client as any });
+  await app.ready();
+});
+
+afterEach(async () => {
+  await app.close();
+});
+
+test("admin export requires a valid admin token", async () => {
+  const response = await app.inject({
+    method: "GET",
+    url: "/admin/export/example-org",
+  });
+  assert.equal(response.statusCode, 401);
+});
+
+test("admin export rejects non-matching org access", async () => {
+  const token = await signToken({
+    sub: "admin-user",
+    orgId: "org-abc",
+    roles: ["admin"],
+  });
+  const response = await app.inject({
+    method: "GET",
+    url: "/admin/export/org-other",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  assert.equal(response.statusCode, 403);
+});
+
+test("admin export returns organisation data without secrets", async () => {
+  seedOrgWithData(stub.state, {
+    orgId: "org-123",
+    userId: "user-456",
+    lineId: "line-789",
+  });
+
+  const token = await signToken({
+    sub: "admin-1",
+    orgId: "org-123",
+    roles: ["admin"],
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/admin/export/org-123",
+    headers: { authorization: `Bearer ${token}` },
+  });
+
+  assert.equal(response.statusCode, 200);
+  const body = response.json() as { export: AdminOrgExport };
+  assert.equal(body.export.bankLines[0]?.payee, "Vendor");
+  assert.ok(stub.state.auditLogs.some((entry) => entry.action === "admin.org.export"));
+});
+
+test("GET /users requires an authenticated admin principal", async () => {
+  const noAuth = await app.inject({ method: "GET", url: "/users" });
+  assert.equal(noAuth.statusCode, 401);
+
+  const token = await signToken({
+    sub: "user-1",
+    orgId: "org-123",
+    roles: ["user"],
+  });
+  const response = await app.inject({
+    method: "GET",
+    url: "/users",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  assert.equal(response.statusCode, 403);
+});
+
+test("GET /users rejects expired tokens", async () => {
+  const epoch = Math.floor(Date.now() / 1000);
+  const expired = await new SignJWT({
+    org: "org-expired",
+    roles: ["admin"],
+  })
+    .setProtectedHeader({ alg: "RS256", kid: publicJwk.kid! })
+    .setIssuedAt(epoch - 7200)
+    .setNotBefore(epoch - 7200)
+    .setExpirationTime(epoch - 3600)
+    .setAudience(JWT_AUDIENCE)
+    .setIssuer(JWT_ISSUER)
+    .setSubject("expired-user")
+    .sign(privateKey);
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/users",
+    headers: { authorization: `Bearer ${expired}` },
+  });
+  assert.equal(response.statusCode, 401);
+});
+
+test("GET /users scopes results to the caller's organisation and masks data", async () => {
+  seedOrgWithData(stub.state, {
+    orgId: "org-a",
+    userId: "user-a",
+    lineId: "line-a",
+  });
+  seedOrgWithData(stub.state, {
+    orgId: "org-b",
+    userId: "user-b",
+    lineId: "line-b",
+  });
+
+  const token = await signToken({
+    sub: "admin-1",
+    orgId: "org-a",
+    roles: ["admin"],
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/users",
+    headers: { authorization: `Bearer ${token}` },
+  });
+
+  assert.equal(response.statusCode, 200);
+  const body = response.json() as { users: Array<{ userId: string; email: string }> };
+  assert.equal(body.users.length, 1);
+  assert.equal(body.users[0].userId, hashIdentifier("org-a:user-a"));
+  assert.equal(body.users[0].email, "so*****@example.com");
+  assert.ok(stub.state.auditLogs.some((entry) => entry.action === "users.list"));
+});
+
+test("GET /bank-lines requires an authenticated finance principal", async () => {
+  const noAuth = await app.inject({ method: "GET", url: "/bank-lines" });
+  assert.equal(noAuth.statusCode, 401);
+
+  const forbiddenToken = await signToken({
+    sub: "member-1",
+    orgId: "org-a",
+    roles: ["user"],
+  });
+  const forbidden = await app.inject({
+    method: "GET",
+    url: "/bank-lines",
+    headers: { authorization: `Bearer ${forbiddenToken}` },
+  });
+  assert.equal(forbidden.statusCode, 403);
+});
+
+test("GET /bank-lines only returns records for the caller's organisation", async () => {
+  seedOrgWithData(stub.state, {
+    orgId: "org-a",
+    userId: "user-a",
+    lineId: "line-a",
+  });
+  const altPayee = encryptPII("Different Vendor");
+  const altDesc = encryptPII("Other org purchase");
+  stub.state.bankLines.push({
+    id: "line-b",
+    orgId: "org-b",
+    date: new Date("2024-03-01T00:00:00Z"),
+    amount: 500 as any,
+    payeeCiphertext: altPayee.ciphertext,
+    payeeKid: altPayee.kid,
+    descCiphertext: altDesc.ciphertext,
+    descKid: altDesc.kid,
+    createdAt: new Date("2024-03-02T00:00:00Z"),
+  } as BankLine);
+
+  const token = await signToken({
+    sub: "finance-1",
+    orgId: "org-a",
+    roles: ["analyst"],
+  });
+
+  const response = await app.inject({
+    method: "GET",
+    url: "/bank-lines",
+    headers: { authorization: `Bearer ${token}` },
+  });
+
+  assert.equal(response.statusCode, 200);
+  const body = response.json() as { lines: Array<{ id: string; description: string }> };
+  assert.equal(body.lines.length, 1);
+  assert.equal(body.lines[0].id, hashIdentifier("line-a"));
+  assert.equal(body.lines[0].description, "Invoice");
+  assert.ok(stub.state.auditLogs.some((entry) => entry.action === "bank-lines.list"));
+});
+
+test("POST /bank-lines rejects mismatched claims", async () => {
+  const token = await signToken({
+    sub: "admin-1",
+    orgId: "org-123",
+    roles: ["admin"],
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/bank-lines",
+    payload: {
+      date: "2024-01-01T00:00:00.000Z",
+      amount: "100.00",
+      payee: "Acme",
+      desc: "Test line",
+      orgId: "org-other",
+    } as any,
+    headers: {
+      authorization: `Bearer ${token}`,
+      "Idempotency-Key": randomUUID(),
+    },
+  });
+
+  assert.equal(response.statusCode, 400);
+  const json = response.json() as { error: { code: string } };
+  assert.equal(json.error.code, "invalid_body");
+});
+
+test("POST /bank-lines inserts a new line scoped to the principal", async () => {
+  const token = await signToken({
+    sub: "admin-1",
+    orgId: "org-123",
+    roles: ["admin"],
+  });
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/bank-lines",
+    payload: {
+      date: "2024-01-01T00:00:00.000Z",
+      amount: "150.50",
+      payee: "Acme",
+      desc: "Consulting",
+    },
+    headers: { authorization: `Bearer ${token}`, "Idempotency-Key": randomUUID() },
+  });
+
+  assert.equal(response.statusCode, 201);
+  const body = response.json() as { line: { id: string; amount: number; description: string } };
+  assert.equal(typeof body.line.id, "string");
+  assert.equal(body.line.id.length, 16);
+  assert.equal(body.line.amount, 150.5);
+  assert.equal(body.line.description, "Consulting");
+  assert.ok(stub.state.auditLogs.some((entry) => entry.action === "bank-lines.create"));
+});
+
+test("POST /bank-lines replays when Idempotency-Key is reused", async () => {
+  const token = await signToken({
+    sub: "admin-1",
+    orgId: "org-123",
+    roles: ["admin"],
+  });
+
+  const key = randomUUID();
+  const payload = {
+    date: "2024-01-01T00:00:00.000Z",
+    amount: "250.00",
+    payee: "Acme",
+    desc: "Retainer",
+  };
+
+  const first = await app.inject({
+    method: "POST",
+    url: "/bank-lines",
+    payload,
+    headers: { authorization: `Bearer ${token}`, "Idempotency-Key": key },
+  });
+
+  assert.equal(first.statusCode, 201);
+  assert.equal(first.headers["idempotent-replay"], "false");
+
+  const second = await app.inject({
+    method: "POST",
+    url: "/bank-lines",
+    payload,
+    headers: { authorization: `Bearer ${token}`, "Idempotency-Key": key },
+  });
+
+  assert.equal(second.statusCode, 201);
+  assert.equal(second.headers["idempotent-replay"], "true");
+  assert.deepEqual(second.json(), first.json());
+
+  const createdLines = stub.state.bankLines.filter((line) => line.orgId === "org-123");
+  assert.equal(createdLines.length, 1);
+
+  const auditEvents = stub.state.auditLogs.filter((entry) => entry.action === "bank-lines.create");
+  assert.equal(auditEvents.length, 1);
+});
+
+test("metrics endpoint exposes Prometheus counters", async () => {
+  const response = await app.inject({ method: "GET", url: "/metrics" });
+  assert.equal(response.statusCode, 200);
+  assert.match(response.body as string, /http_requests_total/);
+});
+
+test("deleting an organisation requires matching admin role and audits the action", async () => {
+  seedOrgWithData(stub.state, {
+    orgId: "delete-me",
+    userId: "delete-user",
+    lineId: "delete-line",
+  });
+
+  const token = await signToken({
+    sub: "admin-1",
+    orgId: "delete-me",
+    roles: ["admin"],
+  });
+
+  const response = await app.inject({
+    method: "DELETE",
+    url: "/admin/delete/delete-me",
+    headers: { authorization: `Bearer ${token}` },
+  });
+
+  assert.equal(response.statusCode, 200);
+  const payload = response.json() as { status: string; deletedAt: string };
+  assert.equal(payload.status, "deleted");
+  assert.ok(Date.parse(payload.deletedAt));
+
+  assert.ok(stub.state.auditLogs.some((entry) => entry.action === "admin.org.delete"));
+});
+
+function createPrismaStub(initial?: Partial<State>): Stub {
+  const state: State = {
+    orgs: initial?.orgs ?? [],
+    users: initial?.users ?? [],
+    bankLines: initial?.bankLines ?? [],
+    tombstones: initial?.tombstones ?? [],
+    auditLogs: initial?.auditLogs ?? [],
+    idempotencyEntries: initial?.idempotencyEntries ?? [],
+  };
+
+  const client: PrismaLike = {
+    org: {
+      findUnique: async (args: any) => {
+        const { where, include } = args ?? {};
+        const org = state.orgs.find((o) => o.id === where.id);
+        if (!org) return null;
+        if (include?.users || include?.lines) {
+          return {
+            ...org,
+            users: state.users.filter((user) => user.orgId === org.id),
+            lines: state.bankLines.filter((line) => line.orgId === org.id),
+          } as unknown as Org;
+        }
+        return { ...org } as Org;
+      },
+      update: async (args: any) => {
+        const { where, data } = args ?? {};
+        const org = state.orgs.find((o) => o.id === where.id);
+        if (!org) throw new Error("Org not found");
+        Object.assign(org, data);
+        return { ...org } as Org;
+      },
+    },
+    user: {
+      findMany: async ({ select, orderBy, where }: any = {}) => {
+        let users = [...state.users];
+        if (where?.orgId) {
+          users = users.filter((user) => user.orgId === where.orgId);
+        }
+        if (orderBy?.createdAt === "desc") {
+          users.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        }
+        if (select) {
+          return users.map((user) => pick(user, select));
+        }
+        return users;
+      },
+      deleteMany: async (args: any) => {
+        const { where } = args ?? {};
+        const initialLength = state.users.length;
+        state.users = state.users.filter((user) => user.orgId !== where?.orgId);
+        return { count: initialLength - state.users.length };
+      },
+    },
+    bankLine: {
+      findMany: async ({ orderBy, take, where, select }: any = {}) => {
+        let lines = [...state.bankLines];
+        if (where?.orgId) {
+          lines = lines.filter((line) => line.orgId === where.orgId);
+        }
+        if (orderBy?.date === "desc") {
+          lines.sort((a, b) => b.date.getTime() - a.date.getTime());
+        }
+        if (typeof take === "number") {
+          lines = lines.slice(0, take);
+        }
+        if (select) {
+          return lines.map((line) => pick(line, select));
+        }
+        return lines;
+      },
+      create: async ({ data, select }: any) => {
+        const created = {
+          id: data.id ?? randomUUID(),
+          orgId: data.orgId!,
+          date: data.date as Date,
+          amount: data.amount as any,
+          payeeCiphertext: data.payeeCiphertext,
+          payeeKid: data.payeeKid,
+          descCiphertext: data.descCiphertext,
+          descKid: data.descKid,
+          createdAt: data.createdAt ?? new Date(),
+          idempotencyKey: data.idempotencyKey ?? null,
+        } as unknown as BankLine;
+        state.bankLines.push(created);
+        return select ? pick(created, select) : created;
+      },
+      createMany: async ({ data }: any) => {
+        for (const entry of data) {
+          const created = {
+            id: entry.id ?? randomUUID(),
+            orgId: entry.orgId,
+            date: entry.date,
+            amount: entry.amount,
+            payeeCiphertext: entry.payeeCiphertext,
+            payeeKid: entry.payeeKid,
+            descCiphertext: entry.descCiphertext,
+            descKid: entry.descKid,
+            createdAt: entry.createdAt ?? new Date(),
+            idempotencyKey: entry.idempotencyKey ?? null,
+          } as unknown as BankLine;
+          state.bankLines.push(created);
+        }
+        return { count: data.length };
+      },
+      deleteMany: async (args: any) => {
+        const { where } = args ?? {};
+        const initialLength = state.bankLines.length;
+        state.bankLines = state.bankLines.filter((line) => line.orgId !== where?.orgId);
+        return { count: initialLength - state.bankLines.length };
+      },
+      upsert: async ({ where, create, select }: any) => {
+        const existing = state.bankLines.find(
+          (line) =>
+            line.orgId === where.orgId_idempotencyKey.orgId &&
+            (line as any).idempotencyKey === where.orgId_idempotencyKey.idempotencyKey,
+        );
+        if (existing) {
+          return select ? pick(existing, select) : existing;
+        }
+        const created = {
+          id: create.id ?? randomUUID(),
+          orgId: create.orgId,
+          date: create.date,
+          amount: create.amount,
+          payeeCiphertext: create.payeeCiphertext,
+          payeeKid: create.payeeKid,
+          descCiphertext: create.descCiphertext,
+          descKid: create.descKid,
+          createdAt: create.createdAt ?? new Date(),
+          idempotencyKey: create.idempotencyKey,
+        } as any;
+        state.bankLines.push(created);
+        return select ? pick(created, select) : created;
+      },
+    },
+    orgTombstone: {
+      create: async (args: any) => {
+        const { data } = args ?? {};
+        const record = {
+          id: data.id ?? randomUUID(),
+          orgId: data.orgId!,
+          payload: data.payload as AdminOrgExport,
+          createdAt: data.createdAt ?? new Date(),
+        };
+        state.tombstones.push(record);
+        return record;
+      },
+    },
+    auditLog: {
+      create: async (args: any) => {
+        const { data } = args ?? {};
+        const entry: AuditEntry = {
+          id: data.id ?? randomUUID(),
+          orgId: data.orgId,
+          actorId: data.actorId,
+          action: data.action,
+          metadata: (data.metadata ?? {}) as Record<string, unknown>,
+          createdAt: data.createdAt ?? new Date(),
+        };
+        state.auditLogs.push(entry);
+        return entry;
+      },
+    },
+    idempotencyEntry: {
+      findUnique: async ({ where }: any = {}) => {
+        const composite = where?.orgId_key;
+        if (!composite) return null;
+        const entry = state.idempotencyEntries.find(
+          (record) => record.orgId === composite.orgId && record.key === composite.key,
+        );
+        return entry ? { ...entry } : null;
+      },
+      create: async ({ data }: any = {}) => {
+        const existing = state.idempotencyEntries.find(
+          (record) => record.orgId === data.orgId && record.key === data.key,
+        );
+        if (existing) {
+          const error: any = new Error("Unique constraint failed");
+          error.code = "P2002";
+          throw error;
+        }
+        const entry: IdempotencyRecord = {
+          id: data.id ?? randomUUID(),
+          orgId: data.orgId,
+          actorId: data.actorId,
+          key: data.key,
+          requestHash: data.requestHash,
+          responseHash: data.responseHash,
+          statusCode: data.statusCode,
+          responsePayload: data.responsePayload ?? null,
+          resource: data.resource ?? null,
+          resourceId: data.resourceId ?? null,
+          createdAt: data.createdAt ?? new Date(),
+        };
+        state.idempotencyEntries.push(entry);
+        return { ...entry };
+      },
+    },
+    $transaction: async <T>(callback: TransactionCallback<T>) => {
+      return callback(client);
+    },
+  } as unknown as PrismaLike;
+
+  return { client, state };
+}
+
+  function seedOrgWithData(state: State, ids: { orgId: string; userId: string; lineId: string }) {
+    const createdAt = new Date("2024-01-01T00:00:00Z");
+    state.orgs.push({
+      id: ids.orgId,
+      name: "Example Org",
+      createdAt,
+      deletedAt: null,
+    } as OrgState);
+    state.users.push({
+      id: ids.userId,
+      email: "someone@example.com",
+      password: "hashed-password",
+      orgId: ids.orgId,
+      createdAt,
+    } as User);
+    const payee = encryptPII("Vendor");
+    const desc = encryptPII("Invoice");
+    state.bankLines.push({
+      id: ids.lineId,
+      orgId: ids.orgId,
+      date: new Date("2024-02-02T00:00:00Z"),
+      amount: 1200 as any,
+      payeeCiphertext: payee.ciphertext,
+      payeeKid: payee.kid,
+      descCiphertext: desc.ciphertext,
+      descKid: desc.kid,
+      createdAt,
+    } as BankLine);
+  }
+
+  function pick<T>(value: T, select: Record<string, boolean>): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
+    for (const [key, include] of Object.entries(select)) {
+      if (include && key in (value as any)) {
+        result[key] = (value as any)[key];
+      }
+    }
+    return result;
+  }
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\test\ready.spec.js
+============================================================
+import { after, before, describe, it, test } from "node:test";
+import assert from "node:assert/strict";
+const runReadySuite = process.env.RUN_READY_SUITE === "true";
+if (!runReadySuite) {
+    test.skip("Readiness integration test requires RUN_READY_SUITE=true", () => { });
+}
+else {
+    const { createApp } = await import("../src/app");
+    const { prisma } = await import("@apgms/shared/db");
+    let app;
+    describe("/ready", () => {
+        before(async () => {
+            app = await createApp();
+            await app.ready();
+        });
+        after(async () => {
+            await app.close();
+            await prisma.$disconnect();
+        });
+        it("returns 200 when DB is reachable", async () => {
+            const res = await app.inject({ method: "GET", url: "/ready" });
+            assert.equal(res.statusCode, 200);
+            assert.deepEqual(res.json(), { ready: true });
+        });
+    });
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\test\ready.spec.ts
+============================================================
+import { after, before, describe, it, test } from "node:test";
+import assert from "node:assert/strict";
+
+const runReadySuite = process.env.RUN_READY_SUITE === "true";
+
+if (!runReadySuite) {
+  test.skip("Readiness integration test requires RUN_READY_SUITE=true", () => {});
+} else {
+  const { createApp } = await import("../src/app");
+  const { prisma } = await import("@apgms/shared/db");
+
+  let app: Awaited<ReturnType<typeof createApp>>;
+
+  describe("/ready", () => {
+    before(async () => {
+      app = await createApp();
+      await app.ready();
+    });
+
+    after(async () => {
+      await app.close();
+      await prisma.$disconnect();
+    });
+
+    it("returns 200 when DB is reachable", async () => {
+      const res = await app.inject({ method: "GET", url: "/ready" });
+      assert.equal(res.statusCode, 200);
+      assert.deepEqual(res.json(), { ready: true });
+    });
+  });
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\test\regulator.routes.spec.ts
+============================================================
+import assert from "node:assert/strict";
+import { after, before, describe, it } from "node:test";
+
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
+
+import { registerRegulatorRoutes } from "../src/routes/regulator";
+import type { recordAuditLog } from "../src/lib/audit.js";
+
+const now = new Date();
+const fakeBankLine = {
+  id: "line-1",
+  orgId: "org-test",
+  date: now,
+  amount: 100,
+  createdAt: now,
+};
+
+const stubPrisma = {
+  basCycle: {
+    findMany: async () => [],
+    findFirst: async () => null,
+  },
+  paymentPlanRequest: {
+    findMany: async () => [],
+  },
+  alert: {
+    count: async () => 0,
+    findMany: async () => [],
+  },
+  designatedAccount: {
+    findMany: async () => [],
+  },
+  monitoringSnapshot: {
+    findMany: async () => [],
+  },
+  evidenceArtifact: {
+    findMany: async () => [],
+    findUnique: async () => null,
+  },
+  bankLine: {
+    aggregate: async () => ({
+      _count: { id: 0 },
+      _sum: { amount: 0 },
+    }),
+    findFirst: async () => fakeBankLine,
+    findMany: async () => [fakeBankLine],
+  },
+};
+
+const stubAuditLog: (entry: Parameters<typeof recordAuditLog>[0]) => Promise<void> = async () => {};
+
+describe("regulator routes wiring", () => {
+  let app: FastifyInstance;
+
+  before(async () => {
+    app = Fastify();
+    app.addHook("onRequest", (request: FastifyRequest, _reply: FastifyReply, done) => {
+      (request as FastifyRequest & { user?: { orgId?: string; sub?: string } }).user = {
+        orgId: "org-test",
+        sub: "regulator-user",
+      };
+      done();
+    });
+    await app.register(async (regScope) => {
+      await registerRegulatorRoutes(regScope, {
+        prisma: stubPrisma as any,
+        auditLogger: stubAuditLog,
+      });
+    }, { prefix: "/regulator" });
+    await app.ready();
+  });
+
+  after(async () => {
+    await app.close();
+  });
+
+  it("exposes health at /regulator/health", async () => {
+    const response = await app.inject({ method: "GET", url: "/regulator/health" });
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.json(), { ok: true, service: "regulator" });
+  });
+
+  it("serves compliance and alerts endpoints", async () => {
+    const report = await app.inject({
+      method: "GET",
+      url: "/regulator/compliance/report",
+    });
+    assert.equal(report.statusCode, 200);
+    assert.equal(report.json().orgId, "org-test");
+
+    const alerts = await app.inject({
+      method: "GET",
+      url: "/regulator/alerts",
+    });
+    assert.equal(alerts.statusCode, 200);
+    assert.deepEqual(alerts.json(), { alerts: [] });
+  });
+
+  it("services bank-line summary and evidence routes", async () => {
+    const summary = await app.inject({
+      method: "GET",
+      url: "/regulator/bank-lines/summary",
+    });
+    assert.equal(summary.statusCode, 200);
+    const summaryBody = summary.json();
+    assert.equal(summaryBody.summary.totalEntries, 0);
+    assert.ok(Array.isArray(summaryBody.recent));
+
+    const evidence = await app.inject({
+      method: "GET",
+      url: "/regulator/evidence",
+    });
+    assert.equal(evidence.statusCode, 200);
+    assert.deepEqual(evidence.json(), { artifacts: [] });
+  });
+});
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\test\regulator-compliance-summary.test.ts
+============================================================
+// services/api-gateway/test/regulator-compliance-summary.test.ts
+
+import fastify from "fastify";
+import helmet from "@fastify/helmet";
+import { buildHelmetConfig } from "../src/security-headers";
+import { registerRegulatorComplianceSummaryRoute } from "../src/routes/regulator-compliance-summary";
+import type { AppConfig } from "../src/config";
+import { Buffer } from "node:buffer";
+
+const baseConfig: AppConfig = {
+  env: "test",
+  databaseUrl: "postgres://user:pass@localhost:5432/testdb",
+  shadowDatabaseUrl: undefined,
+  rateLimit: {
+    max: 60,
+    window: "1 minute",
+  },
+  security: {
+    authFailureThreshold: 5,
+    kmsKeysetLoaded: true,
+    requireHttps: false,
+  },
+  cors: {
+    allowedOrigins: ["http://localhost:5173"],
+  },
+  taxEngineUrl: "http://tax-engine:8000",
+  auth: {
+    audience: "test-audience",
+    issuer: "https://auth.localhost",
+    devSecret: "local-dev-secret",
+  },
+  regulator: {
+    accessCode: "test-code",
+    jwtAudience: "urn:apgms:regulator",
+    sessionTtlMinutes: 60,
+  },
+  encryption: {
+    masterKey: Buffer.alloc(32),
+  },
+  webauthn: {
+    rpId: "localhost",
+    rpName: "APGMS Test",
+    origin: "http://localhost:5173",
+  },
+  banking: {
+    providerId: "mock",
+    maxReadTransactions: 1000,
+    maxWriteCents: 5_000_000,
+  },
+  redis: undefined,
+  nats: undefined,
+};
+
+describe("/regulator/compliance/summary", () => {
+  it("returns a compliant demo payload", async () => {
+    const app = fastify();
+
+    await app.register(helmet, buildHelmetConfig(baseConfig));
+    await registerRegulatorComplianceSummaryRoute(app, baseConfig);
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/regulator/compliance/summary",
+    });
+
+    expect(res.statusCode).toBe(200);
+
+    const body = res.json() as {
+      generatedAt: string;
+      items: Array<{ orgId: string; riskBand: string }>;
+    };
+
+    expect(body.items.length).toBeGreaterThan(0);
+    expect(body.items[0]).toHaveProperty("orgId");
+    expect(body.items[0]).toHaveProperty("riskBand");
+  });
+});
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\test\run.js
+============================================================
+import { readdir, stat } from "node:fs/promises";
+import { join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+const rootDir = fileURLToPath(new URL(".", import.meta.url));
+async function collectSpecFiles(dir) {
+    const entries = await readdir(dir);
+    const results = [];
+    for (const entry of entries) {
+        const fullPath = join(dir, entry);
+        const info = await stat(fullPath);
+        if (info.isDirectory()) {
+            const nested = await collectSpecFiles(fullPath);
+            results.push(...nested);
+            continue;
+        }
+        if (entry.toLowerCase().endsWith(".spec.ts")) {
+            results.push(fullPath);
+        }
+    }
+    return results;
+}
+async function loadSpecs() {
+    const files = await collectSpecFiles(rootDir);
+    for (const file of files) {
+        await import(pathToFileURL(file).href);
+    }
+}
+await loadSpecs();
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\test\run.ts
+============================================================
+import { readdir, stat } from "node:fs/promises";
+import { join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+const defaultTestEnv: Record<string, string> = {
+  DATABASE_URL: "postgresql://user:pass@localhost:5432/apgms?schema=public",
+  SHADOW_DATABASE_URL: "postgresql://user:pass@localhost:5432/apgms_shadow?schema=public",
+  AUTH_AUDIENCE: "urn:test:aud",
+  AUTH_ISSUER: "urn:test:issuer",
+  AUTH_JWKS: JSON.stringify({ keys: [{ kid: "local", alg: "RS256" }] }),
+  AUTH_DEV_SECRET: "local-dev-secret",
+  PII_KEYS: JSON.stringify([{ kid: "local", material: "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=" }]),
+  PII_ACTIVE_KEY: "local",
+  PII_SALTS: JSON.stringify([{ sid: "local", secret: "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=" }]),
+  PII_ACTIVE_SALT: "local",
+  API_RATE_LIMIT_MAX: "120",
+  API_RATE_LIMIT_WINDOW: "1 minute",
+  AUTH_FAILURE_THRESHOLD: "5",
+  TAX_ENGINE_URL: "http://tax-engine:8000",
+  CORS_ALLOWED_ORIGINS: "http://localhost:5173",
+  REGULATOR_ACCESS_CODE: "regulator-dev-code",
+  REGULATOR_JWT_AUDIENCE: "urn:apgms:regulator",
+  REGULATOR_SESSION_TTL_MINUTES: "60",
+  ENCRYPTION_MASTER_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+  WEBAUTHN_RP_ID: "localhost",
+  WEBAUTHN_RP_NAME: "APGMS Admin",
+  WEBAUTHN_ORIGIN: "http://localhost:5173",
+};
+
+for (const [key, value] of Object.entries(defaultTestEnv)) {
+  const current = process.env[key];
+  if (!current || current.trim().length === 0) {
+    process.env[key] = value;
+  }
+}
+
+const rootDir = fileURLToPath(new URL(".", import.meta.url));
+
+async function collectSpecFiles(dir: string): Promise<string[]> {
+  const entries = await readdir(dir);
+  const results: string[] = [];
+  for (const entry of entries) {
+    const fullPath = join(dir, entry);
+    const info = await stat(fullPath);
+    if (info.isDirectory()) {
+      const nested = await collectSpecFiles(fullPath);
+      results.push(...nested);
+      continue;
+    }
+    if (entry.toLowerCase().endsWith(".spec.ts")) {
+      results.push(fullPath);
+    }
+  }
+  return results;
+}
+
+async function loadSpecs(): Promise<void> {
+  const files = await collectSpecFiles(rootDir);
+  for (const file of files) {
+    await import(pathToFileURL(file).href);
+  }
+}
+
+await loadSpecs();
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\test\security.headers.spec.ts
+============================================================
+import assert from "node:assert/strict";
+import { after, before, describe, it } from "node:test";
+
+import type { FastifyInstance } from "fastify";
+
+import { buildServer } from "../src/app";
+
+let app: FastifyInstance;
+
+describe("security headers", () => {
+  before(async () => {
+    app = await buildServer();
+    await app.ready();
+  });
+
+  after(async () => {
+    await app.close();
+  });
+
+  it("applies helmet headers on public endpoints", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/health",
+    });
+
+    assert.equal(response.statusCode, 200);
+
+    const csp = response.headers["content-security-policy"];
+    assert.ok(csp, "expected CSP header");
+    assert.ok(
+      csp.includes("default-src 'self'"),
+      `expected default-src directive, got: ${csp}`,
+    );
+    assert.ok(
+      csp.includes(
+        "script-src 'self' 'sha256-+Ul8C6HpBvEV0hgFekKPKiEh0Ug3SIn50SjA+iyTNHo='",
+      ),
+      `expected script-src directive, got: ${csp}`,
+    );
+    assert.equal(response.headers["x-content-type-options"], "nosniff");
+    assert.equal(response.headers["x-frame-options"], "DENY");
+    assert.equal(
+      response.headers["strict-transport-security"],
+      "max-age=15552000; includeSubDomains; preload",
+    );
+  });
+
+  it("rejects disallowed origins with 403", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/health",
+      headers: {
+        origin: "https://evil.example",
+      },
+    });
+
+    assert.equal(response.statusCode, 403);
+  });
+
+  it("allows configured origins and returns ACAO header", async () => {
+    const response = await app.inject({
+      method: "OPTIONS",
+      url: "/health",
+      headers: {
+        origin: "http://localhost:5173",
+        "access-control-request-method": "GET",
+      },
+    });
+
+    assert.notEqual(response.statusCode, 403);
+    assert.equal(
+      response.headers["access-control-allow-origin"],
+      "http://localhost:5173",
+    );
+  });
+
+  it("allows Idempotency-Key preflight on /bank-lines and exposes replay header", async () => {
+    const response = await app.inject({
+      method: "OPTIONS",

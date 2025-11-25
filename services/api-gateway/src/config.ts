@@ -4,6 +4,8 @@ import { URL } from "node:url";
 import { z } from "zod";
 
 export interface AppConfig {
+  readonly env: "local" | "test" | "development" | "staging" | "production";
+
   readonly databaseUrl: string;
   readonly shadowDatabaseUrl?: string;
   readonly rateLimit: {
@@ -14,6 +16,7 @@ export interface AppConfig {
     readonly authFailureThreshold: number;
     readonly kmsKeysetLoaded?: boolean;
     readonly requireHttps: boolean;
+    readonly enableIsolation?: boolean; 
   };
   readonly cors: {
     readonly allowedOrigins: string[];
@@ -208,6 +211,10 @@ const splitOrigins = (raw: string | undefined): string[] => {
 
 // This builds a config object from process.env with validation.
 export function loadConfig(): AppConfig {
+  const rawEnv = process.env.APP_ENV ?? process.env.NODE_ENV ?? "local";
+  const env = (rawEnv && rawEnv.trim().length > 0
+    ? rawEnv.trim()
+    : "local") as AppConfig["env"];
   // DB URLs
   const databaseUrl = ensureUrl(
     envString("DATABASE_URL"),
@@ -270,6 +277,7 @@ export function loadConfig(): AppConfig {
   const kmsKeysetLoaded = true;
   const requireHttps = process.env.REQUIRE_TLS === "true";
   const enableIsolation = process.env.SECURITY_ENABLE_ISOLATION === "true";
+
 
   // rate limit config
   const rateLimitMax = parseIntegerEnv(
@@ -353,6 +361,8 @@ export function loadConfig(): AppConfig {
       : undefined;
 
   return {
+    env,
+
     databaseUrl,
     shadowDatabaseUrl,
     rateLimit: {
@@ -363,6 +373,7 @@ export function loadConfig(): AppConfig {
       authFailureThreshold,
       kmsKeysetLoaded,
       requireHttps,
+      enableIsolation,
     },
     cors: {
       allowedOrigins: corsAllowedOrigins,

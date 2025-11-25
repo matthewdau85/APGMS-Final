@@ -3,6 +3,7 @@ import type { AppConfig } from "../src/config";
 
 // --- Mocks -------------------------------------------------------------------
 const fakeConfig: AppConfig = {
+  env: "test",
   databaseUrl: "postgres://localhost:5432/apgms",
   shadowDatabaseUrl: undefined,
   rateLimit: { max: 100, window: "1 minute" },

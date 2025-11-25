@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "test": "jest --config ../../jest.config.js services/api-gateway/test",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",

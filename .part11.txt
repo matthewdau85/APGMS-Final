@@ -1,0 +1,2651 @@
+﻿export function hashRecoveryCode(code: string): string {
+  return crypto.createHash("sha256").update(code).digest("hex");
+}
+
+function buildContext(prefix: string, userId: string): string {
+  return `${prefix}${userId}`;
+}
+
+function envelopeFromRecord(record: MfaCredential): EncryptionEnvelope {
+  return record.data as unknown as EncryptionEnvelope;
+}
+
+function toJson(envelope: EncryptionEnvelope): InputJsonValue {
+  return envelope as unknown as InputJsonValue;
+}
+
+export async function getTotpCredential(userId: string): Promise<{
+  secret: string;
+  recoveryCodes: Array<{ hash: string; used: boolean }>;
+  record: MfaCredential;
+} | null> {
+  const credential = await prisma.mfaCredential.findFirst({
+    where: { userId, type: "totp", status: "active" },
+  });
+  if (!credential) {
+    return null;
+  }
+  const payload = unsealObject<TotpCredentialPayload>(
+    envelopeFromRecord(credential),
+    buildContext(TOTP_CONTEXT_PREFIX, userId),
+  );
+  return {
+    secret: payload.secret,
+    recoveryCodes: payload.recoveryCodes,
+    record: credential,
+  };
+}
+
+export async function upsertTotpCredential(
+  userId: string,
+  secret: string,
+  recoveryCodes: Array<{ hash: string; used: boolean }>,
+): Promise<void> {
+  const payload: TotpCredentialPayload = {
+    secret,
+    recoveryCodes,
+  };
+  const envelope = sealObject(payload, buildContext(TOTP_CONTEXT_PREFIX, userId));
+
+  const existing = await prisma.mfaCredential.findFirst({
+    where: { userId, type: "totp" },
+  });
+
+  if (existing) {
+    await prisma.mfaCredential.update({
+      where: { id: existing.id },
+      data: {
+        data: toJson(envelope),
+        status: "active",
+        primary: true,
+        lastUsedAt: null,
+      },
+    });
+    return;
+  }
+
+  await prisma.mfaCredential.create({
+    data: {
+      userId,
+      type: "totp",
+      primary: true,
+      data: toJson(envelope),
+    },
+  });
+}
+
+export async function updateTotpRecoveryCodes(
+  credentialId: string,
+  userId: string,
+  secret: string,
+  recoveryCodes: Array<{ hash: string; used: boolean }>,
+): Promise<void> {
+  const envelope = sealObject(
+    {
+      secret,
+      recoveryCodes,
+    },
+    buildContext(TOTP_CONTEXT_PREFIX, userId),
+  );
+  await prisma.mfaCredential.update({
+    where: { id: credentialId },
+    data: {
+      data: toJson(envelope),
+    },
+  });
+}
+
+export async function recordMfaUsage(credentialId: string): Promise<void> {
+  await prisma.mfaCredential.update({
+    where: { id: credentialId },
+    data: { lastUsedAt: new Date() },
+  });
+}
+
+export async function listPasskeyCredentials(userId: string): Promise<MfaCredential[]> {
+  return prisma.mfaCredential.findMany({
+    where: { userId, type: "webauthn", status: "active" },
+  });
+}
+
+export async function savePasskeyCredential(
+  userId: string,
+  credentialId: string,
+  publicKey: Buffer,
+  counter: number,
+): Promise<void> {
+  const payload: PasskeyCredentialPayload = {
+    publicKey: publicKey.toString("base64"),
+    counter,
+  };
+  const envelope = sealObject(payload, buildContext(PASSKEY_CONTEXT_PREFIX, userId));
+
+  const existing = await prisma.mfaCredential.findUnique({
+    where: { credentialId },
+  });
+
+  if (existing) {
+    await prisma.mfaCredential.update({
+      where: { id: existing.id },
+      data: {
+        userId,
+        data: toJson(envelope),
+        status: "active",
+      },
+    });
+    return;
+  }
+
+  await prisma.mfaCredential.create({
+    data: {
+      userId,
+      type: "webauthn",
+      credentialId,
+      primary: false,
+      data: toJson(envelope),
+    },
+  });
+}
+
+export async function updatePasskeyCounter(
+  credentialId: string,
+  counter: number,
+): Promise<void> {
+  const record = await prisma.mfaCredential.findUnique({
+    where: { credentialId },
+  });
+  if (!record) {
+    return;
+  }
+  const payload = unsealObject<PasskeyCredentialPayload>(
+    envelopeFromRecord(record),
+    buildContext(PASSKEY_CONTEXT_PREFIX, record.userId),
+  );
+  payload.counter = counter;
+  const updated = sealObject(payload, buildContext(PASSKEY_CONTEXT_PREFIX, record.userId));
+  await prisma.mfaCredential.update({
+    where: { id: record.id },
+    data: {
+      data: toJson(updated),
+      lastUsedAt: new Date(),
+    },
+  });
+}
+
+export async function decodePasskeyCredential(
+  record: MfaCredential,
+): Promise<{ publicKey: Buffer; counter: number }> {
+  const payload = unsealObject<PasskeyCredentialPayload>(
+    envelopeFromRecord(record),
+    buildContext(PASSKEY_CONTEXT_PREFIX, record.userId),
+  );
+  return {
+    publicKey: Buffer.from(payload.publicKey, "base64"),
+    counter: payload.counter,
+  };
+}
+
+export async function hasPasskey(userId: string): Promise<boolean> {
+  const count = await prisma.mfaCredential.count({
+    where: { userId, type: "webauthn", status: "active" },
+  });
+  return count > 0;
+}
+
+export async function disableTotp(userId: string): Promise<void> {
+  await prisma.mfaCredential.updateMany({
+    where: { userId, type: "totp" },
+    data: { status: "revoked" },
+  });
+}
+
+export async function hasTotp(userId: string): Promise<boolean> {
+  const count = await prisma.mfaCredential.count({
+    where: { userId, type: "totp", status: "active" },
+  });
+  return count > 0;
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\lib\pii.js
+============================================================
+import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "node:crypto";
+const AES_ALGORITHM = "aes-256-gcm";
+const AES_IV_LENGTH = 12;
+const AES_AUTH_TAG_LENGTH = 16;
+let context;
+export function configurePIIProviders(newContext) {
+    context = newContext;
+}
+export function tokenizeTFN(plain) {
+    if (!context) {
+        throw new Error("PII providers not configured");
+    }
+    const normalized = plain.replace(/\s+/g, "");
+    if (!/^\d{8,9}$/.test(normalized)) {
+        throw new Error("Invalid TFN format");
+    }
+    const { sid, secret } = context.saltProvider.getActiveSalt();
+    const digest = createHmac("sha256", secret).update(normalized).digest("base64url");
+    return `${sid}.${digest}`;
+}
+export function encryptPII(plain) {
+    if (!context) {
+        throw new Error("PII providers not configured");
+    }
+    const key = context.kms.getActiveKey();
+    if (key.material.length !== 32) {
+        throw new Error("Invalid encryption key length");
+    }
+    const iv = randomBytes(AES_IV_LENGTH);
+    const cipher = createCipheriv(AES_ALGORITHM, key.material, iv, { authTagLength: AES_AUTH_TAG_LENGTH });
+    const encrypted = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+    const payload = Buffer.concat([iv, authTag, encrypted]);
+    return { kid: key.kid, ciphertext: payload.toString("base64") };
+}
+export function decryptPII(payload) {
+    if (!context) {
+        throw new Error("PII providers not configured");
+    }
+    const key = context.kms.getKeyById(payload.kid);
+    if (!key) {
+        throw new Error("Unknown key identifier");
+    }
+    const data = Buffer.from(payload.ciphertext, "base64");
+    if (data.length < AES_IV_LENGTH + AES_AUTH_TAG_LENGTH) {
+        throw new Error("Malformed ciphertext");
+    }
+    const iv = data.subarray(0, AES_IV_LENGTH);
+    const authTag = data.subarray(AES_IV_LENGTH, AES_IV_LENGTH + AES_AUTH_TAG_LENGTH);
+    const encrypted = data.subarray(AES_IV_LENGTH + AES_AUTH_TAG_LENGTH);
+    const decipher = createDecipheriv(AES_ALGORITHM, key.material, iv, { authTagLength: AES_AUTH_TAG_LENGTH });
+    decipher.setAuthTag(authTag);
+    const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+    return decrypted.toString("utf8");
+}
+export function registerPIIRoutes(app, guard) {
+    app.post("/admin/pii/decrypt", async (request, reply) => {
+        if (!context) {
+            return reply.code(500).send({ error: "pii_unconfigured" });
+        }
+        const decision = await guard(request);
+        if (!decision.allowed) {
+            return reply.code(403).send({ error: "forbidden" });
+        }
+        const body = request.body;
+        if (!body?.ciphertext || !body?.kid) {
+            return reply.code(400).send({ error: "invalid_request" });
+        }
+        try {
+            const value = decryptPII({ ciphertext: body.ciphertext, kid: body.kid });
+            await context.auditLogger.record({
+                actorId: decision.actorId,
+                action: "pii.decrypt",
+                timestamp: new Date().toISOString(),
+                metadata: { kid: body.kid },
+            });
+            return reply.code(200).send({ value });
+        }
+        catch (error) {
+            return reply.code(400).send({ error: "invalid_payload" });
+        }
+    });
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\lib\pii.ts
+============================================================
+import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "node:crypto";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+
+const AES_ALGORITHM = "aes-256-gcm";
+const AES_IV_LENGTH = 12;
+const AES_AUTH_TAG_LENGTH = 16;
+
+export interface EncryptionKey {
+  kid: string;
+  material: Buffer;
+}
+
+export interface KeyManagementService {
+  getActiveKey(): EncryptionKey;
+  getKeyById(kid: string): EncryptionKey | undefined;
+}
+
+export interface SaltMaterial {
+  sid: string;
+  secret: Buffer;
+}
+
+export interface TokenSaltProvider {
+  getActiveSalt(): SaltMaterial;
+  getSaltById(id: string): SaltMaterial | undefined;
+}
+
+export interface AuditEvent {
+  actorId: string;
+  action: string;
+  timestamp: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface AuditLogger {
+  record(event: AuditEvent): void | Promise<void>;
+}
+
+interface PIIContext {
+  kms: KeyManagementService;
+  saltProvider: TokenSaltProvider;
+  auditLogger: AuditLogger;
+}
+
+let context: PIIContext | undefined;
+
+export function configurePIIProviders(newContext: PIIContext): void {
+  context = newContext;
+}
+
+export function tokenizeTFN(plain: string): string {
+  if (!context) {
+    throw new Error("PII providers not configured");
+  }
+
+  const normalized = plain.replace(/\s+/g, "");
+  if (!/^\d{8,9}$/.test(normalized)) {
+    throw new Error("Invalid TFN format");
+  }
+
+  const { sid, secret } = context.saltProvider.getActiveSalt();
+  const digest = createHmac("sha256", secret).update(normalized).digest("base64url");
+  return `${sid}.${digest}`;
+}
+
+export function encryptPII(plain: string): { ciphertext: string; kid: string } {
+  if (!context) {
+    throw new Error("PII providers not configured");
+  }
+
+  const key = context.kms.getActiveKey();
+  if (key.material.length !== 32) {
+    throw new Error("Invalid encryption key length");
+  }
+
+  const iv = randomBytes(AES_IV_LENGTH);
+  const cipher = createCipheriv(AES_ALGORITHM, key.material, iv, { authTagLength: AES_AUTH_TAG_LENGTH });
+  const encrypted = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  const payload = Buffer.concat([iv, authTag, encrypted]);
+  return { kid: key.kid, ciphertext: payload.toString("base64") };
+}
+
+export function decryptPII(payload: { ciphertext: string; kid: string }): string {
+  if (!context) {
+    throw new Error("PII providers not configured");
+  }
+
+  const key = context.kms.getKeyById(payload.kid);
+  if (!key) {
+    throw new Error("Unknown key identifier");
+  }
+
+  const data = Buffer.from(payload.ciphertext, "base64");
+  if (data.length < AES_IV_LENGTH + AES_AUTH_TAG_LENGTH) {
+    throw new Error("Malformed ciphertext");
+  }
+
+  const iv = data.subarray(0, AES_IV_LENGTH);
+  const authTag = data.subarray(AES_IV_LENGTH, AES_IV_LENGTH + AES_AUTH_TAG_LENGTH);
+  const encrypted = data.subarray(AES_IV_LENGTH + AES_AUTH_TAG_LENGTH);
+  const decipher = createDecipheriv(AES_ALGORITHM, key.material, iv, { authTagLength: AES_AUTH_TAG_LENGTH });
+  decipher.setAuthTag(authTag);
+  const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+  return decrypted.toString("utf8");
+}
+
+export interface AdminGuardResult {
+  allowed: boolean;
+  actorId: string;
+}
+
+export type AdminGuard = (request: FastifyRequest) => Promise<AdminGuardResult> | AdminGuardResult;
+
+export function registerPIIRoutes(app: FastifyInstance, guard: AdminGuard): void {
+  app.post(
+    "/admin/pii/decrypt",
+    async (request: FastifyRequest, reply: FastifyReply): Promise<FastifyReply> => {
+      if (!context) {
+        return reply.code(500).send({ error: "pii_unconfigured" });
+      }
+
+      const decision = await guard(request);
+      if (!decision.allowed) {
+        return reply.code(403).send({ error: "forbidden" });
+      }
+
+      const body = request.body as { ciphertext?: string; kid?: string };
+      if (!body?.ciphertext || !body?.kid) {
+        return reply.code(400).send({ error: "invalid_request" });
+      }
+
+      try {
+        const value = decryptPII({ ciphertext: body.ciphertext, kid: body.kid });
+        await context.auditLogger.record({
+          actorId: decision.actorId,
+          action: "pii.decrypt",
+          timestamp: new Date().toISOString(),
+          metadata: { kid: body.kid },
+        });
+        return reply.code(200).send({ value });
+      } catch (error) {
+        return reply.code(400).send({ error: "invalid_payload" });
+      }
+    },
+  );
+}
+
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\lib\regulator-session.ts
+============================================================
+import crypto from "node:crypto";
+
+import { prisma } from "../db.js";
+
+export async function createRegulatorSession(orgId: string, ttlMinutes: number) {
+  const seed = crypto.randomBytes(32).toString("hex");
+  const tokenHash = crypto.createHash("sha256").update(seed).digest("hex");
+  const issuedAt = new Date();
+  const expiresAt = new Date(issuedAt.getTime() + ttlMinutes * 60 * 1000);
+
+  const session = await prisma.regulatorSession.create({
+    data: {
+      orgId,
+      tokenHash,
+      issuedAt,
+      expiresAt,
+      lastUsedAt: issuedAt,
+    },
+  });
+
+  return {
+    session,
+    sessionToken: seed,
+  };
+}
+
+export async function ensureRegulatorSessionActive(sessionId: string) {
+  const session = await prisma.regulatorSession.findUnique({
+    where: { id: sessionId },
+  });
+
+  if (!session) {
+    throw new Error("regulator_session_not_found");
+  }
+
+  if (session.revokedAt) {
+    throw new Error("regulator_session_revoked");
+  }
+
+  if (session.expiresAt.getTime() <= Date.now()) {
+    throw new Error("regulator_session_expired");
+  }
+
+  await prisma.regulatorSession.update({
+    where: { id: session.id },
+    data: { lastUsedAt: new Date() },
+  });
+
+  return session;
+}
+
+export async function revokeRegulatorSession(sessionId: string) {
+  await prisma.regulatorSession.updateMany({
+    where: { id: sessionId, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\lib\require-mfa.ts
+============================================================
+import type { FastifyRequest } from "fastify";
+
+export function requireMfa(req: FastifyRequest) {
+  const user = req.user;
+  if (!user || !user.mfaVerified) {
+    throw new Error("MFA_REQUIRED");
+  }
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\lib\retry.ts
+============================================================
+export interface RetryOptions {
+  readonly maxAttempts?: number;
+  readonly initialDelayMs?: number;
+  readonly maxDelayMs?: number;
+  readonly jitter?: boolean;
+  readonly retriable?: (error: unknown) => boolean;
+}
+
+/**
+ * Generic async retry with exponential backoff.
+ */
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  options: RetryOptions = {},
+): Promise<T> {
+  const {
+    maxAttempts = 3,
+    initialDelayMs = 250,
+    maxDelayMs = 5_000,
+    jitter = true,
+    retriable = () => true,
+  } = options;
+
+  let attempt = 0;
+  let delay = initialDelayMs;
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    try {
+      return await fn();
+    } catch (error) {
+      attempt += 1;
+      if (attempt >= maxAttempts || !retriable(error)) {
+        throw error;
+      }
+
+      let sleepFor = delay;
+      if (jitter) {
+        const rand = 0.5 + Math.random(); // 0.5â€“1.5
+        sleepFor = Math.floor(delay * rand);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, sleepFor));
+      delay = Math.min(delay * 2, maxDelayMs);
+    }
+  }
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\lib\secrets.ts
+============================================================
+let awsAvailable = false;
+let SecretsManagerCtor: any | null = null;
+
+async function ensureAws() {
+  if (SecretsManagerCtor || awsAvailable) return;
+
+  try {
+    const mod = await import("@aws-sdk/client-secrets-manager");
+    // v3 client name is SecretsManagerClient; we alias to keep generic
+    SecretsManagerCtor = (mod as any).SecretsManagerClient ?? (mod as any).SecretsManager;
+    awsAvailable = !!SecretsManagerCtor;
+  } catch {
+    awsAvailable = false;
+  }
+}
+
+/**
+ * Get a secret from AWS Secrets Manager, with optional env fallback.
+ *
+ * - key: the SecretId in AWS
+ * - fallbackEnv: env var to use when AWS is unavailable
+ * - json: parse value as JSON if true
+ */
+export async function getSecret(
+  key: string,
+  options?: { fallbackEnv?: string; json?: boolean },
+): Promise<string | Record<string, unknown> | null> {
+  await ensureAws();
+
+  const envKey = options?.fallbackEnv ?? key;
+  const envValue = process.env[envKey];
+
+  // If AWS is not available at all, use env only
+  if (!awsAvailable || !SecretsManagerCtor) {
+    if (!envValue) return null;
+    return options?.json ? JSON.parse(envValue) : envValue;
+  }
+
+  const client = new SecretsManagerCtor({});
+
+  try {
+    const res = await client.getSecretValue({ SecretId: key });
+    const secretString = res.SecretString;
+    if (!secretString) return null;
+    return options?.json ? JSON.parse(secretString) : secretString;
+  } catch {
+    // On errors, fall back to env if present
+    if (!envValue) return null;
+    return options?.json ? JSON.parse(envValue) : envValue;
+  }
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\lib\validation.ts
+============================================================
+// services/api-gateway/src/lib/validation.ts
+import type { z } from "zod";
+
+/**
+ * Simple helper: parse a value with a Zod schema and return the typed data.
+ * Throws ZodError on validation failure.
+ *
+ * This is used in routes like auth/payment-plans where we expect a valid body
+ * and let the route handler deal with errors (usually by try/catch or Fastify's
+ * error handling).
+ */
+export function parseWithSchema<TSchema extends z.ZodTypeAny>(
+  schema: TSchema,
+  value: unknown,
+): z.infer<TSchema> {
+  return schema.parse(value);
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\observability\metrics.ts
+============================================================
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import {
+  Counter,
+  Histogram,
+  Gauge,
+  collectDefaultMetrics,
+  register as promRegister,
+} from 'prom-client';
+
+// ---- Registry & default process metrics ----
+collectDefaultMetrics({ register: promRegister });
+
+// ---- HTTP metrics ----
+const httpRequestTotal = new Counter({
+  name: 'apgms_http_requests_total',
+  help: 'Total HTTP requests by method, route, and status code',
+  labelNames: ['method', 'route', 'status'] as const,
+});
+
+const httpRequestDuration = new Histogram({
+  name: 'apgms_http_request_duration_seconds',
+  help: 'HTTP request duration histogram',
+  labelNames: ['method', 'route', 'status'] as const,
+  buckets: [0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10],
+});
+
+// ---- DB metrics (use from your Prisma middleware) ----
+const dbQueryDuration = new Histogram({
+  name: 'apgms_db_query_duration_seconds',
+  help: 'Prisma query duration by model and operation',
+  labelNames: ['model', 'operation'] as const,
+  buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1],
+});
+
+const dbQueryTotal = new Counter({
+  name: 'apgms_db_queries_total',
+  help: 'Total Prisma queries by model, operation, and status',
+  labelNames: ['model', 'operation', 'status'] as const,
+});
+
+// ---- Background job metrics ----
+const jobDuration = new Histogram({
+  name: 'apgms_job_duration_seconds',
+  help: 'Background job duration histogram',
+  labelNames: ['job'] as const,
+  buckets: [0.1, 0.25, 0.5, 1, 2, 5, 10, 30],
+});
+
+const integrationEventDuration = new Histogram({
+  name: 'apgms_integration_event_duration_seconds',
+  help: 'Time to process payroll / POS integration events',
+  labelNames: ['tax_type', 'status'] as const,
+  buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1],
+});
+
+const integrationEventsTotal = new Counter({
+  name: 'apgms_integration_events_total',
+  help: 'Total payroll / POS integration events processed',
+  labelNames: ['tax_type', 'status'] as const,
+});
+
+const integrationDiscrepanciesTotal = new Counter({
+  name: 'apgms_integration_discrepancies_total',
+  help: 'Discrepancy alerts raised when amounts mismatch expected values',
+  labelNames: ['tax_type', 'severity'] as const,
+});
+
+const obligationsTotal = new Gauge({
+  name: 'apgms_integration_pending_obligation_amount',
+  help: 'Current pending obligations per tax type',
+  labelNames: ['tax_type'] as const,
+});
+
+const integrationAnomalyScore = new Gauge({
+  name: 'apgms_integration_anomaly_score',
+  help: 'Heuristic anomaly score ([-1,1]) for integration feeds',
+  labelNames: ['tax_type', 'severity'] as const,
+});
+
+const basLodgmentsTotal = new Counter({
+  name: 'apgms_bas_lodgments_total',
+  help: 'Total BAS lodgment attempts',
+  labelNames: ['status'] as const,
+});
+
+const transferInstructionTotal = new Counter({
+  name: 'apgms_transfer_instructions_total',
+  help: 'Transfer instructions generated for BAS lodgments',
+  labelNames: ['tax_type', 'status'] as const,
+});
+
+const transferExecutionTotal = new Counter({
+  name: 'apgms_transfer_execution_total',
+  help: 'Execution attempts for transfer instructions',
+  labelNames: ['status'] as const,
+});
+
+const paymentPlanRequestsTotal = new Counter({
+  name: 'apgms_payment_plan_requests_total',
+  help: 'Payment plan requests created after failed BAS lodgments',
+  labelNames: ['status'] as const,
+});
+
+const atoReportsTotal = new Counter({
+  name: 'apgms_ato_reports_total',
+  help: 'ATO compliance reports submitted',
+  labelNames: ['status'] as const,
+});
+
+const riskEventsTotal = new Counter({
+  name: 'apgms_risk_events_total',
+  help: 'Risk events recorded',
+  labelNames: ['severity'] as const,
+});
+
+// ---- Public API for DB/jobs instrumentation ----
+export const metrics = {
+  httpRequestTotal,
+  httpRequestDuration,
+  dbQueryDuration,
+  dbQueryTotal,
+  jobDuration,
+  integrationEventDuration,
+  integrationEventsTotal,
+  integrationDiscrepanciesTotal,
+  obligationsTotal,
+  integrationAnomalyScore,
+  basLodgmentsTotal,
+  transferInstructionTotal,
+  transferExecutionTotal,
+  paymentPlanRequestsTotal,
+  atoReportsTotal,
+  riskEventsTotal,
+
+  async observeJob<T>(job: string, fn: () => Promise<T>): Promise<T> {
+    const stop = jobDuration.startTimer({ job });
+    try {
+      const result = await fn();
+      stop();
+      return result;
+    } catch (err) {
+      stop();
+      throw err;
+    }
+  },
+};
+
+export { promRegister };
+
+// ---- /metrics route (Prometheus text format) ----
+export function registerMetricsRoute(app: FastifyInstance) {
+  app.get('/metrics', async (_req, reply) => {
+    reply.header('Content-Type', promRegister.contentType);
+    return promRegister.metrics();
+  });
+}
+
+// ---- Optional Fastify hooks to auto-collect HTTP metrics ----
+type ReqWithStart = FastifyRequest & { _apgmsStartNs?: bigint };
+
+export function installHttpMetrics(app: FastifyInstance) {
+  app.addHook('onRequest', (req: ReqWithStart, _reply, done) => {
+    // monotonic clock for duration
+    req._apgmsStartNs = process.hrtime.bigint();
+    done();
+  });
+
+  app.addHook('onResponse', (req: ReqWithStart, reply: FastifyReply, done) => {
+    try {
+      const endNs = process.hrtime.bigint();
+      const startNs = req._apgmsStartNs ?? endNs;
+      const durSeconds = Number(endNs - startNs) / 1e9;
+
+      const method = (req.method || 'GET').toUpperCase();
+      const status = String(reply.statusCode || 0);
+
+      // Try to get a stable route template; fall back to raw URL
+      // Fastify v4: request.routeOptions.url is usually present for registered routes
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const route =
+        (req as any).routeOptions?.url ||
+        // older plugin contexts sometimes expose routerPath
+        (req as any).routerPath ||
+        req.url ||
+        'unknown';
+
+      httpRequestTotal.inc({ method, route, status }, 1);
+      httpRequestDuration.observe({ method, route, status }, durSeconds);
+    } catch {
+      // never block responses on metrics errors
+    }
+    done();
+  });
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\observability\prisma-metrics.ts
+============================================================
+// services/api-gateway/src/observability/prisma-metrics.ts
+import { metrics } from "./metrics.js";
+
+/**
+ * Return a Prisma-like client extended with query-level timing (Prisma v6+).
+ * This is defensive: if $extends is missing, we just return the original client.
+ */
+export function instrumentPrisma<T>(client: T): T {
+  const anyClient = client as any;
+
+  if (typeof anyClient.$extends !== "function") {
+    return client;
+  }
+
+  const extended = anyClient.$extends({
+    query: {
+      $allModels: {
+        async $allOperations(ctx: any) {
+          const model = ctx.model ?? "UnknownModel";
+          const operation = ctx.operation ?? "unknown";
+          const end = metrics.dbQueryDuration.startTimer({ model, operation });
+          try {
+            return await ctx.query(ctx.args as any);
+          } finally {
+            end();
+          }
+        },
+      },
+    },
+  });
+
+  return extended as T;
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\observability\tracing.ts
+============================================================
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
+
+let sdk: NodeSDK | null = null;
+
+export async function startTracing() {
+  if (sdk) return;
+
+  // Prefer env vars:
+  //   OTEL_SERVICE_NAME=apgms-api-gateway
+  //   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://localhost:4318/v1/traces
+  const endpoint =
+    process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT ??
+    process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+
+  const traceExporter = new OTLPTraceExporter(
+    endpoint ? { url: endpoint } : undefined
+  );
+
+  sdk = new NodeSDK({
+    // rely on env OTEL_SERVICE_NAME instead of programmatic Resource to avoid TS drift
+    traceExporter: traceExporter as unknown as any
+  });
+
+  await sdk.start();
+}
+
+export async function stopTracing() {
+  if (!sdk) return;
+  const s = sdk;
+  sdk = null;
+  try {
+    await s.shutdown();
+  } catch {
+    // swallow
+  }
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\plugins\metrics.js
+============================================================
+import { Counter, Histogram, collectDefaultMetrics, register, } from "prom-client";
+// Collect Node process metrics (CPU, mem, event loop lag, etc)
+collectDefaultMetrics();
+/**
+ * Total request volume, by method/route/status.
+ * Lets you do: rate(http_requests_total{status="500"}[5m])
+ */
+const httpRequestsTotal = new Counter({
+    name: "http_requests_total",
+    help: "Total number of API gateway requests",
+    labelNames: ["method", "route", "status"],
+});
+/**
+ * Request latency histogram in seconds, by method/route/status.
+ * Lets you do p95(api latency by route).
+ */
+const httpRequestDurationSeconds = new Histogram({
+    name: "http_request_duration_seconds",
+    help: "Distribution of API gateway response times in seconds",
+    labelNames: ["method", "route", "status"],
+    buckets: [0.05, 0.1, 0.25, 0.5, 1, 2, 5], // tune if you want finer low-lat buckets
+});
+/**
+ * Generic security/audit events.
+ * We'll call this for things like "readiness.fail", "admin.org.delete", etc.
+ */
+const securityEventsTotal = new Counter({
+    name: "security_events_total",
+    help: "Count of security or audit events emitted by the gateway",
+    labelNames: ["event"],
+});
+/**
+ * Explicit auth failures (unauthorized / forbidden).
+ * Why separate from securityEventsTotal?
+ * Because SOC/oncall wants to alert specifically on spikes in auth failures.
+ */
+const authFailuresTotal = new Counter({
+    name: "auth_failures_total",
+    help: "Count of authentication/authorization failures, labelled by org if known",
+    labelNames: ["orgId"],
+});
+/**
+ * Blocked browser origins.
+ * If this spikes, either an attacker is hammering you from weird origins
+ * or you forgot to add a legit new frontend origin to the allowlist.
+ */
+const corsRejectTotal = new Counter({
+    name: "cors_reject_total",
+    help: "Count of rejected CORS requests by origin",
+    labelNames: ["origin"],
+});
+const metricsPlugin = (app, _opts, done) => {
+    /**
+     * Per-response hook:
+     *  - increment http_requests_total
+     *  - observe latency into http_request_duration_seconds
+     */
+    app.addHook("onResponse", (request, reply, doneHook) => {
+        const scopedRequest = request;
+        // Try to get a stable "route" dimension ("/bank-lines", "/ready", etc.)
+        const route = scopedRequest.routerPath ??
+            scopedRequest.routeOptions?.url ??
+            request.url ??
+            "unknown";
+        const labels = {
+            method: request.method,
+            route,
+            status: reply.statusCode.toString(),
+        };
+        httpRequestsTotal.inc(labels);
+        // Fastify reply has getResponseTime() when the latency tracking decorator is on.
+        // If it's missing, we just fall back to 0 to avoid NaN.
+        const getResponseTime = reply.getResponseTime;
+        const responseTimeSeconds = typeof getResponseTime === "function"
+            ? getResponseTime() / 1000
+            : 0;
+        if (responseTimeSeconds >= 0) {
+            httpRequestDurationSeconds.observe(labels, responseTimeSeconds);
+        }
+        doneHook();
+    });
+    /**
+     * /metrics endpoint: Prometheus will scrape this.
+     */
+    app.get("/metrics", async (_req, reply) => {
+        reply.header("Content-Type", register.contentType);
+        return reply.send(await register.metrics());
+    });
+    /**
+     * Expose helpers on app.metrics so the rest of the code
+     * (auth checks, CORS guard, readiness checks, audit logging)
+     * can emit structured events.
+     */
+    app.decorate("metrics", {
+        /**
+         * recordSecurityEvent("readiness.fail")
+         * recordSecurityEvent("admin.org.delete")
+         * recordSecurityEvent("anomaly.auth")
+         */
+        recordSecurityEvent: (event) => {
+            securityEventsTotal.inc({ event });
+        },
+        /**
+         * incAuthFailure(orgId)
+         *
+         * Call this when you send a 401/403 or block a principal.
+         * If you don't know org yet, pass "unknown".
+         */
+        incAuthFailure: (orgId) => {
+            authFailuresTotal.inc({ orgId });
+        },
+        /**
+         * incCorsReject(origin)
+         *
+         * Call this when you reject an Origin in the CORS plugin.
+         */
+        incCorsReject: (origin) => {
+            corsRejectTotal.inc({ origin: origin ?? "unknown" });
+        },
+    });
+    done();
+};
+export default metricsPlugin;
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\plugins\metrics.ts
+============================================================
+import {
+  Counter,
+  Histogram,
+  collectDefaultMetrics,
+  register,
+} from "prom-client";
+import type {
+  FastifyInstance,
+  FastifyPluginCallback,
+  FastifyRequest,
+} from "fastify";
+
+collectDefaultMetrics();
+
+// total request counter
+const httpRequestsTotal = new Counter({
+  name: "http_requests_total",
+  help: "Total number of API gateway requests",
+  labelNames: ["method", "route", "status"] as const,
+});
+
+// duration histogram
+const httpRequestDurationSeconds = new Histogram({
+  name: "http_request_duration_seconds",
+  help: "Distribution of API gateway response times in seconds",
+  labelNames: ["method", "route", "status"] as const,
+  buckets: [0.05, 0.1, 0.25, 0.5, 1, 2, 5],
+});
+
+// security / anomaly / audit counters
+const securityEventsTotal = new Counter({
+  name: "security_events_total",
+  help: "Count of security-related events (auth failures, CORS rejects, etc.)",
+  labelNames: ["event"] as const,
+});
+
+const authFailuresTotal = new Counter({
+  name: "auth_failures_total",
+  help: "AuthN/AuthZ failures by org (rate-limited, bad token, etc.)",
+  labelNames: ["orgId"] as const,
+});
+
+const corsRejectTotal = new Counter({
+  name: "cors_reject_total",
+  help: "Number of browser CORS rejections by origin",
+  labelNames: ["origin"] as const,
+});
+
+const metricsPlugin: FastifyPluginCallback = (app, _opts, done) => {
+  // per-request timing hook
+  app.addHook("onResponse", (request, reply, doneHook) => {
+    const scopedRequest = request as FastifyRequest & {
+      routerPath?: string;
+      routeOptions?: { url?: string };
+    };
+
+    const route =
+      scopedRequest.routerPath ??
+      scopedRequest.routeOptions?.url ??
+      request.url ??
+      "unknown";
+
+    const labels = {
+      method: request.method,
+      route,
+      status: reply.statusCode.toString(),
+    };
+
+    httpRequestsTotal.inc(labels);
+
+    // Fastify reply.getResponseTime() is only there if you have the timing plugin,
+    // so we guard it.
+    const getResponseTime = (reply as typeof reply & {
+      getResponseTime?: () => number;
+    }).getResponseTime;
+    const responseTimeSeconds =
+      typeof getResponseTime === "function"
+        ? getResponseTime() / 1000
+        : 0;
+
+    if (responseTimeSeconds >= 0) {
+      httpRequestDurationSeconds.observe(labels, responseTimeSeconds);
+    }
+
+    doneHook();
+  });
+
+  // /metrics endpoint for Prometheus
+  app.get("/metrics", async (_req, reply) => {
+    reply.header("Content-Type", register.contentType);
+    return reply.send(await register.metrics());
+  });
+
+  // decorate app with helper methods we call elsewhere
+  app.decorate("metrics", {
+    recordSecurityEvent: (event: string) => {
+      securityEventsTotal.inc({ event });
+    },
+    incAuthFailure: (orgId: string) => {
+      authFailuresTotal.inc({ orgId });
+    },
+    incCorsReject: (origin: string) => {
+      corsRejectTotal.inc({ origin });
+    },
+  });
+
+  done();
+};
+
+export default metricsPlugin;
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\plugins\rate-limit.ts
+============================================================
+import rateLimit from "@fastify/rate-limit";
+import fp from "fastify-plugin";
+import { config } from "../config.js";
+
+export default fp(async (app) => {
+  await app.register(rateLimit, {
+    max: config.rateLimit.max,
+    timeWindow: config.rateLimit.window,
+    redis: null,
+    allowList: (req) => {
+      const url = req.raw.url ?? "";
+      return (
+        url.startsWith("/health") ||
+        url.startsWith("/ready") ||
+        url.startsWith("/metrics")
+      );
+    },
+  });
+});
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\prisma-augment.d.ts
+============================================================
+// services/api-gateway/src/prisma-augment.d.ts
+
+// Ensure the module exists so we can augment it
+import '@prisma/client';
+
+declare module '@prisma/client' {
+  // --- Model types that old code still refers to --------------------------
+  // These are used only in types, so `any` is fine for now.
+  // Add more here if TS complains about missing exports later.
+
+  // e.g. src/lib/mfa-store.ts used to import this
+  type MfaCredential = any;
+
+  // e.g. bank-lines, demo, regulator routes used to import this
+  type BankLine = any;
+
+  // Monitoring / evidence used in regulator routes
+  type MonitoringSnapshot = any;
+  type EvidenceArtifact = any;
+
+  // --- PrismaClient delegate augmentation ---------------------------------
+  // The real PrismaClient is a generic class; we declare a matching generic
+  // interface so TypeScript will merge these members into it.
+
+  interface PrismaClient<T = any, U = any, V = any> {
+    // From src/auth.ts, src/routes/auth.ts
+    user: any;
+
+    // From src/lib/audit.ts
+    auditLog: any;
+
+    // From src/lib/idempotency.ts
+    idempotencyEntry: any;
+
+    // From src/lib/mfa-store.ts and src/routes/auth.ts
+    mfaCredential: any;
+
+    // From src/lib/regulator-session.ts
+    regulatorSession: any;
+
+    // From bank-lines/regulator/compliance-proxy/demo routes
+    bankLine: any;
+
+    // From regulator/compliance-proxy
+    basCycle: any;
+    paymentPlanRequest: any;
+    alert: any;
+
+    // From regulator
+    monitoringSnapshot: any;
+    evidenceArtifact: any;
+
+    // From compliance-proxy/regulator
+    org: any;
+
+    // From demo.ts
+    employee: any;
+    payRun: any;
+    payslip: any;
+  }
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\providers.ts
+============================================================
+// services/api-gateway/src/providers.ts
+import type { FastifyBaseLogger } from "fastify";
+import { createClient, type RedisClientType } from "redis";
+import { connect, type ConnectionOptions, type NatsConnection } from "nats";
+import { config } from "./config.js";
+
+// Accept any-augmented redis client variants
+type AnyRedisClient = RedisClientType<any, any, any>;
+
+export type Providers = {
+  redis: AnyRedisClient | null;
+  nats: NatsConnection | null;
+};
+
+export async function initProviders(
+  logger: FastifyBaseLogger,
+): Promise<Providers> {
+  const providers: Providers = {
+    redis: null,
+    nats: null,
+  };
+
+  if (config.redis?.url) {
+    const redisClient = createClient({ url: config.redis.url }) as AnyRedisClient;
+    redisClient.on("error", (err) => {
+      logger.error({ err }, "redis_client_error");
+    });
+
+    try {
+      await redisClient.connect();
+      providers.redis = redisClient;
+      logger.info("redis_connected");
+    } catch (error) {
+      logger.error({ err: error }, "redis_connection_failed");
+    }
+  }
+
+  if (config.nats?.url) {
+    const options: ConnectionOptions = {
+      servers: config.nats.url,
+    };
+    if (config.nats.token) options.token = config.nats.token;
+    if (config.nats.username) options.user = config.nats.username;
+    if (config.nats.password) options.pass = config.nats.password;
+
+    try {
+      const natsConnection = await connect(options);
+      providers.nats = natsConnection;
+      logger.info("nats_connected");
+    } catch (error) {
+      logger.error({ err: error }, "nats_connection_failed");
+    }
+  }
+
+  return providers;
+}
+
+export async function closeProviders(
+  providers: Providers,
+  logger: FastifyBaseLogger,
+): Promise<void> {
+  if (providers.redis) {
+    try {
+      await providers.redis.quit();
+    } catch (error) {
+      logger.error({ err: error }, "redis_quit_failed");
+    }
+  }
+
+  if (providers.nats) {
+    try {
+      await providers.nats.drain();
+    } catch (error) {
+      logger.error({ err: error }, "nats_drain_failed");
+    } finally {
+      try {
+        await providers.nats.close();
+      } catch (closeError) {
+        logger.error({ err: closeError }, "nats_close_failed");
+      }
+    }
+  }
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\routes\admin.data.js
+============================================================
+import { createHash } from "node:crypto";
+import { adminDataDeleteRequestSchema, subjectDataExportRequestSchema, subjectDataExportResponseSchema, } from "../schemas/admin.data";
+import { logSecurityEvent, buildSecurityContextFromRequest, buildSecurityLogEntry, } from "@apgms/shared/security-log.js";
+import { hashPassword } from "@apgms/shared";
+import { authenticateRequest, } from "../lib/auth";
+const PASSWORD_PLACEHOLDER = "__deleted__";
+async function buildDefaultPrisma() {
+    const module = (await import("../../../../shared/src/db.js"));
+    return module.prisma;
+}
+export async function registerAdminDataRoutes(app, deps = {}) {
+    const prisma = deps.prisma ?? (await buildDefaultPrisma());
+    const authenticate = deps.authenticate ?? ((req, reply, roles) => authenticateRequest(app, req, reply, roles));
+    const requirePrincipal = async (req, reply, roles) => {
+        const principal = await authenticate(req, reply, roles);
+        if (!principal) {
+            return null;
+        }
+        req.user = principal;
+        return principal;
+    };
+    const secLog = deps.secLog ??
+        ((entry) => {
+            logSecurityEvent(app.log, entry);
+        });
+    const hash = deps.hash ?? hashPassword;
+    const logAuditEvent = async (payload) => {
+        if (deps.auditLog) {
+            await deps.auditLog(payload);
+            return;
+        }
+        if (prisma.auditLog && typeof prisma.auditLog.create === "function") {
+            await prisma.auditLog.create({
+                data: {
+                    orgId: payload.orgId,
+                    actorId: payload.principal,
+                    action: payload.event,
+                    metadata: buildAuditMetadata(payload),
+                    createdAt: new Date(payload.occurredAt),
+                },
+            });
+        }
+    };
+    app.get("/admin/data", async (req, reply) => {
+        const principal = await requirePrincipal(req, reply, []);
+        if (!principal) {
+            return;
+        }
+        reply.send({ items: [] });
+    });
+
+    app.post("/admin/data/delete", async (req, reply) => {
+        const principal = await requirePrincipal(req, reply, ["admin"]);
+        if (!principal) {
+            return;
+        }
+        const parsed = adminDataDeleteRequestSchema.safeParse(req.body ?? {});
+        if (!parsed.success) {
+            void reply.code(400).send({ error: "invalid_request", details: parsed.error.flatten() });
+            return;
+        }
+        const payload = parsed.data;
+        if (payload.orgId !== principal.orgId) {
+            app.metrics?.recordSecurityEvent("auth.forbidden");
+            void reply.code(403).send({ error: "forbidden" });
+            return;
+        }
+        const targetUser = await prisma.user.findFirst({
+            where: { email: payload.email, orgId: payload.orgId },
+        });
+        if (!targetUser) {
+            void reply.code(404).send({ error: "user_not_found" });
+            return;
+        }
+        const referencedLines = await prisma.bankLine.count({
+            where: { orgId: payload.orgId },
+        });
+        const occurredAt = new Date().toISOString();
+        const secContext = buildSecurityContextFromRequest(req);
+        if (referencedLines > 0) {
+            const anonymizedEmail = anonymizeEmail(targetUser.email, targetUser.id);
+            const hashedPlaceholder = await hash(PASSWORD_PLACEHOLDER);
+            await prisma.user.update({
+                where: { id: targetUser.id },
+                data: {
+                    email: anonymizedEmail,
+                    password: hashedPlaceholder,
+                },
+            });
+            if (secLog) {
+                const entry = buildSecurityLogEntry(
+                    {
+                        event: "data_delete",
+                        orgId: payload.orgId,
+                        principal: principal.id,
+                        subjectUserId: targetUser.id,
+                        subjectEmail: payload.email,
+                        mode: "anonymized",
+                        occurredAt,
+                    },
+                    secContext,
+                );
+                await secLog(entry);
+            }
+            app.metrics?.recordSecurityEvent("data_delete");
+            await logAuditEvent({
+                event: "data_delete",
+                orgId: payload.orgId,
+                principal: principal.id,
+                subjectUserId: targetUser.id,
+                mode: "anonymized",
+                occurredAt,
+            });
+            const response = {
+                action: "anonymized",
+                userId: targetUser.id,
+                occurredAt,
+            };
+            void reply.code(202).send(response);
+            return;
+        }
+        await prisma.user.delete({ where: { id: targetUser.id } });
+        if (secLog) {
+            const entry = buildSecurityLogEntry(
+                {
+                    event: "data_delete",
+                    orgId: payload.orgId,
+                    principal: principal.id,
+                    subjectUserId: targetUser.id,
+                    subjectEmail: payload.email,
+                    mode: "deleted",
+                    occurredAt,
+                },
+                secContext,
+            );
+            await secLog(entry);
+        }
+        app.metrics?.recordSecurityEvent("data_delete");
+        await logAuditEvent({
+            event: "data_delete",
+            orgId: payload.orgId,
+            principal: principal.id,
+            subjectUserId: targetUser.id,
+            mode: "deleted",
+            occurredAt,
+        });
+        const response = {
+            action: "deleted",
+            userId: targetUser.id,
+            occurredAt,
+        };
+        void reply.code(202).send(response);
+    });
+}
+const adminDataRoutes = async (app) => {
+    const db = app.db;
+    if (!db) {
+        throw new Error("admin data export routes require app.db to be decorated");
+    }
+    const authenticate = app.adminDataAuth ??
+        ((req, reply, roles) => authenticateRequest(app, req, reply, roles));
+    const requirePrincipalForExport = async (request, reply, roles) => {
+        const principal = await authenticate(request, reply, roles);
+        if (!principal) {
+            return null;
+        }
+        request.user = principal;
+        return principal;
+    };
+    const secLog = app.secLog;
+    const auditLog = app.auditLog;
+    app.post("/admin/data/export", async (request, reply) => {
+        const principal = await requirePrincipalForExport(request, reply, ["admin"]);
+        if (!principal) {
+            return;
+        }
+        const payloadParse = subjectDataExportRequestSchema.safeParse(request.body ?? {});
+        if (!payloadParse.success) {
+            void reply.code(400).send({ error: "invalid_request", details: payloadParse.error.flatten() });
+            return;
+        }
+        const payload = payloadParse.data;
+        if (payload.orgId !== principal.orgId) {
+            app.metrics?.recordSecurityEvent("auth.forbidden");
+            void reply.code(403).send({ error: "forbidden" });
+            return;
+        }
+        const userRecord = await db.user.findFirst({
+            where: { email: payload.email, orgId: payload.orgId },
+            select: {
+                id: true,
+                email: true,
+                createdAt: true,
+                org: { select: { id: true, name: true } },
+            },
+        });
+        if (!userRecord) {
+            void reply.code(404).send({ error: "user_not_found" });
+            return;
+        }
+        const bankLinesCount = await db.bankLine.count({ where: { orgId: payload.orgId } });
+        const exportedAt = new Date().toISOString();
+        if (db.accessLog?.create) {
+            await db.accessLog.create({
+                data: {
+                    event: "data_export",
+                    orgId: payload.orgId,
+                    principalId: principal.id,
+                    subjectEmail: payload.email,
+                },
+            });
+        }
+        if (secLog) {
+            const context = buildSecurityContextFromRequest(request);
+            const entry = buildSecurityLogEntry(
+                {
+                    event: "data_export",
+                    orgId: payload.orgId,
+                    principal: principal.id,
+                    subjectEmail: payload.email,
+                    occurredAt: exportedAt,
+                },
+                context,
+            );
+            await secLog(entry);
+        }
+        app.metrics?.recordSecurityEvent("data_export");
+        await logAuditForDb(db, auditLog, {
+            event: "data_export",
+            orgId: payload.orgId,
+            principal: principal.id,
+            subjectEmail: payload.email,
+            occurredAt: exportedAt,
+        });
+        const responsePayload = {
+            org: {
+                id: userRecord.org.id,
+                name: userRecord.org.name,
+            },
+            user: {
+                id: userRecord.id,
+                email: userRecord.email,
+                createdAt: userRecord.createdAt.toISOString(),
+            },
+            relationships: {
+                bankLinesCount,
+            },
+            exportedAt,
+        };
+        const validated = subjectDataExportResponseSchema.parse(responsePayload);
+        void reply.send(validated);
+    });
+};
+export default adminDataRoutes;
+function anonymizeEmail(email, userId) {
+    const hash = createHash("sha256").update(`${email}:${userId}`).digest("hex");
+    return `deleted+${hash.slice(0, 12)}@example.com`;
+}
+function buildAuditMetadata(payload) {
+    return {
+        ...(payload.subjectUserId ? { subjectUserId: payload.subjectUserId } : {}),
+        ...(payload.subjectEmail ? { subjectEmail: payload.subjectEmail } : {}),
+        ...(payload.mode ? { mode: payload.mode } : {}),
+    };
+}
+async function logAuditForDb(db, auditLogFn, payload) {
+    if (auditLogFn) {
+        await auditLogFn(payload);
+        return;
+    }
+    if (db?.auditLog && typeof db.auditLog.create === "function") {
+        await db.auditLog.create({
+            data: {
+                orgId: payload.orgId,
+                actorId: payload.principal,
+                action: payload.event,
+                metadata: buildAuditMetadata(payload),
+                createdAt: new Date(payload.occurredAt),
+            },
+        });
+    }
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\routes\admin.data.ts
+============================================================
+// services/api-gateway/src/routes/admin.data.ts
+import type { FastifyInstance } from "fastify";
+
+export async function registerAdminDataRoutes(app: FastifyInstance) {
+  // TODO: implement real admin data routes.
+  // This stub keeps the app booting cleanly.
+  app.get("/admin/health", async () => ({ status: "ok" }));
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\routes\ato.ts
+============================================================
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+
+import {
+  analyzeIntegrationAnomaly,
+  logGovernmentSubmission,
+  aggregateObligations,
+  fetchRecentDiscrepancies,
+  listPaymentPlans,
+} from "@apgms/shared";
+import { metrics } from "../observability/metrics.js";
+
+async function buildCompliancePayload(
+  orgId: string,
+  taxType: string,
+): Promise<{
+  orgId: string;
+  taxType: string;
+  pendingObligations: string;
+  discrepancies: Array<{
+    eventId: string;
+    shortfall: string;
+    reason: string;
+    createdAt: Date;
+  }>;
+  paymentPlans: Array<{
+    id: string;
+    status: string;
+    reason: string;
+    requestedAt: Date;
+  }>;
+  anomaly: unknown;
+}> {
+  const [obligations, discrepancies, plans, anomaly] = await Promise.all([
+    aggregateObligations(orgId, taxType),
+    fetchRecentDiscrepancies(orgId),
+    listPaymentPlans(orgId),
+    analyzeIntegrationAnomaly(orgId, taxType),
+  ]);
+
+  return {
+    orgId,
+    taxType,
+    pendingObligations: obligations.toString(),
+    discrepancies: discrepancies.map((alert: any) => ({
+      eventId: alert.eventId,
+      shortfall: alert.expectedAmount
+        .minus(alert.actualAmount)
+        .toString(),
+      reason: alert.reason,
+      createdAt: alert.createdAt,
+    })),
+    paymentPlans: plans.map((plan: any) => ({
+      id: plan.id,
+      status: plan.status,
+      reason: plan.reason,
+      requestedAt: plan.requestedAt,
+    })),
+    anomaly,
+  };
+}
+
+export async function registerAtoRoutes(
+  app: FastifyInstance,
+): Promise<void> {
+  app.post(
+    "/ato/report",
+    async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+      const body = request.body as { orgId?: string; taxType?: string } | undefined;
+
+      const orgId = String(body?.orgId ?? "").trim();
+      if (!orgId) {
+        reply.code(400).send({ error: "orgId_required" });
+        return;
+      }
+
+      const taxType = String(body?.taxType ?? "PAYGW").trim();
+      const payload = await buildCompliancePayload(orgId, taxType);
+
+      try {
+        const endpoint = process.env.ATO_REPORT_ENDPOINT;
+        let responseBody: Record<string, unknown> = {};
+
+        if (endpoint) {
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+
+          responseBody = {
+            status: response.status,
+            text: await response.text(),
+          };
+        }
+
+        await logGovernmentSubmission({
+          orgId,
+          method: "/ato/report",
+          payload,
+          response: responseBody,
+          status: "sent",
+        });
+
+        metrics.atoReportsTotal.inc({ status: "sent" });
+        reply.send({ ok: true, payload, response: responseBody });
+      } catch (error) {
+        await logGovernmentSubmission({
+          orgId,
+          method: "/ato/report",
+          payload,
+          response: { error: String(error) },
+          status: "failed",
+        });
+
+        metrics.atoReportsTotal.inc({ status: "failed" });
+        reply.code(500).send({ error: "submission_failed" });
+      }
+    },
+  );
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\routes\auth.ts
+============================================================
+// services/api-gateway/src/routes/auth.ts
+import crypto from "node:crypto";
+import bcrypt from "bcryptjs";
+import { FastifyInstance } from "fastify";
+import {
+  authGuard,
+  // verifyCredentials, // no longer used
+  signToken,
+  buildClientUser,
+  buildSessionUser,
+} from "../auth.js";
+import { prisma } from "../db.js";
+import { recordAuditLog } from "../lib/audit.js";
+import {
+  grantStepUpSession,
+  clearVerification,
+  requireRecentVerification,
+  verifyChallenge,
+} from "../security/mfa.js";
+import {
+  generateTotpSecret,
+  verifyTotpToken,
+  buildTotpUri,
+  LoginBodySchema,
+  TotpConfirmBodySchema,
+  MfaStepUpBodySchema,
+  PasskeyRegistrationBodySchema,
+  PasskeyVerifyBodySchema,
+  unauthorized,
+  forbidden,
+  notFound,
+  conflict,
+  badRequest,
+} from "@apgms/shared";
+import { parseWithSchema } from "../lib/validation.js";
+import type {
+  RegistrationResponseJSON,
+  AuthenticationResponseJSON,
+  WebAuthnCredential,
+} from "@simplewebauthn/server";
+import {
+  hashRecoveryCode,
+  upsertTotpCredential,
+  getTotpCredential,
+  listPasskeyCredentials,
+  savePasskeyCredential,
+  decodePasskeyCredential,
+  hasTotp,
+  updatePasskeyCounter,
+} from "../lib/mfa-store.js";
+import {
+  createRegistrationOptions,
+  verifyPasskeyRegistration,
+  createAuthenticationOptions,
+  verifyPasskeyAuthentication,
+} from "../security/webauthn.js";
+
+type PendingTotpSetup = {
+  secret: string;
+  codesPlain: string[];
+  codesHashed: Array<{ hash: string; used: boolean }>;
+  expiresAt: number;
+};
+
+const PENDING_TOTP_TTL_MS = 10 * 60 * 1000;
+const pendingTotpEnrollments = new Map<string, PendingTotpSetup>();
+const TOTP_ISSUER = "APGMS";
+
+function generateRecoveryCodes(count = 10): string[] {
+  const codes: string[] = [];
+  for (let i = 0; i < count; i += 1) {
+    codes.push(crypto.randomBytes(4).toString("hex").toUpperCase());
+  }
+  return codes;
+}
+
+function cleanupPendingTotp(): void {
+  const ts = Date.now();
+  for (const [userId, entry] of pendingTotpEnrollments.entries()) {
+    if (entry.expiresAt <= ts) {
+      pendingTotpEnrollments.delete(userId);
+    }
+  }
+}
+
+export async function registerAuthRoutes(app: FastifyInstance) {
+  //
+  // LOGIN
+  //
+  app.post("/auth/login", async (request, reply) => {
+    const body = parseWithSchema(LoginBodySchema, request.body);
+    const { email, password } = body;
+
+    // Do NOT log password
+    request.log.info({ email }, "auth.login: incoming login request");
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    request.log.info(
+      {
+        found: !!user,
+        id: user?.id,
+        email: user?.email,
+        role: user?.role,
+      },
+      "auth.login: user lookup result",
+    );
+
+    if (!user) {
+      throw unauthorized("bad_credentials", "Invalid email/password");
+    }
+
+    const passwordOk = await bcrypt.compare(password, user.password);
+
+    request.log.info(
+      { userId: user.id, passwordOk },
+      "auth.login: password comparison result",
+    );
+
+    if (!passwordOk) {
+      throw unauthorized("bad_credentials", "Invalid email/password");
+    }
+
+    const authUser = buildSessionUser(user);
+    const token = await signToken({
+      id: authUser.sub,
+      orgId: authUser.orgId,
+      role: authUser.role,
+      mfaEnabled: authUser.mfaEnabled,
+    });
+
+    reply.send({
+      token,
+      user: buildClientUser(authUser),
+    });
+  });
+
+  //
+  // MFA STATUS
+  //
+  app.get(
+    "/auth/mfa/status",
+    { preHandler: authGuard },
+    async (request, reply) => {
+      const claims: any = (request as any).user;
+      const userId = claims?.sub as string | undefined;
+
+      if (!userId) {
+        throw unauthorized("unauthorized", "Missing user context");
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, email: true, orgId: true, mfaEnabled: true },
+      });
+
+      if (!user) {
+        throw notFound("user_not_found", "User record missing");
+      }
+
+      const [totpCredential, passkeys] = await Promise.all([
+        getTotpCredential(user.id),
+        listPasskeyCredentials(user.id),
+      ]);
+
+      const recoveryRemaining = totpCredential
+        ? totpCredential.recoveryCodes.filter((entry) => !entry.used).length
+        : 0;
+
+      const pending = pendingTotpEnrollments.get(user.id);
+      const stepUpActive = requireRecentVerification(user.id);
+
+      reply.send({
+        mfaEnabled: user.mfaEnabled,
+        stepUpActive,
+        totp: {
+          enabled: Boolean(totpCredential),
+          recoveryCodesRemaining: recoveryRemaining,
+          pending: pending
+            ? { expiresAt: new Date(pending.expiresAt).toISOString() }
+            : null,
+        },
+        passkey: {
+          enrolled: passkeys.length,
+        },
+      });
+    },
+  );
+
+  //
+  // MFA: TOTP BEGIN
+  //
+  app.post(
+    "/auth/mfa/totp/begin",
+    { preHandler: authGuard },
+    async (request, reply) => {
+      const claims: any = (request as any).user;
+      const userId = claims?.sub as string | undefined;
+
+      if (!userId) {
+        throw unauthorized("unauthorized", "Missing user context");
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, email: true, orgId: true },
+      });
+
+      if (!user) {
+        throw notFound("user_not_found", "User record missing");
+      }
+
+      cleanupPendingTotp();
+
+      const secret = generateTotpSecret();
+      const existingTotp = await hasTotp(user.id);
+      const recoveryCodes = generateRecoveryCodes();
+      const hashedRecoveryCodes = recoveryCodes.map((code) => ({
+        hash: hashRecoveryCode(code),
+        used: false,
+      }));
+      const expiresAt = Date.now() + PENDING_TOTP_TTL_MS;
+
+      pendingTotpEnrollments.set(user.id, {
+        secret,
+        codesPlain: recoveryCodes,
+        codesHashed: hashedRecoveryCodes,
+        expiresAt,
+      });
+
+      await recordAuditLog({
+        orgId: user.orgId,
+        actorId: user.id,
+        action: "auth.mfa.totp.begin",
+        metadata: {
+          hasExistingTotp: existingTotp,
+        },
+      });
+
+      reply.send({
+        secret,
+        otpauthUrl: buildTotpUri(
+          secret,
+          `${user.email ?? user.id}`,
+          TOTP_ISSUER,
+        ),
+        recoveryCodes,
+        expiresAt: new Date(expiresAt).toISOString(),
+      });
+    },
+  );
+
+  //
+  // MFA: TOTP CONFIRM
+  //
+  app.post(
+    "/auth/mfa/totp/confirm",
+    { preHandler: authGuard },
+    async (request, reply) => {
+      const claims: any = (request as any).user;
+      const userId = claims?.sub as string | undefined;
+
+      if (!userId) {
+        throw unauthorized("unauthorized", "Missing user context");
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, orgId: true },
+      });
+
+      if (!user) {
+        throw notFound("user_not_found", "User record missing");
+      }
+
+      const body = parseWithSchema(TotpConfirmBodySchema, request.body);
+
+      cleanupPendingTotp();
+      const pending = pendingTotpEnrollments.get(user.id);
+      if (!pending) {
+        throw conflict("totp_enrollment_missing", "No pending TOTP enrollment");
+      }
+
+      const trimmed = body.token.replace(/\s+/g, "");
+      if (!verifyTotpToken(pending.secret, trimmed)) {
+        throw unauthorized("totp_invalid", "Invalid TOTP token");
+      }
+
+      await upsertTotpCredential(user.id, pending.secret, pending.codesHashed);
+      pendingTotpEnrollments.delete(user.id);
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { mfaEnabled: true },
+      });
+
+      const sessionExpiry = grantStepUpSession(user.id);
+
+      await recordAuditLog({
+        orgId: user.orgId,
+        actorId: user.id,
+        action: "auth.mfa.totp.confirm",
+        metadata: {
+          recoveryCodesIssued: pending.codesPlain.length,
+        },
+      });
+
+      reply.send({
+        status: "enabled",
+        recoveryCodes: pending.codesPlain,
+        session: {
+          expiresAt: sessionExpiry.toISOString(),
+        },
+      });
+    },
+  );
+
+  //
+  // MFA: STEP UP
+  //
+  app.post(
+    "/auth/mfa/step-up",
+    { preHandler: authGuard },
+    async (request, reply) => {
+      const claims: any = (request as any).user;
+      const userId = claims?.sub as string | undefined;
+
+      if (!userId) {
+        throw unauthorized("unauthorized", "Missing user context");
+      }
+
+      const body = parseWithSchema(MfaStepUpBodySchema, request.body);
+
+      const result = await verifyChallenge(userId, body.code);
+      if (!result.success) {
+        throw unauthorized("mfa_invalid", "MFA verification failed");
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { orgId: true },
+      });
+
+      await recordAuditLog({
+        orgId: user?.orgId ?? "unknown",
+        actorId: userId,
+        action: "auth.mfa.stepUp",
+        metadata: {
+          method: result.method,
+          recoveryCodesRemaining: result.remainingRecoveryCodes,
+        },
+      });
+
+      reply.send({
+        status: "verified",
+        session: {
+          expiresAt: result.expiresAt?.toISOString(),
+        },
+      });
+    },
+  );
+
+  //
+  // MFA: PASSKEY REGISTRATION OPTIONS
+  //
+  app.post(
+    "/auth/mfa/passkey/registration-options",
+    { preHandler: authGuard },
+    async (request, reply) => {
+      const claims: any = (request as any).user;
+      const userId = claims?.sub as string | undefined;
+
+      if (!userId) {
+        throw unauthorized("unauthorized", "Missing user context");
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, email: true, orgId: true },
+      });
+
+      if (!user) {
+        throw notFound("user_not_found", "User record missing");
+      }
+
+      const existing = await listPasskeyCredentials(user.id);
+      const excludeCredentialIds = existing
+        .map((cred) => cred.credentialId)
+        .filter((id): id is string => Boolean(id));
+
+      const options = await createRegistrationOptions({
+        userId: user.id,
+        username: user.email ?? user.id,
+        displayName: user.email ?? user.id,
+        excludeCredentialIds,
+      });
+
+      await recordAuditLog({
+        orgId: user.orgId,
+        actorId: user.id,
+        action: "auth.mfa.passkey.registrationOptions",
+        metadata: {
+          existingCredentials: existing.length,
+        },
+      });
+
+      reply.send(options);
+    },
+  );
+
+  //
+  // MFA: PASSKEY REGISTER
+  //
+  app.post(
+    "/auth/mfa/passkey/register",
+    { preHandler: authGuard },
+    async (request, reply) => {
+      const claims: any = (request as any).user;
+      const userId = claims?.sub as string | undefined;
+
+      if (!userId) {
+        throw unauthorized("unauthorized", "Missing user context");
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, orgId: true },
+      });
+
+      if (!user) {
+        throw notFound("user_not_found", "User record missing");
+      }
+
+      const body = parseWithSchema(PasskeyRegistrationBodySchema, request.body);
+      const registrationResponse = (body.credential ?? body.response) as RegistrationResponseJSON;
+      if (!registrationResponse) {
+        throw badRequest("invalid_body", "registration response is required");
+      }
+
+      const verification = await verifyPasskeyRegistration(user.id, registrationResponse);
+      if (!verification.verified || !verification.registrationInfo) {
+        throw unauthorized("passkey_invalid", "Registration verification failed");
+      }
+
+      const credential = verification.registrationInfo.credential;
+      const credentialId = credential.id;
+      await savePasskeyCredential(
+        user.id,
+        credentialId,
+        Buffer.from(credential.publicKey),
+        credential.counter,
+      );
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { mfaEnabled: true },
+      });
+
+      const sessionExpiry = grantStepUpSession(user.id);
+
+      await recordAuditLog({
+        orgId: user.orgId,
+        actorId: user.id,
+        action: "auth.mfa.passkey.register",
+        metadata: {
+          credentialId,
+        },
+      });
+
+      reply.send({
+        status: "registered",
+        session: {
+          expiresAt: sessionExpiry.toISOString(),
+        },
+      });
+    },
+  );
+
+  //
+  // MFA: PASSKEY AUTH OPTIONS
+  //
+  app.post(
+    "/auth/mfa/passkey/authentication-options",
+    { preHandler: authGuard },
+    async (request, reply) => {
+      const claims: any = (request as any).user;
+      const userId = claims?.sub as string | undefined;
+
+      if (!userId) {
+        throw unauthorized("unauthorized", "Missing user context");
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, orgId: true },
+      });
+
+      if (!user) {
+        throw notFound("user_not_found", "User record missing");
+      }
+
+      const credentials = await listPasskeyCredentials(user.id);
+      const allowCredentialIds = credentials
+        .map((cred) => cred.credentialId)
+        .filter((id): id is string => Boolean(id));
+
+      if (allowCredentialIds.length === 0) {
+        throw notFound("passkey_not_configured", "No passkey credentials available");
+      }
+
+      const options = await createAuthenticationOptions({
+        userId: user.id,
+        allowCredentialIds,
+      });
+
+      await recordAuditLog({
+        orgId: user.orgId,
+        actorId: user.id,
+        action: "auth.mfa.passkey.authenticationOptions",
+        metadata: {
+          credentialCount: credentials.length,
+        },
+      });
+
+      reply.send(options);
+    },
+  );
+
+  //
+  // MFA: PASSKEY VERIFY
+  //
+  app.post(
+    "/auth/mfa/passkey/verify",
+    { preHandler: authGuard },
+    async (request, reply) => {
+      const claims: any = (request as any).user;
+      const userId = claims?.sub as string | undefined;
+
+      if (!userId) {
+        throw unauthorized("unauthorized", "Missing user context");
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, orgId: true },
+      });
+
+      if (!user) {
+        throw notFound("user_not_found", "User record missing");
+      }
+
+      const body = parseWithSchema(PasskeyVerifyBodySchema, request.body);
+      const assertionResponse = (body.credential ?? body.response) as AuthenticationResponseJSON;
+      if (!assertionResponse) {
+        throw badRequest("invalid_body", "authentication response is required");
+      }
+
+      const credentialId = assertionResponse.id;
+      const credentialRecord = credentialId
+        ? await prisma.mfaCredential.findUnique({
+            where: { credentialId },
+          })
+        : null;
+
+      if (
+        !credentialRecord ||
+        credentialRecord.userId !== user.id ||
+        credentialRecord.status !== "active"
+      ) {
+        throw notFound("passkey_not_found", "Passkey not registered");
+      }
+
+      const decoded = await decodePasskeyCredential(credentialRecord);
+      const webauthnCredential: WebAuthnCredential = {
+        id: credentialId!,
+        publicKey: new Uint8Array(decoded.publicKey),
+        counter: decoded.counter,
+      };
+
+      const verification = await verifyPasskeyAuthentication(
+        user.id,
+        assertionResponse,
+        webauthnCredential,
+      );
+      if (!verification.verified) {
+        throw unauthorized("passkey_invalid", "Authentication failed");
+      }
+
+      await updatePasskeyCounter(credentialId!, verification.authenticationInfo.newCounter);
+
+      const sessionExpiry = grantStepUpSession(user.id);
+
+      await recordAuditLog({
+        orgId: user.orgId,
+        actorId: user.id,
+        action: "auth.mfa.passkey.verify",
+        metadata: {
+          credentialId,
+        },
+      });
+
+      reply.send({
+        status: "verified",
+        session: {
+          expiresAt: sessionExpiry.toISOString(),
+        },
+      });
+    },
+  );
+
+  //
+  // MFA: RESET
+  //
+  app.post(
+    "/auth/mfa/reset",
+    { preHandler: authGuard },
+    async (request, reply) => {
+      const claims: any = (request as any).user;
+      const userId = claims?.sub as string | undefined;
+      if (!userId) {
+        throw unauthorized("unauthorized", "Missing user context");
+      }
+
+      clearVerification(userId);
+
+      reply.send({ status: "cleared" });
+    },
+  );
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\routes\bank-lines.ts
+============================================================
+import { PrismaClient } from "@prisma/client";
+import { Decimal } from "@prisma/client/runtime/library.js";
+import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
+import { z } from "zod";
+
+import { prisma } from "../db.js";
+import { assertRoleForBankLines, requireOrgContext, redactBankLine } from "../utils/orgScope.js";
+
+const createBankLineSchema = z.object({
+  idempotencyKey: z.string().min(1),
+  amount: z.number(),
+  date: z.preprocess(
+    (value) => (typeof value === "string" || value instanceof Date ? new Date(value as any) : value),
+    z.date()
+  ),
+  payeeCiphertext: z.string().min(1),
+  payeeKid: z.string().min(1),
+  descCiphertext: z.string().min(1),
+  descKid: z.string().min(1),
+});
+
+type BankLineRoutesDeps = {
+  prisma: Pick<PrismaClient, "bankLine">;
+};
+
+export function createBankLinesPlugin(deps: BankLineRoutesDeps): FastifyPluginAsync {
+  return async (app: FastifyInstance) => {
+    app.post("/bank-lines", async (req, reply) => {
+      const ctx = requireOrgContext(req, reply);
+      if (!ctx) return;
+
+      const parsed = createBankLineSchema.safeParse(req.body);
+      if (!parsed.success) {
+        reply.code(400).send({
+          error: {
+            code: "invalid_body",
+            message: "Validation failed",
+            details: parsed.error.flatten(),
+          },
+        });
+        return;
+      }
+
+      const data = parsed.data;
+      if (!assertRoleForBankLines(req, reply)) return;
+
+      const existing = await deps.prisma.bankLine.findUnique({
+        where: {
+          orgId_idempotencyKey: {
+            orgId: ctx.orgId,
+            idempotencyKey: data.idempotencyKey,
+          },
+        },
+      });
+
+      if (existing) {
+        reply.header("idempotent-replay", "true");
+        reply.code(201).send(redactBankLine(existing));
+        return;
+      }
+
+      const created = await deps.prisma.bankLine.create({
+        data: {
+          orgId: ctx.orgId,
+          idempotencyKey: data.idempotencyKey,
+          amount: new Decimal(data.amount),
+          date: data.date,
+          payeeCiphertext: data.payeeCiphertext,
+          payeeKid: data.payeeKid,
+          descCiphertext: data.descCiphertext,
+          descKid: data.descKid,
+        },
+      });
+
+      reply.header("idempotent-replay", "false");
+      reply.code(201).send(redactBankLine(created));
+    });
+
+    app.get("/bank-lines", async (req, reply) => {
+      const ctx = requireOrgContext(req, reply);
+      if (!ctx) return;
+
+      const rows = await deps.prisma.bankLine.findMany({
+        where: { orgId: ctx.orgId },
+        orderBy: { createdAt: "desc" },
+      });
+
+      reply.send({ lines: rows.map(redactBankLine) });
+    });
+  };
+}
+
+export const registerBankLinesRoutes: FastifyPluginAsync = createBankLinesPlugin({ prisma });
+
+export default registerBankLinesRoutes;
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\routes\bas.ts
+============================================================
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+
+import {
+  finalizeBasLodgment,
+  recordBasLodgment,
+  createTransferInstruction,
+  createPaymentPlanRequest,
+  verifyObligations,
+} from "@apgms/shared";
+import { metrics } from "../observability/metrics.js";
+import { assertOrgAccess } from "../utils/orgScope.js";
+import { recordCriticalAuditLog } from "../lib/audit.js";
+
+const TAX_TYPES: Array<{ key: string; label: string }> = [
+  { key: "PAYGW", label: "PAYGW obligations" },
+  { key: "GST", label: "GST obligations" },
+];
+
+type LodgmentRequest = FastifyRequest<{
+  Querystring: { basCycleId?: string };
+  Body?: { initiatedBy?: string };
+}>;
+
+function ensureUserOrg(request: FastifyRequest, reply: FastifyReply): string | null {
+  const user = (request as any).user as { orgId?: string } | undefined;
+  if (!user?.orgId) {
+    reply.code(401).send({ error: "unauthorized", message: "Authentication required" });
+    return null;
+  }
+  if (!assertOrgAccess(request, reply, user.orgId)) {
+    return null;
+  }
+  return user.orgId;
+}
+
+type VerificationEntry = {
+  balance: string;
+  pending: string;
+  shortfall: string | null;
+};
+
+export async function registerBasRoutes(
+  app: FastifyInstance,
+): Promise<void> {
+  app.post(
+    "/bas/lodgment",
+    async (request: LodgmentRequest, reply: FastifyReply): Promise<void> => {
+      const orgId = ensureUserOrg(request, reply);
+      if (!orgId) return;
+
+      const basCycleId = String(request.query.basCycleId ?? "manual");
+      const lodgment = await recordBasLodgment({
+        orgId,
+        initiatedBy: request.body?.initiatedBy,
+        taxTypes: TAX_TYPES.map((type) => type.key),
+        status: "in_progress",
+      });
+
+      const verification: Record<string, VerificationEntry> = {};
+      let overallStatus: "success" | "failed" = "success";
+      const shortfalls: string[] = [];
+
+      for (const type of TAX_TYPES) {
+        const result = await verifyObligations(orgId, type.key);
+        verification[type.key] = {
+          balance: result.balance.toString(),
+          pending: result.pending.toString(),
+          shortfall: result.shortfall?.toString() ?? null,
+        };
+
+        if (result.shortfall && result.shortfall.gt(0)) {
+          overallStatus = "failed";
+          shortfalls.push(
+            `${type.key} shortfall ${result.shortfall.toString()}`,
+          );
+        }
+      }
+
+      if (overallStatus === "success") {
+        for (const type of TAX_TYPES) {
+          const entry = verification[type.key];
+
+          await createTransferInstruction({
+            orgId,
+            taxType: type.key,
+            basId: lodgment.id,
+            amount: entry.pending,
+            destination: `gov:${type.key.toLowerCase()}`,
+          });
+
+          metrics.transferInstructionTotal.inc({
+            tax_type: type.key,
+            status: "queued",
+          });
+        }
+      }
+
+      if (overallStatus === "failed") {
+        const reason =
+          shortfalls.length > 0
+            ? shortfalls.join("; ")
+            : "Verification failed";
+
+        await createPaymentPlanRequest({
+          orgId,
+          basCycleId,
+          reason,
+          details: {
+            shortfalls,
+            verification,
+          },

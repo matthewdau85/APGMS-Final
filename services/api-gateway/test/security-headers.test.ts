@@ -4,6 +4,7 @@ import type { AppConfig } from "../src/config";
 describe("helmet configuration", () => {
   it("sets strict CSP and includes allowed origins for connect-src", () => {
     const cfg: AppConfig = {
+      env: "test",
       databaseUrl: "postgres://localhost:5432/apgms",
       shadowDatabaseUrl: undefined,
       rateLimit: { max: 100, window: "1 minute" },

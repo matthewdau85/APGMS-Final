@@ -1,9 +1,10 @@
-// packages/domain-policy/src/au-tax/paygw-engine.test.ts
+// packages/domain-policy/tests/paygw-engine.test.ts
 
 import {
   PaygwEngine,
   type PaygwCalculationInput,
-} from "./paygw-engine";
+} from "../src/au-tax/paygw-engine";
+
 import {
   TaxType,
   type JurisdictionCode,
@@ -12,7 +13,8 @@ import {
   type TaxConfigRepository,
   type TaxParameterSetMeta,
   type AuTaxConfig,
-} from "./types";
+} from "../src/au-tax/types";
+
 
 const JURISDICTION_AU: JurisdictionCode = "AU";
 
@@ -74,7 +76,9 @@ function makeEngineWithBrackets(
   return new PaygwEngine(repo);
 }
 
-function makeInput(overrides: Partial<PaygwCalculationInput> = {}): PaygwCalculationInput {
+function makeInput(
+  overrides: Partial<PaygwCalculationInput> = {},
+): PaygwCalculationInput {
   return {
     jurisdiction: JURISDICTION_AU,
     paymentDate: new Date("2024-08-01T00:00:00Z"),

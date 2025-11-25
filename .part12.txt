@@ -1,0 +1,2651 @@
+﻿        });
+
+        metrics.paymentPlanRequestsTotal.inc({ status: "created" });
+      }
+
+      await finalizeBasLodgment(lodgment.id, verification, overallStatus);
+      metrics.basLodgmentsTotal.inc({ status: overallStatus });
+
+      await recordCriticalAuditLog({
+        orgId,
+        actorId: request.user?.sub ?? "system",
+        action: "bas.lodgment",
+        metadata: {
+          basCycleId,
+          status: overallStatus,
+          shortfalls,
+        },
+      });
+
+      reply.send({
+        lodgmentId: lodgment.id,
+        status: overallStatus,
+        verification,
+      });
+    },
+  );
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\routes\compliance-monitor.ts
+============================================================
+// services/api-gateway/src/routes/compliance-monitor.ts
+
+import type { FastifyInstance, FastifyPluginAsync } from "fastify";
+
+/**
+ * Temporary stub for the compliance monitor routes.
+ *
+ * The previous version imported deep internals from "@apgms/shared/ledger/ingest.js",
+ * which are not exposed via the package's "exports" map. That caused
+ * ERR_PACKAGE_PATH_NOT_EXPORTED at runtime when starting the API.
+ *
+ * This stub keeps the router wired into app.ts without relying on any
+ * non-exported subpaths. You can expand this later using only public
+ * shared exports or by introducing a proper internal module import.
+ */
+export const registerComplianceMonitorRoutes: FastifyPluginAsync = async (
+  app: FastifyInstance,
+) => {
+  // Simple health/check endpoint for now
+  app.get("/compliance/monitor/ping", async () => {
+    return {
+      ok: true,
+      service: "compliance-monitor",
+      message: "Compliance monitor stub is running",
+    };
+  });
+
+  // You can add more lightweight, self-contained endpoints here later, e.g.:
+  // app.get("/compliance/monitor/summary", async () => {
+  //   return { ok: true, summary: "Not yet implemented" };
+  // });
+};
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\routes\compliance-proxy.ts
+============================================================
+// services/api-gateway/src/routes/compliance-proxy.ts
+import { type FastifyPluginAsync } from "fastify";
+import { z } from "zod";
+
+import { authGuard } from "../auth.js";
+import { prisma } from "../db.js";
+import { createHash } from "node:crypto";
+
+const formatPeriod = (start: Date, end: Date): string =>
+  `${start.toISOString().slice(0, 10)}-${end.toISOString().slice(0, 10)}`;
+
+const toNumber = (value: unknown): number =>
+  typeof value === "number" ? value : Number(value ?? 0);
+
+function sha256Of(value: unknown): string {
+  const raw =
+    typeof value === "string" ? value : JSON.stringify(value ?? null);
+  return createHash("sha256").update(raw).digest("hex");
+}
+
+export const registerComplianceProxy: FastifyPluginAsync = async (app) => {
+  app.get("/compliance/report", { preHandler: [authGuard] }, async (req, reply) => {
+    const orgId = (req.user as any)?.orgId;
+    if (!orgId) {
+      reply.code(401).send({ error: "unauthorized" });
+      return;
+    }
+
+    const [basCycles, paymentPlans, openHighSeverity, resolvedThisQuarter, designatedAccounts] =
+      await Promise.all([
+        prisma.basCycle.findMany({
+          where: { orgId },
+          orderBy: { periodStart: "desc" },
+        }),
+        prisma.paymentPlanRequest.findMany({
+          where: { orgId },
+          orderBy: { requestedAt: "desc" },
+        }),
+        prisma.alert.count({
+          where: { orgId, severity: "HIGH", resolvedAt: null },
+        }),
+        prisma.alert.count({
+          where: {
+            orgId,
+            resolvedAt: { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) },
+          },
+        }),
+        prisma.designatedAccount.findMany({ where: { orgId } }),
+      ]);
+
+    const basHistory = basCycles.map((cycle: any) => ({
+      period: formatPeriod(cycle.periodStart, cycle.periodEnd),
+      lodgedAt: cycle.lodgedAt?.toISOString() ?? null,
+      status: cycle.overallStatus,
+      notes: `PAYGW ${toNumber(cycle.paygwSecured)} / ${toNumber(
+        cycle.paygwRequired,
+      )} | GST ${toNumber(cycle.gstSecured)} / ${toNumber(cycle.gstRequired)}`,
+    }));
+
+    const paymentPlanHistory = paymentPlans.map((plan: any) => ({
+      id: plan.id,
+      basCycleId: plan.basCycleId,
+      requestedAt: plan.requestedAt.toISOString(),
+      status: plan.status,
+      reason: plan.reason,
+      details: plan.detailsJson ?? {},
+      resolvedAt: plan.resolvedAt?.toISOString() ?? null,
+    }));
+
+    const totals = designatedAccounts.reduce(
+      (acc: { paygw: number; gst: number }, account: any) => {
+        if (account.type === "PAYGW") {
+          acc.paygw += Number(account.balance ?? 0);
+        } else if (account.type === "GST") {
+          acc.gst += Number(account.balance ?? 0);
+        }
+        return acc;
+      },
+      { paygw: 0, gst: 0 },
+    );
+
+    reply.send({
+      orgId,
+      basHistory,
+      paymentPlanHistory,
+      openHighSeverity,
+      resolvedThisQuarter,
+      totals,
+    });
+  });
+
+  app.get("/admin/export/:orgId", { preHandler: [authGuard] }, async (req, reply) => {
+    const principalOrgId = (req.user as any)?.orgId;
+    if (!principalOrgId) {
+      reply.code(401).send({ error: "unauthorized" });
+      return;
+    }
+
+    const paramsSchema = z.object({ orgId: z.string().min(1) });
+    const parsed = paramsSchema.safeParse(req.params ?? {});
+    if (!parsed.success) {
+      reply
+        .code(400)
+        .send({ error: { code: "invalid_params", details: parsed.error.flatten() } });
+      return;
+    }
+
+    const orgId = parsed.data.orgId;
+    if (orgId !== principalOrgId) {
+      reply.code(403).send({ error: "forbidden" });
+      return;
+    }
+
+    const org = await prisma.org.findUnique({ where: { id: orgId } });
+    const userRecord =
+      (
+        await prisma.user.findMany({
+          where: { orgId },
+          take: 1,
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            email: true,
+            createdAt: true,
+            org: { select: { id: true, name: true } },
+          },
+        })
+      )[0] ?? null;
+
+    if (!org || !userRecord) {
+      reply.code(404).send({ error: "org_not_found" });
+      return;
+    }
+
+    const bankLinesCount = await prisma.bankLine.count({ where: { orgId } });
+    const exportedAt = new Date().toISOString();
+
+    reply.send({
+      org: { id: org.id, name: org.name },
+      user: {
+        id: userRecord.id,
+        email: userRecord.email,
+        createdAt: userRecord.createdAt.toISOString(),
+      },
+      relationships: {
+        bankLinesCount,
+      },
+      exportedAt,
+    });
+  });
+
+  app.post("/compliance/evidence", { preHandler: [authGuard] }, async (req, reply) => {
+    const orgId = (req.user as any)?.orgId;
+    if (!orgId) {
+      reply.code(401).send({ error: "unauthorized" });
+      return;
+    }
+
+    const bodySchema = z
+      .object({
+        kind: z.string().min(1).default("designated-reconciliation"),
+        payload: z.unknown().optional(),
+        wormUri: z.string().min(1).optional(),
+      })
+      .default({} as any);
+
+    const parsed = bodySchema.safeParse((req as any).body ?? {});
+    if (!parsed.success) {
+      reply
+        .code(400)
+        .send({ error: { code: "invalid_body", details: parsed.error.flatten() } });
+      return;
+    }
+
+    const { kind, payload, wormUri } = parsed.data;
+
+    const sha256 = sha256Of(payload ?? {});
+    const effectiveWormUri = wormUri ?? "local://evidence";
+
+    const artifact = await prisma.evidenceArtifact.create({
+      data: {
+        orgId,
+        kind,
+        sha256,
+        wormUri: effectiveWormUri,
+        payload: payload ?? {},
+      },
+    });
+
+    reply.code(201).send({ artifact: { id: artifact.id } });
+  });
+
+  app.get("/compliance/evidence/:artifactId", { preHandler: [authGuard] }, async (req, reply) => {
+    const orgId = (req.user as any)?.orgId;
+    if (!orgId) {
+      reply.code(401).send({ error: "unauthorized" });
+      return;
+    }
+
+    const artifactParamsSchema = z.object({ artifactId: z.string().min(1) });
+    const parsed = artifactParamsSchema.safeParse(req.params ?? {});
+    if (!parsed.success) {
+      reply
+        .code(400)
+        .send({ error: { code: "invalid_params", details: parsed.error.flatten() } });
+      return;
+    }
+
+    const artifact = await prisma.evidenceArtifact.findUnique({
+      where: { id: parsed.data.artifactId },
+    });
+
+    if (!artifact || artifact.orgId !== orgId) {
+      reply.code(404).send({ error: "artifact_not_found" });
+      return;
+    }
+
+    reply.send({
+      artifact: {
+        id: artifact.id,
+        kind: artifact.kind,
+        sha256: artifact.sha256,
+        wormUri: artifact.wormUri,
+        createdAt: artifact.createdAt.toISOString(),
+        // payload included but still scoped to orgId
+        payload: artifact.payload ?? null,
+      },
+    });
+  });
+};
+
+export default registerComplianceProxy;
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\routes\connectors.ts
+============================================================
+import type { FastifyInstance } from "fastify";
+
+export interface Deps {
+  // TODO: define later
+}
+
+export default async function registerConnectorRoutes(
+  app: FastifyInstance,
+  deps: Deps
+): Promise<void> {
+  app.get("/connectors/health", async () => {
+    return { status: "ok", connectors: "stubbed" };
+  });
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\routes\demo.ts
+============================================================
+import { Decimal, JsonValue } from "@prisma/client/runtime/library.js";
+import { FastifyInstance, FastifyRequest } from "fastify";
+import { z } from "zod";
+
+import { authGuard } from "../auth.js";
+import { prisma } from "../db.js";
+import { forbidden } from "@apgms/shared";
+import { recordAuditLog } from "../lib/audit.js";
+import { encryptPII } from "../lib/pii.js";
+
+const DEMO_ORG_ID = process.env.DEV_ADMIN_ORG_ID?.trim() ?? "demo-org";
+const MOCK_DATE = process.env.DEMO_MOCK_DATE ? new Date(process.env.DEMO_MOCK_DATE) : new Date();
+
+const bankSchema = z.object({
+  daysBack: z.number().int().min(1).max(30).optional(),
+  intensity: z.enum(["low", "high"]).optional(),
+});
+
+const payrollSchema = z.object({
+  includeBankLines: z.boolean().optional(),
+  note: z.string().optional(),
+});
+
+const basSchema = z.object({
+  year: z.number().int().min(2020).max(2100),
+  month: z.number().int().min(1).max(12),
+});
+
+type DemoUser = {
+  orgId: string;
+  role: "admin";
+  sub: string;
+};
+
+function ensureDemoOrg(request: FastifyRequest): DemoUser {
+  const user = (request as any).user as { orgId?: string; role?: string; sub?: string } | undefined;
+  if (!user || user.orgId !== DEMO_ORG_ID || user.role !== "admin" || !user.sub) {
+    throw forbidden("demo_restricted", "Demo endpoints are limited to the admin demo org");
+  }
+  return { orgId: user.orgId, role: "admin", sub: user.sub };
+}
+
+function auditMetadata(payload?: Record<string, unknown>) {
+  if (!payload) return null;
+  return JSON.parse(JSON.stringify(payload)) as JsonValue;
+}
+
+function createBankLinePayload(orgId: string, index: number, daysBack: number, intensity: "low" | "high") {
+  const base = new Date(MOCK_DATE);
+  base.setUTCDate(base.getUTCDate() - daysBack + index);
+  const dateLabel = base.toISOString().split("T")[0];
+  const amount =
+    index % 2 === 0 ? 1200 + (intensity === "high" ? 400 : 0) : -(600 + (intensity === "high" ? 200 : 0));
+  const payeeText = amount >= 0 ? "Demo POS Sale" : "Demo Payroll Settlement";
+  const descText = amount >= 0 ? `POS ${dateLabel}` : `Payroll ${dateLabel}`;
+  const payee = encryptPII(payeeText);
+  const desc = encryptPII(descText);
+
+  return {
+    orgId,
+    idempotencyKey: `demo:${dateLabel}:${amount}`,
+    amount,
+    date: base,
+    payeeCiphertext: payee.ciphertext,
+    payeeKid: payee.kid,
+    descCiphertext: desc.ciphertext,
+    descKid: desc.kid,
+  };
+}
+
+async function adjustDesignatedAccount(orgId: string, type: "PAYGW" | "GST", amount: number) {
+  const account = await prisma.designatedAccount.findFirst({ where: { orgId, type } });
+  if (!account) return;
+  const newBalance = new Decimal(account.balance ?? 0).add(new Decimal(amount));
+  await prisma.designatedAccount.update({
+    where: { id: account.id },
+    data: {
+      balance: newBalance.toFixed(8),
+      updatedAt: new Date(),
+    },
+  });
+}
+
+export async function registerDemoRoutes(app: FastifyInstance) {
+  app.addHook("onRequest", authGuard);
+
+  app.post("/demo/banking/generate", async (request, reply) => {
+    const user = ensureDemoOrg(request);
+    const parsed = bankSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: { code: "invalid_body", details: parsed.error.flatten() } });
+    }
+    const options = parsed.data;
+    const daysBack = options.daysBack ?? 7;
+    const intensity = options.intensity ?? "low";
+
+    const rows = [];
+    let generated = 0;
+    for (let index = 0; index < daysBack; index += 1) {
+      const payload = createBankLinePayload(user.orgId, index, daysBack, intensity);
+      try {
+        const created = await prisma.bankLine.create({
+          data: {
+            orgId: payload.orgId,
+            idempotencyKey: payload.idempotencyKey,
+            amount: new Decimal(payload.amount),
+            date: payload.date,
+            payeeCiphertext: payload.payeeCiphertext,
+            payeeKid: payload.payeeKid,
+            descCiphertext: payload.descCiphertext,
+            descKid: payload.descKid,
+          },
+        });
+        rows.push({ id: created.id, amount: created.amount.toNumber(), date: created.date.toISOString() });
+        generated += 1;
+      } catch (err) {
+        // Ignore duplicates due to idempotency
+      }
+    }
+
+    await adjustDesignatedAccount(user.orgId, "PAYGW", rows.filter((r) => r.amount < 0).reduce((sum, r) => sum + r.amount, 0));
+    await adjustDesignatedAccount(user.orgId, "GST", rows.filter((r) => r.amount > 0).reduce((sum, r) => sum + r.amount, 0));
+
+    const summary = {
+      note: `Generated ${generated} demo rows (${intensity}) for ${daysBack} days back`,
+      generated,
+      intensity,
+      range: `${daysBack} days`,
+      rows,
+    };
+
+    await recordAuditLog({
+      orgId: user.orgId,
+      actorId: user.sub,
+      action: "demo_bank_feed_generate",
+      metadata: auditMetadata(summary),
+    });
+
+    reply.send(summary);
+  });
+
+  app.post("/demo/payroll/run", async (request, reply) => {
+    const user = ensureDemoOrg(request);
+    const parsed = payrollSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: { code: "invalid_body", details: parsed.error.flatten() } });
+    }
+    const payload = parsed.data;
+
+    const payRunId = `demo-payrun-${Date.now()}`;
+    const grossWages = 12000;
+    const totalPaygWithheld = 3200;
+    const today = new Date();
+    await prisma.payRun.create({
+      data: {
+        id: payRunId,
+        orgId: user.orgId,
+        periodStart: today,
+        periodEnd: today,
+        paymentDate: today,
+        status: "committed",
+      },
+    });
+
+    if (payload.includeBankLines) {
+      const payloadBank = createBankLinePayload(user.orgId, 0, 1, "low");
+      await prisma.bankLine.create({
+        data: {
+          orgId: payloadBank.orgId,
+          idempotencyKey: payloadBank.idempotencyKey,
+          amount: new Decimal(payloadBank.amount),
+          date: payloadBank.date,
+          payeeCiphertext: payloadBank.payeeCiphertext,
+          payeeKid: payloadBank.payeeKid,
+          descCiphertext: payloadBank.descCiphertext,
+          descKid: payloadBank.descKid,
+        },
+      });
+    }
+
+    const summary = {
+      note: payload.note ?? "",
+      payRunId,
+      totalPaygWithheld,
+      payslips: 10,
+    };
+
+    await recordAuditLog({
+      orgId: user.orgId,
+      actorId: user.sub,
+      action: "demo_payroll_run",
+      metadata: auditMetadata(summary),
+    });
+
+    reply.send(summary);
+  });
+
+  app.post("/demo/bas/compile", async (request, reply) => {
+    const user = ensureDemoOrg(request);
+    const parsed = basSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: { code: "invalid_body", details: parsed.error.flatten() } });
+    }
+    const payload = parsed.data;
+
+    const gstCollected = 4200;
+    const gstCredits = 1200;
+    const netGst = gstCollected - gstCredits;
+    const paygWithheld = 3200;
+
+    const summary = {
+      note: "Compiled demo BAS",
+      period: { year: payload.year, month: payload.month },
+      gstCollected,
+      gstCredits,
+      netGst,
+      paygWithheld,
+      bankLines: 12,
+      payslips: 10,
+    };
+
+    await recordAuditLog({
+      orgId: user.orgId,
+      actorId: user.sub,
+      action: "demo_bas_compile",
+      metadata: auditMetadata(summary),
+    });
+
+    reply.send(summary);
+  });
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\routes\forecast.ts
+============================================================
+// services/api-gateway/src/routes/forecast.ts
+
+import type {
+  FastifyInstance,
+  FastifyPluginAsync,
+  FastifyRequest,
+} from "fastify";
+import type { PrismaClient } from "@prisma/client";
+
+type ForecastQuery = {
+  orgId: string;
+};
+
+export const registerForecastRoutes: FastifyPluginAsync = async (
+  app: FastifyInstance,
+): Promise<void> => {
+  const prisma = (app as any).prisma as PrismaClient;
+
+  app.get(
+    "/forecast/obligations",
+    async (request: FastifyRequest<{ Querystring: ForecastQuery }>, reply) => {
+      const { orgId } = request.query;
+
+      const db: any = prisma as any;
+
+      const history =
+        (db.obligationHistory?.findMany
+          ? await db.obligationHistory.findMany({
+              where: { orgId },
+              orderBy: { periodStart: "asc" },
+            })
+          : []) ?? [];
+
+      const samples = history.map((h: any) => ({
+        orgId: h.orgId,
+        periodStart: h.periodStart,
+        periodEnd: h.periodEnd,
+        amount: Number(h.amount ?? 0),
+        taxType: h.taxType ?? "UNKNOWN",
+      }));
+
+      return reply.send({ samples });
+    },
+  );
+};
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\routes\gst.ts
+============================================================
+import type { FastifyInstance } from "fastify";
+import type { GstBatch, PosTransaction } from "@apgms/domain-policy";
+
+export async function registerGstRoutes(app: FastifyInstance) {
+  app.post<{
+    Params: { orgId: string };
+    Body: { transactions: Omit<PosTransaction, "orgId">[] };
+  }>("/orgs/:orgId/pos/transactions", async (req, reply) => {
+    const { orgId } = req.params;
+    const batch: GstBatch = {
+      orgId,
+      transactions: req.body.transactions.map(tx => ({ ...tx, orgId })),
+    };
+
+    const result = await app.services.gstSettlement.settleBatch(batch);
+    return reply.code(200).send(result);
+  });
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\routes\integration-events.ts
+============================================================
+// services/api-gateway/src/routes/integration-events.ts
+import type {
+  FastifyInstance,
+  FastifyReply,
+  FastifyRequest,
+} from "fastify";
+import { z } from "zod";
+
+import {
+  aggregateObligations,
+  analyzeIntegrationAnomaly,
+  depositToOneWayAccount,
+  fetchRecentDiscrepancies,
+  listPaymentPlans,
+  markIntegrationEventProcessed,
+  recordDiscrepancy,
+  recordIntegrationEvent,
+  recordObligation,
+  type TaxObligation,
+  verifyObligations,
+} from "@apgms/shared";
+import { metrics } from "../observability/metrics.js";
+
+const IntegrationEventSchema = z.object({
+  orgId: z.string().min(1),
+  amount: z
+    .union([z.number(), z.string()])
+    .transform((value) =>
+      typeof value === "number" ? value.toString() : value
+    )
+    .refine((value) => {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) && numeric > 0;
+    }, "amount must be a positive number"),
+  source: z.string().trim().min(1).optional().default("integration"),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+type IntegrationPayload = z.infer<typeof IntegrationEventSchema>;
+
+function extractExpectedAmount(
+  metadata?: Record<string, unknown>,
+): number | null {
+  if (!metadata) return null;
+  const value = (metadata as { expectedAmount?: unknown }).expectedAmount;
+  if (value == null) return null;
+
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return null;
+  }
+  return numeric;
+}
+
+async function handleIntegrationEvent(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  taxType: TaxObligation,
+): Promise<void> {
+  let payload: IntegrationPayload;
+  try {
+    payload = IntegrationEventSchema.parse(request.body);
+  } catch {
+    reply.code(400).send({ error: "invalid_body" });
+    return;
+  }
+
+  const stopTimer = metrics.integrationEventDuration.startTimer({
+    tax_type: taxType,
+  });
+
+  const event = await recordIntegrationEvent({
+    orgId: payload.orgId,
+    taxType,
+    source: payload.source,
+    amount: payload.amount,
+    metadata: payload.metadata,
+  });
+
+  try {
+    await depositToOneWayAccount({
+      orgId: payload.orgId,
+      taxType,
+      amount: payload.amount,
+    });
+
+    await recordObligation({
+      orgId: payload.orgId,
+      taxType,
+      eventId: event.id,
+      amount: payload.amount,
+    });
+
+    const verification = await verifyObligations(payload.orgId, taxType);
+
+    if (verification.shortfall?.greaterThan(0)) {
+      await recordDiscrepancy({
+        orgId: payload.orgId,
+        taxType,
+        eventId: event.id,
+        expectedAmount: verification.pending.toString(),
+        actualAmount: verification.balance.toString(),
+        reason: "Secured balance below total pending obligations",
+      });
+      metrics.integrationDiscrepanciesTotal.inc({
+        tax_type: taxType,
+        severity: "high",
+      });
+    }
+
+    const expectedAmount = extractExpectedAmount(
+      payload.metadata as Record<string, unknown> | undefined,
+    );
+    const actualAmount = Number(payload.amount);
+
+    if (expectedAmount != null && expectedAmount > actualAmount) {
+      await recordDiscrepancy({
+        orgId: payload.orgId,
+        taxType,
+        eventId: event.id,
+        expectedAmount: expectedAmount.toString(),
+        actualAmount: payload.amount,
+        reason: "Secured amount below expected obligation",
+      });
+      metrics.integrationDiscrepanciesTotal.inc({
+        tax_type: taxType,
+        severity: "high",
+      });
+    }
+
+    await markIntegrationEventProcessed(event.id);
+    metrics.integrationEventsTotal.inc({
+      tax_type: taxType,
+      status: "success",
+    });
+    stopTimer({ status: "success" });
+
+    reply.code(201).send({ eventId: event.id });
+  } catch (error) {
+    metrics.integrationEventsTotal.inc({
+      tax_type: taxType,
+      status: "failed",
+    });
+    stopTimer({ status: "failed" });
+    throw error;
+  }
+}
+
+export async function registerIntegrationEventRoutes(
+  app: FastifyInstance,
+): Promise<void> {
+  app.get(
+    "/integrations/discrepancies",
+    async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+      const orgId = String(
+        (request.query as { orgId?: string }).orgId ?? "",
+      ).trim();
+
+      if (!orgId) {
+        reply.code(400).send({ error: "orgId_is_required" });
+        return;
+      }
+
+      const alerts = await fetchRecentDiscrepancies(orgId);
+      reply.send({ discrepancies: alerts });
+    },
+  );
+
+  app.get(
+    "/integrations/obligations",
+    async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+      const query = request.query as { orgId?: string; taxType?: string };
+      const orgId = String(query.orgId ?? "").trim();
+      const taxType = String(query.taxType ?? "PAYGW").trim();
+
+      if (!orgId) {
+        reply.code(400).send({ error: "orgId_is_required" });
+        return;
+      }
+
+      const total = await aggregateObligations(orgId, taxType);
+      metrics.obligationsTotal.set(
+        { tax_type: taxType },
+        Number(total.toString()),
+      );
+
+      reply.send({
+        orgId,
+        taxType,
+        pendingAmount: total.toString(),
+      });
+    },
+  );
+
+  app.get(
+    "/integrations/anomaly",
+    async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+      const query = request.query as { orgId?: string; taxType?: string };
+      const orgId = String(query.orgId ?? "").trim();
+      const taxType = String(query.taxType ?? "PAYGW").trim();
+
+      if (!orgId) {
+        reply.code(400).send({ error: "orgId_is_required" });
+        return;
+      }
+
+      const analysis = await analyzeIntegrationAnomaly(orgId, taxType);
+
+      metrics.integrationAnomalyScore.set(
+        { tax_type: taxType, severity: analysis.severity },
+        Number(analysis.score.toFixed(4)),
+      );
+
+      reply.send({
+        orgId,
+        taxType,
+        severity: analysis.severity,
+        score: Number(analysis.score.toFixed(4)),
+        narrative: analysis.narrative,
+        explanation: analysis.explanation,
+      });
+    },
+  );
+
+  app.get(
+    "/integrations/compliance-report",
+    async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+      const query = request.query as { orgId?: string; taxType?: string };
+      const orgId = String(query.orgId ?? "").trim();
+      const taxType = String(query.taxType ?? "PAYGW").trim();
+
+      if (!orgId) {
+        reply.code(400).send({ error: "orgId_is_required" });
+        return;
+      }
+
+      const [obligationsTotal, discrepancies, anomaly] = await Promise.all([
+        aggregateObligations(orgId, taxType),
+        fetchRecentDiscrepancies(orgId),
+        analyzeIntegrationAnomaly(orgId, taxType),
+      ]);
+
+      const plans = await listPaymentPlans(orgId);
+
+      reply.send({
+        orgId,
+        taxType,
+        pendingObligations: obligationsTotal.toString(),
+        discrepancies: discrepancies.map((alert: any) => ({
+          eventId: alert.eventId,
+          reason: alert.reason,
+          shortfall: alert.expectedAmount
+            .minus(alert.actualAmount)
+            .toString(),
+          createdAt: alert.createdAt,
+        })),
+        anomaly,
+        paymentPlans: plans.map((plan: any) => ({
+          id: plan.id,
+          basCycleId: plan.basCycleId,
+          status: plan.status,
+          reason: plan.reason,
+          requestedAt: plan.requestedAt,
+        })),
+        generatedAt: new Date().toISOString(),
+      });
+    },
+  );
+
+  app.post(
+    "/integrations/payroll",
+    async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+      await handleIntegrationEvent(request, reply, "PAYGW");
+    },
+  );
+
+  app.post(
+    "/integrations/pos",
+    async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+      await handleIntegrationEvent(request, reply, "GST");
+    },
+  );
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\routes\monitoring.ts
+============================================================
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+
+import { authGuard } from "../auth.js";
+import { complianceSnapshot } from "@apgms/shared";
+
+type MonitoringRequest = FastifyRequest & { user?: { orgId?: string } };
+
+export async function registerMonitoringRoutes(app: FastifyInstance) {
+  app.get("/monitor/compliance", { preHandler: authGuard }, async (request: MonitoringRequest, reply: FastifyReply) => {
+    const orgId = request.user?.orgId;
+    if (!orgId) {
+      reply.code(401).send({ error: "unauthenticated" });
+      return;
+    }
+    const snapshot = await complianceSnapshot(orgId);
+    reply.send({ snapshot });
+  });
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\routes\onboarding.ts
+============================================================
+// services/api-gateway/src/routes/onboarding.ts
+
+import type {
+  FastifyInstance,
+  FastifyPluginAsync,
+  FastifyRequest,
+} from "fastify";
+import type { PrismaClient } from "@prisma/client";
+
+type OnboardBody = {
+  abn: string;
+  legalName: string;
+  designatedAccounts: Array<{
+    kind: "PAYGW" | "GST" | "BAS_ESCROW" | string;
+    bsb: string;
+    accountNumber: string;
+    displayName?: string;
+  }>;
+};
+
+export const registerOnboardingRoutes: FastifyPluginAsync = async (
+  app: FastifyInstance,
+): Promise<void> => {
+  const prisma = (app as any).prisma as PrismaClient;
+
+  app.post(
+    "/onboarding/org",
+    async (request: FastifyRequest<{ Body: OnboardBody }>, reply) => {
+      const { abn, legalName, designatedAccounts } = request.body;
+      const db: any = prisma as any;
+
+      const orgWhere: any = { abn };
+      const orgUpdate: any = { legalName };
+      const orgCreate: any = { abn, legalName };
+
+      const org = await db.organization.upsert({
+        where: orgWhere,
+        update: orgUpdate,
+        create: orgCreate,
+      });
+
+      for (const account of designatedAccounts) {
+        const designatedData: any = {
+          orgId: org.id,
+          kind: account.kind,
+          bsb: account.bsb,
+          accountNumber: account.accountNumber,
+          displayName: account.displayName ?? account.kind,
+        };
+
+        await db.designatedAccount.create({
+          data: designatedData,
+        });
+      }
+
+      // Obligation settings shim â€“ tolerate missing model
+      if (db.obligationSetting?.upsert) {
+        await db.obligationSetting.upsert({
+          where: {
+            orgId: org.id,
+          } as any,
+          update: {
+            orgId: org.id,
+          } as any,
+          create: {
+            orgId: org.id,
+          } as any,
+        });
+      }
+
+      return reply.send({ orgId: org.id });
+    },
+  );
+};
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\routes\payment-plans.ts
+============================================================
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { z } from "zod";
+
+import { prisma } from "../db.js";
+import {
+  createPaymentPlanRequest,
+  listPaymentPlans,
+  updatePaymentPlanStatus,
+} from "@apgms/shared";
+import { authGuard } from "../auth.js";
+import { parseWithSchema } from "../lib/validation.js";
+import { buildPaymentPlanNarrative } from "@apgms/shared";
+
+const PaymentPlanBodySchema = z.object({
+  basCycleId: z.string().min(1),
+  reason: z.string().min(10),
+  details: z.record(z.string(), z.unknown()).optional(),
+});
+
+const PaymentPlanStatusSchema = z.object({
+  status: z.enum(["APPROVED", "REJECTED", "CANCELLED"]),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+type AuthenticatedRequest = FastifyRequest & { user?: { orgId?: string; sub?: string } };
+
+export async function registerPaymentPlanRoutes(app: FastifyInstance) {
+  app.addHook("onRequest", authGuard);
+
+  app.get("/payment-plans", async (request: AuthenticatedRequest, reply: FastifyReply) => {
+    const orgId = request.user?.orgId;
+    if (!orgId) {
+      reply.code(401).send({ error: "unauthenticated" });
+      return;
+    }
+    const plans = await listPaymentPlans(orgId);
+    reply.send({ plans });
+  });
+
+  app.post("/payment-plans", async (request: AuthenticatedRequest, reply: FastifyReply) => {
+    const orgId = request.user?.orgId;
+    if (!orgId) {
+      reply.code(401).send({ error: "unauthenticated" });
+      return;
+    }
+    const payload = parseWithSchema(PaymentPlanBodySchema, request.body);
+    const plan = await createPaymentPlanRequest({
+      orgId,
+      basCycleId: payload.basCycleId,
+      reason: payload.reason,
+      details: payload.details,
+    });
+    reply.code(201).send({ plan });
+  });
+
+  app.post("/payment-plans/:id/status", async (request: FastifyRequest, reply: FastifyReply) => {
+    const payload = parseWithSchema(PaymentPlanStatusSchema, request.body);
+    try {
+      const updated = await updatePaymentPlanStatus(
+        (request.params as { id: string }).id,
+        payload.status,
+        payload.metadata,
+      );
+      reply.send({ updated });
+    } catch (error) {
+      reply.code(404).send({ error: "plan_not_found" });
+    }
+  });
+
+  app.get("/payment-plans/:id/summary", async (request: FastifyRequest, reply: FastifyReply) => {
+    const id = (request.params as { id: string }).id;
+    const plan = await prisma.paymentPlanRequest.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        orgId: true,
+        basCycleId: true,
+        reason: true,
+        status: true,
+        detailsJson: true,
+        requestedAt: true,
+      },
+    });
+    if (!plan) {
+      reply.code(404).send({ error: "plan_not_found" });
+      return;
+    }
+    const narrative = buildPaymentPlanNarrative(plan);
+    reply.send({ plan, summary: narrative });
+  });
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\routes\payroll.ts
+============================================================
+import type { FastifyInstance } from "fastify";
+import type { PayrollBatch } from "@apgms/domain-policy";
+
+export async function registerPayrollRoutes(app: FastifyInstance) {
+  app.post<{
+    Params: { orgId: string };
+    Body: Omit<PayrollBatch, "orgId">;
+  }>("/orgs/:orgId/payroll/simulate", async (req, reply) => {
+    const { orgId } = req.params;
+    const batch: PayrollBatch = {
+      orgId,
+      basPeriodId: req.body.basPeriodId,
+      lines: req.body.lines,
+    };
+
+    const result = await app.services.paygwSettlement.settleBatch(batch);
+    return reply.code(200).send(result);
+  });
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\routes\regulator.ts
+============================================================
+// services/api-gateway/src/routes/regulator.ts
+import type { JsonValue } from "@prisma/client/runtime/library.js";
+import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { PrismaClient } from "@prisma/client";
+import { z } from "zod";
+
+import { prisma } from "../db.js";
+import { recordAuditLog } from "../lib/audit.js";
+
+type RegulatorRequest = FastifyRequest & {
+  user?: { orgId?: string; sub?: string };
+  regulatorSession?: { id: string; orgId: string };
+};
+
+const MAX_SNAPSHOTS = 20;
+
+type RegulatorRoutesDeps = {
+  prisma?: PrismaClient;
+  auditLogger?: typeof recordAuditLog;
+};
+
+function ensureOrgId(request: RegulatorRequest): string {
+  const orgId = request.user?.orgId ?? request.regulatorSession?.orgId;
+  if (!orgId) {
+    throw new Error("regulator_org_missing");
+  }
+  return orgId;
+}
+
+function actorIdFrom(request: RegulatorRequest): string {
+  return request.regulatorSession?.id ?? request.user?.sub ?? "regulator";
+}
+
+async function logRegulatorAction(
+  request: RegulatorRequest,
+  action: string,
+  metadata: Record<string, unknown | null> | undefined,
+  auditLogger?: RegulatorRoutesDeps["auditLogger"],
+) {
+  const logger = auditLogger ?? recordAuditLog;
+  await logger({
+    orgId: ensureOrgId(request),
+    actorId: actorIdFrom(request),
+    action,
+    metadata:
+      metadata == null
+        ? null
+        : (JSON.parse(JSON.stringify(metadata)) as JsonValue),
+  });
+}
+
+function toNumber(value: unknown | null | undefined): number {
+  if (value == null) return 0;
+  return Number(value);
+}
+
+function formatPeriod(start: Date, end: Date): string {
+  return `${start.toISOString().slice(0, 10)}-${end.toISOString().slice(0, 10)}`;
+}
+
+export async function registerRegulatorRoutes(
+  app: FastifyInstance,
+  deps: RegulatorRoutesDeps = {},
+) {
+  const db = deps.prisma ?? (prisma as any as PrismaClient);
+  const auditLogger = deps.auditLogger;
+
+  app.get("/health", async (request: RegulatorRequest) => {
+    await logRegulatorAction(request, "regulator.health", undefined, auditLogger);
+    return { ok: true, service: "regulator" };
+  });
+
+  app.get("/compliance/report", async (request: RegulatorRequest) => {
+    const orgId = ensureOrgId(request);
+
+    const designatedAccountsPromise =
+      (db as any).designatedAccount &&
+      typeof (db as any).designatedAccount.findMany === "function"
+        ? (db as any).designatedAccount.findMany({ where: { orgId } })
+        : Promise.resolve([] as any[]);
+
+    const [
+      basCycles,
+      paymentPlans,
+      openHighSeverity,
+      resolvedThisQuarter,
+      designatedAccounts,
+    ] = await Promise.all([
+      db.basCycle.findMany({
+        where: { orgId },
+        orderBy: { periodStart: "desc" },
+      }),
+      db.paymentPlanRequest.findMany({
+        where: { orgId },
+        orderBy: { requestedAt: "desc" },
+      }),
+      db.alert.count({
+        where: { orgId, severity: "HIGH", resolvedAt: null },
+      }),
+      db.alert.count({
+        where: {
+          orgId,
+          resolvedAt: { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) },
+        },
+      }),
+      designatedAccountsPromise,
+    ]);
+
+    const basHistory = (basCycles as any[]).map((cycle: any) => ({
+      period: formatPeriod(cycle.periodStart, cycle.periodEnd),
+      lodgedAt: cycle.lodgedAt?.toISOString() ?? null,
+      status: cycle.overallStatus,
+      notes: `PAYGW ${toNumber(cycle.paygwSecured)} / ${toNumber(
+        cycle.paygwRequired,
+      )} Â· GST ${toNumber(cycle.gstSecured)} / ${toNumber(cycle.gstRequired)}`,
+    }));
+
+    const paymentPlanHistory = (paymentPlans as any[]).map((plan: any) => ({
+      id: plan.id,
+      basCycleId: plan.basCycleId,
+      requestedAt: plan.requestedAt.toISOString(),
+      status: plan.status,
+      reason: plan.reason,
+      details: plan.detailsJson ?? {},
+      resolvedAt: plan.resolvedAt?.toISOString() ?? null,
+    }));
+
+    const totals = (designatedAccounts as any[]).reduce(
+      (acc: { paygw: number; gst: number }, account: any) => {
+        if (account.type === "PAYGW") {
+          acc.paygw += Number(account.balance ?? 0);
+        } else if (account.type === "GST") {
+          acc.gst += Number(account.balance ?? 0);
+        }
+        return acc;
+      },
+      { paygw: 0, gst: 0 },
+    );
+
+    const nextBasCycle = await db.basCycle.findFirst({
+      where: { orgId, lodgedAt: null },
+      orderBy: { periodEnd: "asc" },
+    });
+
+    await logRegulatorAction(
+      request,
+      "regulator.compliance.report",
+      { basPeriods: basHistory.length },
+      auditLogger,
+    );
+
+    return {
+      orgId,
+      basHistory,
+      paymentPlans: paymentPlanHistory,
+      alertsSummary: {
+        openHighSeverity,
+        resolvedThisQuarter,
+      },
+      nextBasDue: nextBasCycle?.periodEnd?.toISOString() ?? null,
+      designatedTotals: {
+        paygw: totals.paygw,
+        gst: totals.gst,
+      },
+    };
+  });
+
+  app.get("/alerts", async (request: RegulatorRequest) => {
+    const orgId = ensureOrgId(request);
+    const alerts = await db.alert.findMany({
+      where: { orgId },
+      orderBy: { createdAt: "desc" },
+    });
+
+    await logRegulatorAction(
+      request,
+      "regulator.alerts.list",
+      { count: alerts.length },
+      auditLogger,
+    );
+
+    return {
+      alerts: (alerts as any[]).map((alert: any) => ({
+        id: alert.id,
+        type: alert.type,
+        severity: alert.severity,
+        message: alert.message,
+        createdAt: alert.createdAt.toISOString(),
+        resolved: alert.resolvedAt != null,
+        resolvedAt: alert.resolvedAt?.toISOString() ?? null,
+      })),
+    };
+  });
+
+  app.get("/monitoring/snapshots", async (request: RegulatorRequest) => {
+    const orgId = ensureOrgId(request);
+
+    const querySchema = z.object({
+      limit: z
+        .union([z.string(), z.number()])
+        .transform((val) => Number(val))
+        .pipe(z.number().int().min(1).max(MAX_SNAPSHOTS))
+        .optional()
+        .default(5),
+    });
+
+    const parsed = querySchema.safeParse(request.query ?? {});
+    if (!parsed.success) {
+      return {
+        error: { code: "invalid_query", details: parsed.error.flatten() },
+      };
+    }
+    const limit = parsed.data.limit;
+
+    const snapshots = await db.monitoringSnapshot.findMany({
+      where: { orgId },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    });
+
+    await logRegulatorAction(
+      request,
+      "regulator.monitoring.snapshots",
+      { limit },
+      auditLogger,
+    );
+
+    return {
+      snapshots: (snapshots as any[]).map((snapshot: any) => ({
+        id: snapshot.id,
+        type: snapshot.type,
+        createdAt: snapshot.createdAt.toISOString(),
+        payload: snapshot.payload,
+      })),
+    };
+  });
+
+  app.get("/evidence", async (request: RegulatorRequest) => {
+    const orgId = ensureOrgId(request);
+    const artifacts = await db.evidenceArtifact.findMany({
+      where: { orgId },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    });
+
+    await logRegulatorAction(
+      request,
+      "regulator.evidence.list",
+      { count: artifacts.length },
+      auditLogger,
+    );
+
+    return {
+      artifacts: (artifacts as any[]).map((artifact: any) => ({
+        id: artifact.id,
+        kind: artifact.kind,
+        sha256: artifact.sha256,
+        wormUri: artifact.wormUri,
+        createdAt: artifact.createdAt.toISOString(),
+      })),
+    };
+  });
+
+  app.get("/evidence/:artifactId", async (request: RegulatorRequest, reply) => {
+    const orgId = ensureOrgId(request);
+    const paramsSchema = z.object({ artifactId: z.string().min(1) });
+
+    const parsed = paramsSchema.safeParse(request.params ?? {});
+    if (!parsed.success) {
+      reply
+        .code(400)
+        .send({ error: { code: "invalid_params", details: parsed.error.flatten() } });
+      return;
+    }
+
+    const artifact = await db.evidenceArtifact.findUnique({
+      where: { id: parsed.data.artifactId },
+    });
+    if (!artifact || artifact.orgId !== orgId) {
+      reply.code(404).send({ error: "artifact_not_found" });
+      return;
+    }
+
+    await logRegulatorAction(
+      request,
+      "regulator.evidence.detail",
+      { artifactId: artifact.id },
+      auditLogger,
+    );
+
+    return {
+      artifact: {
+        id: artifact.id,
+        kind: artifact.kind,
+        sha256: artifact.sha256,
+        wormUri: artifact.wormUri,
+        createdAt: artifact.createdAt.toISOString(),
+        payload: artifact.payload ?? null,
+      },
+    };
+  });
+
+  app.get("/bank-lines/summary", async (request: RegulatorRequest) => {
+    const orgId = ensureOrgId(request);
+    const [aggregate, firstEntry, lastEntry, recent] = await Promise.all([
+      db.bankLine.aggregate({
+        where: { orgId },
+        _count: { id: true },
+        _sum: { amount: true },
+      }),
+      db.bankLine.findFirst({
+        where: { orgId },
+        orderBy: { date: "asc" },
+      }),
+      db.bankLine.findFirst({
+        where: { orgId },
+        orderBy: { date: "desc" },
+      }),
+      db.bankLine.findMany({
+        where: { orgId },
+        orderBy: { date: "desc" },
+        take: 5,
+      }),
+    ]);
+
+    await logRegulatorAction(
+      request,
+      "regulator.bank.summary",
+      { entries: (aggregate as any)._count?.id ?? 0 },
+      auditLogger,
+    );
+
+    return {
+      summary: {
+        totalEntries: (aggregate as any)._count?.id ?? 0,
+        totalAmount: Number((aggregate as any)._sum?.amount ?? 0),
+        firstEntryAt: (firstEntry as any)?.createdAt?.toISOString() ?? null,
+        lastEntryAt: (lastEntry as any)?.createdAt?.toISOString() ?? null,
+      },
+      recent: (recent as any[]).map((line: any) => ({
+        id: line.id,
+        date: line.date.toISOString(),
+        amount: Number(line.amount),
+      })),
+    };
+  });
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\routes\regulator-auth.ts
+============================================================
+import { FastifyInstance } from "fastify";
+
+import { config } from "../config.js";
+import { prisma } from "../db.js";
+import { signToken, buildSessionUser } from "../auth.js";
+import { createRegulatorSession } from "../lib/regulator-session.js";
+import { recordAuditLog } from "../lib/audit.js";
+
+export async function registerRegulatorAuthRoutes(app: FastifyInstance): Promise<void> {
+  app.post("/regulator/login", async (request, reply) => {
+    const body = request.body as { accessCode?: string; orgId?: string } | null;
+
+    if (!body?.accessCode || body.accessCode.trim().length === 0) {
+      reply.code(400).send({
+        error: { code: "invalid_body", message: "accessCode is required" },
+      });
+      return;
+    }
+
+    if (body.accessCode.trim() !== config.regulator.accessCode) {
+      reply.code(401).send({
+        error: { code: "access_denied", message: "Invalid regulator access code" },
+      });
+      return;
+    }
+
+    const orgId = body.orgId ?? "dev-org";
+    const org = await prisma.org.findUnique({
+      where: { id: orgId },
+      select: { id: true },
+    });
+    if (!org) {
+      reply.code(404).send({
+        error: { code: "org_not_found", message: "Organisation not found" },
+      });
+      return;
+    }
+
+    const { session, sessionToken } = await createRegulatorSession(
+      orgId,
+      config.regulator.sessionTtlMinutes,
+    );
+
+    const authUser = buildSessionUser({
+      id: session.id,
+      orgId,
+      role: "regulator",
+      mfaEnabled: false,
+    });
+
+    const token = await signToken(
+      {
+        id: authUser.sub,
+        orgId: authUser.orgId,
+        role: authUser.role,
+        mfaEnabled: authUser.mfaEnabled,
+      },
+      {
+        subject: session.id,
+        audience: config.regulator.jwtAudience,
+        expiresIn: `${config.regulator.sessionTtlMinutes}m`,
+        extraClaims: {
+          sessionId: session.id,
+          regulator: true,
+        },
+      },
+    );
+
+    await recordAuditLog({
+      orgId,
+      actorId: `regulator:${session.id}`,
+      action: "regulator.login",
+      metadata: {},
+    });
+
+    reply.send({
+      token,
+      session: {
+        id: session.id,
+        issuedAt: session.issuedAt.toISOString(),
+        expiresAt: session.expiresAt.toISOString(),
+        sessionToken,
+      },
+    });
+  });
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\routes\regulator-compliance-summary.ts
+============================================================
+// services/api-gateway/src/routes/regulator-compliance-summary.ts
+
+import type { FastifyInstance } from "fastify";
+import type { AppConfig } from "../config.js";
+
+interface ComplianceSummaryItem {
+  orgId: string;
+  orgName: string;
+  basCoverageRatio: number; // 0â€“1
+  paygwShortfallCents: number;
+  gstShortfallCents: number;
+  lateBasCount: number;
+  riskBand: "LOW" | "MEDIUM" | "HIGH";
+}
+
+interface ComplianceSummaryResponse {
+  generatedAt: string;
+  items: ComplianceSummaryItem[];
+}
+
+export async function registerRegulatorComplianceSummaryRoute(
+  app: FastifyInstance,
+  _config: AppConfig
+): Promise<void> {
+  app.get<{ Reply: ComplianceSummaryResponse }>(
+    "/regulator/compliance/summary",
+    async (request, reply) => {
+      // In a real implementation this would query your domain layer.
+      const demo: ComplianceSummaryResponse = {
+        generatedAt: new Date().toISOString(),
+        items: [
+          {
+            orgId: "org-demo-1",
+            orgName: "Demo Pty Ltd",
+            basCoverageRatio: 0.92,
+            paygwShortfallCents: 0,
+            gstShortfallCents: 12500,
+            lateBasCount: 0,
+            riskBand: "LOW",
+          },
+          {
+            orgId: "org-demo-2",
+            orgName: "Stretched Cafe Group",
+            basCoverageRatio: 0.61,
+            paygwShortfallCents: 380000,
+            gstShortfallCents: 95000,
+            lateBasCount: 2,
+            riskBand: "HIGH",
+          },
+        ],
+      };
+
+      return reply.code(200).send(demo);
+    }
+  );
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\routes\risk.ts
+============================================================
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+
+import { authGuard } from "../auth.js";
+import { detectRisk, listRiskEvents } from "@apgms/shared";
+import { metrics } from "../observability/metrics.js";
+
+type RiskRequest = FastifyRequest & { user?: { orgId?: string } };
+
+export async function registerRiskRoutes(app: FastifyInstance) {
+  app.get("/monitor/risk", { preHandler: authGuard }, async (request: RiskRequest, reply: FastifyReply) => {
+    const orgId = request.user?.orgId;
+    if (!orgId) {
+      reply.code(401).send({ error: "unauthenticated" });
+      return;
+    }
+    const taxType = String((request.query as { taxType?: string }).taxType ?? "PAYGW");
+    const result = await detectRisk(orgId, taxType);
+    metrics.riskEventsTotal.inc({ severity: result.record.severity });
+    reply.send({ risk: result.record, snapshot: result.snapshot });
+  });
+
+  app.get("/monitor/risk/events", { preHandler: authGuard }, async (request: RiskRequest, reply: FastifyReply) => {
+    const orgId = request.user?.orgId;
+    if (!orgId) {
+      reply.code(401).send({ error: "unauthenticated" });
+      return;
+    }
+    const events = await listRiskEvents(orgId);
+    reply.send({ events });
+  });
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\routes\tax.js
+============================================================
+import { SpanStatusCode, trace } from "@opentelemetry/api";
+import { z } from "zod";
+import { safeLogAttributes, safeLogError } from "@apgms/shared";
+import { authenticateRequest } from "../lib/auth";
+const tracer = trace.getTracer("apgms-api-gateway");
+const TAX_HEALTH_TIMEOUT_MS = 5_000;
+const TAX_ALLOWED_ROLES = ["admin", "analyst", "finance"];
+const TaxHealthResponseSchema = z
+    .object({
+    ok: z.boolean(),
+})
+    .passthrough();
+export default async function taxRoutes(app) {
+    app.get("/tax/health", async (request, reply) => {
+        const principal = await authenticateRequest(app, request, reply, TAX_ALLOWED_ROLES);
+        if (!principal) {
+            return;
+        }
+        const span = tracer.startSpan("tax.health.fetch");
+        span.setAttribute("upstream.url", app.config.taxEngineUrl);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), TAX_HEALTH_TIMEOUT_MS);
+        try {
+            const res = await fetch(`${app.config.taxEngineUrl}/health`, {
+                signal: controller.signal,
+            });
+            if (!res.ok) {
+                span.setStatus({
+                    code: SpanStatusCode.ERROR,
+                    message: `upstream responded with ${res.status}`,
+                });
+                app.metrics?.recordSecurityEvent("tax.health.upstream_fail");
+                return sendUpstreamError(reply, "tax-engine unavailable", res.status);
+            }
+            const json = await res.json();
+            const parsed = TaxHealthResponseSchema.safeParse(json);
+            if (!parsed.success) {
+                span.setStatus({
+                    code: SpanStatusCode.ERROR,
+                    message: "invalid upstream payload",
+                });
+        app.log.warn(safeLogAttributes({ err: parsed.error.flatten(), upstream: json }), "invalid tax-engine payload");
+                return sendUpstreamError(reply, "tax-engine payload invalid", 502);
+            }
+            return reply.send(parsed.data);
+        }
+        catch (error) {
+            span.setStatus({ code: SpanStatusCode.ERROR, message: "tax health check failed" });
+        app.log.error(safeLogAttributes({ err: safeLogError(error) }), "tax health request failed");
+            app.metrics?.recordSecurityEvent("tax.health.error");
+            return sendUpstreamError(reply, "tax-engine unavailable", 502);
+        }
+        finally {
+            clearTimeout(timeout);
+            span.end();
+        }
+    });
+}
+function sendUpstreamError(reply, message, status) {
+    const payload = {
+        error: {
+            code: "tax_upstream_unavailable",
+            message,
+        },
+    };
+    return reply.code(status).send(payload);
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\routes\tax.ts
+============================================================
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { context, trace } from "@opentelemetry/api";
+import { authenticateRequest, type Role } from "../lib/auth.js";
+
+export async function registerTaxRoutes(app: FastifyInstance) {
+  const guard = (roles: readonly Role[] = []) =>
+    async (req: FastifyRequest, reply: FastifyReply) =>
+      authenticateRequest(app, req, reply, roles);
+
+  app.get("/tax/health", { preHandler: guard([]) }, async (_req, reply) => {
+    const span = trace.getTracer("api").startSpan("tax.health");
+    const ctx = trace.setSpan(context.active(), span);
+    try {
+      const upstream = String((app as any).config?.taxEngineUrl ?? "");
+      if (!upstream) {
+        reply.send({ ok: true, upstream: null });
+        return;
+      }
+      const res = await fetch(`${upstream}/health`, { signal: AbortSignal.timeout(2000) });
+      reply.send({ ok: res.ok, upstream });
+    } catch (err) {
+      app.metrics?.recordSecurityEvent?.("tax.health.error");
+      reply.code(502).send({ ok: false });
+    } finally {
+      span.end();
+    }
+  });
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\routes\transfers.ts
+============================================================
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { z } from "zod";
+
+import { markTransferStatus } from "@apgms/shared";
+import { metrics } from "../observability/metrics.js";
+import { prisma } from "../db.js";
+import { requireOrgContext } from "../utils/orgScope.js";
+import { withIdempotency } from "../lib/idempotency.js";
+import { recordCriticalAuditLog } from "../lib/audit.js";
+
+const TransferRequestSchema = z.object({
+  instructionId: z.string().min(1),
+  mfaCode: z.string().min(4),
+});
+
+export async function registerTransferRoutes(app: FastifyInstance) {
+  app.post("/bas/transfer", async (request: FastifyRequest, reply: FastifyReply) => {
+    const payload = TransferRequestSchema.parse(request.body);
+    const expectedCode = process.env.BAS_MFA_CODE ?? "0000";
+    if (payload.mfaCode !== expectedCode) {
+      metrics.transferExecutionTotal.inc({ status: "failed" });
+      reply.code(401).send({ error: "invalid_mfa" });
+      return;
+    }
+
+    const ctx = requireOrgContext(request, reply);
+    if (!ctx) return;
+
+    try {
+      await withIdempotency(
+        request,
+        reply,
+        {
+          prisma,
+          orgId: ctx.orgId,
+          actorId: ctx.actorId,
+          requestPayload: payload,
+        },
+        async () => {
+          await markTransferStatus(payload.instructionId, "sent");
+          await recordCriticalAuditLog({
+            orgId: ctx.orgId,
+            actorId: ctx.actorId,
+            action: "bas.transfer",
+            metadata: { instructionId: payload.instructionId },
+          });
+          metrics.transferExecutionTotal.inc({ status: "success" });
+          reply.send({ instructionId: payload.instructionId, status: "sent" });
+          return { statusCode: 200 };
+        },
+      );
+    } catch (error) {
+      metrics.transferExecutionTotal.inc({ status: "failed" });
+      const message = error instanceof Error ? error.message : undefined;
+      if (message?.includes("idempotent_replay")) {
+        reply.code(409).send({ error: "transfer_conflict" });
+      } else {
+        reply.code(500).send({ error: "transfer_failed" });
+      }
+    }
+  });
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\schemas\admin.data.js
+============================================================
+import { z } from "zod";
+export const adminDataDeleteRequestSchema = z.object({
+    orgId: z.string().min(1, "orgId is required"),
+    email: z.string().email("email must be valid"),
+    confirm: z.literal("DELETE"),
+});
+export const adminDataDeleteResponseSchema = z.object({
+    action: z.union([z.literal("anonymized"), z.literal("deleted")]),
+    userId: z.string().min(1),
+    occurredAt: z
+        .string()
+        .refine((value) => !Number.isNaN(Date.parse(value)), {
+        message: "occurredAt must be ISO string",
+    }),
+});
+export const subjectDataExportRequestSchema = z.object({
+    orgId: z.string().min(1),
+    email: z.string().email(),
+});
+const orgSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+});
+const userSchema = z.object({
+    id: z.string(),
+    email: z.string().email(),
+    createdAt: z.string(),
+});
+const relationshipsSchema = z.object({
+    bankLinesCount: z.number().int(),
+});
+export const subjectDataExportResponseSchema = z.object({
+    org: orgSchema,
+    user: userSchema,
+    relationships: relationshipsSchema,
+    exportedAt: z.string(),
+});
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\schemas\admin.data.ts
+============================================================
+import { z } from "zod";
+
+export const adminDataDeleteRequestSchema = z.object({
+  orgId: z.string().min(1, "orgId is required"),
+  email: z.string().email("email must be valid"),
+  confirm: z.literal("DELETE"),
+});
+
+export const adminDataDeleteResponseSchema = z.object({
+  action: z.union([z.literal("anonymized"), z.literal("deleted")]),
+  userId: z.string().min(1),
+  occurredAt: z
+    .string()
+    .refine((value) => !Number.isNaN(Date.parse(value)), {
+      message: "occurredAt must be ISO string",
+    }),
+});
+
+export type AdminDataDeleteRequest = z.infer<typeof adminDataDeleteRequestSchema>;
+export type AdminDataDeleteResponse = z.infer<typeof adminDataDeleteResponseSchema>;
+
+export const subjectDataExportRequestSchema = z.object({
+  orgId: z.string().min(1),
+  email: z.string().email(),
+});
+
+const orgSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+});
+
+const userSchema = z.object({
+  id: z.string(),
+  email: z.string().email(),
+  createdAt: z.string(),
+});
+
+const relationshipsSchema = z.object({
+  bankLinesCount: z.number().int(),
+});
+
+export const subjectDataExportResponseSchema = z.object({
+  org: orgSchema,
+  user: userSchema,
+  relationships: relationshipsSchema,
+  exportedAt: z.string(),
+});
+
+export type SubjectDataExportRequest = z.infer<typeof subjectDataExportRequestSchema>;
+export type SubjectDataExportResponse = z.infer<typeof subjectDataExportResponseSchema>;
+
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\schemas\compliance-transfer.ts
+============================================================
+import { z } from "zod";
+
+export const complianceTransferSchema = z.object({
+  orgId: z.string().min(1).optional(),
+  paygwAmount: z
+    .number()
+    .min(0)
+    .default(0),
+  gstAmount: z
+    .number()
+    .min(0)
+    .default(0),
+  description: z.string().trim().optional(),
+});
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\schemas\designated-ingest.ts
+============================================================
+import { z } from "zod";
+
+export const contributionSchema = z.object({
+  orgId: z.string().min(1),
+  amount: z.number().positive(),
+  source: z.string().min(1).optional(),
+  actorId: z.string().optional(),
+  payload: z.unknown().optional(),
+});
+
+export const precheckSchema = z.object({
+  orgId: z.string().min(1).optional(),
+});
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\schemas\pii.schema.json
+============================================================
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://apgms.example.com/schemas/pii.schema.json",
+  "title": "PIIRecord",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["abn", "tfnToken", "secret"],
+  "properties": {
+    "abn": {
+      "type": "string",
+      "pattern": "^\\d{11}$"
+    },
+    "tfnToken": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]{43,}$"
+    },
+    "secret": {
+      "type": "object",
+      "required": ["ciphertext", "kid"],
+      "additionalProperties": false,
+      "properties": {
+        "ciphertext": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kid": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\security\mfa.ts
+============================================================
+import { verifyTotpToken } from "@apgms/shared";
+import {
+  getTotpCredential,
+  hashRecoveryCode,
+  recordMfaUsage,
+  updateTotpRecoveryCodes,
+} from "../lib/mfa-store.js";
+
+const SESSION_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
+
+type ActiveSession = {
+  expiresAt: number;
+};
+
+const activeSessions = new Map<string, ActiveSession>();
+
+const now = () => Date.now();
+
+const cleanup = () => {
+  const timestamp = now();
+  for (const [userId, details] of activeSessions.entries()) {
+    if (details.expiresAt <= timestamp) {
+      activeSessions.delete(userId);
+    }
+  }
+};
+
+export function requireRecentVerification(userId: string): boolean {
+  cleanup();
+  const record = activeSessions.get(userId);
+  if (!record) {
+    return false;
+  }
+  if (record.expiresAt <= now()) {
+    activeSessions.delete(userId);
+    return false;
+  }
+  return true;
+}
+
+export function clearVerification(userId: string): void {
+  activeSessions.delete(userId);
+}
+
+export function grantStepUpSession(
+  userId: string,
+  ttlMs: number = SESSION_EXPIRY_MS,
+): Date {
+  const expiry = now() + ttlMs;
+  activeSessions.set(userId, {
+    expiresAt: expiry,
+  });
+  return new Date(expiry);
+}
+
+function normaliseRecoveryCode(input: string): string {
+  return input.replace(/[\s-]/g, "").toUpperCase();
+}
+
+export type VerifyChallengeResult = {
+  success: boolean;
+  method?: "totp" | "recovery";
+  expiresAt?: Date;
+  remainingRecoveryCodes?: number;
+};
+
+export async function verifyChallenge(userId: string, code: string): Promise<VerifyChallengeResult> {
+  cleanup();
+  const trimmed = code.trim();
+  if (trimmed.length === 0) {
+    return { success: false };
+  }
+
+  const credential = await getTotpCredential(userId);
+  if (!credential) {
+    return { success: false };
+  }
+
+  const numericToken = trimmed.replace(/\s+/g, "");
+  if (/^\d{6}$/.test(numericToken) && verifyTotpToken(credential.secret, numericToken)) {
+    await recordMfaUsage(credential.record.id);
+    const expiresAt = grantStepUpSession(userId);
+    return {
+      success: true,
+      method: "totp",
+      expiresAt,
+      remainingRecoveryCodes: credential.recoveryCodes.filter((entry) => !entry.used).length,
+    };
+  }
+
+  const hashed = hashRecoveryCode(normaliseRecoveryCode(trimmed));
+  const index = credential.recoveryCodes.findIndex(
+    (entry) => entry.hash === hashed && !entry.used,
+  );
+
+  if (index === -1) {
+    return { success: false };
+  }
+
+  const updatedRecoveryCodes = credential.recoveryCodes.map((entry, idx) =>
+    idx === index ? { ...entry, used: true } : entry,
+  );
+
+  await updateTotpRecoveryCodes(
+    credential.record.id,
+    userId,
+    credential.secret,
+    updatedRecoveryCodes,
+  );
+  await recordMfaUsage(credential.record.id);
+  const expiresAt = grantStepUpSession(userId);
+  return {
+    success: true,
+    method: "recovery",
+    expiresAt,
+    remainingRecoveryCodes: updatedRecoveryCodes.filter((entry) => !entry.used).length,
+  };
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\security\providers.js
+============================================================
+import { randomBytes } from "node:crypto";
+import { Buffer } from "node:buffer";
+import { createSecretManager } from "@apgms/shared";
+function decodeKeyMaterial(raw) {
+    return {
+        kid: raw.kid,
+        material: Buffer.from(raw.material, "base64"),
+    };
+}
+class EnvKeyManagementService {
+    keys = new Map();
+    activeKid;
+    constructor(rawKeys, activeKid) {
+        if (rawKeys.length === 0) {
+            throw new Error("PII_KEYS must provide at least one key");
+        }
+        for (const raw of rawKeys) {
+            if (!raw.kid || !raw.material) {
+                throw new Error("PII_KEYS entries require kid and material");
+            }
+            this.keys.set(raw.kid, decodeKeyMaterial(raw));
+        }
+        this.activeKid = activeKid ?? rawKeys[0].kid;
+        if (!this.keys.has(this.activeKid)) {
+            throw new Error(`PII_ACTIVE_KEY ${this.activeKid} missing from key set`);
+        }
+    }
+    getActiveKey() {
+        const key = this.keys.get(this.activeKid);
+        if (!key) {
+            throw new Error(`Active key ${this.activeKid} is not available`);
+        }
+        return key;
+    }
+    getKeyById(kid) {
+        return this.keys.get(kid);
+    }
+}
+class EnvSaltProvider {
+    salts = new Map();
+    activeSid;
+    constructor(rawSalts, activeSid) {
+        if (rawSalts.length === 0) {
+            // generate ephemeral salt to avoid crashes, but warn
+            const sid = `ephemeral-${Date.now()}`;
+            const secret = randomBytes(32);
+            this.salts.set(sid, { sid, secret });
+            this.activeSid = sid;
+            return;
+        }
+        for (const raw of rawSalts) {
+            if (!raw.sid || !raw.secret) {
+                throw new Error("PII_SALTS entries require sid and secret");
+            }
+            this.salts.set(raw.sid, {
+                sid: raw.sid,
+                secret: Buffer.from(raw.secret, "base64"),
+            });
+        }
+        this.activeSid = activeSid ?? rawSalts[0].sid;
+        if (!this.salts.has(this.activeSid)) {
+            throw new Error(`PII_ACTIVE_SALT ${this.activeSid} missing from salt set`);
+        }
+    }
+    getActiveSalt() {
+        const salt = this.salts.get(this.activeSid);
+        if (!salt) {
+            throw new Error("Active salt is not available");
+        }
+        return salt;
+    }
+    getSaltById(id) {
+        return this.salts.get(id);
+    }
+}
+class PrismaAuditLogger {
+    prisma;
+    constructor(prisma) {
+        this.prisma = prisma;
+    }
+    async record(event) {
+        const payload = event;
+        try {
+            await this.prisma.auditLog.create({
+                data: {
+                    actorId: payload.actorId,
+                    action: payload.action,
+                    orgId: payload.metadata?.orgId ?? "unknown",
+                    metadata: payload.metadata ?? {},
+                },
+            });
+        }
+        catch (error) {
+            // Failing closed to avoid leaking operations; log and continue
+            console.error("unable to persist audit log", error);
+            throw error;
+        }
+    }
+}
+export async function createKeyManagementService() {
+    const secretManager = createSecretManager();
+    const rawKeys = await readJsonSecret(secretManager, "PII_KEYS", process.env.PII_KEYS_SECRET_PATH);
+    const activeKid = process.env.PII_ACTIVE_KEY;
+    return new EnvKeyManagementService(rawKeys ?? [], activeKid);
+}
+export async function createSaltProvider() {
+    const secretManager = createSecretManager();
+    const rawSalts = await readJsonSecret(secretManager, "PII_SALTS", process.env.PII_SALTS_SECRET_PATH);
+    const activeSid = process.env.PII_ACTIVE_SALT;
+    return new EnvSaltProvider(rawSalts ?? [], activeSid);
+}
+export function createAuditLogger(prisma) {
+    return new PrismaAuditLogger(prisma);
+}
+async function readJsonSecret(secretManager, envName, secretPath) {
+    const identifier = secretPath ?? envName;
+    const secret = await secretManager.getSecret(identifier);
+    if (secret) {
+        return parseJson(secret, identifier);
+    }
+    const fallback = process.env[envName];
+    if (fallback) {
+        return parseJson(fallback, envName);
+    }
+    return undefined;
+}
+function parseJson(value, name) {
+    try {
+        return JSON.parse(value);
+    }
+    catch (error) {
+        throw new Error(`${name} must contain valid JSON`);
+    }
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\security\providers.ts
+============================================================
+// services/api-gateway/src/security/providers.ts
+
+import { randomBytes } from "node:crypto";
+import { Buffer } from "node:buffer";
+
+import {
+  createSecretManager,
+  type SecretManager,
+} from "./secret-manager.js";
+import { recordAuditLog } from "../lib/audit.js";
+import { redactValue } from "@apgms/shared";
+
+import type {
+  AuditEvent,
+  AuditLogger,
+  EncryptionKey,
+  KeyManagementService,
+  SaltMaterial,
+  TokenSaltProvider,
+} from "../lib/pii.js";
+
+// Minimal JSON type for safe metadata coercion
+type JsonPrimitive = string | number | boolean | null;
+type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
+
+interface RawKeyMaterial {
+  kid: string;
+  material: string;
+}
+
+interface RawSaltMaterial {
+  sid: string;
+  secret: string;
+}
+
+function decodeKeyMaterial(raw: RawKeyMaterial): EncryptionKey {
+  return {
+    kid: raw.kid,
+    material: Buffer.from(raw.material, "base64"),
+  };
+}
+
+class EnvKeyManagementService implements KeyManagementService {
+  private readonly keys = new Map<string, EncryptionKey>();
+  private readonly activeKid: string;
+
+  constructor(rawKeys: RawKeyMaterial[], activeKid: string | undefined) {
+    if (rawKeys.length === 0) {
+      throw new Error("PII_KEYS must provide at least one key");
+    }
+    for (const raw of rawKeys) {
+      if (!raw.kid || !raw.material) {
+        throw new Error("PII_KEYS entries require kid and material");
+      }
+      this.keys.set(raw.kid, decodeKeyMaterial(raw));
+    }
+    this.activeKid = activeKid ?? rawKeys[0]!.kid;
+    if (!this.keys.has(this.activeKid)) {
+      throw new Error(`PII_ACTIVE_KEY ${this.activeKid} missing from key set`);
+    }
+  }
+
+  getActiveKey(): EncryptionKey {
+    const key = this.keys.get(this.activeKid);
+    if (!key) {
+      throw new Error(`Active key ${this.activeKid} is not available`);
+    }
+    return key;
+  }
+
+  getKeyById(kid: string): EncryptionKey | undefined {
+    return this.keys.get(kid);
+  }
+}
+
+class EnvSaltProvider implements TokenSaltProvider {
+  private readonly salts = new Map<string, SaltMaterial>();
+  private readonly activeSid: string;
+
+  constructor(rawSalts: RawSaltMaterial[], activeSid: string | undefined) {
+    if (rawSalts.length === 0) {
+      // generate ephemeral salt to avoid crashes, but warn
+      const sid = `ephemeral-${Date.now()}`;
+      const secret = randomBytes(32);
+      this.salts.set(sid, { sid, secret });
+      this.activeSid = sid;
+      return;
+    }
+
+    for (const raw of rawSalts) {
+      if (!raw.sid || !raw.secret) {
+        throw new Error("PII_SALTS entries require sid and secret");
+      }
+      this.salts.set(raw.sid, {
+        sid: raw.sid,
+        secret: Buffer.from(raw.secret, "base64"),
+      });
+    }
+
+    this.activeSid = activeSid ?? rawSalts[0]!.sid;
+    if (!this.salts.has(this.activeSid)) {
+      throw new Error(
+        `PII_ACTIVE_SALT ${this.activeSid} missing from salt set`
+      );
+    }
+  }
+
+  getActiveSalt(): SaltMaterial {
+    const salt = this.salts.get(this.activeSid);
+    if (!salt) {
+      throw new Error("Active salt is not available");
+    }
+    return salt;
+  }
+
+  getSaltById(id: string): SaltMaterial | undefined {
+    return this.salts.get(id);
+  }
+}
+
+class PrismaAuditLogger implements AuditLogger {
+  constructor(private readonly prisma: any) {}
+
+  async record(
+    event: Parameters<AuditLogger["record"]>[0]
+  ): Promise<void> {
+    const payload = event as AuditEvent;
+    try {
+      const orgId =
+        (payload.metadata?.orgId as string | undefined) ??
+        "unknown";
+      const metadata = coerceMetadata(payload.metadata);
+      const safeMetadata = redactValue(metadata) as JsonValue | null;
+
+      await recordAuditLog({
+        orgId,
+        actorId: payload.actorId,
+        action: payload.action,
+        metadata: safeMetadata,
+        throwOnError: true,
+      });
+    } catch (error: unknown) {
+      // Failing closed to avoid leaking operations; log and continue
+      console.error("unable to persist audit log", error);
+      throw error;
+    }
+  }
+}
+
+export interface ProviderConfig {
+  prisma: any;
+}
+
+export async function createKeyManagementService(): Promise<KeyManagementService> {
+  const secretManager = createSecretManager();
+
+  const rawKeys = await readJsonSecret<RawKeyMaterial[]>(
+    secretManager,
+    "PII_KEYS",
+    process.env.PII_KEYS_SECRET_PATH
+  );
+  const activeKid = process.env.PII_ACTIVE_KEY;
+
+  return new EnvKeyManagementService(rawKeys ?? [], activeKid);
+}
+
+export async function createSaltProvider(): Promise<TokenSaltProvider> {
+  const secretManager = createSecretManager();
+
+  const rawSalts = await readJsonSecret<RawSaltMaterial[]>(
+    secretManager,
+    "PII_SALTS",
+    process.env.PII_SALTS_SECRET_PATH
+  );
+  const activeSid = process.env.PII_ACTIVE_SALT;
+
+  return new EnvSaltProvider(rawSalts ?? [], activeSid);
+}
+
+export function createAuditLogger(prisma: any): AuditLogger {
+  return new PrismaAuditLogger(prisma);
+}
+
+function coerceMetadata(
+  metadata: AuditEvent["metadata"] | undefined
+): JsonValue | null {
+  if (metadata == null) {
+    return null;
+  }
+  const jsonSafe = JSON.parse(JSON.stringify(metadata));
+  return jsonSafe as JsonValue;
+}
+
+async function readJsonSecret<T>(
+  secretManager: SecretManager,
+  envName: string,
+  secretPath: string | undefined
+): Promise<T | undefined> {
+  const identifier = secretPath ?? envName;
+
+  const secret = await secretManager.getSecret(identifier);
+  if (secret) {
+    return parseJson<T>(secret, identifier);
+  }
+
+  const fallback = process.env[envName];
+  if (fallback) {
+    return parseJson<T>(fallback, envName);
+  }
+
+  return undefined;
+}
+
+function parseJson<T>(value: string, name: string): T {
+  try {
+    return JSON.parse(value) as T;
+  } catch (_err) {
+    throw new Error(`${name} must contain valid JSON`);
+  }
+}
+
+
+
+============================================================
+FILE: C:\src\apgms-final\services\api-gateway\src\security\secret-manager.ts
+============================================================
+// services/api-gateway/src/security/secret-manager.ts
+
+import assert from "node:assert/strict";
+
+export type SecretManagerProvider = "env" | "vault";
+
+export interface SecretManager {
+  getSecret(identifier: string): Promise<string | undefined>;
+}
+
+export function createSecretManager(): SecretManager {
+  const provider = (
+    process.env.SECRETS_PROVIDER ?? "env"
+  ).toLowerCase() as SecretManagerProvider;
+
+  if (provider === "vault") {
+    const addr = process.env.VAULT_ADDR;
+    const token = process.env.VAULT_TOKEN;
+    assert(
+      addr,
+      "VAULT_ADDR is required when SECRETS_PROVIDER=vault"
+    );
+    assert(
+      token,
+      "VAULT_TOKEN is required when SECRETS_PROVIDER=vault"
+    );
+    return new VaultSecretManager(
+      addr,
+      token,
+      process.env.VAULT_NAMESPACE
+    );
+    // NOTE: VAULT_NAMESPACE is optional
+  }
+
+  return new EnvSecretManager();
+}
+
+class EnvSecretManager implements SecretManager {
+  async getSecret(identifier: string): Promise<string | undefined> {
+    return process.env[identifier];
+  }
+}
+
+class VaultSecretManager implements SecretManager {
+  constructor(
+    private readonly addr: string,
+    private readonly token: string,
+    private readonly namespace?: string
+  ) {}
+
+  async getSecret(identifier: string): Promise<string | undefined> {
+    // allow either a full URL or a KV path
+    const path = identifier.startsWith("http")
+      ? identifier
+      : `${this.addr.replace(/\/$/, "")}/v1/${identifier.replace(
+          /^\//,
+          ""
+        )}`;
+
+    const headers: Record<string, string> = {
+      "X-Vault-Token": this.token,
+    };
+
+    if (this.namespace) {
+      headers["X-Vault-Namespace"] = this.namespace;
+    }
+
+    const response = await fetch(path, { headers });
+
+    if (response.status === 404) {
+      return undefined;
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to read secret from vault at ${identifier}: ${response.statusText}`
+      );
+    }
+
+    const body = (await response.json()) as { data?: unknown };
+    const payload = extractVaultData(body);
+
+    if (payload === undefined) {
+      return undefined;
+    }
+    if (typeof payload === "string") {
+      return payload;
+    }
+    return JSON.stringify(payload);
+  }
+}
+
+function extractVaultData(body: { data?: unknown }): unknown {
+  if (!body.data) {
+    return undefined;
+  }
+
+  // Vault KV v2 wraps secrets like { data: { data: {...}, metadata: {...} } }
+  if (
+    typeof body.data === "object" &&
+    body.data !== null &&
+    "data" in (body.data as Record<string, unknown>) &&
+    typeof (body.data as Record<string, unknown>).data === "object"
+  ) {
+    return (body.data as Record<string, unknown>).data;
+  }
+
+  return body.data;

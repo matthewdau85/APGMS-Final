@@ -11,7 +11,7 @@ const makeApp = (user: any) => {
     },
   };
   const app = Fastify();
-  app.decorateRequest("user", null);
+  app.decorateRequest("user", null as any);
   app.addHook("onRequest", (req, _rep, done) => {
     (req as any).user = user;
     done();

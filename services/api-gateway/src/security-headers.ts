@@ -1,47 +1,64 @@
-// services/api-gateway/src/security-headers.ts
 import type { FastifyHelmetOptions } from "@fastify/helmet";
-import type { AppConfig } from "./config.js";
+import type { AppConfig } from "./config";
 
-/**
- * Centralised Helmet configuration for the API gateway.
- * We keep it strict enough for ATO/DSP expectations but not so
- * exotic that it breaks local/dev.
- */
-export function helmetConfigFor(config: AppConfig): FastifyHelmetOptions {
-  const isProduction = config.security.requireHttps;
+type CspDirectives = Record<string, string[]>;
 
-  const cspDirectives = {
+function buildCsp(config: AppConfig): CspDirectives {
+  const { allowedOrigins } = config.cors;
+
+  const connectSrc = ["'self'", ...allowedOrigins];
+
+  return {
     defaultSrc: ["'self'"],
     baseUri: ["'self'"],
+    connectSrc,
     scriptSrc: ["'self'"],
     styleSrc: ["'self'", "'unsafe-inline'"],
     imgSrc: ["'self'", "data:"],
-    connectSrc: ["'self'"],
-    fontSrc: ["'self'", "data:"],
     objectSrc: ["'none'"],
     frameAncestors: ["'none'"],
-    // We rely on TLS in prod; this hint is mainly for browsers.
-    upgradeInsecureRequests: [] as string[],
   };
+}
+
+/**
+ * Build a helmet configuration for the given app config.
+ * This is what the app and tests should use.
+ */
+export function helmetConfigFor(config: AppConfig): FastifyHelmetOptions {
+  const csp = buildCsp(config);
+
+  const enableIsolation = config.security.enableIsolation === true;
 
   return {
-    hidePoweredBy: true,
-    frameguard: { action: "deny" },
-    referrerPolicy: { policy: "no-referrer" },
-
-    // Helmet/fastify-helmet CSP – always an object here, no booleans,
-    // so TS is happy and the browser gets a clear policy.
     contentSecurityPolicy: {
-      directives: cspDirectives,
+      useDefaults: false,
+      directives: csp,
     },
-
-    // Strict HSTS only when we *actually* require HTTPS.
-    hsts: isProduction
-      ? {
-          maxAge: 15552000, // 180 days
-          includeSubDomains: true,
-          preload: false,
-        }
-      : false,
+    frameguard: {
+      action: "deny",
+    },
+    referrerPolicy: {
+      policy: "no-referrer",
+    },
+    hsts: {
+      maxAge: 60 * 60 * 24 * 180, // 180 days
+      includeSubDomains: true,
+      preload: false,
+    },
+    crossOriginEmbedderPolicy: enableIsolation,
+    crossOriginOpenerPolicy: enableIsolation
+      ? { policy: "same-origin" }
+      : { policy: "same-origin-allow-popups" },
+    crossOriginResourcePolicy: {
+      policy: "same-site",
+    },
   };
+}
+
+/**
+ * Back-compat alias for older tests.
+ * test/regulator-compliance-summary.test.ts imports this by name.
+ */
+export function buildHelmetConfig(config: AppConfig): FastifyHelmetOptions {
+  return helmetConfigFor(config);
 }

@@ -26,6 +26,7 @@ import { registerRegulatorRoutes } from "./routes/regulator.js";
 import { registerAdminDataRoutes } from "./routes/admin.data.js";
 import { registerBankLinesRoutes } from "./routes/bank-lines.js";
 import { registerTaxRoutes } from "./routes/tax.js";
+
 import registerConnectorRoutes from "./routes/connectors.js";
 import { prisma } from "./db.js";
 import { parseWithSchema } from "./lib/validation.js";
@@ -55,7 +56,7 @@ import { registerComplianceMonitorRoutes } from "./routes/compliance-monitor.js"
 import { registerOnboardingRoutes } from "./routes/onboarding.js";
 import { registerForecastRoutes } from "./routes/forecast.js";
 import { ERROR_MESSAGES } from "./lib/errors.js";
-
+export * from "./designated-accounts/mappings";
 
 type BuildServerOptions = {
   bankLinesPlugin?: FastifyPluginAsync;
@@ -295,6 +296,8 @@ export async function buildServer(
     },
     { prefix: "/regulator" },
   );
+
+  app.register(registerPayrollRoutes);
 
   return app;
 }
