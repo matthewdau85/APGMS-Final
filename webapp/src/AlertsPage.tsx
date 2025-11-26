@@ -19,16 +19,14 @@ export default function AlertsPage() {
       if (!token) return;
       if (!options?.silent) {
         setLoading(true);
+        setError(null);
       }
-      setError(null);
       try {
         const result = await fetchAlerts(token);
         setAlerts(result.alerts);
       } catch (err) {
         console.error(err);
-        if (!options?.silent) {
-          setError("Unable to load alerts");
-        }
+        setError((prev) => (options?.silent ? prev ?? "Unable to load alerts" : "Unable to load alerts"));
       } finally {
         if (!options?.silent) {
           setLoading(false);
