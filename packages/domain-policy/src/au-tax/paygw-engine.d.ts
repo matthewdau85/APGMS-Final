@@ -23,5 +23,6 @@ export declare class PaygwEngine {
     calculate(input: PaygwCalculationInput): Promise<PaygwCalculationResult>;
     private toWeekly;
     private fromWeekly;
-    private findBracket;
+    private weeksPerPeriod;
+    private findBracketIndex;
 }

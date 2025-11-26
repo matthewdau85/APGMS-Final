@@ -57,19 +57,26 @@ export class PaygwEngine {
     const sortedBrackets = [...config.brackets].sort(
       (a, b) => a.thresholdCents - b.thresholdCents
     );
-    const bracketIndex = this.findBracketIndex(sortedBrackets, grossCents);
+    const weeklyGrossCents = this.toWeekly(grossCents, normalizedPeriod);
+
+    const bracketIndex = this.findBracketIndex(sortedBrackets, weeklyGrossCents);
 
     if (bracketIndex < 0) {
       throw new Error("No PAYGW bracket found for jurisdiction/period");
     }
 
     const bracket = sortedBrackets[bracketIndex];
-    const excessCents = Math.max(0, grossCents - bracket.thresholdCents);
+    const excessCents = Math.max(0, weeklyGrossCents - bracket.thresholdCents);
     const variableCents = Math.floor(
       (excessCents * bracket.marginalRateMilli) / 1000
     );
 
-    const withholdingCents = bracket.baseWithholdingCents + variableCents;
+    const weeklyWithholdingCents =
+      bracket.baseWithholdingCents + variableCents;
+    const withholdingCents = this.fromWeekly(
+      weeklyWithholdingCents,
+      normalizedPeriod
+    );
 
     return {
       withholdingCents,
@@ -77,6 +84,29 @@ export class PaygwEngine {
       bracketIndex,
       configUsed: config,
     };
+  }
+
+  private toWeekly(amountCents: number, period: PayPeriod): number {
+    const factor = this.weeksPerPeriod(period);
+    return amountCents / factor;
+  }
+
+  private fromWeekly(amountCents: number, period: PayPeriod): number {
+    const factor = this.weeksPerPeriod(period);
+    return Math.round(amountCents * factor);
+  }
+
+  private weeksPerPeriod(period: PayPeriod): number {
+    switch (period) {
+      case "FORTNIGHTLY":
+        return 2;
+      case "MONTHLY":
+        // 52 weeks / 12 months = 13/3
+        return 13 / 3;
+      case "WEEKLY":
+      default:
+        return 1;
+    }
   }
 
   private normalizePeriod(period: PayPeriod): PayPeriod {
