@@ -5,6 +5,7 @@ process.env.NODE_OPTIONS = "--experimental-vm-modules";
 export default {
   preset: "ts-jest/presets/default-esm",
   testEnvironment: "node",
+  cache: false,
 
   // Only TS needs special ESM treatment
   extensionsToTreatAsEsm: [".ts"],

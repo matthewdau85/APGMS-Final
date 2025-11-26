@@ -139,4 +139,51 @@ describe("PaygwEngine", () => {
       engine.calculate(makeInput({ grossCents: 100_00 })),
     ).rejects.toThrow(/No PAYGW bracket found/);
   });
+
+  it("rejects configs that are not PAYGW", async () => {
+    const gstConfig: AuTaxConfig = {
+      meta: {
+        ...baseMeta,
+        taxType: TaxType.GST,
+        id: "GST_TEST",
+      },
+      jurisdiction: JURISDICTION_AU,
+      taxType: TaxType.GST,
+      rateMilli: 100,
+    };
+
+    const repo = new InMemoryTaxConfigRepository(gstConfig);
+    const engine = new PaygwEngine(repo);
+
+    await expect(
+      engine.calculate(makeInput({ grossCents: 100_00 })),
+    ).rejects.toThrow(/No PAYGW bracket found/);
+  });
+
+  it("rejects configs with mismatching pay periods", async () => {
+    const config: PaygwConfig = {
+      meta: baseMeta,
+      brackets: testBrackets,
+      flags: {},
+      payPeriod: "monthly",
+    };
+
+    const repo = new InMemoryTaxConfigRepository(config);
+    const engine = new PaygwEngine(repo);
+
+    await expect(
+      engine.calculate(makeInput({ payPeriod: "weekly" })),
+    ).rejects.toThrow(/pay period does not match/);
+  });
+
+  it("normalizes negative gross to zero before applying brackets", async () => {
+    const engine = makeEngineWithBrackets(testBrackets);
+
+    const result = await engine.calculate(
+      makeInput({ grossCents: -50_00 }),
+    );
+
+    expect(result.withholdingCents).toBe(0);
+    expect(result.bracketIndex).toBe(0);
+  });
 });

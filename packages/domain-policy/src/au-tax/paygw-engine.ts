@@ -23,7 +23,11 @@ export interface PaygwCalculationResult {
 }
 
 function isPaygwConfig(config: AuTaxConfig | null): config is PaygwConfig {
-  return !!config && "brackets" in config;
+  return (
+    !!config &&
+    (config as PaygwConfig).meta?.taxType === TaxType.PAYGW &&
+    Array.isArray((config as PaygwConfig).brackets)
+  );
 }
 
 /**
@@ -43,11 +47,21 @@ export class PaygwEngine {
           onDate: paymentDate,
         });
 
-    if (!isPaygwConfig(config) || !config.brackets || config.brackets.length === 0) {
+    if (!isPaygwConfig(config)) {
       throw new Error("No PAYGW bracket found for jurisdiction/period");
     }
 
-    const bracketIndex = this.findBracketIndex(config.brackets, grossCents);
+    if (config.payPeriod && config.payPeriod !== payPeriod) {
+      throw new Error("PAYGW config pay period does not match input pay period");
+    }
+
+    if (!config.brackets || config.brackets.length === 0) {
+      throw new Error("No PAYGW bracket found for jurisdiction/period");
+    }
+
+    const normalizedGross = Math.max(0, grossCents);
+
+    const bracketIndex = this.findBracketIndex(config.brackets, normalizedGross);
 
     if (bracketIndex < 0) {
       throw new Error("No PAYGW bracket found for jurisdiction/period");
@@ -55,7 +69,7 @@ export class PaygwEngine {
 
     const bracket = config.brackets[bracketIndex];
 
-    const excess = grossCents - bracket.thresholdCents;
+    const excess = normalizedGross - bracket.thresholdCents;
     const marginal = Math.floor((excess * bracket.marginalRateMilli) / 1000);
     const withholdingCents = Math.max(0, bracket.baseWithholdingCents + marginal);
 
