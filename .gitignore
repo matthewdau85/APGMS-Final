@@ -51,3 +51,4 @@ pnpm-test-output.txt
 packages/**/dist/
 packages/domain-policy/src/**/*.js
 packages-domain-policy/src/**/*.d.ts
+fix-apgms-esm-domain.patch
