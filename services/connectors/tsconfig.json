@@ -5,14 +5,19 @@
     "outDir": "dist",
     "declaration": true,
     "declarationMap": false,
+
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "baseUrl": ".",
-    "composite": false,
+    "target": "ES2022",
+    "moduleDetection": "force",
     "allowJs": true,
+    "composite": false,
+    "baseUrl": ".",
+
     "paths": {
       "@apgms/shared": ["../../shared/dist/index"],
       "@apgms/shared/*": ["../../shared/dist/*"],
+
       "@apgms/domain-policy": ["../../packages/domain-policy/dist/index"],
       "@apgms/domain-policy/*": ["../../packages/domain-policy/dist/*"]
     }

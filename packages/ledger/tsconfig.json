@@ -1,17 +1,26 @@
 {
-   "extends": "../../tsconfig.json",
-    "compilerOptions":  {
-                            "outDir":  "./dist",
-                            "rootDir":  "./src",
-                            "module":  "ESNext",
-                            "moduleResolution":  "Node",
-                            "declaration":  true
-                        },
-    "include":  [
-                    "src/**/*.ts"
-                ],
-    "exclude":  [
-                    "dist",
-                    "tests"
-                ]
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": false,
+
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022",
+    "moduleDetection": "force",
+    "allowJs": true,
+    "composite": false,
+
+    "baseUrl": ".",
+    "paths": {
+      "@apgms/shared": ["../../shared/dist/index"],
+      "@apgms/shared/*": ["../../shared/dist/*"],
+
+      "@apgms/domain-policy": ["../domain-policy/dist/index"],
+      "@apgms/domain-policy/*": ["../domain-policy/dist/*"]
+    }
+  },
+  "include": ["src"]
 }
