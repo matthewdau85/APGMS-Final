@@ -4,11 +4,21 @@ export interface PaygwCalculationInput {
     orgId: string;
     jurisdiction: JurisdictionCode;
     payPeriod: PayPeriod;
-    grossIncomeCents: number;
-    asOf: Date;
+    /** Gross income for the pay period, expressed in cents. */
+    grossCents: number;
+    /** Payment date for the pay run. */
+    paymentDate: Date;
+    /** Optional flags from upstream payroll calculations. */
+    flags?: Record<string, unknown>;
 }
 export interface PaygwCalculationResult {
-    withheldCents: number;
+    withholdingCents: number;
+    /**
+     * Index of the bracket used from the configured PAYGW schedule.
+     */
+    bracketIndex: number;
+    /** Parameter set ID used for the calculation (from config meta). */
+    parameterSetId: string;
     configUsed?: PaygwConfig;
 }
 /**
@@ -19,6 +29,7 @@ export declare class PaygwEngine {
     private readonly repo;
     constructor(repo: TaxConfigRepository);
     calculate(input: PaygwCalculationInput): Promise<PaygwCalculationResult>;
+    private normalizePeriod;
     private toWeekly;
     private fromWeekly;
     private findBracket;

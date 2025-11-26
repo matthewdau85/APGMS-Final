@@ -7,7 +7,13 @@ export declare enum TaxType {
     COMPANY_TAX = "COMPANY_TAX",
     OTHER = "OTHER"
 }
-export type PayPeriod = "WEEKLY" | "FORTNIGHTLY" | "MONTHLY";
+export type PayPeriod =
+    | "WEEKLY"
+    | "FORTNIGHTLY"
+    | "MONTHLY"
+    | "weekly"
+    | "fortnightly"
+    | "monthly";
 export interface TaxParameterSetMeta {
     id: string;
     jurisdiction: JurisdictionCode;
@@ -20,18 +26,20 @@ export interface TaxParameterSetMeta {
 }
 export interface PaygwBracket {
     /**
-     * Apply this bracket if weekly income is < weeklyLessThan.
-     * Use null for the top bracket (no upper bound).
+     * Lower bound (inclusive) for the bracket, expressed in cents for weekly
+     * income. Brackets are evaluated in order and the highest matching
+     * threshold will be used.
      */
-    weeklyLessThan: number | null;
+    thresholdCents: number;
     /**
-     * Coefficient "a" in ATO formulas.
+     * Fixed amount to withhold at the start of the bracket, in cents.
      */
-    a: number | null;
+    baseWithholdingCents: number;
     /**
-     * Coefficient "b" in ATO formulas.
+     * Marginal rate applied to income above the threshold, expressed in milli-
+     * rate (per thousand). For example, 100 = 10%.
      */
-    b: number | null;
+    marginalRateMilli: number;
 }
 export interface PaygwConfig {
     meta: TaxParameterSetMeta;
