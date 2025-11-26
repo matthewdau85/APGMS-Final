@@ -1,39 +1,32 @@
 // packages/domain-policy/src/index.ts
 
 // ---------------------------------------------------------------------------
-// Designated one-way account domain – top-level helpers
+// Core tax types & BAS period
 // ---------------------------------------------------------------------------
-export * from "./au-tax/bas-types";
-export * from "./au-tax/gst-engine";
-export * from "./au-tax/paygw-settlement";
-export * from "./au-tax/gst-settlement";
-export * from "./au-tax/bas-reconciliation";
-export * from "./au-tax/bas-lodgment";
+export * from "./tax-types.js";
+export * from "./bas-period.js";
 
-export {
-  applyDesignatedAccountTransfer,
-  generateDesignatedAccountReconciliationArtifact,
-} from "./designated-accounts.js";
-
-export type {
-  PrismaClient,
-  DesignatedTransferSource,
-  AuditLogger,
-  ApplyDesignatedTransferContext,
-  ApplyDesignatedTransferInput,
-  ApplyDesignatedTransferResult,
-  DesignatedReconciliationSummary,
-  DesignatedAccountReconciliationArtifact,
-} from "./designated-accounts";
-
-// If you still want the sub-modules exposed, keep them but split
-// runtime vs type-only exports cleanly:
-
-// Designated one-way account domain
-export * from "./designated-accounts/guards.js";
-export type * from "./designated-accounts/types.js";
-
-// AU tax configuration + engines
-export type * from "./au-tax/types.js";
+// ---------------------------------------------------------------------------
+// AU tax configuration + engines + BAS helpers
+// ---------------------------------------------------------------------------
+export * from "./au-tax/types.js";
+export * from "./au-tax/bas-types.js";
+export * from "./au-tax/bas-lodgment.js";
+export * from "./au-tax/bas-reconciliation.js";
 export * from "./au-tax/paygw-engine.js";
+export * from "./au-tax/paygw-settlement.js";
+export * from "./au-tax/gst-engine.js";
+export * from "./au-tax/gst-settlement.js";
 export * from "./au-tax/prisma-repository.js";
+
+// ---------------------------------------------------------------------------
+// Designated account domain (transfers + mappings + guards)
+// ---------------------------------------------------------------------------
+
+// Note: src/designated-accounts.ts (already in your repo) contains the
+// applyDesignatedAccountTransfer + reconciliation plumbing. We just
+// re-export it plus the supporting types/guards.
+export * from "./designated-accounts.js";
+export * from "./designated-accounts/types.js";
+export * from "./designated-accounts/mappings.js";
+export * from "./designated-accounts/guards.js";

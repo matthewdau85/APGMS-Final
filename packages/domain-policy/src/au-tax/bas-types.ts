@@ -1,22 +1,20 @@
-export type BasPeriodId = string; // e.g. "2024-Q1", "2024-07"
+// packages/domain-policy/src/au-tax/bas-types.ts
 
-export type BasFrequency = "monthly" | "quarterly" | "annual";
+import type { BasPeriodId } from "../bas-period.js";
+import type {
+  JurisdictionCode,
+  TaxObligationType,
+} from "../tax-types.js";
 
-export interface BasPeriod {
-  id: BasPeriodId;
+/**
+ * A per-BAS-period tax position for a single obligation type
+ * (e.g. PAYGW or GST).
+ */
+export interface BasPosition {
   orgId: string;
-  frequency: BasFrequency;
-  startDate: Date;
-  endDate: Date;
-  lodgmentDueDate: Date;
-}
-
-export type TaxObligationType = "PAYGW" | "GST";
-
-export interface TaxObligation {
-  id: string;
-  orgId: string;
+  jurisdiction: JurisdictionCode;
   basPeriodId: BasPeriodId;
-  type: TaxObligationType;
-  amountCents: number;
+  obligationType: TaxObligationType;
+  debitCents: number;
+  creditCents: number;
 }

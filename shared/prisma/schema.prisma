@@ -45,6 +45,16 @@ enum AlertStatus {
   CLOSED
 }
 
+enum TaxType {
+  PAYGW
+  GST
+  PAYGI
+  FBT
+  COMPANY
+  LCT
+  WET
+}
+
 // =========================
 // Payroll domain
 // =========================

@@ -1,31 +1,54 @@
-import type { BasPeriodId } from "./bas-types";
+﻿// packages/domain-policy/src/au-tax/gst-engine.ts
 
-export interface GstConfig {
-  rateMilli: number; // 10000 = 10% for 10%
-}
+import {
+  TaxType,
+  type GstConfig,
+  type TaxConfigRepository,
+} from "./types.js";
+import type { JurisdictionCode } from "../tax-types.js";
 
-export interface PosTransaction {
+export interface GstCalculationInput {
   orgId: string;
-  basPeriodId: BasPeriodId;
-  txId: string;
-  txDate: Date;
-  grossCents: number;
-  taxable: boolean;
+  jurisdiction: JurisdictionCode;
+  taxableSuppliesCents: number;
+  gstFreeSuppliesCents: number;
+  inputTaxCreditsCents: number;
+  asOf: Date;
 }
 
 export interface GstCalculationResult {
-  txId: string;
-  gstCents: number;
+  netPayableCents: number;
+  configUsed?: GstConfig;
 }
 
 export class GstEngine {
-  constructor(private readonly config: GstConfig) {}
+  constructor(private readonly repo: TaxConfigRepository) {}
 
-  calculate(tx: PosTransaction): GstCalculationResult {
-    if (!tx.taxable) {
-      return { txId: tx.txId, gstCents: 0 };
+  async calculate(
+    input: GstCalculationInput
+  ): Promise<GstCalculationResult> {
+    const { jurisdiction, asOf } = input;
+
+    const config =
+      (this.repo.getGstConfig
+        ? await this.repo.getGstConfig(jurisdiction, asOf)
+        : ((await this.repo.getActiveConfig({
+            jurisdiction,
+            taxType: TaxType.GST,
+            onDate: asOf,
+          })) as GstConfig | null));
+
+    if (!config) {
+      throw new Error("No GST config for jurisdiction/date");
     }
-    const gstCents = Math.floor((tx.grossCents * this.config.rateMilli) / 100_000);
-    return { txId: tx.txId, gstCents };
+
+    const taxableBase =
+      input.taxableSuppliesCents - input.gstFreeSuppliesCents;
+    const gstOnSupplies = Math.round(
+      (taxableBase * config.rateMilli) / 1000
+    );
+    const netPayableCents = gstOnSupplies - input.inputTaxCreditsCents;
+
+    return { netPayableCents, configUsed: config };
   }
 }

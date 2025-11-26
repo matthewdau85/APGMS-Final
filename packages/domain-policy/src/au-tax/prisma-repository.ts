@@ -1,50 +1,59 @@
-// packages/domain-policy/src/au-tax/prisma-repository.ts
+﻿// packages/domain-policy/src/au-tax/prisma-repository.ts
 
 import type { PrismaClient } from "@prisma/client";
-import type {
-  AuTaxConfig,
-  JurisdictionCode,
-  TaxConfigRepository,
+import {
   TaxType,
-} from "./types";
+  type AuTaxConfig,
+  type PaygwConfig,
+  type GstConfig,
+  type PayPeriod,
+  type TaxConfigRepository,
+} from "./types.js";
+import type { JurisdictionCode } from "../tax-types.js";
 
 /**
- * Temporary stub of TaxConfigRepository backed by Prisma.
+ * Minimal stub for a Prisma-backed tax config repository.
  *
- * This is here so the domain-policy package compiles cleanly while
- * the actual Prisma schema for AU tax tables is being finalised.
- *
- * Once your Prisma models are settled (AuTaxParameterSet, AuTaxRateSchedule,
- * etc.), we can replace this with a real implementation that:
- *   - queries those tables
- *   - enforces non-overlapping effective windows
- *   - maps rows into PaygwConfig / GstConfig.
+ * This keeps the type surface stable while you design the actual
+ * Prisma schema and queries.
  */
 export class PrismaTaxConfigRepository implements TaxConfigRepository {
-  private readonly prisma: PrismaClient;
-
-  constructor(prisma: PrismaClient) {
-    this.prisma = prisma;
+  constructor(private readonly prisma: PrismaClient) {
+    void prisma;
   }
 
   async getActiveConfig(params: {
     jurisdiction: JurisdictionCode;
     taxType: TaxType;
     onDate: Date;
-  }): Promise<AuTaxConfig> {
-    // eslint-disable-next-line no-console
-    console.warn(
-      "[PrismaTaxConfigRepository] getActiveConfig called, but this is currently a stub. " +
-        "Wire this up to your real Prisma models before using in production.",
-      {
-        jurisdiction: params.jurisdiction,
-        taxType: params.taxType,
-        onDate: params.onDate.toISOString(),
-      }
-    );
+  }): Promise<AuTaxConfig | null> {
+    // TODO: Implement real Prisma queries using AuTaxParameterSet, etc.
+    void params;
+    return null;
+  }
 
-    throw new Error(
-      "PrismaTaxConfigRepository.getActiveConfig is not implemented for your Prisma schema yet."
-    );
+  async getPaygwConfigForSchedule(
+    jurisdiction: JurisdictionCode,
+    payPeriod: PayPeriod,
+    asOf: Date
+  ): Promise<PaygwConfig | null> {
+    const cfg = await this.getActiveConfig({
+      jurisdiction,
+      taxType: TaxType.PAYGW,
+      onDate: asOf,
+    });
+    return (cfg as PaygwConfig) ?? null;
+  }
+
+  async getGstConfig(
+    jurisdiction: JurisdictionCode,
+    asOf: Date
+  ): Promise<GstConfig | null> {
+    const cfg = await this.getActiveConfig({
+      jurisdiction,
+      taxType: TaxType.GST,
+      onDate: asOf,
+    });
+    return (cfg as GstConfig) ?? null;
   }
 }

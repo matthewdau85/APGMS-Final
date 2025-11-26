@@ -1,96 +1,40 @@
-import type { BasPeriodId } from "./bas-types";
-import type { BasReconciliationService } from "./bas-reconciliation";
-import type { JournalWriter } from "@apgms/ledger";
-import type { DesignatedAccountMappingRepository } from "../designated-accounts/mappings";
-import { assertDesignatedAccountMovementAllowed } from "../designated-accounts/guards";
+// packages/domain-policy/src/au-tax/bas-lodgment.ts
+
+import type { BasPeriodId } from "../bas-period.js";
+import type { TaxObligationType } from "../tax-types.js";
 
 export interface BasLodgmentInput {
   orgId: string;
   basPeriodId: BasPeriodId;
-  actorUserId: string;
+}
+
+export interface BasLodgmentLine {
+  obligationType: TaxObligationType;
+  payableCents: number;
 }
 
 export interface BasLodgmentResult {
+  orgId: string;
   basPeriodId: BasPeriodId;
-  paygwCents: number;
-  gstCents: number;
-  journalId: string;
+  lines: BasLodgmentLine[];
+  totalPayableCents: number;
 }
 
+/**
+ * Placeholder BAS lodgment service.
+ *
+ * Intentionally minimal: lets the rest of the stack compile and gives
+ * you a stable surface to flesh out later.
+ */
 export class BasLodgmentService {
-  constructor(
-    private readonly reconciliationService: BasReconciliationService,
-    private readonly journalWriter: JournalWriter,
-    private readonly mappings: DesignatedAccountMappingRepository
-  ) {}
-
-  async lodge(input: BasLodgmentInput): Promise<BasLodgmentResult> {
-    const reco = await this.reconciliationService.reconcile({
-      orgId: input.orgId,
-      basPeriodId: input.basPeriodId,
-    });
-
-    if (reco.overallStatus === "SHORTFALL") {
-      throw new Error("Cannot lodge BAS: shortfall in designated accounts");
-    }
-
-    const paygw = reco.lines.find(l => l.type === "PAYGW");
-    const gst = reco.lines.find(l => l.type === "GST");
-
-    const paygwMapping = paygw
-      ? await this.mappings.getForOrgAndType(input.orgId, "PAYGW")
-      : null;
-    const gstMapping = gst
-      ? await this.mappings.getForOrgAndType(input.orgId, "GST")
-      : null;
-
-    const entries: Array<{ accountId: string; type: "DEBIT" | "CREDIT"; amountCents: number }> = [];
-
-    if (paygw && paygwMapping) {
-      entries.push(
-        {
-          accountId: paygwMapping.designatedAccountId,
-          type: "DEBIT",
-          amountCents: paygw.designatedBalanceCents,
-        },
-        {
-          accountId: "ATO_PAYGW_CLEARING",
-          type: "CREDIT",
-          amountCents: paygw.designatedBalanceCents,
-        }
-      );
-    }
-
-    if (gst && gstMapping) {
-      entries.push(
-        {
-          accountId: gstMapping.designatedAccountId,
-          type: "DEBIT",
-          amountCents: gst.designatedBalanceCents,
-        },
-        {
-          accountId: "ATO_GST_CLEARING",
-          type: "CREDIT",
-          amountCents: gst.designatedBalanceCents,
-        }
-      );
-    }
-
-    const journalId = await this.journalWriter.writeJournal({
-      orgId: input.orgId,
-      basPeriodId: input.basPeriodId,
-      entries,
-      meta: {
-        kind: "BAS_LODGMENT",
-        actorUserId: input.actorUserId,
-      },
-    });
-
+  async prepareBasLodgment(
+    input: BasLodgmentInput
+  ): Promise<BasLodgmentResult> {
     return {
+      orgId: input.orgId,
       basPeriodId: input.basPeriodId,
-      paygwCents: paygw?.designatedBalanceCents ?? 0,
-      gstCents: gst?.designatedBalanceCents ?? 0,
-      journalId,
+      lines: [],
+      totalPayableCents: 0,
     };
   }
 }
