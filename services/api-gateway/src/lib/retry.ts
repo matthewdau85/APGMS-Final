@@ -1,4 +1,4 @@
-export interface RetryOptions {
+﻿export interface RetryOptions {
   readonly maxAttempts?: number;
   readonly initialDelayMs?: number;
   readonly maxDelayMs?: number;
@@ -36,7 +36,7 @@ export async function withRetry<T>(
 
       let sleepFor = delay;
       if (jitter) {
-        const rand = 0.5 + Math.random(); // 0.5–1.5
+        const rand = 0.5 + Math.random(); // 0.5â€“1.5
         sleepFor = Math.floor(delay * rand);
       }
 

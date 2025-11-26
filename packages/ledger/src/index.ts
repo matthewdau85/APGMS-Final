@@ -3,3 +3,4 @@
 
 export * from "./reader.js";
 
+export { JournalWriter, UnbalancedJournalError } from "./journalWriter.js";

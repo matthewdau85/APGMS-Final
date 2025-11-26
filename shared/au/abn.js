@@ -1,4 +1,4 @@
-const ABN_WEIGHTS = [10, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19];
+﻿const ABN_WEIGHTS = [10, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19];
 const DIGIT_ONLY = /\d+/g;
 export function normalizeAbn(input) {
     const digits = input.match(DIGIT_ONLY)?.join("") ?? "";
@@ -21,3 +21,40 @@ export function isValidABN(input) {
     const weightedSum = digits.reduce((sum, digit, index) => sum + digit * ABN_WEIGHTS[index], 0);
     return weightedSum % 89 === 0;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

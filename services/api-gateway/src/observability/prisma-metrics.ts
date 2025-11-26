@@ -1,4 +1,4 @@
-// services/api-gateway/src/observability/prisma-metrics.ts
+﻿// services/api-gateway/src/observability/prisma-metrics.ts
 import { metrics } from "./metrics.js";
 
 /**
@@ -31,3 +31,4 @@ export function instrumentPrisma<T>(client: T): T {
 
   return extended as T;
 }
+

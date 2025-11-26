@@ -1,4 +1,4 @@
-// services/api-gateway/src/lib/idempotency.ts
+﻿// services/api-gateway/src/lib/idempotency.ts
 import { createHash } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import { conflict } from "@apgms/shared";

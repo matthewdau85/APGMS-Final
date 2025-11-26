@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+﻿import type { FastifyInstance } from "fastify";
 import type { GstBatch, PosTransaction } from "@apgms/domain-policy";
 
 export async function registerGstRoutes(app: FastifyInstance) {

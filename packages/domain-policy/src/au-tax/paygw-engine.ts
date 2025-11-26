@@ -1,71 +1,68 @@
-﻿// packages/domain-policy/src/au-tax/paygw-engine.ts
+﻿// packages/domain-policy/src/au-tax/paygw-engine.js
 
-import {
-  TaxType,
-  type PayPeriod,
-  type PaygwBracket,
-  type PaygwConfig,
-  type TaxConfigRepository,
-} from "./types.js";
-import type { JurisdictionCode } from "../tax-types.js";
-
-export interface PaygwCalculationInput {
-  orgId: string;
-  jurisdiction: JurisdictionCode;
-  payPeriod: PayPeriod;
-  grossIncomeCents: number;
-  asOf: Date;
-}
-
-export interface PaygwCalculationResult {
-  withheldCents: number;
-  configUsed?: PaygwConfig;
-}
+import { TaxType } from "./types.js";
 
 /**
- * Basic PAYGW engine that uses ATO "a * X − b" style brackets.
+ * Basic PAYGW engine that uses ATO-style "a * X − b" brackets.
  * Keeps behaviour simple and deterministic for now.
  */
 export class PaygwEngine {
-  constructor(private readonly repo: TaxConfigRepository) {}
+  constructor(repo) {
+    this.repo = repo;
+  }
 
-  async calculate(
-    input: PaygwCalculationInput
-  ): Promise<PaygwCalculationResult> {
+  async calculate(input) {
     const { jurisdiction, payPeriod, asOf, grossIncomeCents } = input;
 
-    const config =
-      (this.repo.getPaygwConfigForSchedule
-        ? await this.repo.getPaygwConfigForSchedule(
-            jurisdiction,
-            payPeriod,
-            asOf
-          )
-        : ((await this.repo.getActiveConfig({
-            jurisdiction,
-            taxType: TaxType.PAYGW,
-            onDate: asOf,
-          })) as PaygwConfig | null));
+    const config = this.repo.getPaygwConfigForSchedule
+      ? await this.repo.getPaygwConfigForSchedule(jurisdiction, payPeriod, asOf)
+      : await this.repo.getActiveConfig({
+          jurisdiction,
+          taxType: TaxType.PAYGW,
+          onDate: asOf,
+        });
 
+    // Tests expect /No PAYGW bracket found/ when nothing usable exists.
     if (!config || !config.brackets || config.brackets.length === 0) {
-      throw new Error("No PAYGW brackets configured for jurisdiction/period");
+      throw new Error("No PAYGW bracket found for jurisdiction/period");
     }
 
     const weeklyIncome = this.toWeekly(grossIncomeCents, payPeriod);
     const bracket = this.findBracket(config.brackets, weeklyIncome);
 
-    if (!bracket || bracket.a == null || bracket.b == null) {
-      return { withheldCents: 0, configUsed: config };
+    if (!bracket) {
+      // Config exists but does not contain a suitable bracket.
+      throw new Error("No PAYGW bracket found for jurisdiction/period");
+    }
+
+    const bracketIndex = config.brackets.indexOf(bracket);
+
+    // If the bracket is misconfigured, fall back to zero withholding but
+    // still report which bracket was selected.
+    if (bracket.a == null || bracket.b == null) {
+      return {
+        withholdingCents: 0,
+        withheldCents: 0,
+        bracketIndex,
+        parameterSetId: config.meta.id,
+        configUsed: config,
+      };
     }
 
     const taxWeekly = weeklyIncome * bracket.a - bracket.b;
     const taxForPeriod = this.fromWeekly(taxWeekly, payPeriod);
-    const withheldCents = Math.max(0, Math.round(taxForPeriod));
+    const withholdingCents = Math.max(0, Math.round(taxForPeriod));
 
-    return { withheldCents, configUsed: config };
+    return {
+      withholdingCents,
+      withheldCents: withholdingCents,
+      bracketIndex,
+      parameterSetId: config.meta.id,
+      configUsed: config,
+    };
   }
 
-  private toWeekly(amountCents: number, period: PayPeriod): number {
+  toWeekly(amountCents, period) {
     switch (period) {
       case "WEEKLY":
         return amountCents;
@@ -78,7 +75,7 @@ export class PaygwEngine {
     }
   }
 
-  private fromWeekly(amountCents: number, period: PayPeriod): number {
+  fromWeekly(amountCents, period) {
     switch (period) {
       case "WEEKLY":
         return amountCents;
@@ -91,10 +88,7 @@ export class PaygwEngine {
     }
   }
 
-  private findBracket(
-    brackets: PaygwBracket[],
-    weeklyIncome: number
-  ): PaygwBracket | undefined {
+  findBracket(brackets, weeklyIncome) {
     for (const b of brackets) {
       if (b.weeklyLessThan == null || weeklyIncome < b.weeklyLessThan) {
         return b;

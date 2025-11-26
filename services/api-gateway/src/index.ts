@@ -1,4 +1,4 @@
-import { buildServer } from "./app.js";
+﻿import { buildServer } from "./app.js";
 import { startTracing, stopTracing } from "./observability/tracing.js";
 
 
@@ -39,3 +39,4 @@ main().catch(async (err) => {
   await stopTracing();
   process.exit(1);
 });
+

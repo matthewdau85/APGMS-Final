@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+﻿import type { FastifyInstance } from "fastify";
 import type { PayrollBatch } from "@apgms/domain-policy";
 
 export async function registerPayrollRoutes(app: FastifyInstance) {

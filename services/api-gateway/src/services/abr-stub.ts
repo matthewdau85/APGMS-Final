@@ -1,4 +1,4 @@
-export type AbnTfnLookupInput = {
+﻿export type AbnTfnLookupInput = {
   abn?: string;
   tfn?: string;
 };

@@ -16,6 +16,11 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "jest --config ../../jest.config.js packages/domain-policy/tests"
+    "test": "jest --config ../../jest.config.mjs packages/domain-policy/tests"
   }
 }
+
+
+
+
+

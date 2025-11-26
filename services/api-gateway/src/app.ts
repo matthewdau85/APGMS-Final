@@ -1,4 +1,4 @@
-// services/api-gateway/src/app.ts
+﻿// services/api-gateway/src/app.ts
 
 import Fastify, {
   type FastifyInstance,
@@ -22,12 +22,13 @@ import { config } from "./config.js";
 import rateLimit from "./plugins/rate-limit.js";
 import { authGuard, createAuthGuard, REGULATOR_AUDIENCE } from "./auth.js";
 import { registerAuthRoutes } from "./routes/auth.js";
-import { helmetConfigFor } from "./security-headers";
+import { helmetConfigFor } from "./security-headers.js";
 import { registerRegulatorAuthRoutes } from "./routes/regulator-auth.js";
 import { registerRegulatorRoutes } from "./routes/regulator.js";
 import { registerAdminDataRoutes } from "./routes/admin.data.js";
 import { registerBankLinesRoutes } from "./routes/bank-lines.js";
 import { registerTaxRoutes } from "./routes/tax.js";
+import { buildServer } from './server.js';
 
 import registerConnectorRoutes from "./routes/connectors.js";
 import { prisma } from "./db.js";
@@ -60,7 +61,7 @@ import { registerForecastRoutes } from "./routes/forecast.js";
 import { ERROR_MESSAGES } from "./lib/errors.js";
 
 // TODO: re-export designated account mappings when the module exists
-// export * from "./designated-accounts/mappings";
+// export * from "./designated-accounts/mappings.js";
 
 type BuildServerOptions = {
   bankLinesPlugin?: FastifyPluginAsync;
@@ -306,3 +307,6 @@ export async function buildServer(
 
   return app;
 }
+
+
+

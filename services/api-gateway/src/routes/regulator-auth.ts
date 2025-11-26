@@ -1,4 +1,4 @@
-import { FastifyInstance } from "fastify";
+﻿import { FastifyInstance } from "fastify";
 
 import { config } from "../config.js";
 import { prisma } from "../db.js";

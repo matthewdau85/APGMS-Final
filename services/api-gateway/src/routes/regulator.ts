@@ -1,4 +1,4 @@
-// services/api-gateway/src/routes/regulator.ts
+﻿// services/api-gateway/src/routes/regulator.ts
 import type { JsonValue } from "@prisma/client/runtime/library.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { PrismaClient } from "@prisma/client";
@@ -112,7 +112,7 @@ export async function registerRegulatorRoutes(
       status: cycle.overallStatus,
       notes: `PAYGW ${toNumber(cycle.paygwSecured)} / ${toNumber(
         cycle.paygwRequired,
-      )} · GST ${toNumber(cycle.gstSecured)} / ${toNumber(cycle.gstRequired)}`,
+      )} Â· GST ${toNumber(cycle.gstSecured)} / ${toNumber(cycle.gstRequired)}`,
     }));
 
     const paymentPlanHistory = (paymentPlans as any[]).map((plan: any) => ({

@@ -1,4 +1,4 @@
-// services/api-gateway/src/lib/audit.ts
+﻿// services/api-gateway/src/lib/audit.ts
 import crypto from "node:crypto";
 import { prisma } from "../db.js";
 

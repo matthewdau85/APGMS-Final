@@ -1,4 +1,4 @@
-import { NodeSDK } from "@opentelemetry/sdk-node";
+﻿import { NodeSDK } from "@opentelemetry/sdk-node";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 
 let sdk: NodeSDK | null = null;

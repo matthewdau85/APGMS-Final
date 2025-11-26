@@ -1,4 +1,4 @@
-// services/api-gateway/src/providers.ts
+﻿// services/api-gateway/src/providers.ts
 import type { FastifyBaseLogger } from "fastify";
 import { createClient, type RedisClientType } from "redis";
 import { connect, type ConnectionOptions, type NatsConnection } from "nats";
@@ -81,3 +81,4 @@ export async function closeProviders(
     }
   }
 }
+

@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+﻿import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { authGuard } from "../auth.js";
 import { detectRisk, listRiskEvents } from "@apgms/shared";

@@ -1,4 +1,4 @@
-// services/api-gateway/src/routes/compliance-monitor.ts
+﻿// services/api-gateway/src/routes/compliance-monitor.ts
 
 import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 

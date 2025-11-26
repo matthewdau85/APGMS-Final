@@ -1,4 +1,4 @@
-import crypto from "node:crypto";
+﻿import crypto from "node:crypto";
 import type { InputJsonValue } from "@prisma/client/runtime/library.js";
 import type { MfaCredential } from "@prisma/client";
 
@@ -227,3 +227,4 @@ export async function hasTotp(userId: string): Promise<boolean> {
   });
   return count > 0;
 }
+

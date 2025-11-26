@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+﻿import { PrismaClient } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library.js";
 import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";

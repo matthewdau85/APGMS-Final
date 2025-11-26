@@ -1,4 +1,4 @@
-// Thin wrapper so routes can import a stable function name.
+﻿// Thin wrapper so routes can import a stable function name.
 // Swap implementation here when you wire up real ABR/ATO integration.
 
 import {

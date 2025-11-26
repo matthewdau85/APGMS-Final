@@ -1,4 +1,4 @@
-// services/api-gateway/src/utils/orgScope.ts
+﻿// services/api-gateway/src/utils/orgScope.ts
 import type { BankLine } from "@prisma/client";
 import type { FastifyReply, FastifyRequest } from "fastify";
 

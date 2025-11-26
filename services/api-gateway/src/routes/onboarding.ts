@@ -1,4 +1,4 @@
-// services/api-gateway/src/routes/onboarding.ts
+﻿// services/api-gateway/src/routes/onboarding.ts
 
 import type {
   FastifyInstance,
@@ -53,7 +53,7 @@ export const registerOnboardingRoutes: FastifyPluginAsync = async (
         });
       }
 
-      // Obligation settings shim – tolerate missing model
+      // Obligation settings shim â€“ tolerate missing model
       if (db.obligationSetting?.upsert) {
         await db.obligationSetting.upsert({
           where: {

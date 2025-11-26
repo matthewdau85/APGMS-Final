@@ -1,4 +1,4 @@
-// packages/domain-policy/src/index.ts
+﻿// packages/domain-policy/src/index.ts
 
 // ---------------------------------------------------------------------------
 // Core tax types & BAS period
@@ -30,3 +30,6 @@ export * from "./designated-accounts.js";
 export * from "./designated-accounts/types.js";
 export * from "./designated-accounts/mappings.js";
 export * from "./designated-accounts/guards.js";
+export * from "./models/gst.js";
+export * from "./models/payroll.js";
+export * from "./models/pos.js";

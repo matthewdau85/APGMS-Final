@@ -1,4 +1,4 @@
-// services/api-gateway/src/lib/errors.ts
+﻿// services/api-gateway/src/lib/errors.ts
 
 /**
  * Centralised error messages used across the API gateway.

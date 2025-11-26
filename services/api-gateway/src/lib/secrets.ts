@@ -1,4 +1,4 @@
-let awsAvailable = false;
+﻿let awsAvailable = false;
 let SecretsManagerCtor: any | null = null;
 
 async function ensureAws() {

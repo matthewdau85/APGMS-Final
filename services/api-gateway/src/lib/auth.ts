@@ -1,4 +1,4 @@
-import { Buffer } from "node:buffer";
+﻿import { Buffer } from "node:buffer";
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import jwt from "jsonwebtoken";

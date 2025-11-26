@@ -1,4 +1,4 @@
-// services/api-gateway/src/routes/auth.ts
+﻿// services/api-gateway/src/routes/auth.ts
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { FastifyInstance } from "fastify";

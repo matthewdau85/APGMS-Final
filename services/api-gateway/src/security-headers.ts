@@ -1,5 +1,6 @@
-import type { FastifyHelmetOptions } from "@fastify/helmet";
-import type { AppConfig } from "./config";
+﻿import type { FastifyHelmetOptions } from "@fastify/helmet";
+import type { AppConfig } from "./config.js";
+import helmet from "./plugins/helmet.js";
 
 type CspDirectives = Record<string, string[]>;
 
@@ -62,3 +63,4 @@ export function helmetConfigFor(config: AppConfig): FastifyHelmetOptions {
 export function buildHelmetConfig(config: AppConfig): FastifyHelmetOptions {
   return helmetConfigFor(config);
 }
+

@@ -1,4 +1,4 @@
-// services/api-gateway/src/routes/admin.data.ts
+﻿// services/api-gateway/src/routes/admin.data.ts
 import type { FastifyInstance } from "fastify";
 
 export async function registerAdminDataRoutes(app: FastifyInstance) {

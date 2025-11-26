@@ -1,4 +1,4 @@
-// services/api-gateway/src/security/providers.ts
+﻿// services/api-gateway/src/security/providers.ts
 
 import { randomBytes } from "node:crypto";
 import { Buffer } from "node:buffer";
@@ -218,3 +218,4 @@ function parseJson<T>(value: string, name: string): T {
     throw new Error(`${name} must contain valid JSON`);
   }
 }
+

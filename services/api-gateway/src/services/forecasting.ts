@@ -1,4 +1,4 @@
-export type ObligationSample = {
+﻿export type ObligationSample = {
   period: string; // e.g. "2025-Q1" or "2025-05"
   cents: number;
 };

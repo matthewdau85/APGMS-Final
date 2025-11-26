@@ -1,4 +1,4 @@
-// services/api-gateway/src/routes/integration-events.ts
+﻿// services/api-gateway/src/routes/integration-events.ts
 import type {
   FastifyInstance,
   FastifyReply,

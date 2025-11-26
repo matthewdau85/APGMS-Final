@@ -1,4 +1,4 @@
-import {
+﻿import {
   generateRegistrationOptions,
   verifyRegistrationResponse,
   generateAuthenticationOptions,

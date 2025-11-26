@@ -1,4 +1,4 @@
-// services/api-gateway/src/routes/forecast.ts
+﻿// services/api-gateway/src/routes/forecast.ts
 
 import type {
   FastifyInstance,

@@ -1,4 +1,4 @@
-// services/api-gateway/src/db.ts
+﻿// services/api-gateway/src/db.ts
 import pkg from "@prisma/client";
 import { instrumentPrisma } from "./observability/prisma-metrics.js";
 
@@ -11,3 +11,4 @@ const { PrismaClient } = pkg as unknown as {
 const prismaClient = new PrismaClient();
 
 export const prisma = instrumentPrisma(prismaClient);
+

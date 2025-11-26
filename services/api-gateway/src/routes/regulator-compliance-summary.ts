@@ -1,4 +1,4 @@
-// services/api-gateway/src/routes/regulator-compliance-summary.ts
+﻿// services/api-gateway/src/routes/regulator-compliance-summary.ts
 
 import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../config.js";
@@ -6,7 +6,7 @@ import type { AppConfig } from "../config.js";
 interface ComplianceSummaryItem {
   orgId: string;
   orgName: string;
-  basCoverageRatio: number; // 0–1
+  basCoverageRatio: number; // 0â€“1
   paygwShortfallCents: number;
   gstShortfallCents: number;
   lateBasCount: number;

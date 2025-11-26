@@ -1,4 +1,4 @@
-// services/api-gateway/src/services/stp-generator.ts
+﻿// services/api-gateway/src/services/stp-generator.ts
 export type PayEventEmployee = {
   taxFileNumber: string;
   grossCents: number;
@@ -15,7 +15,7 @@ export type StpPayEvent = {
 
 /**
  * Generates a minimal STP-style payload for PAYGW.
- * This is intentionally not the full ATO XML schema – it's a logical representation.
+ * This is intentionally not the full ATO XML schema â€“ it's a logical representation.
  */
 export function generateStpPayload(event: StpPayEvent): unknown {
   const totalGross = event.employees.reduce(

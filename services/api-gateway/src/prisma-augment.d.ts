@@ -1,4 +1,4 @@
-// services/api-gateway/src/prisma-augment.d.ts
+﻿// services/api-gateway/src/prisma-augment.d.ts
 
 // Ensure the module exists so we can augment it
 import '@prisma/client';

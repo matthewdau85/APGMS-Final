@@ -1,4 +1,7 @@
-import { buildServer } from "./app.js";
+﻿export function buildServer() { /* TODO */ }
+
+
+;
 import { startTracing, stopTracing } from "./observability/tracing.js";
 
 const PORT = Number(process.env.PORT ?? "3000");
@@ -28,3 +31,6 @@ main().catch((err) => {
   console.error("Fatal boot error:", err);
   process.exit(1);
 });
+
+
+

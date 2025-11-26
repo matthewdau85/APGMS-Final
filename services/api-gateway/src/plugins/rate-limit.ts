@@ -1,4 +1,4 @@
-import rateLimit from "@fastify/rate-limit";
+﻿import rateLimit from "@fastify/rate-limit";
 import fp from "fastify-plugin";
 import { config } from "../config.js";
 

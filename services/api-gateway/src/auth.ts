@@ -1,4 +1,4 @@
-// services/api-gateway/src/auth.ts
+﻿// services/api-gateway/src/auth.ts
 import { FastifyReply, FastifyRequest } from "fastify";
 import jwt, { JwtPayload, type Secret } from "jsonwebtoken";
 import { SignJWT, importJWK, type JWK } from "jose";
@@ -256,3 +256,4 @@ export function buildClientUser(user: AuthenticatedUser) {
     mfaEnabled: user.mfaEnabled,
   };
 }
+
