@@ -6,7 +6,7 @@ import {
   fetchDesignatedAccounts,
 } from "./api";
 import { getToken } from "./auth";
-import { ErrorState, SkeletonBlock, StatCard, StatusChip } from "./components/UI";
+import { EmptyState, ErrorState, SkeletonBlock, StatCard, StatusChip } from "./components/UI";
 
 type Obligations = Awaited<ReturnType<typeof fetchCurrentObligations>>;
 type BankLine = Awaited<ReturnType<typeof fetchBankLines>>["lines"][number];
@@ -84,6 +84,14 @@ export default function DashboardPage() {
     return new Date(obligations.nextBasDue).toLocaleString();
   }, [obligations]);
 
+  const complianceStatus = useMemo(() => {
+    const paygwStatus = obligations?.paygw.status?.toUpperCase?.();
+    const gstStatus = obligations?.gst.status?.toUpperCase?.();
+    if (paygwStatus === "OK" && gstStatus === "OK") return { label: "Compliant", tone: "success" as const };
+    if (paygwGap + gstGap > 0) return { label: "Shortfall detected", tone: "danger" as const };
+    return { label: "Monitoring", tone: "warning" as const };
+  }, [obligations?.paygw.status, obligations?.gst.status, paygwGap, gstGap]);
+
   const paygwDesignatedAccount = useMemo(
     () =>
       designated?.accounts.find(
@@ -124,6 +132,43 @@ export default function DashboardPage() {
           Snapshot of PAYGW and GST obligations, plus the ledger evidence we share with the ATO to prove funds are secured.
         </p>
       </header>
+
+      <section style={ribbonStyle}>
+        {loading ? (
+          <div style={ribbonSkeletonRow}>
+            <SkeletonBlock width={180} height={24} />
+            <SkeletonBlock width={180} height={24} />
+            <SkeletonBlock width={180} height={24} />
+            <SkeletonBlock width={180} height={24} />
+          </div>
+        ) : (
+          <div style={ribbonGrid}>
+            <RibbonItem
+              label="Compliance status"
+              description="PAYGW/GST readiness"
+              tone={complianceStatus.tone}
+              value={complianceStatus.label}
+            />
+            <RibbonItem
+              label="Next BAS due"
+              description="Scheduled lodgment"
+              value={nextBasDueDisplay}
+            />
+            <RibbonItem
+              label="Ledger entries"
+              description="Evidence captured"
+              value={`${bankLines.length} recorded`}
+              tone={bankLines.length > 0 ? "success" : "neutral"}
+            />
+            <RibbonItem
+              label="Shortfall window"
+              description="Amount to secure"
+              value={currencyFormatter.format(paygwGap + gstGap)}
+              tone={paygwGap + gstGap > 0 ? "warning" : "success"}
+            />
+          </div>
+        )}
+      </section>
 
       {loading && (
         <div style={{ display: "grid", gap: 8 }}>
@@ -206,24 +251,29 @@ export default function DashboardPage() {
                     <th style={thStyle}>Created</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {bankLines.map((line) => (
-                    <tr key={line.id}>
-                      <td style={tdStyle}>{line.id}</td>
-                      <td style={tdStyle}>{new Date(line.postedAt).toLocaleString()}</td>
+              <tbody>
+                {bankLines.map((line) => (
+                  <tr key={line.id}>
+                    <td style={tdStyle}>{line.id}</td>
+                    <td style={tdStyle}>{new Date(line.postedAt).toLocaleString()}</td>
                       <td style={tdStyle}>{currencyFormatter.format(line.amount)}</td>
                       <td style={tdStyle}>{line.description}</td>
                       <td style={tdStyle}>{new Date(line.createdAt).toLocaleString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {bankLines.length === 0 && (
-                <div style={{ ...infoTextStyle, padding: "12px 0" }}>
-                  No ledger activity recorded yet.
-                </div>
-              )}
-            </div>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {bankLines.length === 0 && (
+              <div style={{ padding: "12px 0" }}>
+                <EmptyState
+                  title="No ledger activity captured"
+                  description="Generate demo feeds or create a ledger entry to show the compliance evidence rail."
+                  actionLabel="Refresh ledger"
+                  onAction={() => void loadData()}
+                />
+              </div>
+            )}
+          </div>
 
             <form onSubmit={handleCreateLine} style={ledgerFormStyle}>
               <div style={formGridStyle}>
@@ -281,6 +331,28 @@ function statusTone(status: string) {
   return "neutral";
 }
 
+function RibbonItem({
+  label,
+  description,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  description: string;
+  value: React.ReactNode;
+  tone?: "neutral" | "success" | "warning" | "danger";
+}) {
+  return (
+    <div style={ribbonItemStyle}>
+      <div style={ribbonLabelStyle}>{label}</div>
+      <div style={ribbonValueStyle}>{value}</div>
+      <div style={ribbonDescStyle}>
+        <StatusChip tone={tone}>{description}</StatusChip>
+      </div>
+    </div>
+  );
+}
+
 function DesignatedAccountCard({
   title,
   account,
@@ -326,6 +398,52 @@ const summaryGridStyle: React.CSSProperties = {
   display: "grid",
   gap: "12px",
   gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+};
+
+const ribbonStyle: React.CSSProperties = {
+  background: "#0f172a",
+  color: "#e2e8f0",
+  borderRadius: "12px",
+  padding: "12px 14px",
+  boxShadow: "0 8px 20px rgba(15, 23, 42, 0.24)",
+};
+
+const ribbonGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+  gap: "12px",
+};
+
+const ribbonSkeletonRow: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+  gap: 12,
+};
+
+const ribbonItemStyle: React.CSSProperties = {
+  padding: "10px 12px",
+  background: "rgba(255,255,255,0.06)",
+  borderRadius: 10,
+  display: "grid",
+  gap: 6,
+  border: "1px solid rgba(255,255,255,0.08)",
+};
+
+const ribbonLabelStyle: React.CSSProperties = {
+  fontSize: 12,
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+  color: "#cbd5e1",
+};
+
+const ribbonDescStyle: React.CSSProperties = {
+  fontSize: 12,
+  color: "#e2e8f0",
+};
+
+const ribbonValueStyle: React.CSSProperties = {
+  fontSize: 18,
+  fontWeight: 800,
 };
 
 const designatedSectionStyle: React.CSSProperties = {

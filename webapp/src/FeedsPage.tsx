@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { fetchGstFeeds, fetchPayrollFeeds, generateDemoBankLines } from "./api";
 import { getToken } from "./auth";
-import { ErrorState, SkeletonBlock, StatusChip } from "./components/UI";
+import { EmptyState, ErrorState, SkeletonBlock, StatusChip } from "./components/UI";
 
 type PayrollRun = Awaited<ReturnType<typeof fetchPayrollFeeds>>["runs"][number];
 type GstDay = Awaited<ReturnType<typeof fetchGstFeeds>>["days"][number];
@@ -87,65 +87,77 @@ export default function FeedsPage() {
         <>
           <section style={cardStyle}>
             <h2 style={sectionTitleStyle}>Payroll Runs</h2>
-            <table style={tableStyle}>
-              <thead>
-                <tr>
-                  <th style={thStyle}>Run ID</th>
-                  <th style={thStyle}>Date</th>
-                  <th style={thStyle}>Gross Wages</th>
-                  <th style={thStyle}>PAYGW Calculated</th>
-                  <th style={thStyle}>PAYGW Secured</th>
-                  <th style={thStyle}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {payrollRuns.map((run) => (
-                  <tr key={run.id}>
-                    <td style={tdStyle}>{run.id}</td>
-                    <td style={tdStyle}>{run.date}</td>
-                    <td style={tdStyle}>{formatCurrency(run.grossWages)}</td>
-                    <td style={tdStyle}>{formatCurrency(run.paygwCalculated)}</td>
-                    <td style={tdStyle}>{formatCurrency(run.paygwSecured)}</td>
-                    <td style={tdStyle}>
-                      <StatusChip tone={statusTone(run.status)}>{run.status}</StatusChip>
-                    </td>
+            {payrollRuns.length === 0 ? (
+              <EmptyState
+                title="No payroll ingests yet"
+                description="Replay the demo feed to populate PAYGW capture and see ledger evidence populate in real time."
+                actionLabel={demoBusy ? "Reingesting..." : "Reingest demo feed"}
+                onAction={demoBusy ? undefined : () => void handleDemoIngest()}
+              />
+            ) : (
+              <table style={tableStyle}>
+                <thead>
+                  <tr>
+                    <th style={thStyle}>Run ID</th>
+                    <th style={thStyle}>Date</th>
+                    <th style={thStyle}>Gross Wages</th>
+                    <th style={thStyle}>PAYGW Calculated</th>
+                    <th style={thStyle}>PAYGW Secured</th>
+                    <th style={thStyle}>Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-            {payrollRuns.length === 0 && (
-              <div style={infoTextStyle}>No payroll runs recorded yet. Try the demo feed.</div>
+                </thead>
+                <tbody>
+                  {payrollRuns.map((run) => (
+                    <tr key={run.id}>
+                      <td style={tdStyle}>{run.id}</td>
+                      <td style={tdStyle}>{run.date}</td>
+                      <td style={tdStyle}>{formatCurrency(run.grossWages)}</td>
+                      <td style={tdStyle}>{formatCurrency(run.paygwCalculated)}</td>
+                      <td style={tdStyle}>{formatCurrency(run.paygwSecured)}</td>
+                      <td style={tdStyle}>
+                        <StatusChip tone={statusTone(run.status)}>{run.status}</StatusChip>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
           </section>
 
           <section style={cardStyle}>
             <h2 style={sectionTitleStyle}>GST Daily Summary</h2>
-            <table style={tableStyle}>
-              <thead>
-                <tr>
-                  <th style={thStyle}>Date</th>
-                  <th style={thStyle}>Sales Total</th>
-                  <th style={thStyle}>GST Calculated</th>
-                  <th style={thStyle}>GST Secured</th>
-                  <th style={thStyle}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {gstDays.map((day) => (
-                  <tr key={day.date}>
-                    <td style={tdStyle}>{day.date}</td>
-                    <td style={tdStyle}>{formatCurrency(day.salesTotal)}</td>
-                    <td style={tdStyle}>{formatCurrency(day.gstCalculated)}</td>
-                    <td style={tdStyle}>{formatCurrency(day.gstSecured)}</td>
-                    <td style={tdStyle}>
-                      <StatusChip tone={statusTone(day.status)}>{day.status}</StatusChip>
-                    </td>
+            {gstDays.length === 0 ? (
+              <EmptyState
+                title="GST feed is empty"
+                description="Push the demo feed to see daily GST capture, variances, and BAS readiness tracked automatically."
+                actionLabel={demoBusy ? "Reingesting..." : "Reingest demo feed"}
+                onAction={demoBusy ? undefined : () => void handleDemoIngest()}
+              />
+            ) : (
+              <table style={tableStyle}>
+                <thead>
+                  <tr>
+                    <th style={thStyle}>Date</th>
+                    <th style={thStyle}>Sales Total</th>
+                    <th style={thStyle}>GST Calculated</th>
+                    <th style={thStyle}>GST Secured</th>
+                    <th style={thStyle}>Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-            {gstDays.length === 0 && (
-              <div style={infoTextStyle}>No GST feed data captured yet. Try the demo feed.</div>
+                </thead>
+                <tbody>
+                  {gstDays.map((day) => (
+                    <tr key={day.date}>
+                      <td style={tdStyle}>{day.date}</td>
+                      <td style={tdStyle}>{formatCurrency(day.salesTotal)}</td>
+                      <td style={tdStyle}>{formatCurrency(day.gstCalculated)}</td>
+                      <td style={tdStyle}>{formatCurrency(day.gstSecured)}</td>
+                      <td style={tdStyle}>
+                        <StatusChip tone={statusTone(day.status)}>{day.status}</StatusChip>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
           </section>
         </>
@@ -220,11 +232,6 @@ const tdStyle: React.CSSProperties = {
   fontSize: "14px",
   borderBottom: "1px solid #f1f5f9",
   color: "#111827",
-};
-
-const infoTextStyle: React.CSSProperties = {
-  fontSize: "14px",
-  color: "#6b7280",
 };
 
 const successTextStyle: React.CSSProperties = {
