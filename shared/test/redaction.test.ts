@@ -16,7 +16,7 @@ test("maskValue masks by key patterns and URLs", () => {
   const masked = maskObject(input);
   assert.equal(masked.password, "***redacted***");
   assert.equal(masked.apiToken, "***redacted***");
-  assert.match(String((masked.nested as any).dsn), /^\w{4}\*+..$/); // masked DSN
+  assert.equal((masked.nested as any).dsn, "***redacted***");
   assert.equal(masked.short, "***redacted***");
   assert.equal(masked.number, 42);
   assert.equal(masked.bool, true);
