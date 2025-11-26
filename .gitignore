@@ -38,3 +38,16 @@ export-repo.ps1
 make-claude-pack.ps1
 jest.config.cjs
 combined-code-export.txt
+
+# Local helper files
+.part*.txt
+pnpm-build.output.txt
+pnpm-test-output.txt
+
+# TS build cache
+**/tsconfig.tsbuildinfo
+
+# Build outputs
+packages/**/dist/
+packages/domain-policy/src/**/*.js
+packages-domain-policy/src/**/*.d.ts
