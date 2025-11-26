@@ -1,14 +1,16 @@
 import { type PayPeriod, type PaygwConfig, type TaxConfigRepository } from "./types.js";
 import type { JurisdictionCode } from "../tax-types.js";
 export interface PaygwCalculationInput {
-    orgId: string;
     jurisdiction: JurisdictionCode;
     payPeriod: PayPeriod;
-    grossIncomeCents: number;
-    asOf: Date;
+    paymentDate: Date;
+    grossCents: number;
+    flags?: Record<string, unknown>;
 }
 export interface PaygwCalculationResult {
-    withheldCents: number;
+    withholdingCents: number;
+    parameterSetId: string;
+    bracketIndex: number;
     configUsed?: PaygwConfig;
 }
 /**

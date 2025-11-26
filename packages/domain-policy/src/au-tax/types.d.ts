@@ -7,7 +7,13 @@ export declare enum TaxType {
     COMPANY_TAX = "COMPANY_TAX",
     OTHER = "OTHER"
 }
-export type PayPeriod = "WEEKLY" | "FORTNIGHTLY" | "MONTHLY";
+export type PayPeriod =
+  | "weekly"
+  | "fortnightly"
+  | "monthly"
+  | "WEEKLY"
+  | "FORTNIGHTLY"
+  | "MONTHLY";
 export interface TaxParameterSetMeta {
     id: string;
     jurisdiction: JurisdictionCode;
@@ -16,29 +22,30 @@ export interface TaxParameterSetMeta {
     validFrom: Date;
     validTo: Date | null;
     description?: string | null;
-    source: "ATO" | "MANUAL" | "TEST" | "OTHER";
+    source?: "ATO" | "MANUAL" | "TEST" | "OTHER";
+    /**
+     * Optional version tag for tracking revisions of a schedule.
+     */
+    versionTag?: string | null;
 }
 export interface PaygwBracket {
     /**
-     * Apply this bracket if weekly income is < weeklyLessThan.
-     * Use null for the top bracket (no upper bound).
+     * Inclusive threshold (in cents) where this bracket begins.
      */
-    weeklyLessThan: number | null;
+    thresholdCents: number;
     /**
-     * Coefficient "a" in ATO formulas.
+     * Fixed withholding amount for the bracket (in cents).
      */
-    a: number | null;
+    baseWithholdingCents: number;
     /**
-     * Coefficient "b" in ATO formulas.
+     * Marginal rate in "per thousand" units, e.g. 100 = 10.0%.
      */
-    b: number | null;
+    marginalRateMilli: number;
 }
 export interface PaygwConfig {
     meta: TaxParameterSetMeta;
-    jurisdiction: JurisdictionCode;
-    taxType: TaxType.PAYGW;
-    payPeriod: PayPeriod;
     brackets: PaygwBracket[];
+    flags?: Record<string, unknown>;
 }
 export interface GstConfig {
     meta: TaxParameterSetMeta;
@@ -54,7 +61,7 @@ export interface TaxConfigRepository {
     /**
      * Generic "get whatever is active" API – flexible but a bit low-level.
      */
-    getActiveConfig(params: {
+    getActiveConfig(params?: {
         jurisdiction: JurisdictionCode;
         taxType: TaxType;
         onDate: Date;
