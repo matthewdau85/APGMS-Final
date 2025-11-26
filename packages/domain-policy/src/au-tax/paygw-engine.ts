@@ -13,12 +13,22 @@ export interface PaygwCalculationInput {
   orgId: string;
   jurisdiction: JurisdictionCode;
   payPeriod: PayPeriod;
-  grossIncomeCents: number;
-  asOf: Date;
+  /** Gross income for the pay period, expressed in cents. */
+  grossCents: number;
+  /** Payment date for the pay run. */
+  paymentDate: Date;
+  /** Optional flags from upstream payroll calculations. */
+  flags?: Record<string, unknown>;
 }
 
 export interface PaygwCalculationResult {
-  withheldCents: number;
+  withholdingCents: number;
+  /**
+   * Index of the bracket used from the configured PAYGW schedule.
+   */
+  bracketIndex: number;
+  /** Parameter set ID used for the calculation (from config meta). */
+  parameterSetId: string;
   configUsed?: PaygwConfig;
 }
 
@@ -32,46 +42,73 @@ export class PaygwEngine {
   async calculate(
     input: PaygwCalculationInput
   ): Promise<PaygwCalculationResult> {
-    const { jurisdiction, payPeriod, asOf, grossIncomeCents } = input;
+    const { jurisdiction, payPeriod, paymentDate, grossCents } = input;
+
+    const normalizedPeriod = this.normalizePeriod(payPeriod);
 
     const config =
       (this.repo.getPaygwConfigForSchedule
         ? await this.repo.getPaygwConfigForSchedule(
             jurisdiction,
-            payPeriod,
-            asOf
+            normalizedPeriod,
+            paymentDate
           )
         : ((await this.repo.getActiveConfig({
             jurisdiction,
             taxType: TaxType.PAYGW,
-            onDate: asOf,
+            onDate: paymentDate,
           })) as PaygwConfig | null));
 
     if (!config || !config.brackets || config.brackets.length === 0) {
-      throw new Error("No PAYGW brackets configured for jurisdiction/period");
+      throw new Error("No PAYGW bracket found for jurisdiction/period");
     }
 
-    const weeklyIncome = this.toWeekly(grossIncomeCents, payPeriod);
-    const bracket = this.findBracket(config.brackets, weeklyIncome);
+    const weeklyIncome = this.toWeekly(grossCents, normalizedPeriod);
+    const { bracket, index } = this.findBracket(config.brackets, weeklyIncome);
 
-    if (!bracket || bracket.a == null || bracket.b == null) {
-      return { withheldCents: 0, configUsed: config };
+    if (!bracket) {
+      throw new Error("No PAYGW bracket found for jurisdiction/period");
     }
 
-    const taxWeekly = weeklyIncome * bracket.a - bracket.b;
-    const taxForPeriod = this.fromWeekly(taxWeekly, payPeriod);
-    const withheldCents = Math.max(0, Math.round(taxForPeriod));
+    const excess = Math.max(0, weeklyIncome - bracket.thresholdCents);
+    const variable = Math.floor((excess * bracket.marginalRateMilli) / 1000);
+    const weeklyWithholding = bracket.baseWithholdingCents + variable;
+    const withholdingCents = this.fromWeekly(weeklyWithholding, normalizedPeriod);
 
-    return { withheldCents, configUsed: config };
+    return {
+      withholdingCents,
+      parameterSetId: config.meta.id,
+      bracketIndex: index,
+      configUsed: config,
+    };
+  }
+
+  private normalizePeriod(period: PayPeriod): Exclude<
+    PayPeriod,
+    "weekly" | "fortnightly" | "monthly"
+  > {
+    switch (period) {
+      case "weekly":
+        return "WEEKLY";
+      case "fortnightly":
+        return "FORTNIGHTLY";
+      case "monthly":
+        return "MONTHLY";
+      default:
+        return period;
+    }
   }
 
   private toWeekly(amountCents: number, period: PayPeriod): number {
     switch (period) {
       case "WEEKLY":
+      case "weekly":
         return amountCents;
       case "FORTNIGHTLY":
+      case "fortnightly":
         return amountCents / 2;
       case "MONTHLY":
+      case "monthly":
         return (amountCents * 12) / 52;
       default:
         return amountCents;
@@ -81,10 +118,13 @@ export class PaygwEngine {
   private fromWeekly(amountCents: number, period: PayPeriod): number {
     switch (period) {
       case "WEEKLY":
+      case "weekly":
         return amountCents;
       case "FORTNIGHTLY":
+      case "fortnightly":
         return amountCents * 2;
       case "MONTHLY":
+      case "monthly":
         return (amountCents * 52) / 12;
       default:
         return amountCents;
@@ -94,12 +134,20 @@ export class PaygwEngine {
   private findBracket(
     brackets: PaygwBracket[],
     weeklyIncome: number
-  ): PaygwBracket | undefined {
-    for (const b of brackets) {
-      if (b.weeklyLessThan == null || weeklyIncome < b.weeklyLessThan) {
-        return b;
+  ): { bracket: PaygwBracket | undefined; index: number } {
+    let chosen: PaygwBracket | undefined;
+    let index = -1;
+
+    for (let i = 0; i < brackets.length; i++) {
+      const b = brackets[i];
+      if (weeklyIncome >= b.thresholdCents) {
+        chosen = b;
+        index = i;
+      } else {
+        break;
       }
     }
-    return undefined;
+
+    return { bracket: chosen, index };
   }
 }
