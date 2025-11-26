@@ -9,7 +9,7 @@
     ".": "./dist/index.js"
   },
   "dependencies": {
-    "@prisma/client": "6.19.0"
+    "@prisma/client": "7.0.1"
   },
   "devDependencies": {
     "@apgms/shared": "workspace:*"
