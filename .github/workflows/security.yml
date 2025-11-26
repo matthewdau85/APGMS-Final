@@ -52,7 +52,7 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
       - name: Prisma drift check
-        run: pnpm --filter @apgms/shared exec prisma migrate status --schema prisma/schema.prisma
+        run: pnpm -w exec prisma migrate status
       - name: Header + Auth smoke tests
         run: |
           pnpm --filter @apgms/api-gateway exec tsx ./test/security.headers.spec.ts

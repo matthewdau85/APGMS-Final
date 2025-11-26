@@ -39,4 +39,10 @@ export default {
     "packages/**/src/**/*.ts",
     "services/api-gateway/src/**/*.ts",
   ],
+
+  coverageReporters: [
+    "text",
+    "lcov",
+    "json-summary",
+  ],
 };
