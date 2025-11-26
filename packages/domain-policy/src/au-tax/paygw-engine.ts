@@ -73,7 +73,10 @@ export class PaygwEngine {
     const excess = Math.max(0, weeklyIncome - bracket.thresholdCents);
     const variable = Math.floor((excess * bracket.marginalRateMilli) / 1000);
     const weeklyWithholding = bracket.baseWithholdingCents + variable;
-    const withholdingCents = this.fromWeekly(weeklyWithholding, normalizedPeriod);
+    const withholdingCents = Math.max(
+      0,
+      Math.round(this.fromWeekly(weeklyWithholding, normalizedPeriod))
+    );
 
     return {
       withholdingCents,
