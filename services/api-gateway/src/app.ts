@@ -1,3 +1,5 @@
+// services/api-gateway/src/app.ts
+
 import Fastify, {
   type FastifyInstance,
   type FastifyPluginAsync,
@@ -56,7 +58,9 @@ import { registerComplianceMonitorRoutes } from "./routes/compliance-monitor.js"
 import { registerOnboardingRoutes } from "./routes/onboarding.js";
 import { registerForecastRoutes } from "./routes/forecast.js";
 import { ERROR_MESSAGES } from "./lib/errors.js";
-export * from "./designated-accounts/mappings";
+
+// TODO: re-export designated account mappings when the module exists
+// export * from "./designated-accounts/mappings";
 
 type BuildServerOptions = {
   bankLinesPlugin?: FastifyPluginAsync;
@@ -297,7 +301,8 @@ export async function buildServer(
     { prefix: "/regulator" },
   );
 
-  app.register(registerPayrollRoutes);
+  // TODO: enable payroll routes when implemented
+  // app.register(registerPayrollRoutes);
 
   return app;
 }
