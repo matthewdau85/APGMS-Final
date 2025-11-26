@@ -1,1 +1,62 @@
-{}
+{
+  "dashboards": [
+    {
+      "uid": "risk-model-drift",
+      "title": "Risk Model Drift",
+      "description": "Live view of calibrated quantiles and severity labels produced by the risk predictor.",
+      "panels": [
+        {
+          "title": "Risk severity quantiles",
+          "type": "timeseries",
+          "targets": [
+            { "expr": "histogram_quantile(0.5, sum(rate(apgms_risk_score_bucket[5m])) by (le))", "legend": "p50" },
+            { "expr": "histogram_quantile(0.8, sum(rate(apgms_risk_score_bucket[5m])) by (le))", "legend": "p80" },
+            { "expr": "histogram_quantile(0.95, sum(rate(apgms_risk_score_bucket[5m])) by (le))", "legend": "p95" }
+          ],
+          "thresholds": {
+            "moderate": 0.485,
+            "elevated": 0.804,
+            "severe": 0.973
+          }
+        },
+        {
+          "title": "High severity event rate",
+          "type": "stat",
+          "targets": [
+            { "expr": "sum(rate(apgms_risk_events_total{severity=\"high\"}[5m]))" }
+          ],
+          "description": "Alerts when risk severity exceeds calibrated severe threshold for longer than 15 minutes."
+        }
+      ]
+    },
+    {
+      "uid": "compliance-model-drift",
+      "title": "Compliance Model Drift",
+      "description": "Monitor compliance latency scores and dashboards for the monitoring service.",
+      "panels": [
+        {
+          "title": "Latency score distribution",
+          "type": "timeseries",
+          "targets": [
+            { "expr": "histogram_quantile(0.5, sum(rate(apgms_compliance_latency_bucket[5m])) by (le))", "legend": "baseline" },
+            { "expr": "histogram_quantile(0.8, sum(rate(apgms_compliance_latency_bucket[5m])) by (le))", "legend": "warning" },
+            { "expr": "histogram_quantile(0.95, sum(rate(apgms_compliance_latency_bucket[5m])) by (le))", "legend": "breach" }
+          ],
+          "thresholds": {
+            "baseline": 16.5,
+            "warning": 26.6,
+            "breach": 30.35
+          }
+        },
+        {
+          "title": "Auto evidence coverage",
+          "type": "gauge",
+          "targets": [
+            { "expr": "avg(apgms_compliance_auto_coverage)" }
+          ],
+          "description": "Tracks percentage of obligations satisfied by the calibrated automation coverage score."
+        }
+      ]
+    }
+  ]
+}
