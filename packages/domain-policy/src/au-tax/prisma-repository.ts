@@ -1,6 +1,10 @@
-﻿// packages/domain-policy/src/au-tax/prisma-repository.ts
+// packages/domain-policy/src/au-tax/prisma-repository.ts
 
-import type { PrismaClient } from "@prisma/client";
+// Local minimal PrismaClient placeholder to avoid requiring a generated client
+// during library builds. Replace with the real client interface when wiring up
+// persistence.
+type PrismaClient = unknown;
+
 import {
   TaxType,
   type AuTaxConfig,

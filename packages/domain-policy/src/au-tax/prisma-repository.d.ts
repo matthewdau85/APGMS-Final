@@ -1,4 +1,3 @@
-import type { PrismaClient } from "@prisma/client";
 import { TaxType, type AuTaxConfig, type PaygwConfig, type GstConfig, type PayPeriod, type TaxConfigRepository } from "./types.js";
 import type { JurisdictionCode } from "../tax-types.js";
 /**
@@ -9,7 +8,7 @@ import type { JurisdictionCode } from "../tax-types.js";
  */
 export declare class PrismaTaxConfigRepository implements TaxConfigRepository {
     private readonly prisma;
-    constructor(prisma: PrismaClient);
+    constructor(prisma: unknown);
     getActiveConfig(params: {
         jurisdiction: JurisdictionCode;
         taxType: TaxType;

@@ -11,7 +11,8 @@ export enum TaxType {
   OTHER = "OTHER",
 }
 
-export type PayPeriod = "WEEKLY" | "FORTNIGHTLY" | "MONTHLY";
+// Supported payment frequencies for withholding calculations.
+export type PayPeriod = "weekly" | "fortnightly" | "monthly";
 
 export interface TaxParameterSetMeta {
   id: string;
@@ -22,30 +23,32 @@ export interface TaxParameterSetMeta {
   validTo: Date | null;
   description?: string | null;
   source: "ATO" | "MANUAL" | "TEST" | "OTHER";
+  versionTag?: string | null;
 }
 
+// PAYGW brackets use threshold + base + marginal rate (per thousand).
 export interface PaygwBracket {
   /**
-   * Apply this bracket if weekly income is < weeklyLessThan.
-   * Use null for the top bracket (no upper bound).
+   * Gross income (in cents) at which this bracket starts being applied.
    */
-  weeklyLessThan: number | null;
+  thresholdCents: number;
   /**
-   * Coefficient "a" in ATO formulas.
+   * Base withholding (in cents) applied once the threshold is reached.
    */
-  a: number | null;
+  baseWithholdingCents: number;
   /**
-   * Coefficient "b" in ATO formulas.
+   * Marginal rate expressed in milli-units (e.g. 100 = 10%).
    */
-  b: number | null;
+  marginalRateMilli: number;
 }
 
 export interface PaygwConfig {
   meta: TaxParameterSetMeta;
-  jurisdiction: JurisdictionCode;
-  taxType: TaxType.PAYGW;
-  payPeriod: PayPeriod;
   brackets: PaygwBracket[];
+  /** Optional hints or feature flags for the schedule. */
+  flags?: Record<string, unknown>;
+  /** Optional pay period identifier if the schedule is period-specific. */
+  payPeriod?: PayPeriod;
 }
 
 export interface GstConfig {
