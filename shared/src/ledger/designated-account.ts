@@ -1,9 +1,10 @@
+// shared/src/ledger/designated-account.ts
 import type { PrismaClient } from "@prisma/client";
 import type { DesignatedAccountType } from "./types.js";
 import { conflict } from "../errors.js";
 
 // Minimal shape we actually need from the Prisma model.
-// This avoids having to import `Prisma` and fights with its types.
+// This avoids having to import `Prisma` and fight with its types.
 export interface DesignatedAccount {
   id: string;
   orgId: string;
@@ -135,18 +136,21 @@ export async function ensureDesignatedAccountCoverage(
   const shortfall = requiredAmount - balance;
 
   if (shortfall > 0) {
+    const baseMessage = `Designated ${type} account is short by ${shortfall.toFixed(
+      2,
+    )} (required: ${requiredAmount.toFixed(2)}, actual: ${balance.toFixed(2)})`;
+
+    const decoratedMessage =
+      baseMessage +
+      (context?.cycleId ? ` [cycle=${context.cycleId}]` : "") +
+      (context?.description ? ` - ${context.description}` : "");
+
     await prisma.alert.create({
       data: {
         orgId,
         type: "DESIGNATED_FUNDS_SHORTFALL",
         severity: "HIGH",
-        message: `Designated ${type} account is short by ${shortfall.toFixed(2)}`,
-        metadata: {
-          requiredAmount,
-          balance,
-          cycleId: context?.cycleId ?? null,
-          description: context?.description ?? null,
-        },
+        message: decoratedMessage,
       },
     });
 

@@ -3,16 +3,20 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "lint": "eslint . --ext .ts",
-    "test": "pnpm exec jest --config ../../jest.config.js --runTestsByPath ../../packages/ledger/tests/journalWriter.test.ts --coverage"
+    "test": "jest --config ../../jest.config.js packages/ledger/tests"
   },
   "dependencies": {
-    "@apgms/shared": "workspace:*",
-    "@prisma/client": "^6.17.1",
-    "uuid": "^10.0.0"
+    "@apgms/domain-policy": "workspace:*",
+    "@apgms/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
   }
 }

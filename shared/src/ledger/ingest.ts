@@ -1,8 +1,8 @@
-import { Decimal } from "@prisma/client/runtime/library";
+// shared/src/ledger/ingest.ts
+import { Decimal, InputJsonValue } from "@prisma/client/runtime/library";
 import type { PrismaClient } from "@prisma/client";
 import { withIdempotency } from "../idempotency.js";
 import { getDesignatedAccountByType } from "./designated-account.js";
-import { applyDesignatedAccountTransfer, type AuditLogger } from "@apgms/domain-policy";
 
 export type ContributionSource = "payroll_system" | "pos_system";
 
@@ -13,6 +13,36 @@ export type ContributionResult = {
   payrollApplied: number;
   posApplied: number;
 };
+
+/**
+ * Minimal audit logger shape – matches the pattern used elsewhere
+ * but lives locally so this module does not depend on domain-policy.
+ */
+export type AuditLogger = (entry: {
+  orgId: string;
+  actorId: string;
+  action: string;
+  details?: unknown;
+}) => Promise<void> | void;
+
+/**
+ * Dependency signature for the designated-account transfer function.
+ * In production you will pass `applyDesignatedAccountTransfer` from
+ * @apgms/domain-policy, but this file stays decoupled.
+ */
+export type ApplyDesignatedTransfer = (
+  deps: {
+    prisma: PrismaClient;
+    auditLogger?: AuditLogger;
+  },
+  input: {
+    orgId: string;
+    accountId: string;
+    amount: number;
+    source: string;
+    actorId: string;
+  },
+) => Promise<{ transferId: string }>;
 
 export async function recordPayrollContribution(params: {
   prisma: PrismaClient;
@@ -39,14 +69,14 @@ export async function recordPayrollContribution(params: {
       },
       resource: "payrollContribution",
     },
-    // Don’t import HandlerResult – just return a generic “ok” object.
     async ({ idempotencyKey }) => {
       await params.prisma.payrollContribution.create({
         data: {
           orgId: params.orgId,
           amount: new Decimal(params.amount),
           source: PAYROLL_SOURCE,
-          payload: params.payload ?? null,
+          // Avoid null for JSON – cast to InputJsonValue/undefined
+          payload: params.payload as InputJsonValue | undefined,
           actorId: params.actorId,
           idempotencyKey,
         },
@@ -88,7 +118,7 @@ export async function recordPosTransaction(params: {
           orgId: params.orgId,
           amount: new Decimal(params.amount),
           source: POS_SOURCE,
-          payload: params.payload ?? null,
+          payload: params.payload as InputJsonValue | undefined,
           actorId: params.actorId,
           idempotencyKey,
         },
@@ -102,6 +132,7 @@ export async function recordPosTransaction(params: {
 export async function applyPendingContributions(params: {
   prisma: PrismaClient;
   orgId: string;
+  applyTransfer: ApplyDesignatedTransfer;
   actorId?: string;
   auditLogger?: AuditLogger;
 }): Promise<ContributionResult> {
@@ -115,7 +146,11 @@ export async function applyPendingContributions(params: {
     orderBy: { createdAt: "asc" },
   });
 
-  const context = { prisma: params.prisma, auditLogger: params.auditLogger };
+  const context = {
+    prisma: params.prisma,
+    auditLogger: params.auditLogger,
+    applyTransfer: params.applyTransfer,
+  };
 
   for (const contribution of pendingPayroll) {
     await applyContribution(contribution, {
@@ -150,6 +185,7 @@ type ApplyContributionContext = {
   context: {
     prisma: PrismaClient;
     auditLogger?: AuditLogger;
+    applyTransfer: ApplyDesignatedTransfer;
   };
   table: "payroll" | "pos";
 };
@@ -169,7 +205,7 @@ async function applyContribution(
     params.accountType,
   );
 
-  const transfer = await applyDesignatedAccountTransfer(
+  const transfer = await params.context.applyTransfer(
     {
       prisma: params.context.prisma,
       auditLogger: params.context.auditLogger,

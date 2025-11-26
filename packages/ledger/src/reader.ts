@@ -1,4 +1,10 @@
-import type { TaxObligationType, BasPeriodId } from "@apgms/domain-policy"; // adjust path
+// packages/ledger/src/reader.ts
+// Thin type-only view of the AU tax domain, consumed by the ledger.
+// We duplicate the minimal shapes here so this package does not depend
+// on @apgms/domain-policy at build time.
+
+export type BasPeriodId = string;
+export type TaxObligationType = string;
 
 export interface SumObligationsForPeriodInput {
   orgId: string;
@@ -13,10 +19,10 @@ export interface GetDesignatedBalanceInput {
 
 export interface LedgerReader {
   sumObligationsForPeriod(
-    input: SumObligationsForPeriodInput
+    input: SumObligationsForPeriodInput,
   ): Promise<number>;
 
   getDesignatedAccountBalance(
-    input: GetDesignatedBalanceInput
+    input: GetDesignatedBalanceInput,
   ): Promise<number>;
 }

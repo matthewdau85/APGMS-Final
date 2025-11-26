@@ -1,3 +1,4 @@
+// shared/src/ledger/bas.ts
 import { InputJsonValue } from "@prisma/client/runtime/library";
 
 import { prisma } from "../db.js";
@@ -17,12 +18,17 @@ export async function recordBasLodgment(params: {
       initiatedBy: params.initiatedBy,
       taxTypes: params.taxTypes,
       status: params.status ?? "queued",
-      result: params.result ? (params.result as InputJsonValue) : null,
+      // Avoid raw null – let Prisma handle optional JSON via undefined
+      result: params.result ? (params.result as InputJsonValue) : undefined,
     },
   });
 }
 
-export async function finalizeBasLodgment(id: string, result: Record<string, unknown>, status: BasLodgmentStatus) {
+export async function finalizeBasLodgment(
+  id: string,
+  result: Record<string, unknown>,
+  status: BasLodgmentStatus,
+) {
   return prisma.basLodgment.update({
     where: { id },
     data: {

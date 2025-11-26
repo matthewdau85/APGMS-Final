@@ -1,8 +1,13 @@
-import { Decimal, InputJsonValue } from "@prisma/client/runtime/library";
+// shared/src/ledger/payment-plan.ts
+import { InputJsonValue } from "@prisma/client/runtime/library";
 
 import { prisma } from "../db.js";
 
-export type PaymentPlanStatus = "SUBMITTED" | "APPROVED" | "REJECTED" | "CANCELLED";
+export type PaymentPlanStatus =
+  | "SUBMITTED"
+  | "APPROVED"
+  | "REJECTED"
+  | "CANCELLED";
 
 export async function createPaymentPlanRequest(params: {
   orgId: string;
@@ -10,7 +15,9 @@ export async function createPaymentPlanRequest(params: {
   reason: string;
   details?: Record<string, unknown>;
 }) {
-  const payload = params.details ? (params.details as InputJsonValue) : null;
+  // detailsJson is a required Json column – use {} when there are no details
+  const payload = (params.details ?? {}) as InputJsonValue;
+
   return prisma.paymentPlanRequest.create({
     data: {
       orgId: params.orgId,
@@ -39,6 +46,7 @@ export async function updatePaymentPlanStatus(
     where: { id },
     data: {
       status,
+      // Only overwrite detailsJson when metadata is provided
       detailsJson: metadata ? (metadata as InputJsonValue) : undefined,
     },
   });

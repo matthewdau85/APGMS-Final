@@ -1,3 +1,4 @@
+// shared/src/ledger/integration-events.ts
 import { Decimal, InputJsonValue } from "@prisma/client/runtime/library";
 
 import { prisma } from "../db.js";
@@ -14,19 +15,20 @@ export async function recordIntegrationEvent(params: {
   status?: IntegrationEventStatus;
 }) {
   const amountDecimal = new Decimal(params.amount);
-  const metadata = params.metadata ? (params.metadata as InputJsonValue) : null;
 
-  const event = await prisma.integrationEvent.create({
+  return prisma.integrationEvent.create({
     data: {
       orgId: params.orgId,
       taxType: params.taxType,
       source: params.source,
       amount: amountDecimal,
-      metadata,
+      // Avoid null for JSON column
+      metadata: params.metadata
+        ? (params.metadata as InputJsonValue)
+        : undefined,
       status: params.status ?? "pending",
     },
   });
-  return event;
 }
 
 export async function markIntegrationEventProcessed(eventId: string) {
