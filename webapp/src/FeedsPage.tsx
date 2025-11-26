@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { fetchGstFeeds, fetchPayrollFeeds, generateDemoBankLines } from "./api";
 import { getToken } from "./auth";
-import { ErrorState, SkeletonBlock, StatusChip } from "./components/UI";
+import { ActivityRail, ErrorState, KpiRibbon, SkeletonBlock, StatusChip } from "./components/UI";
 
 type PayrollRun = Awaited<ReturnType<typeof fetchPayrollFeeds>>["runs"][number];
 type GstDay = Awaited<ReturnType<typeof fetchGstFeeds>>["days"][number];
@@ -14,6 +14,34 @@ export default function FeedsPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [demoBusy, setDemoBusy] = useState(false);
+
+  const feedKpis = useMemo(() => {
+    if (loading || error) return [];
+    return [
+      { title: "Payroll runs", value: payrollRuns.length, subtitle: "Committed" },
+      { title: "GST days", value: gstDays.length, subtitle: "Captured" },
+      { title: "Latest payroll", value: payrollRuns[0]?.date ?? "-" },
+      { title: "Latest GST", value: gstDays[0]?.date ?? "-" },
+    ];
+  }, [loading, error, payrollRuns, gstDays]);
+
+  const feedActivity = useMemo(
+    () => [
+      {
+        title: "Payroll feed",
+        status: loading ? "loading" : error ? "error" : payrollRuns.length > 0 ? "success" : "idle",
+        detail: payrollRuns.length > 0 ? `${payrollRuns.length} runs` : "No runs yet",
+        meta: payrollRuns[0]?.date,
+      },
+      {
+        title: "GST feed",
+        status: loading ? "loading" : error ? "error" : gstDays.length > 0 ? "success" : "idle",
+        detail: gstDays.length > 0 ? `${gstDays.length} days` : "No GST days ingested",
+        meta: gstDays[0]?.date,
+      },
+    ],
+    [loading, error, payrollRuns, gstDays],
+  );
 
   useEffect(() => {
     if (!token) return;
@@ -82,6 +110,21 @@ export default function FeedsPage() {
       )}
       {error && <ErrorState message={error} onRetry={loadFeeds} detail="We could not load feed ingests." />}
       {success && <div style={successTextStyle}>{success}</div>}
+
+      {!loading && !error && feedKpis.length > 0 && <KpiRibbon items={feedKpis} columns={2} />}
+
+      {!loading && !error && (
+        <section style={cardStyle}>
+          <div style={{ ...cardHeaderStyle, marginBottom: 8 }}>
+            <div>
+              <h2 style={sectionTitleStyle}>Feed activity</h2>
+              <p style={sectionSubtitleStyle}>Operational status of the payroll and GST feeds.</p>
+            </div>
+            <StatusChip tone="neutral">Realtime demo</StatusChip>
+          </div>
+          <ActivityRail items={feedActivity} />
+        </section>
+      )}
 
       {!loading && !error && (
         <>
@@ -192,6 +235,14 @@ const cardStyle: React.CSSProperties = {
   border: "1px solid #e2e8f0",
   display: "grid",
   gap: "16px",
+};
+
+const cardHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  flexWrap: "wrap",
 };
 
 const sectionTitleStyle: React.CSSProperties = {
