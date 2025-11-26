@@ -132,6 +132,36 @@ describe("PaygwEngine", () => {
     expect(result.withholdingCents).toBe(30_00);
   });
 
+  it("evaluates brackets in threshold order even if unsorted", async () => {
+    const unsortedBrackets: PaygwBracket[] = [
+      {
+        thresholdCents: 200_00,
+        baseWithholdingCents: 20_00,
+        marginalRateMilli: 200,
+      },
+      {
+        thresholdCents: 0,
+        baseWithholdingCents: 0,
+        marginalRateMilli: 0,
+      },
+      {
+        thresholdCents: 100_00,
+        baseWithholdingCents: 10_00,
+        marginalRateMilli: 100,
+      },
+    ];
+
+    const engine = makeEngineWithBrackets(unsortedBrackets);
+
+    const result = await engine.calculate(
+      makeInput({ grossCents: 150_00 }),
+    );
+
+    // Should still select the mid bracket (original index 2) based on threshold.
+    expect(result.bracketIndex).toBe(2);
+    expect(result.withholdingCents).toBe(15_00);
+  });
+
   it("throws if no brackets are configured", async () => {
     const engine = makeEngineWithBrackets([]);
 
