@@ -48,14 +48,14 @@ export class PaygwEngine {
       throw new Error("No PAYGW bracket found for jurisdiction/period");
     }
 
-    const bracket = this.findBracket(config.brackets, grossCents);
+    const match = this.findBracket(config.brackets, grossCents);
 
-    if (!bracket) {
+    if (!match) {
       // Config exists but does not contain a suitable bracket.
       throw new Error("No PAYGW bracket found for jurisdiction/period");
     }
 
-    const bracketIndex = config.brackets.indexOf(bracket);
+    const { bracket, index: bracketIndex } = match;
 
     // If the bracket is misconfigured, fall back to zero withholding but
     // still report which bracket was selected.
@@ -86,12 +86,27 @@ export class PaygwEngine {
     };
   }
 
-  private findBracket(brackets: PaygwBracket[], grossCents: number): PaygwBracket | undefined {
-    let candidate: PaygwBracket | undefined;
+  private findBracket(
+    brackets: PaygwBracket[],
+    grossCents: number,
+  ): { bracket: PaygwBracket; index: number } | undefined {
+    let candidate: { bracket: PaygwBracket; index: number } | undefined;
 
-    for (const bracket of brackets) {
-      if (grossCents >= bracket.thresholdCents) {
-        candidate = bracket;
+    // Use a stable sort to avoid mutating the original array while ensuring we
+    // always evaluate brackets from lowest to highest threshold.
+    const ordered = brackets
+      .map((bracket, index) => ({ bracket, index }))
+      .sort((a, b) => {
+        if (a.bracket.thresholdCents === b.bracket.thresholdCents) {
+          return a.index - b.index;
+        }
+
+        return a.bracket.thresholdCents - b.bracket.thresholdCents;
+      });
+
+    for (const entry of ordered) {
+      if (grossCents >= entry.bracket.thresholdCents) {
+        candidate = entry;
       } else {
         break;
       }
