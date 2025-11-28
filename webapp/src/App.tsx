@@ -15,6 +15,8 @@ import RegulatorLayout from "./RegulatorLayout";
 import RegulatorOverviewPage from "./RegulatorOverviewPage";
 import RegulatorEvidencePage from "./RegulatorEvidencePage";
 import RegulatorMonitoringPage from "./RegulatorMonitoringPage";
+import OnboardingWizard from "./OnboardingWizard";
+import LegalPage from "./pages/Legal";
 
 export default function App() {
   return (
@@ -23,6 +25,7 @@ export default function App() {
         {/* login */}
         <Route path="/" element={<LoginPage />} />
         <Route path="/regulator" element={<RegulatorLoginPage />} />
+        <Route path="/legal" element={<LegalPage />} />
         <Route path="/regulator/portal" element={<RegulatorLayout />}>
           <Route index element={<Navigate to="overview" replace />} />
           <Route path="overview" element={<RegulatorOverviewPage />} />
@@ -35,6 +38,7 @@ export default function App() {
           <Route path="/alerts" element={<AlertsPage />} />
           <Route path="/bas" element={<BasPage />} />
           <Route path="/compliance" element={<CompliancePage />} />
+          <Route path="/onboarding" element={<OnboardingWizard />} />
           <Route path="/demo" element={<DemoPage />} />
           <Route path="/security" element={<SecurityPage />} />
         </Route>
