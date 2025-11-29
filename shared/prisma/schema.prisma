@@ -1,705 +1,184 @@
+// FILE: shared/Prisma/schema.prisma
+
+// Generator + datasource (keep yours if already defined)
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider          = "postgresql"
-  url               = env("DATABASE_URL")
-  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
-// =========================
-// Enums
-// =========================
+// ========== Enums ==========
+enum BasPeriodStatus {
+  DRAFT
+  READY_TO_LODGE
+  LODGED
+  PAID
+  PARTIALLY_PAID
+  SHORTFALL
+}
 
 enum AccountType {
-  ASSET
-  LIABILITY
-  INCOME
-  EXPENSE
-  EQUITY
+  OPERATING
+  PAYGW_TAX
+  GST_TAX
+  ESCROW
 }
 
-enum AccountSubtype {
-  BANK
-  PAYGW_BUFFER
-  GST_BUFFER
-  CLEARING
-  SUSPENSE
-  RECEIVABLE
-  PAYABLE
-}
-
-enum JournalType {
-  PAYROLL_HOLD
-  POS_GST
-  BANK_SETTLEMENT
-  BAS_RELEASE
-  ADJUSTMENT
-  REVERSAL
-}
-
-enum AlertStatus {
-  OPEN
-  ACKED
+enum AccountStatus {
+  ACTIVE
   CLOSED
+  SUSPENDED
 }
 
-enum TaxType {
+enum AlertSeverity {
+  INFO
+  WARNING
+  HIGH
+  CRITICAL
+}
+
+enum TaxObligationType {
   PAYGW
   GST
-  PAYGI
-  FBT
-  COMPANY
-  LCT
-  WET
 }
 
-// =========================
-// Payroll domain
-// =========================
-//
-// IDs are String to align with current Org/User tables.
-// baseRate, superRate etc. use Decimal with @db.Decimal now.
-// =========================
+// ========== Core Models (merge with your existing ones) ==========
 
-model Employee {
-  id    String @id
-  orgId String
-  org   Org    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+model Organisation {
+  id           String  @id @default(cuid())
+  name         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  fullNameCiphertext String
-  fullNameKid        String
-  tfnProvided        Boolean @default(false)
-
-  // "full_time" | "part_time" | "contractor" | etc.
-  employmentType String
-
-  // hourly rate or derived salary rate
-  baseRate Decimal @default("0") @db.Decimal(12, 2)
-
-  // superannuation %, e.g. 11.00
-  superRate Decimal @default("11.0") @db.Decimal(5, 2)
-
-  status    String   @default("active")
-  createdAt DateTime @default(now())
-
-  payslips Payslip[]
-
-  @@index([orgId], map: "Employee_orgId_idx")
-}
-
-model PayRun {
-  id    String @id
-  orgId String
-  org   Org    @relation(fields: [orgId], references: [id], onDelete: Cascade)
-
-  periodStart DateTime
-  periodEnd   DateTime
-  paymentDate DateTime
-
-  // "draft" | "committed"
-  status String @default("draft")
-
-  createdAt DateTime @default(now())
-
-  payslips Payslip[]
-
-  @@index([orgId], map: "PayRun_orgId_idx")
-}
-
-model Payslip {
-  id String @id
-
-  payRunId String
-  payRun   PayRun @relation(fields: [payRunId], references: [id], onDelete: Cascade)
-
-  employeeId String
-  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-
-  grossPay     Decimal @db.Decimal(12, 2)
-  paygWithheld Decimal @db.Decimal(12, 2)
-  superAccrued Decimal @db.Decimal(12, 2)
-
-  notesCiphertext String
-  notesKid        String
-
-  createdAt DateTime @default(now())
-
-  @@index([payRunId], map: "Payslip_payRunId_idx")
-  @@index([employeeId], map: "Payslip_employeeId_idx")
-}
-
-// =========================
-/**
- * Core ledger / compliance
- */
-// =========================
-//
-// Production ledger covering:
-// - GST collection
-// - PAYGW / STSL accrual
-// - BAS evidence trails
-// =========================
-
-model Organization {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String
-  createdAt DateTime @default(now())
-
-  accounts Account[]
-  journals Journal[]
+  accounts     Account[]
+  basPeriods   BasPeriod[]
+  journal      JournalEntry[]
+  evidence     EvidenceArtifact[]
+  alerts       Alert[]
+  mappings     DesignatedAccountMapping[]
 }
 
 model Account {
-  id        String          @id @default(uuid()) @db.Uuid
-  orgId     String          @db.Uuid
-  code      String
-  name      String
-  type      AccountType
-  subtype   AccountSubtype?
-  currency  String          @default("AUD")
-  isActive  Boolean         @default(true)
-  createdAt DateTime        @default(now())
+  id            String        @id @default(cuid())
+  orgId         String
+  organisation  Organisation  @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
-  postings Posting[]
-  balances BalanceSnapshot[]
+  name          String
+  type          AccountType
+  status        AccountStatus @default(ACTIVE)
 
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  // Designated account flag for policy engine ease-of-use
+  isDesignated  Boolean       @default(false)
 
-  @@unique([orgId, code])
-  @@index([orgId, subtype])
-}
-
-model Journal {
-  id          String      @id @default(uuid()) @db.Uuid
-  orgId       String      @db.Uuid
-  seq         BigInt      @db.BigInt
-  type        JournalType
-  eventId     String
-  dedupeId    String
-  occurredAt  DateTime
-  recordedAt  DateTime    @default(now())
-  source      String
-  description String?
-  hash        String?
-  prevHash    String?
-
-  postings     Posting[]
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-
-  @@unique([orgId, dedupeId])
-  @@unique([orgId, seq])
-  @@index([orgId, occurredAt])
-}
-
-model Posting {
-  id          String  @id @default(uuid()) @db.Uuid
-  orgId       String  @db.Uuid
-  journalId   String  @db.Uuid
-  accountId   String  @db.Uuid
-  amountCents BigInt  @db.BigInt
-  memo        String?
-
-  journal Journal @relation(fields: [journalId], references: [id], onDelete: Cascade)
-  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
-
-  @@index([orgId, accountId])
-  @@index([orgId, journalId])
-}
-
-model BalanceSnapshot {
-  id           String   @id @default(uuid()) @db.Uuid
-  orgId        String   @db.Uuid
-  accountId    String   @db.Uuid
-  asOfSeq      BigInt   @db.BigInt
-  balanceCents BigInt   @db.BigInt
-  createdAt    DateTime @default(now())
-
-  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
-
-  @@unique([orgId, accountId, asOfSeq])
-}
-
-model EventEnvelope {
-  id            String    @id
-  orgId         String    @db.Uuid
-  eventType     String
-  key           String
-  ts            DateTime
-  schemaVersion String
-  source        String
-  traceId       String?
-  payload       Json
-  processedAt   DateTime?
-  status        String    @default("processed")
-  error         String?
-
-  @@index([orgId, ts])
-}
-
-model BankTransaction {
-  id               String   @id @default(uuid()) @db.Uuid
-  orgId            String   @db.Uuid
-  extRef           String?
-  accountName      String
-  txDate           DateTime
-  amountCents      BigInt   @db.BigInt
-  description      String?
-  matchedJournalId String?
-
-  @@index([orgId, txDate])
-}
-
-model GstTransaction {
-  id          String   @id @default(uuid()) @db.Uuid
-  orgId       String   @db.Uuid
-  sourceRef   String?
-  txDate      DateTime
-  netCents    BigInt   @db.BigInt
-  gstCents    BigInt   @db.BigInt
-  code        String
-  basPeriodId String?
-
-  @@index([orgId, txDate])
-}
-
-model PayrollItem {
-  id             String   @id @default(uuid()) @db.Uuid
-  orgId          String   @db.Uuid
-  employeeId     String
-  payPeriodStart DateTime
-  payPeriodEnd   DateTime
-  grossCents     BigInt   @db.BigInt
-  paygwCents     BigInt   @db.BigInt
-  stslCents      BigInt   @db.BigInt
-  journalId      String?
-
-  @@index([orgId, employeeId])
-}
-
-model BasPeriod {
-  id         String    @id @default(uuid()) @db.Uuid
-  orgId      String    @db.Uuid
-  start      DateTime
-  end        DateTime
-  status     String    @default("open")
-  readyAt    DateTime?
-  releasedAt DateTime?
-  lodgedAt   DateTime?
-  evidenceId String?
-
-  @@unique([orgId, start, end])
-}
-
-model ReconciliationAlert {
-  id         String      @id @default(uuid()) @db.Uuid
-  orgId      String      @db.Uuid
-  kind       String
-  openedAt   DateTime    @default(now())
-  status     AlertStatus @default(OPEN)
-  details    Json
-  resolvedAt DateTime?
-
-  @@index([orgId, status])
-}
-
-model EvidenceArtifact {
-  id        String   @id @default(uuid()) @db.Uuid
-  orgId     String   @db.Uuid
-  kind      String
-  wormUri   String
-  sha256    String
-  payload   Json?
-  createdAt DateTime @default(now())
-
-  @@index([orgId, kind])
-}
-
-// =========================
-// Legacy models still used by the live Fastify API
-// =========================
-//
-// These match what the running api-gateway expects today
-// (auth/login, /users, /bank-lines, /admin/export/:orgId).
-// =========================
-
-model IdempotencyEntry {
-  id              String   @id @default(cuid())
-  orgId           String
-  actorId         String
-  key             String
-  requestHash     String
-  responseHash    String
-  statusCode      Int
-  responsePayload Json?
-  resource        String?
-  resourceId      String?
-  createdAt       DateTime @default(now())
-
-  @@unique([orgId, key])
-}
-
-model Org {
-  id        String    @id @default(cuid())
-  name      String
-  createdAt DateTime  @default(now())
-  deletedAt DateTime?
-
-  users                  User[]
-  oneWayAccounts         OneWayAccount[]
-  discrepancyAlerts      DiscrepancyAlert[]
-  integrationObligations IntegrationObligation[]
-  integrationEvents      IntegrationEvent[]
-  basLodgments           BasLodgment[]
-  transferInstructions   TransferInstruction[]
-  governmentSubmissions  GovernmentSubmission[]
-  riskEvents             RiskEvent[]
-  lines                  BankLine[]
-  tombstones             OrgTombstone[]
-  alerts                 Alert[]
-  basCycles              BasCycle[]
-  designatedAccounts     DesignatedAccount[]
-  designatedTransfers    DesignatedTransfer[]
-  paymentPlanRequests    PaymentPlanRequest[]
-  regulatorSessions      RegulatorSession[]
-  monitoringSnapshots    MonitoringSnapshot[]
-
-  // payroll backrefs
-  employees Employee[]
-  payRuns   PayRun[]
-
-  // contributions / POS backrefs
-  payrollContributions PayrollContribution[] @relation("OrgPayrollContributions")
-  posTransactions      PosTransaction[]      @relation("OrgPosTransactions")
-}
-
-model User {
-  id         String   @id @default(cuid())
-  email      String   @unique
-  password   String
-  createdAt  DateTime @default(now())
-  role       String   @default("admin")
-  mfaEnabled Boolean  @default(false)
-
-  org            Org             @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  orgId          String
-  mfaCredentials MfaCredential[]
-}
-
-model MfaCredential {
-  id           String    @id @default(cuid())
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId       String
-  type         String
-  label        String?
-  data         Json
-  credentialId String?   @unique
-  primary      Boolean   @default(false)
-  status       String    @default("active")
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  lastUsedAt   DateTime?
-
-  @@index([userId, type, status])
-}
-
-model Alert {
-  id             String    @id @default(cuid())
-  org            Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  orgId          String
-  type           String
-  severity       String
-  message        String
-  createdAt      DateTime  @default(now())
-  resolvedAt     DateTime?
-  resolutionNote String?
-
-  @@index([orgId, createdAt])
-  @@index([orgId, resolvedAt])
-}
-
-model BasCycle {
-  id                  String               @id @default(cuid())
-  org                 Org                  @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  orgId               String
-  periodStart         DateTime
-  periodEnd           DateTime
-  paygwRequired       Decimal
-  paygwSecured        Decimal
-  gstRequired         Decimal
-  gstSecured          Decimal
-  overallStatus       String
-  lodgedAt            DateTime?
-  paymentPlanRequests PaymentPlanRequest[]
-
-  @@index([orgId, periodStart, periodEnd])
-  @@index([orgId, lodgedAt])
-}
-
-model DesignatedAccount {
-  id        String    @id @default(cuid())
-  org       Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  orgId     String
-  type      String
-  balance   Decimal   @default(0)
-  locked    Boolean   @default(false)
-  lockedAt  DateTime?
-  updatedAt DateTime  @default(now())
-
-  transfers DesignatedTransfer[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   @@index([orgId, type])
 }
 
-model DesignatedTransfer {
-  id        String            @id @default(cuid())
-  org       Org               @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  orgId     String
-  account   DesignatedAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  accountId String
-  amount    Decimal
-  source    String
-  createdAt DateTime          @default(now())
+model DesignatedAccountMapping {
+  id                 String            @id @default(cuid())
+  orgId              String
+  organisation       Organisation      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  obligationType     TaxObligationType
+  designatedAccountId String
 
-  @@index([orgId, accountId, createdAt])
+  createdAt          DateTime          @default(now())
+
+  @@unique([orgId, obligationType])
 }
 
-model PaymentPlanRequest {
-  id          String    @id @default(cuid())
-  org         Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  orgId       String
-  basCycle    BasCycle  @relation(fields: [basCycleId], references: [id], onDelete: Cascade)
-  basCycleId  String
-  requestedAt DateTime  @default(now())
-  reason      String
-  status      String    @default("SUBMITTED")
-  detailsJson Json
-  resolvedAt  DateTime?
+model BasPeriod {
+  id            String          @id @default(cuid())
+  orgId         String
+  organisation  Organisation    @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
-  @@index([orgId, basCycleId])
-  @@index([orgId, status])
+  periodStart   DateTime
+  periodEnd     DateTime
+  dueDate       DateTime
+  status        BasPeriodStatus @default(DRAFT)
+
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([orgId, periodStart, periodEnd])
 }
 
-model BankLine {
-  id              String   @id @default(cuid())
-  org             Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  orgId           String
-  date            DateTime
-  amount          Decimal
-  payeeCiphertext String
-  payeeKid        String
-  descCiphertext  String
-  descKid         String
-  createdAt       DateTime @default(now())
-  idempotencyKey  String?
+model JournalEntry {
+  id            String        @id @default(cuid())
+  orgId         String
+  organisation  Organisation  @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
-  @@unique([orgId, idempotencyKey])
-  @@index([orgId])
+  occurredAt    DateTime
+  debitAccountId String
+  creditAccountId String
+  amountCents   Int
+
+  // Optional foreign links
+  basPeriodId   String?
+  basPeriod     BasPeriod?     @relation(fields: [basPeriodId], references: [id])
+  sourceId      String?        // e.g., payroll run id, POS batch id
+
+  evidenceId    String?
+  evidence      EvidenceArtifact? @relation(fields: [evidenceId], references: [id])
+
+  createdAt     DateTime       @default(now())
+
+  @@index([orgId, occurredAt])
 }
 
-model OrgTombstone {
-  id        String   @id @default(cuid())
-  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  orgId     String
-  payload   Json
-  createdAt DateTime @default(now())
+model EvidenceArtifact {
+  id            String        @id @default(cuid())
+  orgId         String
+  organisation  Organisation  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  tag           String        // e.g., designated-reconciliation, schema-alignment
+  payload       Json
+  sha256        String
+  wormUri       String?       // reference to immutable store
+
+  createdAt     DateTime      @default(now())
+
+  @@index([orgId, createdAt])
 }
 
 model AuditLog {
-  id        String   @id @default(cuid())
-  orgId     String
-  actorId   String
-  action    String
-  metadata  Json?
-  createdAt DateTime @default(now())
-  hash      String
-  prevHash  String?
-
-  @@index([orgId, createdAt])
-  @@index([actorId, createdAt])
-}
-
-model RegulatorSession {
-  id         String    @id @default(cuid())
-  org        Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
   orgId      String
-  tokenHash  String
-  issuedAt   DateTime  @default(now())
-  expiresAt  DateTime
-  lastUsedAt DateTime?
-  revokedAt  DateTime?
-  createdAt  DateTime  @default(now())
-
-  @@index([orgId, createdAt])
-  @@index([orgId, expiresAt])
+  actorId    String
+  action     String
+  metadata   Json
+  hash       String   @unique
+  prevHash   String?
+  occurredAt DateTime @default(now())
 }
 
-model MonitoringSnapshot {
-  id        String   @id @default(cuid())
-  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  orgId     String
-  type      String
-  payload   Json
-  createdAt DateTime @default(now())
-
-  @@index([orgId, createdAt])
-  @@index([orgId, type, createdAt])
-}
-
-model OneWayAccount {
-  id            String    @id @default(cuid())
+model Alert {
+  id            String        @id @default(cuid())
   orgId         String
-  org           Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  taxType       String
-  balance       Decimal   @default("0") @db.Decimal(24, 8)
-  lastDepositAt DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  organisation  Organisation  @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
-  @@unique([orgId, taxType])
-  @@index([taxType])
-  @@index([orgId])
+  type          String        // e.g., DESIGNATED_WITHDRAWAL_ATTEMPT, DESIGNATED_FUNDS_SHORTFALL
+  severity      AlertSeverity @default(WARNING)
+  message       String
+  metadata      Json
+  resolved      Boolean       @default(false)
+  resolvedAt    DateTime?
+
+  createdAt     DateTime      @default(now())
+
+  @@index([orgId, createdAt])
 }
 
-model PayrollContribution {
-  id    String @id @default(cuid())
-  orgId String
-
-  org Org @relation("OrgPayrollContributions", fields: [orgId], references: [id], onDelete: Cascade)
-
-  amount         Decimal   @db.Decimal(20, 2)
-  source         String
-  payload        Json?
-  actorId        String?
-  idempotencyKey String?
-  appliedAt      DateTime?
-  transferId     String?
-  createdAt      DateTime  @default(now())
+// Idempotency example
+model WriteGuard {
+  id               String   @id @default(cuid())
+  orgId            String
+  idempotencyKey   String
+  occurredAt       DateTime @default(now())
 
   @@unique([orgId, idempotencyKey])
-  @@index([orgId, appliedAt])
-}
-
-model PosTransaction {
-  id    String @id @default(cuid())
-  orgId String
-
-  org Org @relation("OrgPosTransactions", fields: [orgId], references: [id], onDelete: Cascade)
-
-  amount         Decimal   @db.Decimal(20, 2)
-  source         String
-  payload        Json?
-  actorId        String?
-  idempotencyKey String?
-  appliedAt      DateTime?
-  transferId     String?
-  createdAt      DateTime  @default(now())
-
-  @@unique([orgId, idempotencyKey])
-  @@index([orgId, appliedAt])
-}
-
-model DiscrepancyAlert {
-  id             String   @id @default(cuid())
-  orgId          String
-  org            Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  taxType        String
-  eventId        String
-  expectedAmount Decimal  @db.Decimal(24, 8)
-  actualAmount   Decimal  @db.Decimal(24, 8)
-  reason         String
-  resolved       Boolean  @default(false)
-  createdAt      DateTime @default(now())
-
-  @@index([orgId, taxType])
-  @@index([eventId])
-}
-
-model IntegrationObligation {
-  id        String   @id @default(cuid())
-  orgId     String
-  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  taxType   String
-  eventId   String
-  amount    Decimal  @db.Decimal(24, 8)
-  status    String   @default("pending")
-  createdAt DateTime @default(now())
-
-  @@index([orgId, taxType])
-  @@index([eventId])
-}
-
-model BasLodgment {
-  id          String    @id @default(cuid())
-  orgId       String
-  org         Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  initiatedBy String?
-  taxTypes    String[]
-  result      Json?
-  status      String    @default("queued")
-  createdAt   DateTime  @default(now())
-  processedAt DateTime?
-
-  @@index([orgId, status])
-}
-
-model TransferInstruction {
-  id          String   @id @default(cuid())
-  orgId       String
-  org         Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  taxType     String
-  amount      Decimal  @db.Decimal(24, 8)
-  basId       String
-  status      String   @default("queued")
-  destination String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([orgId, taxType])
-  @@index([basId])
-}
-
-model GovernmentSubmission {
-  id        String   @id @default(cuid())
-  orgId     String
-  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  method    String
-  payload   Json
-  response  Json?
-  status    String   @default("pending")
-  createdAt DateTime @default(now())
-
-  @@index([orgId, status])
-}
-
-model RiskEvent {
-  id          String    @id @default(cuid())
-  orgId       String
-  org         Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  taxType     String
-  severity    String
-  score       Float
-  description String
-  resolved    Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  resolvedAt  DateTime?
-
-  @@index([orgId, severity, resolved])
-}
-
-model IntegrationEvent {
-  id          String    @id @default(cuid())
-  orgId       String
-  org         Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  taxType     String
-  source      String
-  amount      Decimal   @db.Decimal(24, 8)
-  metadata    Json?
-  status      String    @default("pending")
-  createdAt   DateTime  @default(now())
-  processedAt DateTime?
-
-  @@index([orgId, taxType])
-  @@index([taxType])
 }
