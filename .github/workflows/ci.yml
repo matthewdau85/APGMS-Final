@@ -126,8 +126,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20.11.x'
-        cache: 'pnpm'
-        cache-dependency-path: pnpm-lock.yaml
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @apgms/webapp build
