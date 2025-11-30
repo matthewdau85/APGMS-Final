@@ -46,7 +46,7 @@ jobs:
 
       # 4. Bring up API gateway and perf smoke it with k6
       - name: Install k6
-        uses: grafana/setup-k6@v1
+        uses: grafana/setup-k6-action@v1
 
       - name: Start API Gateway
         run: |
@@ -77,7 +77,7 @@ jobs:
         run: pnpm -w exec prisma migrate status
 
       - name: Conflict marker guard
-        run: git grep -n '<<<<<<<\|=======\|>>>>>>>' -- ':!*.lock'
+        run: git grep -n '<<<<<<<\|=======\|>>>>>>>' -- ':!*.lock' ':!.github/workflows/*.yml' ':!README.md'
 
       # 6. Secret scanning gate (Gitleaks)
       #    Fails the build if any API keys/tokens/secrets are committed.
