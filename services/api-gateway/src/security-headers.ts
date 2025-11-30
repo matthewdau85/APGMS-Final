@@ -1,6 +1,5 @@
 ﻿import type { FastifyHelmetOptions } from "@fastify/helmet";
 import type { AppConfig } from "./config.js";
-import helmet from "./plugins/helmet.js";
 
 type CspDirectives = Record<string, string[]>;
 
