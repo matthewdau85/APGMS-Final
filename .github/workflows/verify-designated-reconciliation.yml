@@ -12,7 +12,7 @@ jobs:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       # Ensure the worker DB and other secrets are set
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v3
         with:
           version: 9

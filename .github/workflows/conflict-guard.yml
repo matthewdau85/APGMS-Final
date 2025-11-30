@@ -10,6 +10,6 @@ jobs:
   guard:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Check for conflict markers
         run: git grep -n '<<<<<<<\\|=======\\|>>>>>>>' -- ':!*.lock' ':!.github/workflows/*.yml' ':!README.md' && exit 1 || exit 0
