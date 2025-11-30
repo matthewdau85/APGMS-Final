@@ -1,5 +1,5 @@
 // shared/src/idempotency.ts
-import type { PrismaClient, Prisma } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 import { badRequest, conflict } from "./errors.js";
 import { createHash } from "node:crypto";
 
@@ -66,10 +66,7 @@ export async function withIdempotency<T extends HandlerResult>(
   const result = await handler({ idempotencyKey: key });
 
   try {
-    const responsePayload =
-      result.body !== undefined
-        ? (result.body as Prisma.JsonValue)
-        : undefined;
+    const responsePayload = result.body !== undefined ? (result.body as unknown) : undefined;
 
     const responseHash =
       result.body !== undefined ? hashJson(result.body) : "";
