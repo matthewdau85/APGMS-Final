@@ -74,7 +74,8 @@ def main():
         print("[monthly] missing, skipping")
 
     if not pieces:
-        raise SystemExit("No source CSVs found under extracted/. Nothing to normalize.")
+        print("No source CSVs found under extracted/. Nothing to normalize.")
+        return
 
     # Merge, take conservative (min) per income across periods
     df = pd.concat(pieces, ignore_index=True)

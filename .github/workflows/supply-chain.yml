@@ -14,9 +14,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'pnpm'
-      - name: Install pnpm
-        run: corepack enable
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
       - name: Install deps (root)
         run: pnpm install --frozen-lockfile
       - name: Generate SBOM (CycloneDX)
@@ -46,3 +47,5 @@ jobs:
         uses: zricethezav/gitleaks-action@v2
         with:
           args: detect --source . --no-git
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

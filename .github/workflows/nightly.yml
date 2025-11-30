@@ -23,7 +23,7 @@ jobs:
       - name: Install Playwright deps
         run: pnpm exec playwright install --with-deps
       - name: Install k6
-        uses: grafana/setup-k6@v1
+        uses: grafana/setup-k6-action@v1
       - name: Start API Gateway
         run: |
           pnpm --filter @apgms/api-gateway dev &
