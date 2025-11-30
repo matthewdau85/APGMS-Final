@@ -13,18 +13,16 @@ MONTHLY   = EXTRACTED / "monthly.csv"
 
 def _fallback_table() -> pd.DataFrame:
     """Deterministic baseline when ATO CSVs are absent in CI."""
-    data = [
-        (0, 0),
-        (500, 50),
-        (800, 80),
-        (900, 94),
-        (1200, 183),
-        (1500, 280),
-        (2000, 463),
-        (3000, 700),
-        (4000, 1000),
-    ]
-    df = pd.DataFrame(data, columns=["income", "withholding_weekly"])
+    anchors_income = np.array([0, 900, 1200, 2000, 4000], dtype=float)
+    anchors_tax = np.array([0, 94, 183, 463, 1000], dtype=float)
+
+    incomes = np.arange(0, 4001, dtype=float)
+    interpolated = np.interp(incomes, anchors_income, anchors_tax)
+
+    df = pd.DataFrame({
+        "income": incomes,
+        "withholding_weekly": np.round(interpolated).astype(int),
+    })
     return df
 
 def _read_csv_any(path: Path) -> pd.DataFrame:
