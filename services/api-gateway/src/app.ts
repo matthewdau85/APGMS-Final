@@ -28,7 +28,6 @@ import { registerRegulatorRoutes } from "./routes/regulator.js";
 import { registerAdminDataRoutes } from "./routes/admin.data.js";
 import { registerBankLinesRoutes } from "./routes/bank-lines.js";
 import { registerTaxRoutes } from "./routes/tax.js";
-import { buildServer } from './server.js';
 
 import registerConnectorRoutes from "./routes/connectors.js";
 import { prisma } from "./db.js";

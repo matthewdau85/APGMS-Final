@@ -85,6 +85,7 @@ export interface AuthenticatedUser {
   orgId: string;
   role: string;
   mfaEnabled: boolean;
+  mfaVerified?: boolean;
   regulator?: boolean;
   sessionId?: string;
 }
@@ -189,6 +190,7 @@ export function createAuthGuard(
         orgId: principal.orgId,
         role: principal.roles[0] ?? "admin",
         mfaEnabled: principal.mfaEnabled,
+        mfaVerified: (principal as any).mfaVerified ?? principal.mfaEnabled,
         regulator: principal.regulator,
         sessionId: principal.sessionId,
       };

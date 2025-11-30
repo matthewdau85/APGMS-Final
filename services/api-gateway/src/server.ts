@@ -1,7 +1,4 @@
-﻿export function buildServer() { /* TODO */ }
-
-
-;
+import { buildServer } from "./app.js";
 import { startTracing, stopTracing } from "./observability/tracing.js";
 
 const PORT = Number(process.env.PORT ?? "3000");
@@ -29,8 +26,5 @@ async function main() {
 main().catch((err) => {
   // eslint-disable-next-line no-console
   console.error("Fatal boot error:", err);
-  process.exit(1);
+  stopTracing().finally(() => process.exit(1));
 });
-
-
-

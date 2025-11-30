@@ -1,8 +1,8 @@
-﻿import type { PosTransaction } from "./pos.js";
+import type { PosTransaction } from "./pos.js";
 
 export interface GstBatch {
-  id: string;
+  id?: string;
   orgId: string;
-  period: string;
+  period?: string;
   transactions: PosTransaction[];
 }

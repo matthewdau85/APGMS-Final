@@ -1,8 +1,13 @@
-﻿export interface PayrollBatch {
-  id: string;
+export interface PayrollBatch {
+  id?: string;
   orgId: string;
-  payPeriod: string;
-  employees: PayrollEntry[];
+  payPeriod?: string;
+  basPeriodId?: string;
+  /**
+   * Legacy field for payroll entries; aligns with API gateway route payloads.
+   */
+  lines?: PayrollEntry[];
+  employees?: PayrollEntry[];
 }
 
 export interface PayrollEntry {
