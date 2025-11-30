@@ -10,7 +10,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "jest --config ../../jest.config.js packages/ledger/tests"
+    "test": "jest --config ../../jest.config.mjs packages/ledger/tests"
   },
   "dependencies": {
     "@apgms/domain-policy": "workspace:*",
