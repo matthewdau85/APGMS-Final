@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "jest --config ../../jest.config.mjs services/api-gateway/test",
+    "test": "jest --config ../../jest.config.mjs \"services/api-gateway/test/**/*.(test|spec).ts?(x)\" --runInBand --coverage",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
