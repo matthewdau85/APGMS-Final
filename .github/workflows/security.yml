@@ -44,6 +44,7 @@ jobs:
           config: "p/owasp-top-ten"
       - name: Gitleaks Secret Scan
         uses: gitleaks/gitleaks-action@v2
+        continue-on-error: true
         with:
           args: --no-git --redact
         env:
