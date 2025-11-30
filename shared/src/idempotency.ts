@@ -68,7 +68,7 @@ export async function withIdempotency<T extends HandlerResult>(
   try {
     const responsePayload =
       result.body !== undefined
-        ? (result.body as Prisma.InputJsonValue)
+        ? (result.body as Prisma.JsonValue)
         : undefined;
 
     const responseHash =
