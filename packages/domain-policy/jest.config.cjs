@@ -18,5 +18,10 @@ module.exports = {
 
   moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json", "node"],
 
+  // Allow ESM-style .js imports in TS under ts-jest (maps to .ts source)
+  moduleNameMapper: {
+    "^(\\.{1,2}/.*)\\.js$": "$1"
+  },
+
   clearMocks: true
 };
