@@ -11,7 +11,13 @@ export enum TaxType {
   OTHER = "OTHER",
 }
 
-export type PayPeriod = "WEEKLY" | "FORTNIGHTLY" | "MONTHLY";
+export type PayPeriod =
+  | "weekly"
+  | "fortnightly"
+  | "monthly"
+  | "WEEKLY"
+  | "FORTNIGHTLY"
+  | "MONTHLY";
 
 export interface TaxParameterSetMeta {
   id: string;
@@ -21,31 +27,27 @@ export interface TaxParameterSetMeta {
   validFrom: Date;
   validTo: Date | null;
   description?: string | null;
-  source: "ATO" | "MANUAL" | "TEST" | "OTHER";
+  source?: "ATO" | "MANUAL" | "TEST" | "OTHER";
+  versionTag?: string;
 }
 
 export interface PaygwBracket {
-  /**
-   * Apply this bracket if weekly income is < weeklyLessThan.
-   * Use null for the top bracket (no upper bound).
-   */
-  weeklyLessThan: number | null;
-  /**
-   * Coefficient "a" in ATO formulas.
-   */
-  a: number | null;
-  /**
-   * Coefficient "b" in ATO formulas.
-   */
-  b: number | null;
+  /** Income threshold (in cents) at which this bracket starts. */
+  thresholdCents: number;
+  /** Base withholding (in cents) for this bracket. */
+  baseWithholdingCents: number;
+  /** Marginal rate in milli-units (e.g. 200 = 20%). */
+  marginalRateMilli: number;
+  flags?: Record<string, unknown>;
 }
 
 export interface PaygwConfig {
   meta: TaxParameterSetMeta;
-  jurisdiction: JurisdictionCode;
-  taxType: TaxType.PAYGW;
-  payPeriod: PayPeriod;
+  jurisdiction?: JurisdictionCode;
+  taxType?: TaxType.PAYGW;
+  payPeriod?: PayPeriod;
   brackets: PaygwBracket[];
+  flags?: Record<string, unknown>;
 }
 
 export interface GstConfig {
@@ -61,29 +63,46 @@ export interface GstConfig {
 export type AuTaxConfig = PaygwConfig | GstConfig;
 
 export interface TaxConfigRepository {
-  /**
-   * Generic "get whatever is active" API – flexible but a bit low-level.
-   */
   getActiveConfig(params: {
     jurisdiction: JurisdictionCode;
     taxType: TaxType;
     onDate: Date;
   }): Promise<AuTaxConfig | null>;
 
-  /**
-   * Optional convenience for PAYGW lookups by schedule/pay period.
-   */
   getPaygwConfigForSchedule?(
     jurisdiction: JurisdictionCode,
     payPeriod: PayPeriod,
     onDate: Date
   ): Promise<PaygwConfig | null>;
 
-  /**
-   * Optional convenience for GST lookups.
-   */
   getGstConfig?(
     jurisdiction: JurisdictionCode,
     onDate: Date
   ): Promise<GstConfig | null>;
 }
+
+export interface PaygwCalculationInput {
+  jurisdiction?: JurisdictionCode;
+  payPeriod?: PayPeriod | string;
+  grossCents?: number;
+  grossIncomeCents?: number;
+  paymentDate?: Date;
+  onDate?: Date;
+  flags?: Record<string, unknown>;
+}
+
+export interface PaygwResult {
+  amountCents: number;
+  weeklyWithholdingCents: number;
+  period: string;
+  meta?: Record<string, unknown>;
+  withholdingCents: number;
+  parameterSetId?: string;
+  bracketIndex: number;
+  configUsed?: PaygwConfig | null;
+}
+
+export type AuTaxConfigRepo = Pick<
+  TaxConfigRepository,
+  "getActiveConfig" | "getPaygwConfigForSchedule"
+>;
