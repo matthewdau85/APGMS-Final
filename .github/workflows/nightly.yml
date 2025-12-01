@@ -2,7 +2,7 @@ name: Nightly Chaos Smoke
 
 on:
   schedule:
-    - cron: "0 2 * * *"
+    - cron: '0 2 * * *'
   workflow_dispatch:
 
 jobs:
@@ -10,24 +10,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: pnpm/action-setup@v4
         with:
           version: 9
+
       - uses: actions/setup-node@v4
         with:
-          node-version: "20.11.x"
-          cache: "pnpm"
+          node-version: '20.19.0'
+          cache: 'pnpm'
           cache-dependency-path: pnpm-lock.yaml
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
       - name: Install Playwright deps
         run: pnpm exec playwright install --with-deps
+
       - name: Install k6
         uses: grafana/setup-k6-action@v1
+
       - name: Start API Gateway
         run: |
           pnpm --filter @apgms/api-gateway dev &
           echo $! > gateway.pid
+
       - name: Wait for readiness
         run: |
           for i in {1..30}; do
@@ -37,19 +44,24 @@ jobs:
             sleep 2
           done
           echo "API gateway failed to become ready" >&2
-          kill $(cat gateway.pid)
+          kill "$(cat gateway.pid)"
           exit 1
+
       - name: Run compliance evidence (smoke focus)
         env:
-          SKIP_K6: "true"
+          SKIP_K6: 'true'
         run: pnpm compliance:evidence --tag nightly-$(date +%Y%m%d)
+
       - name: Run regulator portal smoke
         run: pnpm smoke:regulator
+
       - name: Run k6 chaos smoke
         run: pnpm k6:smoke -- --env BASE_URL=http://localhost:3000
+
       - name: Stop API Gateway
         if: always()
-        run: kill $(cat gateway.pid) || true
+        run: kill "$(cat gateway.pid)" || true
+
       - name: Upload compliance artefacts
         if: always()
         uses: actions/upload-artifact@v4
