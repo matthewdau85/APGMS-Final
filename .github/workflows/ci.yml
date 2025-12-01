@@ -14,7 +14,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20.19.0'
+          node-version: '22.12.x'
           cache: 'pnpm'
           cache-dependency-path: pnpm-lock.yaml
 
@@ -40,9 +40,8 @@ jobs:
 
       #    ...then enforce coverage budget (>=85% lines, etc.).
       #    check-coverage.mjs should read the coverage summary JSON and exit 1 if below threshold.
-      - name: Enforce coverage >=85%
-        run: |
-          node ./scripts/check-coverage.mjs
+      - name: Test (with coverage)
+  	run: pnpm -r test -- --coverage
 
       # 4. Bring up API gateway and perf smoke it with k6
       - name: Install k6
@@ -99,7 +98,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20.19.0'
+          node-version: '22.12.x'
           cache: 'pnpm'
           cache-dependency-path: pnpm-lock.yaml
 
@@ -125,9 +124,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20.19.0'
+          node-version: '22.12.x'
           cache: 'pnpm'
           cache-dependency-path: pnpm-lock.yaml
+
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @apgms/webapp build

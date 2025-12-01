@@ -1,22 +1,23 @@
 {
-    "name": "@apgms/domain-policy",
-    "version": "0.1.0",
-    "private": true,
-    "type": "module",
-    "main": "dist/index.js",
-    "types": "dist/index.d.ts",
-    "exports": {
-        ".": "./dist/index.js"
-    },
-    "dependencies": {
-        "@prisma/client": "6.19.0"
-    },
-    "devDependencies": {
-        "@types/jest": "^29.5.14",
-        "ts-jest": "^29.4.5"
-    },
-    "scripts": {
-        "build": "tsc -p tsconfig.json",
-        "test": "jest --config ./jest.config.cjs --runInBand"
-    }
+    "name":  "@apgms/domain-policy",
+    "version":  "0.1.0",
+    "private":  true,
+    "type":  "module",
+    "main":  "dist/index.js",
+    "types":  "dist/index.d.ts",
+    "exports":  {
+                    ".":  "./dist/index.js"
+                },
+    "dependencies":  {
+                         "@prisma/client":  "6.19.0"
+                     },
+    "devDependencies":  {
+                            "@types/jest":  "^29.5.14",
+                            "ts-jest":  "^29.4.5"
+                        },
+    "scripts":  {
+                    "build":  "tsc -p tsconfig.json",
+                    "test":  "jest --config ./jest.config.cjs --runInBand",
+                    "posttest":  "echo skipping coverage copy for now"
+                }
 }
