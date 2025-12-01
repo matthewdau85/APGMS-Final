@@ -1,14 +1,15 @@
 /** @type {import('jest').Config} */
 module.exports = {
-  preset: "ts-jest",
+  // No preset here – we wire ts-jest manually via transform
   testEnvironment: "node",
 
-  // Transform BOTH TS and JS with ts-jest, using the Jest-specific tsconfig
+  // Transform TS/JS with ts-jest using the Jest tsconfig
   transform: {
     "^.+\\.[tj]sx?$": [
-      "ts-jest",
+      require.resolve("ts-jest"),
       {
-        tsconfig: "<rootDir>/tsconfig.jest.json"
+        tsconfig: "<rootDir>/tsconfig.jest.json",
+        useESM: false
       }
     ]
   },
@@ -18,7 +19,7 @@ module.exports = {
 
   moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json", "node"],
 
-  // Allow ESM-style .js imports in TS under ts-jest (maps to .ts source)
+  // Allow `.js` imports in TS that map back to `.ts` sources
   moduleNameMapper: {
     "^(\\.{1,2}/.*)\\.js$": "$1"
   },
