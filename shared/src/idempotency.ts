@@ -7,7 +7,7 @@ type Ctx = {
   prisma: PrismaClient;
   orgId: string;
   actorId?: string;        // optional, will default to "system" for persistence
-  requestPayload?: unknown;
+  requestPayload?: any;
   resource?: string | null;
 };
 
@@ -15,12 +15,12 @@ type HandlerResult = {
   statusCode: number;
   resource?: string | null;
   resourceId?: string | null;
-  body?: unknown;
+  body?: any;
 };
 
 export async function withIdempotency<T extends HandlerResult>(
-  request: { headers?: Record<string, unknown> },
-  _reply: unknown,
+  request: { headers?: Record<string, any> },
+  _reply: any,
   ctx: Ctx,
   handler: (args: { idempotencyKey: string }) => Promise<T>
 ): Promise<T> {
@@ -66,7 +66,7 @@ export async function withIdempotency<T extends HandlerResult>(
   const result = await handler({ idempotencyKey: key });
 
   try {
-    const responsePayload = result.body !== undefined ? (result.body as unknown) : undefined;
+    const responsePayload = result.body !== undefined ? (result.body as any) : undefined;
 
     const responseHash =
       result.body !== undefined ? hashJson(result.body) : "";
@@ -93,7 +93,7 @@ export async function withIdempotency<T extends HandlerResult>(
   return result;
 }
 
-function normalizeKey(rawKey: unknown, ctx: Ctx): string {
+function normalizeKey(rawKey: any, ctx: Ctx): string {
   const headerKey = typeof rawKey === "string" ? rawKey.trim() : "";
   if (headerKey.length > 0) {
     return headerKey;
@@ -124,12 +124,12 @@ function derivePayloadDigest(ctx: Ctx): string {
   return createHash("sha256").update(digestInput).digest("hex");
 }
 
-function hashJson(value: unknown): string {
+function hashJson(value: any): string {
   const payloadString = safeStringify(value);
   return createHash("sha256").update(payloadString).digest("hex");
 }
 
-function safeStringify(value: unknown): string {
+function safeStringify(value: any): string {
   if (typeof value === "string") {
     return value;
   }

@@ -17,7 +17,7 @@ export * from "./au-tax/paygw-engine.js";
 export * from "./au-tax/paygw-settlement.js";
 export * from "./au-tax/gst-engine.js";
 export * from "./au-tax/gst-settlement.js";
-export * from "./au-tax/prisma-repository.js";
+ // export * from "./au-tax/prisma-repository.js";
 
 // ---------------------------------------------------------------------------
 // Designated account domain (transfers + mappings + guards)
