@@ -1,26 +1,26 @@
 {
-  "name": "@apgms/shared",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": "./dist/index.js"
-  },
-  "scripts": {
-    "clean-dist": "node ./scripts/clean-dist.js",
-    "build": "pnpm run clean-dist && tsc -p tsconfig.json",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
-    "generate": "node ./scripts/run-prisma-generate.mjs",
-    "prebuild": "pnpm run generate"
-  },
-  "dependencies": {
-    "@prisma/client": "6.19.0",
-    "otplib": "^12.0.1"
-  },
-  "devDependencies": {
-    "prisma": "6.19.0",
-    "typescript": "^5.6.3"
-  }
+    "name":  "@apgms/shared",
+    "version":  "0.1.0",
+    "private":  true,
+    "type":  "module",
+    "main":  "./dist/index.js",
+    "types":  "./dist/index.d.ts",
+    "exports":  {
+                    ".":  "./dist/index.js"
+                },
+    "scripts":  {
+                    "clean-dist":  "echo skipping clean-dist for now",
+                    "build":  "tsc -p tsconfig.json",
+                    "typecheck":  "tsc --noEmit -p tsconfig.json",
+                    "generate":  "node ./scripts/run-prisma-generate.mjs",
+                    "prebuild":  "echo skipping shared prebuild (prisma generate) for now"
+                },
+    "dependencies":  {
+                         "@prisma/client":  "6.19.0",
+                         "otplib":  "^12.0.1"
+                     },
+    "devDependencies":  {
+                            "prisma":  "6.19.0",
+                            "typescript":  "^5.6.3"
+                        }
 }
