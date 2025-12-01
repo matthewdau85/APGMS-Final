@@ -1,4 +1,4 @@
-{
+﻿{
     "name":  "@apgms/shared",
     "version":  "0.1.0",
     "private":  true,
@@ -13,7 +13,7 @@
                     "build":  "tsc -p tsconfig.json",
                     "typecheck":  "tsc --noEmit -p tsconfig.json",
                     "generate":  "node ./scripts/run-prisma-generate.mjs",
-                    "prebuild":  "echo skipping shared prebuild (prisma generate) for now"
+                    "prebuild":  "echo \"skipping shared prebuild prisma generate for now\""
                 },
     "dependencies":  {
                          "@prisma/client":  "6.19.0",
