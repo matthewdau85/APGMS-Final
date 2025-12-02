@@ -1,10 +1,16 @@
-name: CI
+name: CI Webapp
 
 on:
   push:
     branches:
       - main
+      - "feature/**"
+      - "fix/**"
   pull_request:
+
+concurrency:
+  group: ci-webapp-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-lighthouse:
@@ -18,13 +24,12 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: 9
-          run_install: false
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: pnpm
+          node-version: "20.11.x"
+          cache: "pnpm"
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies

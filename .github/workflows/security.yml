@@ -1,12 +1,16 @@
-name: Security and drift checks
+name: Security
 
 on:
   push:
     branches:
       - main
+      - "feature/**"
+      - "fix/**"
   pull_request:
-  schedule:
-    - cron: "0 18 * * 0" # Weekly run (UTC); adjust if you like
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   security:
@@ -20,22 +24,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
-        with:
-          languages: javascript
-
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 9
-          run_install: false
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: pnpm
+          node-version: "22.12.x"
+          cache: "pnpm"
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies

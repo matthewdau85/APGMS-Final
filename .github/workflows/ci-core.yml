@@ -4,11 +4,22 @@ on:
   push:
     branches:
       - main
+      - "feature/**"
+      - "fix/**"
   pull_request:
 
+concurrency:
+  group: ci-core-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  domain-policy:
+  test-core:
     runs-on: ubuntu-latest
+
+    env:
+      # Dummy DB URL just so Prisma CLI gets a value.
+      # This DB does NOT need to exist for validate/generate.
+      DATABASE_URL: postgresql://apgms-ci:apgms-ci@127.0.0.1:5432/apgms_ci
 
     steps:
       - name: Checkout
@@ -18,20 +29,26 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: 9
-          run_install: false
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: pnpm
+          node-version: "22.12.x"
+          cache: "pnpm"
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build domain-policy
-        run: pnpm -r --filter domain-policy build
+      - name: Generate Prisma client for @apgms/shared
+        # Uses the shared/prisma/schema.prisma inside the shared workspace.
+        run: pnpm --filter @apgms/shared exec prisma generate --schema prisma/schema.prisma
 
-      - name: Test domain-policy
-        run: pnpm -r --filter domain-policy test
+      - name: Lint
+        run: pnpm -r lint
+
+      - name: Build
+        run: pnpm -r build
+
+      - name: Test with coverage
+        run: pnpm -r test -- --coverage

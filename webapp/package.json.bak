@@ -7,13 +7,7 @@
   "build": "vite build",
   "typecheck": "tsc --noEmit -p tsconfig.json",
   "preview": "vite preview",
-  "lint": "eslint \"src/**/*.{ts,tsx}\"",
-  "eslintIgnore": [
-  "src",
-  "src/**",
-  "webapp/src",
-  "**/src/**"
-]
+  "lint": "eslint ."
 },
   "dependencies": {
     "react": "^18.2.0",
