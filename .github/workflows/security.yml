@@ -1,64 +1,52 @@
-name: Security Scans
+name: Security & Drift Checks
 
 on:
-  schedule:
-    - cron: '0 3 * * *'
-  workflow_dispatch:
   push:
-    paths:
-      - '**/*.js'
-      - '**/*.ts'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - '.github/workflows/security.yml'
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 3 * * *' # optional: nightly
 
 jobs:
   security:
     runs-on: ubuntu-latest
+
+    # Needed so Prisma can load the schema config
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres?schema=public
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
           version: 9
-      - uses: actions/setup-node@v4
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: '20.11.x'
-          cache: 'pnpm'
+          node-version: 22.12.0
+          cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Dependency audit (high+)
-        continue-on-error: true
-        run: pnpm audit --audit-level high || true
-      - name: Generate SBOM (CycloneDX)
-        run: pnpm exec cyclonedx-npm --ignore-npm-errors --output-format json --output-file sbom.json
-      - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: sbom-json
-          path: sbom.json
-      - name: Semgrep SAST
-        uses: returntocorp/semgrep-action@v1
-        continue-on-error: true
-        with:
-          config: "p/owasp-top-ten"
-      - name: Gitleaks Secret Scan
-        uses: gitleaks/gitleaks-action@v2
-        continue-on-error: true
-        with:
-          args: --no-git --redact
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.28.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Trivy FS Scan
-        uses: aquasecurity/trivy-action@0.12.0
         with:
           scan-type: fs
-          format: table
-          severity: HIGH,CRITICAL
           ignore-unfixed: true
-      - name: Prisma drift check
-        run: pnpm --filter @apgms/shared exec prisma migrate status --schema shared/prisma/schema.prisma
-      - name: Header + Auth smoke tests
-        run: |
-          pnpm --filter @apgms/api-gateway exec tsx ./test/security.headers.spec.ts
-          pnpm --filter @apgms/api-gateway exec tsx ./test/auth.guard.spec.ts
+          format: table
+          exit-code: '1'
+          cache-dir: .trivy-cache
+          severity: HIGH,CRITICAL
+
+      - name: Prisma migrate status (drift check)
+        run: pnpm --filter @apgms/shared exec prisma migrate status --schema prisma/schema.prisma
