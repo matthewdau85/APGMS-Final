@@ -1,0 +1,244 @@
+===== C:\src\APGMS\package.json =====
+{
+    "name": "apgms",
+    "type": "module",
+    "private": true,
+    "version": "0.1.0",
+    "workspaces": [
+        "services/*",
+        "webapp",
+        "shared",
+        "worker",
+        "apps/*",
+        "packages/*"
+    ],
+    "scripts": {
+        "db:migrate": "pnpm --filter @apgms/shared exec prisma migrate dev --schema prisma/schema.prisma",
+        "db:deploy": "pnpm --filter @apgms/shared exec prisma migrate deploy --schema prisma/schema.prisma",
+        "db:gen": "pnpm --filter @apgms/shared exec prisma generate --schema prisma/schema.prisma",
+        "build:api-gateway": "pnpm --filter @apgms/shared build && pnpm --filter @apgms/domain-policy build && pnpm --filter @apgms/api-gateway build",
+        "test": "pnpm -r test",
+        "test:e2e": "pnpm exec playwright test",
+        "jest": "jest",
+        "build": "pnpm -r build",
+        "typecheck": "pnpm -r typecheck",
+        "lint": "pnpm lint:markdown",
+        "coverage": "pnpm jest --coverage",
+        "sbom": "pnpm exec cyclonedx-npm --json --output-file artifacts/sbom.json",
+        "sca": "pnpm audit --prod --audit-level=high",
+        "secrets": "pnpm exec gitleaks detect --no-banner --redact",
+        "trivy": "pnpm exec trivy fs --quiet --exit-code 1 .",
+        "a11y": "pnpm exec playwright test --grep \"@a11y\"",
+        "migrate:status": "pnpm --filter @apgms/shared exec prisma migrate status",
+        "verify:no-conflicts": "node scripts/verify-no-conflicts.mjs",
+        "k6:smoke": "pnpm exec k6 run k6/smoke.js",
+        "smoke:regulator": "node scripts/regulator-smoke.mjs",
+        "lint:markdown": "pnpm exec markdownlint **/*.md",
+        "compliance:evidence": "node scripts/collect-evidence.mjs",
+        "security:rotate-keys": "node scripts/rotate-pii-keys.mjs",
+        "backup:evidence-pack": "tsx scripts/export-evidence-pack.ts"
+    },
+    "devDependencies": {
+        "@axe-core/playwright": "^4.9.2",
+        "@cyclonedx/cyclonedx-npm": "^4.0.3",
+        "@playwright/test": "^1.48.0",
+        "@types/jest": "^29.5.12",
+        "@types/node": "^24.7.1",
+        "bcryptjs": "^3.0.3",
+        "jest": "^29.7.0",
+        "prisma": "6.19.0",
+        "ts-jest": "^29.2.5",
+        "ts-node": "^10.9.2",
+        "tsx": "^4.20.6",
+        "typescript": "^5.9.3"
+    },
+    "dependencies": {
+        "@fastify/cors": "^11.1.0",
+        "@prisma/client": "6.19.0",
+        "argon2": "^0.41.1",
+        "fastify": "^5.6.1",
+        "nats": "^2.18.0",
+        "uuid": "^10.0.0",
+        "zod": "^4.1.12"
+    },
+    "prisma": {
+        "schema": "shared/Prisma/schema.prisma"
+}
+	
+}
+
+===== C:\src\APGMS\apps\phase1-demo\package.json =====
+{
+  "name": "@apgms/phase1-demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@apgms/ledger": "workspace:*",
+    "@apgms/shared": "workspace:*",
+    "@prisma/client": "^6.17.1",
+    "fastify": "^5.6.1",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/uuid": "^11.0.0"
+  }
+}
+
+===== C:\src\APGMS\packages\domain-policy\package.json =====
+{
+  "name": "@apgms/domain-policy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.0"
+  },
+  "devDependencies": {
+    "@apgms/shared": "workspace:*"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "jest --config ./jest.config.cjs --runInBand"
+  }
+}
+
+
+
+
+
+===== C:\src\APGMS\packages\ledger\package.json =====
+{
+  "name": "@apgms/ledger",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "jest --config ./jest.config.cjs --runInBand"
+  },
+  "dependencies": {
+    "@apgms/domain-policy": "workspace:*",
+    "@apgms/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
+
+===== C:\src\APGMS\services\api-gateway\package.json =====
+{
+  "name": "@apgms/api-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "jest --config ./jest.config.cjs --runInBand --coverage --passWithNoTests",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:generate": "prisma generate"
+  },
+  "prisma": {
+    "schema": "../../shared/prisma/schema.prisma"
+  },
+  "dependencies": {
+    "@apgms/connectors": "workspace:*",
+    "@apgms/domain-policy": "workspace:*",
+    "@apgms/shared": "workspace:*",
+    "@aws-sdk/client-secrets-manager": "^3.933.0",
+    "@fastify/helmet": "^13.0.2",
+    "@fastify/rate-limit": "^10.3.0",
+    "@opentelemetry/api": "1.8.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.50.0",
+    "@opentelemetry/resources": "^1.23.0",
+    "@opentelemetry/sdk-node": "^0.50.0",
+    "@opentelemetry/semantic-conventions": "^1.23.0",
+    "@prisma/client": "6.19.0",
+    "@simplewebauthn/server": "^13.2.2",
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^17.2.3",
+    "fastify-plugin": "^5.1.0",
+    "jose": "^6.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "prom-client": "^15.1.3",
+    "redis": "^5.9.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^3.0.0",
+    "@types/jsonwebtoken": "^9.0.10",
+    "prisma": "6.19.0"
+  }
+}
+
+===== C:\src\APGMS\services\connectors\package.json =====
+{
+  "name": "@apgms/connectors",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@apgms/domain-policy": "workspace:*",
+    "@apgms/shared": "workspace:*",
+    "@prisma/client": "6.17.1"
+  },
+  "devDependencies": {
+    "prisma": "6.17.1",
+    "typescript": "^5.9.3"
+  }
+}
+
+===== C:\src\APGMS\shared\package.json =====
+{
+  "name": "@apgms/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "clean-dist": "node ./scripts/clean-dist.js",
+    "build": "pnpm run clean-dist && tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "generate": "node ./scripts/run-prisma-generate.mjs",
+    "prebuild": "pnpm run generate"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.0",
+    "otplib": "^12.0.1"
+  },
+  "devDependencies": {
+    "prisma": "6.19.0",
+    "typescript": "^5.6.3"
+  }
+}
+
