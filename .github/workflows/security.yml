@@ -43,6 +43,9 @@ jobs:
       # --- Prisma schema / drift checks ---
 
       - name: Prisma schema validate (@apgms/shared)
+        env:
+          # Value doesn't matter as long as it's present; validate only needs the env var, not a live DB.
+          DATABASE_URL: postgresql://apgms_ci:apgms_ci@127.0.0.1:5432/apgms_ci?schema=public
         run: pnpm --filter @apgms/shared exec prisma validate --schema prisma/schema.prisma
 
       - name: Prisma migrate status (@apgms/shared)
