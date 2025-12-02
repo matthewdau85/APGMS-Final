@@ -20,27 +20,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-       # 👇 New / important bit
-      - name: Build webapp for Lighthouse
-        run: pnpm -r --filter webapp build
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20.11.x"
+          node-version: "22.12.x"
           cache: "pnpm"
           cache-dependency-path: pnpm-lock.yaml
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Build just the webapp package (apgms-webapp@0.1.0)
       - name: Build webapp
-        run: pnpm --filter @apgms/webapp build
+        run: pnpm --filter apgms-webapp build
 
       - name: Lighthouse CI
         uses: treosh/lighthouse-ci-action@v10
