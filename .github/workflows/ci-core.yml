@@ -1,12 +1,13 @@
-name: CI Core
+name: CI Core - domain-policy tests
 
 on:
   push:
     branches: [ main ]
   pull_request:
+    branches: [ '**' ]
 
 jobs:
-  test-core:
+  test-domain-policy:
     runs-on: ubuntu-latest
 
     steps:
@@ -29,5 +30,5 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run core tests
-        run: pnpm -r --filter domain-policy test
+      - name: Run domain-policy tests
+        run: pnpm -r --filter @apgms/domain-policy test
