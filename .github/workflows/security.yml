@@ -1,12 +1,12 @@
-name: Security & Drift Checks
+name: Security and drift checks
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   pull_request:
-    branches: [ main ]
   schedule:
-    - cron: '0 3 * * *' # optional: nightly
+    - cron: "0 18 * * 0" # Weekly run (UTC); adjust if you like
 
 jobs:
   security:
@@ -20,6 +20,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -29,7 +34,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22.12.0
+          node-version: 20
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
