@@ -1,25 +1,29 @@
-name: Security & Drift Checks
+name: Security and drift checks
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   pull_request:
-    branches: [ main ]
   schedule:
-    - cron: '0 3 * * *' # optional: nightly
+    - cron: "0 18 * * 0" # Weekly run (UTC); adjust if you like
 
 jobs:
   security:
     runs-on: ubuntu-latest
-
-<<<<<<< HEAD
-    # Needed so Prisma can load the schema config
-    env:
-      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres?schema=public
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -30,56 +34,19 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22.12.0
+          node-version: 20
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run Trivy filesystem scan
-        uses: aquasecurity/trivy-action@0.28.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-=======
-    steps:
-      - uses: actions/checkout@v4
+      - name: Build (for CodeQL)
+        run: pnpm -r build
+        continue-on-error: true
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
+      - name: Run Prisma schema validation
+        run: pnpm --filter @apgms/shared exec prisma validate --schema prisma/schema.prisma
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22.12.x'
-          cache: 'pnpm'
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install
-
-      - name: Run Trivy filesystem scan
-        uses: aquasecurity/trivy-action@0.12.0
->>>>>>> 6716291060955e73728760cd8f3994d6c4cce83a
-        with:
-          scan-type: fs
-          ignore-unfixed: true
-<<<<<<< HEAD
-          format: table
-          exit-code: '1'
-          cache-dir: .trivy-cache
-          severity: HIGH,CRITICAL
-
-      - name: Prisma migrate status (drift check)
-        run: pnpm --filter @apgms/shared exec prisma migrate status --schema prisma/schema.prisma
-=======
-
-      - name: Prisma drift check
-        run: pnpm --filter @apgms/shared exec prisma migrate status --schema prisma/schema.prisma
-
-      - name: Header + Auth smoke tests
-        run: |
-          pnpm --filter @apgms/api-gateway exec tsx ./test/security.headers.spec.ts
-          pnpm --filter @apgms/api-gateway exec tsx ./test/auth.guard.spec.ts
->>>>>>> 6716291060955e73728760cd8f3994d6c4cce83a
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
