@@ -43,8 +43,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22.12.x"
-          cache: "pnpm"
-          cache-dependency-path: pnpm-lock.yaml
+          # IMPORTANT: no cache: "pnpm" here, since pnpm isn't installed yet
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -62,8 +61,8 @@ jobs:
       - name: Prisma migrate status (@apgms/shared)
         run: pnpm --filter @apgms/shared exec prisma migrate status --schema prisma/schema.prisma
 
-      # --- Add whatever security tools you want below ---
-      # - name: Run npm audit (all workspaces)
+      # --- Extra security tooling can go here ---
+      # - name: Run pnpm audit (all workspaces)
       #   run: pnpm audit --recursive
       #
       # - name: Run ESLint security rules only

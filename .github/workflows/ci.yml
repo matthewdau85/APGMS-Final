@@ -24,8 +24,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22.12.x"
-          cache: "pnpm"
-          cache-dependency-path: pnpm-lock.yaml
+          # IMPORTANT: no cache: "pnpm" here
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -35,9 +34,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Build just the webapp package (apgms-webapp@0.1.0)
       - name: Build webapp
-        run: pnpm --filter apgms-webapp build
+        # "webapp" is the workspace dir label you see in local logs: "webapp build$ vite build"
+        run: pnpm --filter webapp build
 
       - name: Lighthouse CI
         uses: treosh/lighthouse-ci-action@v10
