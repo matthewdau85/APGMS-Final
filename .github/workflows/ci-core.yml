@@ -1,28 +1,31 @@
-name: CI Core
+name: CI Core - domain-policy tests
 
 on:
   push:
     branches: [ main ]
   pull_request:
+    branches: [ '**' ]
 
 jobs:
-  test-core:
+  test-domain-policy:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-          run_install: false
-
-       - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '22.12.x'
+          cache: 'pnpm'
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
 
       - name: Install dependencies
         run: pnpm install
 
-      - name: Run core tests
-        run: pnpm -r --filter domain-policy test
+      - name: Run domain-policy tests
+        run: pnpm -r --filter @apgms/domain-policy test
