@@ -47,6 +47,9 @@ jobs:
 
       - name: Run Prisma schema validation
         run: pnpm --filter @apgms/shared exec prisma validate --schema prisma/schema.prisma
+        env:
+          # Dummy but syntactically valid URL so Prisma can read env("DATABASE_URL")
+          DATABASE_URL: postgresql://user:pass@localhost:5432/db?schema=public
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@v3
