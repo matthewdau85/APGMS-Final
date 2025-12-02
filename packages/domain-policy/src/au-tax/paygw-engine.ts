@@ -1,3 +1,4 @@
+// PATENT-CORE: real-time PAYGW calculation used for APGMS tax obligation determination.
 import { TaxType } from "./types.js";
 import type {
   AuTaxConfigRepo,

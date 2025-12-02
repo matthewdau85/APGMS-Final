@@ -6,6 +6,7 @@ on:
   pull_request:
 
 jobs:
+<<<<<<< HEAD
   build-and-lighthouse:
     runs-on: ubuntu-latest
 
@@ -14,6 +15,30 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup pnpm
+=======
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      db:
+        image: postgres:16
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: apgms
+        options: >-
+          --health-cmd="pg_isready -U postgres -d apgms"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+>>>>>>> 6716291060955e73728760cd8f3994d6c4cce83a
         uses: pnpm/action-setup@v4
         with:
           version: 9
@@ -22,13 +47,19 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
+<<<<<<< HEAD
           node-version: 20
           cache: pnpm
+=======
+          node-version: '22.12.x'
+          cache: 'pnpm'
+>>>>>>> 6716291060955e73728760cd8f3994d6c4cce83a
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install
 
+<<<<<<< HEAD
       - name: Build web app
         run: pnpm --filter @apgms/webapp build
 
@@ -38,3 +69,10 @@ jobs:
           configPath: ./lighthouserc.json
           runs: 1
           uploadArtifacts: true
+=======
+      - name: Run shared Prisma migrate status (sanity)
+        run: pnpm --filter @apgms/shared exec prisma migrate status --schema prisma/schema.prisma
+
+      - name: Run full test suite (smoke tier)
+        run: pnpm -r test
+>>>>>>> 6716291060955e73728760cd8f3994d6c4cce83a

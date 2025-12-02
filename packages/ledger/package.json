@@ -1,22 +1,24 @@
 {
-  "name": "@apgms/ledger",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": "./dist/index.js"
-  },
-  "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "test": "jest --config ./jest.config.cjs --runInBand"
-  },
-  "dependencies": {
-    "@apgms/domain-policy": "workspace:*",
-    "@apgms/shared": "workspace:*"
-  },
-  "devDependencies": {
-    "typescript": "^5.9.3"
-  }
+    "name": "@apgms/ledger",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": "./dist/index.js"
+    },
+    "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "test": "jest --config ./jest.config.cjs --runInBand"
+    },
+    "dependencies": {
+        "@apgms/domain-policy": "workspace:*",
+        "@apgms/shared": "workspace:*"
+    },
+    "devDependencies": {
+        "@types/jest": "^30.0.0",
+        "ts-jest": "^29.4.5",
+        "typescript": "^5.9.3"
+    }
 }
