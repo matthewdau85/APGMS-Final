@@ -13,7 +13,8 @@
                     "build":  "tsc -p tsconfig.json",
                     "typecheck":  "tsc --noEmit -p tsconfig.json",
                     "generate":  "node ./scripts/run-prisma-generate.mjs",
-                    "prebuild":  "echo \"skipping shared prebuild prisma generate for now\""
+                    "prebuild":  "pnpm prisma:generate",
+                    "prisma:generate": "prisma generate --schema=./prisma/schema.prisma"
                 },
     "dependencies":  {
                          "@prisma/client":  "6.19.0",
