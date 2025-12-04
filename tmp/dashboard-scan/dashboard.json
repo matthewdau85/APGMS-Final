@@ -1,0 +1,13 @@
+{
+  "url": "http://localhost:5173/dashboard",
+  "path": "/dashboard",
+  "headings": [
+    {
+      "level": "h1",
+      "text": "APGMS Admin Login"
+    }
+  ],
+  "roles": [],
+  "links": [],
+  "timestamp": "2025-12-04T09:42:17.546Z"
+}

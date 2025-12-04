@@ -1,0 +1,137 @@
+<!DOCTYPE html><html lang="en"><head>
+    <script type="module">import { injectIntoGlobalHook } from "/@react-refresh";
+injectIntoGlobalHook(window);
+window.$RefreshReg$ = () => {};
+window.$RefreshSig$ = () => (type) => type;</script>
+
+    <script type="module" src="/@vite/client"></script>
+
+    <meta charset="UTF-8">
+    <title>APGMS Admin</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' http://localhost:3000 http://localhost:5173; frame-ancestors 'none'; object-src 'none';">
+  <style type="text/css" data-vite-dev-id="/mnt/c/src/apgms/webapp/src/styles/themes.css">:root {
+  --font-heading: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-body: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --shadow-card: 0 8px 20px rgba(0, 0, 0, 0.04);
+  --shadow-soft: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+body.theme-navy {
+  --bg: #f6f8fb;
+  --surface: #ffffff;
+  --surface-alt: #f0f4ff;
+  --text: #0f172a;
+  --muted: #475569;
+  --border: #e2e8f0;
+  --nav-bg: #0b1c38;
+  --nav-text: #e2e8f0;
+  --accent: #2563eb;
+  --accent-strong: #1d4ed8;
+  --success: #0f9b5f;
+  --warning: #f97316;
+  --danger: #dc2626;
+}
+
+body.theme-sunset {
+  --bg: #fff8f2;
+  --surface: #ffffff;
+  --surface-alt: #ffe8d8;
+  --text: #2d1b12;
+  --muted: #5b4337;
+  --border: #f3d8c4;
+  --nav-bg: #2d1b12;
+  --nav-text: #fcefe5;
+  --accent: #ef6c41;
+  --accent-strong: #d94b24;
+  --success: #0f9b5f;
+  --warning: #f59e0b;
+  --danger: #c53030;
+}
+
+body.theme-forest {
+  --bg: #f4f7f4;
+  --surface: #ffffff;
+  --surface-alt: #e8f5e9;
+  --text: #0f2415;
+  --muted: #3f6249;
+  --border: #d7e7db;
+  --nav-bg: #0f2415;
+  --nav-text: #e6f1e9;
+  --accent: #2f855a;
+  --accent-strong: #276749;
+  --success: #2f855a;
+  --warning: #d97706;
+  --danger: #b91c1c;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+}
+
+a {
+  color: var(--accent);
+}
+
+.app-card {
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  border: 1px solid var(--border);
+  padding: 16px;
+}
+
+.app-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--surface-alt);
+  color: var(--text);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.app-chip.success { color: var(--success); border-color: rgba(15,155,95,0.25); background: rgba(15,155,95,0.08); }
+.app-chip.warning { color: var(--warning); border-color: rgba(247,115,22,0.25); background: rgba(247,115,22,0.1); }
+.app-chip.danger { color: var(--danger); border-color: rgba(220,38,38,0.25); background: rgba(220,38,38,0.1); }
+
+.app-button {
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--accent);
+  color: #ffffff;
+  box-shadow: var(--shadow-soft);
+  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+.app-button:hover { background: var(--accent-strong); transform: translateY(-1px); }
+.app-button:active { transform: translateY(0); box-shadow: none; }
+.app-button.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+
+.app-skeleton {
+  background: linear-gradient(90deg, rgba(0,0,0,0.04) 25%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.04) 75%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+  border-radius: var(--radius-sm);
+}
+
+@keyframes shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
+</style></head>
+  <body class="theme-navy">
+    <div id="root"><div style="display: flex; min-height: 100vh; font-family: var(--font-body); background-color: var(--bg);"><aside style="width: 240px; padding: 24px 20px; display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid var(--border); background-color: var(--nav-bg); color: var(--nav-text);"><div><div style="font-size: 18px; font-weight: 700; margin-bottom: 24px; color: var(--nav-text); display: flex; align-items: center; gap: 8px;"><div>APGMS Admin</div><div style="background: rgba(255, 255, 255, 0.08); color: var(--nav-text); font-size: 12px; padding: 4px 8px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.2);">Sandbox</div></div><div style="font-size: 13px; color: var(--nav-text); margin-bottom: 16px;">Org: demo-org</div><div style="margin: 12px 0px;"><label style="display: flex; flex-direction: column; gap: 6px; color: var(--nav-text); font-size: 13px; font-weight: 600;">Theme<select style="padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.06); color: var(--nav-text);"><option value="navy">Navy</option><option value="sunset">Sunset</option><option value="forest">Forest</option></select></label></div><nav style="display: grid; gap: 8px;"><a class="" href="/dashboard" style="display: block; padding: 10px 12px; font-size: 14px; border-radius: 6px; color: var(--nav-text); background-color: transparent; text-decoration: none; font-weight: 500;">Dashboard</a><a class="" href="/feeds" style="display: block; padding: 10px 12px; font-size: 14px; border-radius: 6px; color: var(--nav-text); background-color: transparent; text-decoration: none; font-weight: 500;">Payroll &amp; GST Feeds</a><a class="" href="/alerts" style="display: block; padding: 10px 12px; font-size: 14px; border-radius: 6px; color: var(--nav-text); background-color: transparent; text-decoration: none; font-weight: 500;">Alerts</a><a class="" href="/bas" style="display: block; padding: 10px 12px; font-size: 14px; border-radius: 6px; color: var(--nav-text); background-color: transparent; text-decoration: none; font-weight: 500;">BAS Lodgment</a><a class="" href="/compliance" style="display: block; padding: 10px 12px; font-size: 14px; border-radius: 6px; color: var(--nav-text); background-color: transparent; text-decoration: none; font-weight: 500;">Compliance</a><a aria-current="page" class="active" href="/demo" style="display: block; padding: 10px 12px; font-size: 14px; border-radius: 6px; color: var(--accent); background-color: rgba(255, 255, 255, 0.08); text-decoration: none; font-weight: 700;">Demo mode</a><a class="" href="/security" style="display: block; padding: 10px 12px; font-size: 14px; border-radius: 6px; color: var(--nav-text); background-color: transparent; text-decoration: none; font-weight: 500;">Security / Access</a></nav><div style="display: grid; gap: 8px; margin-top: 16px;"><button type="button" class="app-button" style="width: 100%;">Run precheck</button><button type="button" class="app-button ghost" style="width: 100%;">Generate evidence</button><button type="button" class="app-button ghost" style="width: 100%;">Trigger demo feed</button></div></div><button type="button" style="margin-top: 24px; padding: 10px 12px; font-size: 14px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.3); background: transparent; color: var(--nav-text); cursor: pointer;">Log out</button></aside><main style="flex: 1 1 0%; padding: 24px 32px 32px; overflow-y: auto;"><div style="background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; box-shadow: var(--shadow-soft); display: flex; align-items: center; justify-content: space-between; gap: 16px;"><div style="display: grid; gap: 8px;"><div style="font-family: var(--font-heading); font-size: 18px; font-weight: 700; margin: 0px;">Compliance Control Room</div><div style="margin: 0px; color: var(--muted); font-size: 14px;">PAYGW/GST coverage, BAS readiness, and evidence status at a glance.</div><div style="display: flex; gap: 8px; flex-wrap: wrap;"><div style="color: var(--danger); font-size: 13px; font-weight: 600;">Unable to load summary <button type="button" class="app-button ghost" style="padding: 4px 8px; font-size: 12px; margin-left: 6px;">Retry</button></div></div></div><div style="display: flex; gap: 10px; align-items: center;"><button type="button" class="app-button">Run pre-check</button><button type="button" class="app-button ghost">Download evidence</button></div></div><div style="display: grid; grid-template-columns: 1fr 280px; gap: 16px; align-items: start;"><div style="max-width: 980px; display: grid; gap: 20px;"><div style="display: grid; gap: 16px;"><header><h1 style="font-size: 24px; font-weight: 700; margin-bottom: 8px;">Demo mode</h1><p style="color: rgb(75, 85, 99); margin: 0px; font-size: 14px; max-width: 700px;">Generate demo bank feeds, payroll runs, and BAS compiles to populate the dashboard with sample data.</p></header><section style="background-color: rgb(255, 255, 255); border-radius: 12px; padding: 20px; border: 1px solid rgb(226, 232, 240); box-shadow: rgba(15, 23, 42, 0.08) 0px 1px 2px; display: grid; gap: 10px;"><div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;"><div><h2 style="font-size: 18px; font-weight: 600; margin: 0px;">Demo bank feed</h2><p style="font-size: 14px; color: rgb(75, 85, 99); margin: 0px;">Replay a position/day feed that locks PAYGW &amp; GST capture for the demo organisation.</p></div><span class="app-chip ">Inbound only</span></div><div style="display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));"><label style="display: grid; gap: 4px; font-size: 14px; color: rgb(17, 24, 39);"><span>Days back</span><input type="number" min="1" max="30" value="7" style="padding: 10px; border-radius: 8px; border: 1px solid rgb(226, 232, 240); font-size: 14px;"></label><label style="display: grid; gap: 4px; font-size: 14px; color: rgb(17, 24, 39);"><span>Intensity</span><select style="padding: 10px; border-radius: 8px; border: 1px solid rgb(226, 232, 240); font-size: 14px;"><option value="low">Low</option><option value="high">High</option></select></label></div><div style="display: flex; gap: 8px;"><button type="button" class="app-button">Generate demo bank feed</button></div></section><section style="background-color: rgb(255, 255, 255); border-radius: 12px; padding: 20px; border: 1px solid rgb(226, 232, 240); box-shadow: rgba(15, 23, 42, 0.08) 0px 1px 2px; display: grid; gap: 10px;"><div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;"><div><h2 style="font-size: 18px; font-weight: 600; margin: 0px;">Demo payroll run</h2><p style="font-size: 14px; color: rgb(75, 85, 99); margin: 0px;">Create a payroll run and optionally mirror it in the bank feed.</p></div><span class="app-chip ">Demo org</span></div><label style="display: flex; align-items: center; gap: 8px; font-size: 14px;"><input type="checkbox" checked="" style="">Create linked bank line</label><div style="display: flex; gap: 8px;"><button type="button" class="app-button">Run demo payroll</button></div></section><section style="background-color: rgb(255, 255, 255); border-radius: 12px; padding: 20px; border: 1px solid rgb(226, 232, 240); box-shadow: rgba(15, 23, 42, 0.08) 0px 1px 2px; display: grid; gap: 10px;"><div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;"><div><h2 style="font-size: 18px; font-weight: 600; margin: 0px;">Demo BAS compile</h2><p style="font-size: 14px; color: rgb(75, 85, 99); margin: 0px;">Compile a mock BAS report for the chosen period.</p></div><span class="app-chip ">Preview only</span></div><div style="display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));"><label style="display: grid; gap: 4px; font-size: 14px; color: rgb(17, 24, 39);"><span>Year</span><input type="number" value="2025" style="padding: 10px; border-radius: 8px; border: 1px solid rgb(226, 232, 240); font-size: 14px;"></label><label style="display: grid; gap: 4px; font-size: 14px; color: rgb(17, 24, 39);"><span>Month</span><input type="number" min="1" max="12" value="12" style="padding: 10px; border-radius: 8px; border: 1px solid rgb(226, 232, 240); font-size: 14px;"></label></div><div style="display: flex; gap: 8px;"><button type="button" class="app-button">Compile demo BAS</button></div></section></div></div><aside style="background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; box-shadow: var(--shadow-soft); position: sticky; top: 20px; height: fit-content; min-height: 240px;"><div style="font-weight: 700; margin-bottom: 10px;">Activity / Alerts</div><div style="color: var(--danger); font-size: 13px; font-weight: 600;">Unable to load summary</div></aside></div></main></div></div>
+    <script type="module" src="/src/main.tsx"></script>
+  
+
+</body></html>
