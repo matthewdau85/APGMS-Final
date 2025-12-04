@@ -12,4 +12,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check for conflict markers
-        run: git grep -n '<<<<<<<\\|=======\\|>>>>>>>' -- ':!*.lock' ':!.github/workflows/*.yml' ':!README.md' && exit 1 || exit 0
+        run: |
+  # Fail the build if real conflict markers are present at the start of a line
+  if git grep -n '^<<<<<<< ' -- ':!*.lock' ':!.github/workflows/*.yml' ':!README.md'; then
+    exit 1
+  fi
+  if git grep -n '^======= ' -- ':!*.lock' ':!.github/workflows/*.yml' ':!README.md'; then
+    exit 1
+  fi
+  if git grep -n '^>>>>>>> ' -- ':!*.lock' ':!.github/workflows/*.yml' ':!README.md'; then
+    exit 1
+  fi
+  exit 0
+

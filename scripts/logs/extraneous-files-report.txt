@@ -1,0 +1,38 @@
+﻿APGMS extraneous file scan
+Root: C:\src\APGMS
+Generated: 2025-12-04 21:52:53
+
+Heuristic:
+  A file is considered 'extraneous' if its file name does not appear in any other
+  text/code file under this tree (excluding node_modules, .git, dist, etc.) and is
+  not in the always-keep list (e.g., package.json, docker-compose.yml).
+
+Caveats:
+  - Some files may be used implicitly by tools (e.g. entrypoints, convention-based
+    names) and still show up here. Review manually before deleting.
+  - Dynamic imports or runtime discovery will not be detected.
+
+Total text/code files scanned: 484
+Extraneous candidates: 19
+
+List of candidate extraneous files:
+-----------------------------------
+apgms-env-check.ps1
+apgms-env-check.sh
+apgms-env-deep-check.ps1
+errors-api.txt
+errors-webapp.txt
+export-package-jsons.ps1
+full-suite-wsl.sh
+full_suite.ps1
+.github\workflows\ci-core.yml
+artifacts\suspicious_commits.txt
+packages\domain-policy\tests\paygw-engine.brackets.test.ts
+scripts\copy-coverage-to-root.cjs
+scripts\find-extraneous-files.ps1
+scripts\fix-internal-deps.ps1
+scripts\scan-dashboard.ts
+services\api-gateway\start.sh
+services\api-gateway\test\__mocks__\shared-au-abn.ts
+services\api-gateway\test\__mocks__\shared-au-tfn.ts
+tmp\dashboard-scan\dashboard.json
