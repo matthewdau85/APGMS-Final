@@ -1,0 +1,121 @@
+﻿APGMS Script Summary Report
+Root: C:\src\APGMS\scripts
+Generated: 2025-12-04 22:03:07
+
+Heuristic:
+  - This report looks at common script/code files and tries to infer what each script does
+    from its top-of-file comments (first 40 lines).
+  - If no header comment is found, it flags the script for manual inspection.
+
+Total script files scanned: 36
+
+Scripts:
+--------
+
+File:    apgms-env-check.ps1
+Summary: No header comment found; inspect manually to understand purpose.
+
+File:    apgms-env-check.sh
+Summary: !/usr/bin/env bash
+
+File:    apgms-env-deep-check.ps1
+Summary: No header comment found; inspect manually to understand purpose.
+
+File:    apply-reword-plan.ps1
+Summary: scripts\apply-reword-plan.ps1
+
+File:    check-coverage.mjs
+Summary: scripts/check-coverage.mjs ESM script (root package.json is "type": "module")
+
+File:    collect-evidence.mjs
+Summary: !/usr/bin/env node
+
+File:    collect-monitoring-evidence.mjs
+Summary: No header comment found; inspect manually to understand purpose.
+
+File:    copy-coverage-to-root.cjs
+Summary: scripts/copy-coverage-to-root.js
+
+File:    crawl-app.ts
+Summary: scripts/crawl-app.ts Crawl the APGMS admin app after login, visiting every reachable internal page, and save: - full-page screenshots - raw HTML - a JSON summary per route Run with: pnpm exec tsx scripts/crawl-app.ts Configure via env (optional): APGMS_BASE_URL          (default: http://localhost...
+
+File:    db-reset.ps1
+Summary: db-reset script
+
+File:    dev-up.ps1
+Summary: dev-up script
+
+File:    e2e-run.ps1
+Summary: e2e-run script
+
+File:    export-apgms-code.ps1
+Summary: export-apgms-code.ps1 Scan the entire repo (all folders) and dump all code files into one text file. Exclusions: - node_modules - .git - dist - the output file itself (combined-code-export.txt)
+
+File:    Export-APGMS-ReviewPack.ps1
+Summary: No header comment found; inspect manually to understand purpose.
+
+File:    Export-CodeDumpPdf.ps1
+Summary: Export-CodeDumpPdf.ps1 Scans the folder this script is in (recursively), collects source/text files, and generates one or more PDFs of ~code dump back-to-back. Each PDF is capped at MaxPages pages. If you need more than MaxPages, it will automatically create CodeDump_part01.pdf, CodeDump_part02.p...
+
+File:    export-dump.ps1
+Summary: export-dump script
+
+File:    export-evidence-pack.ts
+Summary: No header comment found; inspect manually to understand purpose.
+
+File:    Export-FolderTree.ps1
+Summary: Export-FolderTree.ps1 Generates a tree of the folder this script is in and writes it to folder-structure.txt
+
+File:    export-package-jsons.ps1
+Summary: Paths to the package.json files we care about
+
+File:    find-extraneous-files.ps1
+Summary: No header comment found; inspect manually to understand purpose.
+
+File:    fix-domain-policy-and-build.ps1
+Summary: fix-domain-policy-and-build.ps1 ------------------------------------------------------------------- 1) Add .js to relative imports in packages/domain-policy/src 2) Remove duplicate interface/type declarations in AU tax files 3) Run pnpm -r build ---------------------------------------------------...
+
+File:    fix-internal-deps.ps1
+Summary: fix-internal-deps.ps1 Normalises internal @apgms/* package dependencies and layering.
+
+File:    full-suite-wsl.sh
+Summary: !/usr/bin/env bash
+
+File:    full_suite.ps1
+Summary: No header comment found; inspect manually to understand purpose.
+
+File:    generate-commit-reword-plan.ps1
+Summary: scripts\generate-commit-reword-plan.ps1 Reads artifacts\commit_audit.csv and produces: - artifacts\commit_reword_suggestions.csv - artifacts\commit_reword_plan.txt
+
+File:    k6-load.ps1
+Summary: k6-load script
+
+File:    key-rotate.ps1
+Summary: key-rotate script
+
+File:    regulator-smoke.mjs
+Summary: !/usr/bin/env node
+
+File:    rotate-pii-keys.mjs
+Summary: !/usr/bin/env node
+
+File:    run-webapp-tests.ps1
+Summary: No header comment found; inspect manually to understand purpose.
+
+File:    scan-dashboard.ts
+Summary: scripts/scan-dashboard.ts Crawl http://localhost:5173/dashboard and any /dashboard sub-pages it links to, then dump basic structure + screenshots for each page. Run from repo root (WSL): pnpm exec tsx scripts/scan-dashboard.ts Requires: @playwright/test (provides the "playwright" runtime).
+
+File:    seed.ps1
+Summary: seed script
+
+File:    seed.ts
+Summary: No header comment found; inspect manually to understand purpose.
+
+File:    split-into-10.ps1
+Summary: Path to the original file
+
+File:    verify-designated-reconciliation.mjs
+Summary: No header comment found; inspect manually to understand purpose.
+
+File:    verify-no-conflicts.mjs
+Summary: !/usr/bin/env node
