@@ -57,6 +57,12 @@ jobs:
 
       - name: Prisma schema validate (@apgms/shared)
         run: pnpm --filter @apgms/shared exec prisma validate --schema prisma/schema.prisma
+      
+      - name: Apply Prisma migrations
+        run: pnpm --filter @apgms/shared exec prisma migrate deploy --schema prisma/schema.prisma
+
+      - name: Check Prisma migrations status
+        run: pnpm --filter @apgms/shared exec prisma migrate status --schema prisma/schema.prisma
 
       - name: Prisma migrate status (@apgms/shared)
         run: pnpm --filter @apgms/shared exec prisma migrate status --schema prisma/schema.prisma
