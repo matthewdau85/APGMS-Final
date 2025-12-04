@@ -37,6 +37,12 @@ jobs:
       - name: Build web app
         run: pnpm --filter @apgms/webapp build
 
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build webapp
+        run: pnpm --filter apgms-webapp build
+
       - name: Lighthouse CI
         uses: treosh/lighthouse-ci-action@v10
         with:
