@@ -17,7 +17,6 @@
                         },
     "scripts":  {
                     "build":  "tsc -p tsconfig.json",
-                    "test":  "jest --config ./jest.config.cjs --runInBand",
-                    "posttest":  "echo skipping coverage copy for now"
+                    "test":  "jest --config ./jest.config.cjs --runInBand"
                 }
 }

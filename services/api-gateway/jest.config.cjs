@@ -16,8 +16,10 @@ module.exports = {
     "^@apgms/shared-au/(.*)$": "<rootDir>/test/__mocks__/shared-au-$1.ts",
     "^@apgms/shared/security-log\\.js$": "<rootDir>/../../shared/src/security-log.ts"
   },
-  testMatch: ["**/__never__/**"], // disable tests for now
-  setupFilesAfterEnv: ["<rootDir>/jest.setup.cjs"],
+  testMatch: [
+    "<rootDir>/**/__tests__/**/*.[jt]s?(x)",
+    "<rootDir>/**/?(*.)+test.[tj]s?(x)",
+  ],
   coverageDirectory: "./coverage",
   clearMocks: true,
 };

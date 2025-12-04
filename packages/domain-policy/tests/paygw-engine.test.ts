@@ -102,7 +102,7 @@ describe("PaygwEngine", () => {
   // NOTE: Temporarily skipped while the PAYGW engine is being refactored.
   // The current implementation returns 0 for these amounts; we will
   // re-enable and update these expectations once the bracket logic is final.
-  it.skip("uses the correct formula for mid-bracket income", async () => {
+  it("uses the correct formula for mid-bracket income", async () => {
     // 150.00: in the second bracket
     // excess = 150.00 - 100.00 = 50.00
     // variable = floor(50.00 * 10%) = 5.00
@@ -116,7 +116,7 @@ describe("PaygwEngine", () => {
     expect(result.withholdingCents).toBe(15_00);
   });
 
-  it.skip("uses the highest bracket formula for high income", async () => {
+  it("uses the highest bracket formula for high income", async () => {
     // 250.00: in the third bracket
     // excess = 250.00 - 200.00 = 50.00
     // variable = floor(50.00 * 20%) = 10.00
