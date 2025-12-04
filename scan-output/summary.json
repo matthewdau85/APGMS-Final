@@ -1,0 +1,65 @@
+[
+  {
+    "route": "/dashboard",
+    "url": "http://localhost:5173/dashboard",
+    "title": "APGMS Admin",
+    "slug": "dashboard",
+    "screenshot": "scan-output/screenshots/dashboard.png",
+    "html": "scan-output/html/dashboard.html",
+    "textSnippet": "APGMS Admin\nSandbox\nOrg: demo-org\nTheme\nNavy\nSunset\nForest\nDashboard\nPayroll & GST Feeds\nAlerts\nBAS Lodgment\nCompliance\nDemo mode\nSecurity / Access\nRun precheck\nGenerate evidence\nTrigger demo feed\nLog out\nCompliance Control Room\nPAYGW/GST coverage, BAS readiness, and evidence status at a glance.\nUnable to load summary Retry\nRun pre-check\nDownload evidence\nCompliance Control Room\n\nSnapshot of PAYGW and GST obligations, plus the ledger evidence we share with the ATO to prove funds are secured.\n\nUnable to load dashboard data\nWe could not load dashboard data.\nRetry\nActivity / Alerts\nUnable to load summary"
+  },
+  {
+    "route": "/feeds",
+    "url": "http://localhost:5173/feeds",
+    "title": "APGMS Admin",
+    "slug": "feeds",
+    "screenshot": "scan-output/screenshots/feeds.png",
+    "html": "scan-output/html/feeds.html",
+    "textSnippet": "APGMS Admin\nSandbox\nOrg: demo-org\nTheme\nNavy\nSunset\nForest\nDashboard\nPayroll & GST Feeds\nAlerts\nBAS Lodgment\nCompliance\nDemo mode\nSecurity / Access\nRun precheck\nGenerate evidence\nTrigger demo feed\nLog out\nCompliance Control Room\nPAYGW/GST coverage, BAS readiness, and evidence status at a glance.\nUnable to load summary Retry\nRun pre-check\nDownload evidence\nPayroll & GST Feeds\n\nLive data feeds that feed the compliance engine. We surface payroll runs and daily GST summaries to monitor capture.\n\nReingest demo feed\nUnable to load feeds\nWe could not load feed ingests.\nRetry\nActivity / Alerts\nUnable to load summary"
+  },
+  {
+    "route": "/alerts",
+    "url": "http://localhost:5173/alerts",
+    "title": "APGMS Admin",
+    "slug": "alerts",
+    "screenshot": "scan-output/screenshots/alerts.png",
+    "html": "scan-output/html/alerts.html",
+    "textSnippet": "APGMS Admin\nSandbox\nOrg: demo-org\nTheme\nNavy\nSunset\nForest\nDashboard\nPayroll & GST Feeds\nAlerts\nBAS Lodgment\nCompliance\nDemo mode\nSecurity / Access\nRun precheck\nGenerate evidence\nTrigger demo feed\nLog out\nCompliance Control Room\nPAYGW/GST coverage, BAS readiness, and evidence status at a glance.\nUnable to load summary Retry\nRun pre-check\nDownload evidence\nAlerts\n\nReal-time compliance alerts flag shortfalls and anomalies that could block BAS lodgment.\n\nUnable to load alerts\nWe could not load alerts right now.\nRetry\nActivity / Alerts\nUnable to load summary"
+  },
+  {
+    "route": "/bas",
+    "url": "http://localhost:5173/bas",
+    "title": "APGMS Admin",
+    "slug": "bas",
+    "screenshot": "scan-output/screenshots/bas.png",
+    "html": "scan-output/html/bas.html",
+    "textSnippet": "APGMS Admin\nSandbox\nOrg: demo-org\nTheme\nNavy\nSunset\nForest\nDashboard\nPayroll & GST Feeds\nAlerts\nBAS Lodgment\nCompliance\nDemo mode\nSecurity / Access\nRun precheck\nGenerate evidence\nTrigger demo feed\nLog out\nCompliance Control Room\nPAYGW/GST coverage, BAS readiness, and evidence status at a glance.\nUnable to load summary Retry\nRun pre-check\nDownload evidence\nBAS Lodgment\n\nWe preview the BAS position before lodgment. If obligations are underfunded, the system blocks the transfer and surfaces blockers.\n\nUnable to load BAS preview\nWe could not load BAS preview.\nRetry\nActivity / Alerts\nUnable to load summary"
+  },
+  {
+    "route": "/compliance",
+    "url": "http://localhost:5173/compliance",
+    "title": "APGMS Admin",
+    "slug": "compliance",
+    "screenshot": "scan-output/screenshots/compliance.png",
+    "html": "scan-output/html/compliance.html",
+    "textSnippet": "APGMS Admin\nSandbox\nOrg: demo-org\nTheme\nNavy\nSunset\nForest\nDashboard\nPayroll & GST Feeds\nAlerts\nBAS Lodgment\nCompliance\nDemo mode\nSecurity / Access\nRun precheck\nGenerate evidence\nTrigger demo feed\nLog out\nCompliance Control Room\nPAYGW/GST coverage, BAS readiness, and evidence status at a glance.\nUnable to load summary Retry\nRun pre-check\nDownload evidence\nCompliance Evidence\n\nEverything the regulator needs in one place: BAS history, outstanding alerts, and the next due lodgment.\n\nUnable to load compliance report\nWe could not load the compliance report.\nRetry\nActivity / Alerts\nUnable to load summary"
+  },
+  {
+    "route": "/demo",
+    "url": "http://localhost:5173/demo",
+    "title": "APGMS Admin",
+    "slug": "demo",
+    "screenshot": "scan-output/screenshots/demo.png",
+    "html": "scan-output/html/demo.html",
+    "textSnippet": "APGMS Admin\nSandbox\nOrg: demo-org\nTheme\nNavy\nSunset\nForest\nDashboard\nPayroll & GST Feeds\nAlerts\nBAS Lodgment\nCompliance\nDemo mode\nSecurity / Access\nRun precheck\nGenerate evidence\nTrigger demo feed\nLog out\nCompliance Control Room\nPAYGW/GST coverage, BAS readiness, and evidence status at a glance.\nUnable to load summary Retry\nRun pre-check\nDownload evidence\nDemo mode\n\nGenerate demo bank feeds, payroll runs, and BAS compiles to populate the dashboard with sample data.\n\nDemo bank feed\n\nReplay a position/day feed that locks PAYGW & GST capture for the demo organisation.\n\nInbound only\nDays back\nIntensity\nLow\nHigh\nGenerate demo bank feed\nDemo payroll run\n\nCreate a payroll run and optionally mirror it in the bank feed.\n\nDemo org\nCreate linked bank line\nRun demo payroll\nDemo BAS compile\n\nCompile a mock BAS report for the chosen period.\n\nPreview only\nYear\nMonth\nCompile demo BAS\nActivity / Alerts\nUnable to load summary"
+  },
+  {
+    "route": "/security",
+    "url": "http://localhost:5173/security",
+    "title": "APGMS Admin",
+    "slug": "security",
+    "screenshot": "scan-output/screenshots/security.png",
+    "html": "scan-output/html/security.html",
+    "textSnippet": "APGMS Admin\nSandbox\nOrg: demo-org\nTheme\nNavy\nSunset\nForest\nDashboard\nPayroll & GST Feeds\nAlerts\nBAS Lodgment\nCompliance\nDemo mode\nSecurity / Access\nRun precheck\nGenerate evidence\nTrigger demo feed\nLog out\nCompliance Control Room\nPAYGW/GST coverage, BAS readiness, and evidence status at a glance.\nUnable to load summary Retry\nRun pre-check\nDownload evidence\nSecurity & Access\n\nControl who can access APGMS and confirm multi-factor authentication settings before handing credentials to regulators.\n\nUnable to load security settings\nWe could not load security settings.\nRetry\nActivity / Alerts\nUnable to load summary"
+  }
+]

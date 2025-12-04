@@ -59,3 +59,14 @@ model ObligationHistory {
 
   @@index([orgId, type, period])
 }
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organizationsCreated Organization[] @relation("Organization_createdByUserId")
+}
