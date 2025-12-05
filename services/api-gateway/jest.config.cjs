@@ -18,7 +18,7 @@ module.exports = {
   },
   testMatch: [
     "<rootDir>/**/__tests__/**/*.[jt]s?(x)",
-    "<rootDir>/**/?(*.)+test.[tj]s?(x)",
+    "<rootDir>/**/?(*.)+(spec|test).[tj]s?(x)",
   ],
   coverageDirectory: "./coverage",
   clearMocks: true,

@@ -307,5 +307,9 @@ export async function buildServer(
   return app;
 }
 
-
-
+// New: simple wrapper that your index.ts can call
+export async function createApp(
+  options: BuildServerOptions = {},
+): Promise<FastifyInstance> {
+  return buildServer(options);
+}
