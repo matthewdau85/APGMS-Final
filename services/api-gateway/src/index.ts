@@ -1,6 +1,7 @@
-﻿import { buildServer } from "./app.js";
-import { startTracing, stopTracing } from "./observability/tracing.js";
+﻿// services/api-gateway/src/index.ts
 
+import { createApp } from "./app.js"; // <-- import createApp from app.ts (compiled to app.js)
+import { startTracing, stopTracing } from "./observability/tracing.js";
 
 const port = Number(process.env.PORT ?? 3000);
 const host = process.env.HOST ?? "0.0.0.0";
@@ -8,15 +9,18 @@ const host = process.env.HOST ?? "0.0.0.0";
 async function main() {
   await startTracing();
 
-  const app = await buildServer();
+  const app = await createApp();
 
-  const shutdown = async (signal: string) => {
+  const shutdown = async (signal: NodeJS.Signals) => {
     try {
       app.log.info({ signal }, "shutdown_start");
       try {
         // @ts-ignore custom decorator defined in app.ts
         app.setDraining?.(true);
-      } catch {}
+      } catch {
+        // ignore if not present
+      }
+
       await app.close();
       await stopTracing();
       app.log.info("shutdown_complete");
@@ -39,4 +43,3 @@ main().catch(async (err) => {
   await stopTracing();
   process.exit(1);
 });
-

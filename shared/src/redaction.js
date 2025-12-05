@@ -1,7 +1,7 @@
 import { maskValue, maskObject, maskError as maskErrorBase } from "./masking.js";
 const REDACTED = "[REDACTED]";
 const EMAIL_REGEX = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
-const TFN_REGEX = /\b\d{3}\s?\d{3}\s?\d{3}\b/g;
+const TFN_REGEX = /\b\d{3}[-\s]?\d{3}[-\s]?\d{3}\b/g;
 const ABN_REGEX = /\b\d{2}\s?\d{3}\s?\d{3}\s?\d{3}\b/g;
 const IBAN_REGEX = /\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/g;
 function redactIdentifiers(value) {

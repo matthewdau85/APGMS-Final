@@ -5,7 +5,7 @@ const REDACTED = "[REDACTED]";
 const EMAIL_REGEX =
   /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const TFN_REGEX =
-  /\b\d{3}\s?\d{3}\s?\d{3}\b/g;
+  /\b\d{3}[-\s]?\d{3}[-\s]?\d{3}\b/g;
 const ABN_REGEX =
   /\b\d{2}\s?\d{3}\s?\d{3}\s?\d{3}\b/g;
 const IBAN_REGEX =
