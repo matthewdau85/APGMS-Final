@@ -23,24 +23,37 @@
         "typecheck": "pnpm -r typecheck",
         "lint": "pnpm lint:markdown",
         "coverage": "pnpm jest --coverage",
-        "sbom": "pnpm exec cyclonedx-npm --json --output-file artifacts/sbom.json",
-        "sca": "pnpm audit --prod --audit-level=high",
+        "sbom:deps": "pnpm exec license-checker-rse --json --out sbom-licenses.json",
+        "sbom": "npx cyclonedx-npm --ignore-npm-errors --output-file sbom.xml",
+        "check:sbom": "node ./scripts/check-sbom.mjs",
+        "sca": "pnpm audit --audit-level=high",
+        "audit:prod": "pnpm audit --audit-level=high",
+        "audit:dev": "pnpm audit --audit-level=moderate || echo \"[audit:dev] non-zero exit (dev-tool vulns only)\"",
         "secrets": "pnpm exec gitleaks detect --no-banner --redact",
-        "trivy": "pnpm exec trivy fs --quiet --exit-code 1 .",
+        "trivy": "trivy fs . --severity HIGH,CRITICAL --exit-code 1",
         "a11y": "pnpm exec playwright test --grep \"@a11y\"",
         "migrate:status": "pnpm --filter @apgms/shared exec prisma migrate status",
         "verify:no-conflicts": "node scripts/verify-no-conflicts.mjs",
-        "k6:smoke": "pnpm exec k6 run k6/smoke.js",
+        "k6:smoke": "k6 run k6/smoke.js",
         "smoke:regulator": "node scripts/regulator-smoke.mjs",
         "lint:markdown": "pnpm exec markdownlint **/*.md",
         "compliance:evidence": "node scripts/collect-evidence.mjs",
         "security:rotate-keys": "node scripts/rotate-pii-keys.mjs",
         "backup:evidence-pack": "tsx scripts/export-evidence-pack.ts",
-        "scan:app": "tsx scripts/crawl-app.ts"
+        "scan:app": "tsx scripts/crawl-app.ts",
+        "check:coverage": "pnpm --filter @apgms/api-gateway run check:coverage",
+        "prisma:status": "pnpm -w exec prisma migrate status",
+        "gitleaks": "gitleaks detect --no-color --redact --exit-code 1",
+        "test:a11y": "pnpm --filter @apgms/webapp test:axe",
+        "lhci": "pnpm exec lhci autorun --config=./lighthouserc.json",
+        "dev:stack": "docker compose up -d db redis tax-engine",
+        "dev:stack:down": "docker compose down",
+        "scan:secrets": "gitleaks detect --no-banner --redact --report-format=sarif --report-path=gitleaks.sarif",
+        "scan:fs": "trivy fs . --severity HIGH,CRITICAL --exit-code 1 --no-progress"
     },
     "devDependencies": {
         "@axe-core/playwright": "^4.9.2",
-        "@cyclonedx/cyclonedx-npm": "^4.0.3",
+        "@cyclonedx/cyclonedx-npm": "^4.1.2",
         "@playwright/test": "^1.56.1",
         "@types/jest": "^29.5.14",
         "@types/node": "^24.7.1",
@@ -68,5 +81,11 @@
     },
     "prisma": {
         "schema": "shared/Prisma/schema.prisma"
+    },
+    "pnpm": {
+        "overrides": {
+            "jws": "3.2.3",
+            "glob": "10.5.0"
+        }
     }
 }

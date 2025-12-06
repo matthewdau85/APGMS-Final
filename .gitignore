@@ -19,6 +19,7 @@ build/
 
 # Local env
 .env
+.env.*
 
 # Generated artifacts
 coverage/

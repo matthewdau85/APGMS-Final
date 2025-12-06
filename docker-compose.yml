@@ -47,19 +47,16 @@ services:
       # --- Auth / JWT config ---
       AUTH_AUDIENCE: "apgms-local"
       AUTH_ISSUER: "http://auth.local.test"
-      AUTH_DEV_SECRET: "local-dev-shared-secret-change-me"
+      AUTH_DEV_SECRET: ${AUTH_DEV_SECRET:?AUTH_DEV_SECRET not set}
       AUTH_JWKS: >-
         {"keys":[{"kid":"dev-key-1","alg":"RS256"}]}
 
       # --- PII crypto material ---
-      PII_KEYS: >-
-        [{"kid":"dev-key-1","material":"GPHZGdDjE+r7X6S6zQA8KRU34GRXPeePjRGN8dkgk00="}]
-      PII_ACTIVE_KEY: "dev-key-1"
+      PII_KEYS: ${PII_KEYS:?PII_KEYS not set}
+      PII_ACTIVE_KEY: ${PII_ACTIVE_KEY:-dev-key-1}
 
-      PII_SALTS: >-
-        [{"sid":"dev-salt-1","secret":"BN10EUaMmjdthpHf3WGjdHrBuXNL4TkzQNg0KALHEB4="}]
-      PII_ACTIVE_SALT: "dev-salt-1"
-
+      PII_SALTS: ${PII_SALTS:?PII_SALTS not set}
+      PII_ACTIVE_SALT: ${PII_ACTIVE_SALT:-dev-salt-1}
       # --- Rate limit / security knobs ---
       API_RATE_LIMIT_MAX: "60"
       API_RATE_LIMIT_WINDOW: "1 minute"
