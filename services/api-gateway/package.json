@@ -10,7 +10,9 @@
         "start": "node dist/index.js",
         "dev": "tsx watch src/index.ts",
         "prisma:migrate": "prisma migrate dev",
-        "prisma:generate": "prisma generate"
+        "prisma:generate": "prisma generate",
+        "test:node": "if ls test/*.node.* >/dev/null 2>&1; then node --test ./test/*.node.*; else echo \"[test:node] no .node.* files, skipping\"; fi",
+        "check:coverage": "node ./scripts/check-coverage.mjs"
     },
     "prisma": {
         "schema": "../../shared/prisma/schema.prisma"
@@ -33,7 +35,7 @@
         "dotenv": "^17.2.3",
         "fastify-plugin": "^5.1.0",
         "jose": "^6.1.0",
-        "jsonwebtoken": "^9.0.2",
+        "jsonwebtoken": "^9.0.3",
         "prom-client": "^15.1.3",
         "redis": "^5.9.0"
     },

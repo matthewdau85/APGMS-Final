@@ -3,31 +3,31 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-  "dev": "vite",
-  "build": "vite build",
-  "typecheck": "tsc --noEmit -p tsconfig.json",
-  "preview": "vite preview",
-  "lint": "eslint \"src/**/*.{ts,tsx}\"",
-  "eslintIgnore": [
-  "src",
-  "src/**",
-  "webapp/src",
-  "**/src/**"
-]
-},
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "preview": "vite preview",
+    "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "eslintIgnore": [
+      "src",
+      "src/**",
+      "webapp/src",
+      "**/src/**"
+    ]
+  },
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.30.1"
   },
   "devDependencies": {
+    "@types/axe-core": "^3.0.6",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@types/react-router-dom": "^5.3.3",
-    "@types/axe-core": "^3.0.6",
+    "@vitejs/plugin-react": "^5.1.1",
     "axe-core": "^4.9.0",
-    "@vitejs/plugin-react": "^4.2.0",
     "typescript": "^5.3.0",
-    "vite": "^5.4.8"
+    "vite": "^7.2.6"
   }
 }
