@@ -1,0 +1,15 @@
+title = "APGMS gitleaks config"
+
+[[rules]]
+id = "ignore-redacted-exports"
+description = "Ignore REDACTED secrets in export artefacts"
+regex = '''"secret":"REDACTED"'''
+entropy = 8.0
+tags = ["ignore"]
+
+[[allowlist.files]]
+description = "Ignore export artefacts and dev compose"
+paths = [
+  ".part4.txt",
+  "docker-compose.yml"
+]
