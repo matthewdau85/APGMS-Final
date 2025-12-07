@@ -1,70 +1,59 @@
-﻿// services/api-gateway/src/app.ts
-
-import Fastify, {
-  type FastifyInstance,
-  type FastifyPluginAsync,
-} from "fastify";
+﻿import Fastify, { FastifyInstance, FastifyPluginAsync } from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import { context, trace } from "@opentelemetry/api";
 import "dotenv/config.js";
-import { basSettlementRoutes } from "./routes/bas-settlement";
-import { exportRoutes } from "./routes/export";
-import { riskRoutes } from "./routes/risk";
-import { csvIngestRoutes } from "./routes/ingest-csv";
-
-import {
-  AppError,
-  badRequest,
-  conflict,
-  forbidden,
-  notFound,
-  unauthorized,
-} from "@apgms/shared";
-import { config } from "./config.js";
 
 import rateLimit from "./plugins/rate-limit.js";
-import { authGuard, createAuthGuard, REGULATOR_AUDIENCE } from "./auth.js";
+import { config } from "./config.js";
+
+import { AppError } from "@apgms/shared";
+import { ERROR_MESSAGES } from "./lib/errors.js";
+
+import {
+  authGuard,
+  createAuthGuard,
+  REGULATOR_AUDIENCE,
+} from "./auth.js";
+
+import { prisma } from "./db.js";
+import { initProviders, closeProviders } from "./providers.js";
+
+// Core routes
 import { registerAuthRoutes } from "./routes/auth.js";
-import { helmetConfigFor } from "./security-headers.js";
 import { registerRegulatorAuthRoutes } from "./routes/regulator-auth.js";
 import { registerRegulatorRoutes } from "./routes/regulator.js";
 import { registerAdminDataRoutes } from "./routes/admin.data.js";
 import { registerBankLinesRoutes } from "./routes/bank-lines.js";
 import { registerTaxRoutes } from "./routes/tax.js";
-
-import registerConnectorRoutes from "./routes/connectors.js";
-import { prisma } from "./db.js";
-import { parseWithSchema } from "./lib/validation.js";
+import { registerIntegrationEventRoutes } from "./routes/integration-events.js";
 import { registerBasRoutes } from "./routes/bas.js";
 import { registerTransferRoutes } from "./routes/transfers.js";
-import { registerIntegrationEventRoutes } from "./routes/integration-events.js";
-import {
-  verifyChallenge,
-  requireRecentVerification,
-  type VerifyChallengeResult,
-} from "./security/mfa.js";
-import { recordAuditLog } from "./lib/audit.js";
-import { ensureRegulatorSessionActive } from "./lib/regulator-session.js";
-import {
-  metrics,
-  installHttpMetrics,
-  registerMetricsRoute,
-} from "./observability/metrics.js";
-import { closeProviders, initProviders } from "./providers.js";
 import { registerPaymentPlanRoutes } from "./routes/payment-plans.js";
 import { registerAtoRoutes } from "./routes/ato.js";
 import { registerMonitoringRoutes } from "./routes/monitoring.js";
 import { registerRiskRoutes } from "./routes/risk.js";
 import { registerDemoRoutes } from "./routes/demo.js";
-import { registerComplianceProxy } from "./routes/compliance-proxy.js";
 import { registerComplianceMonitorRoutes } from "./routes/compliance-monitor.js";
 import { registerOnboardingRoutes } from "./routes/onboarding.js";
 import { registerForecastRoutes } from "./routes/forecast.js";
-import { ERROR_MESSAGES } from "./lib/errors.js";
+import { registerComplianceProxy } from "./routes/compliance-proxy.js";
+import registerConnectorRoutes from "./routes/connectors.js";
 
-// TODO: re-export designated account mappings when the module exists
-// export * from "./designated-accounts/mappings.js";
+// Observability
+import {
+  metrics,
+  installHttpMetrics,
+  registerMetricsRoute,
+} from "./observability/metrics.js";
+import { helmetConfigFor } from "./security-headers.js";
+
+// Domain-led routes you added
+import { basSettlementRoutes } from "./routes/bas-settlement.js";
+import { exportRoutes } from "./routes/export.js";
+import { csvIngestRoutes } from "./routes/ingest-csv.js";
+
+import { ensureRegulatorSessionActive } from "./lib/regulator-session.js";
 
 type BuildServerOptions = {
   bankLinesPlugin?: FastifyPluginAsync;
@@ -77,20 +66,19 @@ export async function buildServer(
 
   installHttpMetrics(app);
 
-  const allowedOrigins = new Set(config.cors.allowedOrigins);
-
+  /** Provider lifecycle */
   const providers = await initProviders(app.log);
   (app as any).providers = providers;
   app.addHook("onClose", async () => {
     await closeProviders(providers, app.log);
   });
 
+  /** Server draining state for graceful shutdown */
   const drainingState = { value: false };
   (app as any).isDraining = () => drainingState.value;
-  (app as any).setDraining = (v: boolean) => {
-    drainingState.value = v;
-  };
+  (app as any).setDraining = (v: boolean) => (drainingState.value = v);
 
+  /** Telemetry correlation */
   app.addHook("onRequest", (request, reply, done) => {
     const span = trace.getSpan(context.active());
     if (span) {
@@ -124,140 +112,95 @@ export async function buildServer(
       metrics.httpRequestTotal.labels(method, route, status).inc();
       if (typeof metricState.timer === "function") {
         metricState.timer({ status });
-      } else {
-        const end = metrics.httpRequestDuration.startTimer({ method, route });
-        end({ status });
       }
-    } catch (error) {
-      request.log.warn({ err: error }, "failed_to_record_http_metrics");
+    } catch (err) {
+      request.log.warn({ err }, "metrics_record_failed");
     } finally {
       (reply as any).__metrics = undefined;
     }
     done();
   });
 
+  /** Error Handler */
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof AppError) {
-      const appError = error as AppError;
-      reply.status(appError.status).send({
+      reply.status(error.status).send({
         error: {
-          code: appError.code,
-          message: appError.message,
-          fields: appError.fields,
+          code: error.code,
+          message: error.message,
+          fields: error.fields,
         },
       });
       return;
     }
+
     if ((error as any)?.validation) {
-      reply.status(400).send({
-        error: { code: "invalid_body", message: "Validation failed" },
-      });
+      reply.status(400).send({ error: { code: "invalid_body" } });
       return;
     }
+
     if ((error as any)?.code === "FST_CORS_FORBIDDEN_ORIGIN") {
       reply.status(403).send({
-        error: {
-          code: "cors_forbidden",
-          message: ERROR_MESSAGES.cors_forbidden,
-        },
+        error: { code: "cors_forbidden", message: ERROR_MESSAGES.cors_forbidden },
       });
       return;
     }
-    request.log.error({ err: error }, "Unhandled error");
+
+    request.log.error({ err: error }, "unhandled_error");
     reply.status(500).send({
-      error: {
-        code: "internal_error",
-        message: ERROR_MESSAGES.internal_error,
-      },
+      error: { code: "internal_error", message: ERROR_MESSAGES.internal_error },
     });
   });
 
+  /** Core security + rate limiting */
   await app.register(rateLimit);
-
-  // Use extracted, testable helmet configuration
   await app.register(helmet, helmetConfigFor(config));
 
+  /** CORS restrict to known origins per config */
+  const allowedOrigins = new Set(config.cors.allowedOrigins);
   await app.register(cors, {
     origin: (origin, cb) => {
       if (!origin) return cb(null, false);
       if (allowedOrigins.has(origin)) return cb(null, true);
-      const error = new Error(`Origin ${origin} is not allowed`);
-      cb(
-        Object.assign(error, {
-          code: "FST_CORS_FORBIDDEN_ORIGIN",
-          statusCode: 403,
-        }),
-        false,
-      );
+      cb(Object.assign(new Error(`Origin ${origin} is not allowed`), {
+        code: "FST_CORS_FORBIDDEN_ORIGIN",
+        statusCode: 403,
+      }), false);
     },
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key"],
     exposedHeaders: ["Idempotent-Replay"],
   });
 
+  /** Basic endpoints */
   app.get("/health", async () => ({ ok: true, service: "api-gateway" }));
 
   app.get("/ready", async (_request, reply) => {
-    if ((app as any).isDraining?.() === true) {
+    if ((app as any).isDraining()) {
       reply.code(503).send({ ok: false, draining: true });
       return;
     }
 
     const providerState = (app as any).providers ?? {};
-    const results: {
-      db: boolean;
-      redis: boolean | null;
-      nats: boolean | null;
-    } = {
-      db: false,
-      redis: providerState.redis ? false : null,
-      nats: providerState.nats ? false : null,
-    };
-
     try {
       await prisma.$queryRaw`SELECT 1`;
-      results.db = true;
-    } catch (error) {
-      app.log.error({ err: error }, "readiness_db_check_failed");
-      results.db = false;
-    }
-
-    if (providerState.redis) {
-      try {
-        await providerState.redis.ping();
-        results.redis = true;
-      } catch (error) {
-        results.redis = false;
-        app.log.error({ err: error }, "readiness_redis_ping_failed");
-      }
-    }
-
-    if (providerState.nats) {
-      try {
-        await providerState.nats.flush();
-        results.nats = true;
-      } catch (error) {
-        results.nats = false;
-        app.log.error({ err: error }, "readiness_nats_flush_failed");
-      }
-    }
-
-    const healthy =
-      results.db && results.redis !== false && results.nats !== false;
-    if (!healthy) {
-      reply.code(503).send({ ok: false, components: results });
+    } catch (err) {
+      reply.code(503).send({ ok: false, db: false });
       return;
     }
 
-    reply.send({ ok: true, components: results });
+    reply.send({ ok: true });
   });
 
   registerMetricsRoute(app);
 
+  /** Public auth routes */
   await registerAuthRoutes(app);
   await registerRegulatorAuthRoutes(app);
 
-  // All customer/admin routes under auth guard
+  /**
+   * Authenticated customer/admin routes
+   */
   await app.register(async (secureScope) => {
     secureScope.addHook("onRequest", authGuard);
 
@@ -275,23 +218,25 @@ export async function buildServer(
     await secureScope.register(registerDemoRoutes);
     await secureScope.register(registerComplianceMonitorRoutes);
 
-    // Onboarding + forecast inside authenticated scope
     await secureScope.register(registerOnboardingRoutes);
     await secureScope.register(registerForecastRoutes);
 
-    // compliance proxy mounts onto root app, not secureScope
     await registerComplianceProxy(app, {} as any);
 
-    // Connector routes as a standard Fastify plugin
     await secureScope.register(registerConnectorRoutes);
+
+    // 🆕 secureLedger/payto/BAS/export/csv ingestion
+    secureScope.register(basSettlementRoutes, { prefix: "/api" });
+    secureScope.register(exportRoutes, { prefix: "/api" });
+    secureScope.register(csvIngestRoutes, { prefix: "/api/ingest/csv" });
   });
 
+  /**
+   * Regulator routes (separate auth requirement)
+   */
   const regulatorAuthGuard = createAuthGuard(REGULATOR_AUDIENCE, {
     validate: async (principal, request) => {
-      const sessionId = (principal.sessionId ?? principal.id) as
-        | string
-        | undefined;
-      if (!sessionId) throw new Error("regulator_session_missing");
+      const sessionId = (principal.sessionId ?? principal.id) as string;
       const session = await ensureRegulatorSessionActive(sessionId);
       (request as any).regulatorSession = session;
     },
@@ -305,20 +250,11 @@ export async function buildServer(
     { prefix: "/regulator" },
   );
 
-  // TODO: enable payroll routes when implemented
-  // app.register(registerPayrollRoutes);
-
   return app;
 }
 
-// New: simple wrapper that your index.ts can call
 export async function createApp(
   options: BuildServerOptions = {},
 ): Promise<FastifyInstance> {
   return buildServer(options);
 }
-
-app.register(basSettlementRoutes, { prefix: "/api" });
-app.register(exportRoutes, { prefix: "/api" });
-app.register(riskRoutes, { prefix: "/api" });
-app.register(csvIngestRoutes, { prefix: "/api" });
