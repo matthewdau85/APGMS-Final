@@ -702,3 +702,59 @@ model IntegrationEvent {
   @@index([orgId, taxType])
   @@index([taxType])
 }
+
+model TaxLedgerEntry {
+  id           String   @id @default(cuid())
+  orgId        String
+  period       String   // e.g. "2025-Q3" or "2025-09"
+  category     String   // "PAYGW" | "GST" | "PENALTY" | "ADJUSTMENT"
+  direction    String   // "DEBIT" | "CREDIT"
+  amountCents  Int      // store cents to avoid FP
+  description  String?
+  effectiveAt  DateTime @default(now())
+
+  // Hash chain for tamper-evidence
+  hashPrev     String?
+  hashSelf     String
+
+  createdAt    DateTime @default(now())
+
+  @@index([orgId, period, category])
+}
+
+model TrustAccount {
+  id        String   @id @default(cuid())
+  orgId     String   @unique
+  bankName  String
+  bsb       String
+  accountNo String
+  nickname  String?
+  createdAt DateTime @default(now())
+}
+
+model PayToAgreement {
+  id              String   @id @default(cuid())
+  orgId           String
+  trustAccountId  String
+  mandateRef      String   @unique
+  status          String   // "PENDING" | "ACTIVE" | "SUSPENDED" | "CANCELLED"
+  maxDebitCents   Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  TrustAccount TrustAccount @relation(fields: [trustAccountId], references: [id])
+
+  @@index([orgId])
+}
+
+model SettlementInstruction {
+  id             String   @id @default(cuid())
+  orgId          String
+  period         String
+  payToAgreementId String
+  payloadJson    String   // immutable snapshot
+  status         String   // "PREPARED" | "SENT" | "ACK" | "FAILED"
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
