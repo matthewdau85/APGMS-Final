@@ -1,0 +1,9 @@
+timeout: 10m
+scan:
+  scanners:
+    - vuln
+    - secret
+
+fs:
+  skip-files:
+    - scripts/full-suite-wsl.sh

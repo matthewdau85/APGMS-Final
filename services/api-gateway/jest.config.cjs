@@ -3,7 +3,6 @@ module.exports = {
   rootDir: __dirname,
   preset: "ts-jest",
   testEnvironment: "node",
-  coverageProvider: "v8",
 
   transform: {
     "^.+\\.[tj]sx?$": [
@@ -15,11 +14,23 @@ module.exports = {
   },
 
   moduleNameMapper: {
+    // Allow importing compiled JS without `.js` suffix in TS files
     "^(\\.{1,2}/.*)\\.js$": "$1",
+
+    // Existing shared-au mocks (keep these)
     "^@apgms/shared-au/(.*)$":
       "<rootDir>/test/__mocks__/shared-au-$1.ts",
+
+    // Existing mapping for security log
     "^@apgms/shared/security-log\\.js$":
       "<rootDir>/../../shared/src/security-log.ts",
+
+    // 🔑 NEW: map domain-policy imports into the workspace source
+    "^@apgms/domain-policy/(.*)$":
+      "<rootDir>/../../packages/domain-policy/src/$1",
+
+    "^jose$": "<rootDir>/test/__mocks__/jose.ts",
+
   },
 
   // Only run Jest-style tests
@@ -30,10 +41,16 @@ module.exports = {
 
   testPathIgnorePatterns: [
     "/node_modules/",
-    "\\.node\\.[tj]s$",        // ignore node:test files
-    "\\.spec\\.[tj]s$",        // hard-ignore *.spec.* for now
+    // explicitly ignore any node:test files
+    ".node.ts$",
   ],
 
-  coverageDirectory: "./coverage",
+  // Coverage
+  collectCoverageFrom: [
+    "<rootDir>/src/**/*.[tj]s?(x)",
+  ],
+  coverageDirectory: "<rootDir>/coverage",
+  coverageReporters: ["text", "lcov"],
+
   clearMocks: true,
 };
