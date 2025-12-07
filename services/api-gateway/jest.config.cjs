@@ -17,7 +17,7 @@ module.exports = {
     // Allow importing compiled JS without `.js` suffix in TS files
     "^(\\.{1,2}/.*)\\.js$": "$1",
 
-    // Existing shared-au mocks (keep these)
+    // Existing shared-au mocks
     "^@apgms/shared-au/(.*)$":
       "<rootDir>/test/__mocks__/shared-au-$1.ts",
 
@@ -25,12 +25,16 @@ module.exports = {
     "^@apgms/shared/security-log\\.js$":
       "<rootDir>/../../shared/src/security-log.ts",
 
-    // 🔑 NEW: map domain-policy imports into the workspace source
+    // NEW: resolve the shared Prisma client for tests
+    "^@apgms/shared/db\\.js$":
+      "<rootDir>/../../shared/src/db.js",
+
+    // Map domain-policy imports into workspace source
     "^@apgms/domain-policy/(.*)$":
       "<rootDir>/../../packages/domain-policy/src/$1",
 
+    // Mock jose (so Jest doesn't choke on ESM)
     "^jose$": "<rootDir>/test/__mocks__/jose.ts",
-
   },
 
   // Only run Jest-style tests
