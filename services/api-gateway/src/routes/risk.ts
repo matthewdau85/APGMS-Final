@@ -1,31 +1,28 @@
-﻿import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { FastifyInstance } from 'fastify';
+import { computeOrgRisk } from '@apgms/domain-policy/risk/anomaly';
 
-import { authGuard } from "../auth.js";
-import { detectRisk, listRiskEvents } from "@apgms/shared";
-import { metrics } from "../observability/metrics.js";
+export async function riskRoutes(fastify: FastifyInstance) {
+  fastify.get('/risk/summary', {
+    schema: {
+      querystring: {
+        type: 'object',
+        required: ['period'],
+        properties: { period: { type: 'string' } },
+      },
+    },
+  }, async (request, reply) => {
+    const orgId = request.org.orgId;
+    const { period } = request.query as { period: string };
 
-type RiskRequest = FastifyRequest & { user?: { orgId?: string } };
+    const snapshot = await computeOrgRisk(orgId, period);
 
-export async function registerRiskRoutes(app: FastifyInstance) {
-  app.get("/monitor/risk", { preHandler: authGuard }, async (request: RiskRequest, reply: FastifyReply) => {
-    const orgId = request.user?.orgId;
-    if (!orgId) {
-      reply.code(401).send({ error: "unauthenticated" });
-      return;
-    }
-    const taxType = String((request.query as { taxType?: string }).taxType ?? "PAYGW");
-    const result = await detectRisk(orgId, taxType);
-    metrics.riskEventsTotal.inc({ severity: result.record.severity });
-    reply.send({ risk: result.record, snapshot: result.snapshot });
-  });
+    // Expose as metric
+    fastify.metrics?.observeGauge(
+      'apgms_org_risk_score',
+      snapshot.overallLevel === 'LOW' ? 1 : snapshot.overallLevel === 'MEDIUM' ? 2 : 3,
+      { orgId, period },
+    );
 
-  app.get("/monitor/risk/events", { preHandler: authGuard }, async (request: RiskRequest, reply: FastifyReply) => {
-    const orgId = request.user?.orgId;
-    if (!orgId) {
-      reply.code(401).send({ error: "unauthenticated" });
-      return;
-    }
-    const events = await listRiskEvents(orgId);
-    reply.send({ events });
+    return reply.send(snapshot);
   });
 }
