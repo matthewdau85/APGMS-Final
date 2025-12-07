@@ -38,9 +38,7 @@ function computeLedgerHashSelf(input: {
   return crypto.createHash("sha256").update(payload).digest("hex");
 }
 
-export async function appendLedgerEntry(
-  args: LedgerPostArgs,
-) {
+export async function appendLedgerEntry(args: LedgerPostArgs) {
   const effectiveAt = args.effectiveAt ?? new Date();
 
   return prisma.$transaction(async (tx) => {
@@ -157,7 +155,9 @@ export async function verifyLedgerChain(
 
     // 2. Recompute hashSelf from stored fields
     const amount =
-      typeof e.amountCents === "bigint" ? Number(e.amountCents) : (e.amountCents as number);
+      typeof e.amountCents === "bigint"
+        ? Number(e.amountCents)
+        : (e.amountCents as number);
 
     const recomputed = computeLedgerHashSelf({
       orgId: e.orgId,
