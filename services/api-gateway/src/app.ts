@@ -28,6 +28,7 @@ import { initProviders, closeProviders } from "./providers.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerRegulatorAuthRoutes } from "./routes/regulator-auth.js";
 import { registerRegulatorRoutes } from "./routes/regulator.js";
+import { registerRegulatorComplianceSummaryRoute } from "./routes/regulator-compliance-summary.js";
 import { registerAdminDataRoutes } from "./routes/admin.data.js";
 import { registerBankLinesRoutes } from "./routes/bank-lines.js";
 import { registerTaxRoutes } from "./routes/tax.js";
@@ -269,17 +270,19 @@ export async function buildServer(
   const regulatorAuthGuard = createAuthGuard(REGULATOR_AUDIENCE, {
     validate: async (principal, request) => {
       const sessionId = (principal.sessionId ?? principal.id) as string;
-      const session = await ensureRegulatorSessionActive(sessionId);
-      (request as any).regulatorSession = session;
+      await ensureRegulatorSessionActive(sessionId, request.log);
     },
   });
 
   await app.register(
     async (regulatorScope) => {
       regulatorScope.addHook("onRequest", regulatorAuthGuard);
-      await regulatorScope.register(registerRegulatorRoutes, {
-        prefix: "/",
-      });
+
+      // All existing regulator-side routes
+      await regulatorScope.register(registerRegulatorRoutes);
+
+      // ✅ New: compliance summary route under /regulator/compliance/summary
+      await regulatorScope.register(registerRegulatorComplianceSummaryRoute);
     },
     { prefix: "/regulator" },
   );
