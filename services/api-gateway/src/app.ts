@@ -8,6 +8,10 @@ import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import { context, trace } from "@opentelemetry/api";
 import "dotenv/config.js";
+import { basSettlementRoutes } from "./routes/bas-settlement";
+import { exportRoutes } from "./routes/export";
+import { riskRoutes } from "./routes/risk";
+import { csvIngestRoutes } from "./routes/ingest-csv";
 
 import {
   AppError,
@@ -313,3 +317,8 @@ export async function createApp(
 ): Promise<FastifyInstance> {
   return buildServer(options);
 }
+
+app.register(basSettlementRoutes, { prefix: "/api" });
+app.register(exportRoutes, { prefix: "/api" });
+app.register(riskRoutes, { prefix: "/api" });
+app.register(csvIngestRoutes, { prefix: "/api" });
