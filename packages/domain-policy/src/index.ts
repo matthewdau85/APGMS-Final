@@ -5,6 +5,10 @@
 // ---------------------------------------------------------------------------
 export * from "./tax-types.js";
 export * from "./bas-period.js";
+export * from "./obligations/types.js";
+export * from "./obligations/types.js";
+export * from "./obligations/calculator.js";
+export * from "./obligations/computeOrgObligationsForPeriod.js";
 
 // ---------------------------------------------------------------------------
 // AU tax configuration + engines + BAS helpers
@@ -17,6 +21,7 @@ export * from "./au-tax/paygw-engine.js";
 export * from "./au-tax/paygw-settlement.js";
 export * from "./au-tax/gst-engine.js";
 export * from "./au-tax/gst-settlement.js";
+export { computeOrgObligationsForPeriod } from "./obligations/computeOrgObligationsForPeriod.js";
  // export * from "./au-tax/prisma-repository.js";
 
 // ---------------------------------------------------------------------------
@@ -33,3 +38,4 @@ export * from "./designated-accounts/guards.js";
 export * from "./models/gst.js";
 export * from "./models/payroll.js";
 export * from "./models/pos.js";
+
