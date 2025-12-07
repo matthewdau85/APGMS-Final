@@ -1,75 +1,141 @@
-﻿// services/api-gateway/src/routes/regulator-compliance-summary.ts
+﻿// services/api-gateway/test/regulator-compliance-summary.test.ts
 
-import type { FastifyInstance } from "fastify";
-import { AppError } from "@apgms/shared";
+import Fastify from "fastify";
+import { registerRegulatorComplianceSummaryRoute } from "../src/routes/regulator-compliance-summary";
 import { computeOrgObligationsForPeriod } from "@apgms/domain-policy";
 import { getLedgerBalanceForPeriod } from "@apgms/domain-policy/ledger/tax-ledger";
 
-const PERIOD_REGEX = /^\d{4}-(Q[1-4]|0[1-9]|1[0-2])$/;
+// Mock the same modules the route imports
+jest.mock("@apgms/domain-policy");
+jest.mock("@apgms/domain-policy/ledger/tax-ledger");
 
-function assertValidPeriod(period: unknown): string {
-  if (typeof period !== "string" || !PERIOD_REGEX.test(period)) {
-    throw new AppError("invalid_period", 400, "invalid_period", { period });
-  }
-  return period;
+const mockedCompute = jest.mocked(computeOrgObligationsForPeriod);
+const mockedLedger = jest.mocked(getLedgerBalanceForPeriod);
+
+function buildServer() {
+  const app = Fastify();
+  registerRegulatorComplianceSummaryRoute(app);
+  return app;
 }
 
-function classifyRisk(basCoverageRatio: number): "LOW" | "MEDIUM" | "HIGH" {
-  if (basCoverageRatio >= 0.9) return "LOW";
-  if (basCoverageRatio >= 0.6) return "MEDIUM";
-  return "HIGH";
-}
+describe("/regulator/compliance/summary behavioural coverage", () => {
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
 
-export async function registerRegulatorComplianceSummaryRoute(
-  app: FastifyInstance,
-) {
-  // When registered under { prefix: "/regulator" } in app.ts,
-  // this becomes: /regulator/compliance/summary
-  app.get("/compliance/summary", async (request, reply) => {
-    const q = request.query as { period?: string };
-    const period = assertValidPeriod(q.period);
+  it("Case 1: totalObligationCents = 0 -> ratio = 1, riskBand = LOW", async () => {
+    const app = buildServer();
 
-    // org context will depend on your auth; for now we accept either:
-    const orgId =
-      (request as any).org?.orgId ??
-      (request as any).user?.orgId ??
-      (request.headers["x-org-id"] as string | undefined);
+    mockedCompute.mockResolvedValueOnce({
+      paygwCents: 0,
+      gstCents: 0,
+    });
 
-    if (!orgId) {
-      throw new AppError("missing_org", 400, "missing_org", {});
-    }
+    mockedLedger.mockResolvedValueOnce({
+      PAYGW: 0,
+      GST: 0,
+    });
 
-    const obligations = await computeOrgObligationsForPeriod(orgId, period);
-
-    const ledgerTotals = await getLedgerBalanceForPeriod(orgId, period);
-    const paygwSent = ledgerTotals.PAYGW ?? 0;
-    const gstSent = ledgerTotals.GST ?? 0;
-
-    const paygwShortfallCents = obligations.paygwCents - paygwSent;
-    const gstShortfallCents = obligations.gstCents - gstSent;
-
-    const totalObligation = obligations.paygwCents + obligations.gstCents;
-    const totalSent = paygwSent + gstSent;
-
-    const basCoverageRatio =
-      totalObligation <= 0 ? 1 : totalSent / totalObligation;
-
-    const riskBand = classifyRisk(basCoverageRatio);
-
-    reply.send({
-      orgId,
-      period,
-      obligations,
-      ledgerTotals: {
-        PAYGW: paygwSent,
-        GST: gstSent,
-      },
-      paygwShortfallCents,
-      gstShortfallCents,
-      basCoverageRatio,
-      risk: {
-        riskBand,
+    const res = await app.inject({
+      method: "GET",
+      url: "/compliance/summary?period=2025-Q1",
+      headers: {
+        "x-org-id": "org-1",
       },
     });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+
+    expect(body.orgId).toBe("org-1");
+    expect(body.period).toBe("2025-Q1");
+    expect(body.basCoverageRatio).toBe(1);
+    expect(body.risk.riskBand).toBe("LOW");
+
+    await app.close();
   });
-}
+
+  it("Case 2: 0.8 coverage -> riskBand = MEDIUM", async () => {
+    const app = buildServer();
+
+    // Obligations: total = 1000
+    mockedCompute.mockResolvedValueOnce({
+      paygwCents: 600,
+      gstCents: 400,
+    });
+
+    // Sent: total = 800 -> 0.8 coverage
+    mockedLedger.mockResolvedValueOnce({
+      PAYGW: 480,
+      GST: 320,
+    });
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/compliance/summary?period=2025-Q2",
+      headers: {
+        "x-org-id": "org-2",
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+
+    expect(body.basCoverageRatio).toBeCloseTo(0.8, 5);
+    expect(body.risk.riskBand).toBe("MEDIUM");
+
+    await app.close();
+  });
+
+  it("Case 3: 0.5 coverage + PAYGW shortfall -> riskBand = HIGH", async () => {
+    const app = buildServer();
+
+    mockedCompute.mockResolvedValueOnce({
+      paygwCents: 700,
+      gstCents: 300, // total = 1000
+    });
+
+    mockedLedger.mockResolvedValueOnce({
+      PAYGW: 350,
+      GST: 150, // total = 500 -> 0.5 coverage
+    });
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/compliance/summary?period=2025-Q3",
+      headers: {
+        "x-org-id": "org-3",
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+
+    expect(body.basCoverageRatio).toBeCloseTo(0.5, 5);
+    expect(body.risk.riskBand).toBe("HIGH");
+
+    // Explicit PAYGW shortfall present
+    expect(body.paygwShortfallCents).toBe(700 - 350); // 350
+    expect(body.gstShortfallCents).toBe(300 - 150);   // 150
+
+    await app.close();
+  });
+
+  it("rejects invalid period pattern with 400", async () => {
+    const app = buildServer();
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/compliance/summary?period=bad-period",
+      headers: {
+        "x-org-id": "org-1",
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = res.json();
+    expect(body.code ?? body.error).toBe("invalid_period");
+
+    await app.close();
+  });
+});

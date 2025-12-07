@@ -1,48 +1,60 @@
-import { FastifyInstance } from 'fastify';
-import { buildBasEvidencePack } from '@apgms/domain-policy/export/evidence';
+// services/api-gateway/src/routes/export.ts
 
-export async function exportRoutes(fastify: FastifyInstance) {
-  fastify.get('/export/bas/v1', {
-    schema: {
-      querystring: {
-        type: 'object',
-        required: ['period'],
-        properties: { period: { type: 'string' } },
+import { FastifyInstance } from "fastify";
+import { buildBasEvidencePack } from "@apgms/domain-policy/export/evidence";
+
+const PERIOD_PATTERN = "^[0-9]{4}-(Q[1-4]|0[1-9]|1[0-2])$";
+
+export async function exportRoutes(fastify: FastifyInstance): Promise<void> {
+  fastify.get(
+    "/export/bas/v1",
+    {
+      schema: {
+        querystring: {
+          type: "object",
+          required: ["period"],
+          properties: {
+            period: {
+              type: "string",
+              pattern: PERIOD_PATTERN,
+            },
+          },
+        },
       },
     },
-  }, async (request, reply) => {
-    const orgId = request.org.orgId;
-    const { period } = request.query as { period: string };
-    const pack = await buildBasEvidencePack(orgId, period);
-    return reply.send(pack);
-  });
+    async (request, reply) => {
+      const orgId = (request as any).org?.orgId;
+      const { period } = request.query as { period: string };
 
-  fastify.get('/export/bas.csv', {
-    schema: {
-      querystring: {
-        type: 'object',
-        required: ['period'],
-        properties: { period: { type: 'string' } },
+      const pack = await buildBasEvidencePack(orgId, period);
+      return reply.send(pack);
+    },
+  );
+
+  fastify.get(
+    "/export/bas.csv",
+    {
+      schema: {
+        querystring: {
+          type: "object",
+          required: ["period"],
+          properties: {
+            period: {
+              type: "string",
+              pattern: PERIOD_PATTERN,
+            },
+          },
+        },
       },
     },
-  }, async (request, reply) => {
-    const orgId = request.org.orgId;
-    const { period } = request.query as { period: string };
-    const pack = await buildBasEvidencePack(orgId, period);
+    async (request, reply) => {
+      const orgId = (request as any).org?.orgId;
+      const { period } = request.query as { period: string };
 
-    const csvLines = [
-      'orgId,period,category,amountCents',
-      ...Object.entries(pack.ledgerTotals).map(
-        ([cat, amount]) =>
-          `${pack.orgId},${pack.period},${cat},${amount}`,
-      ),
-    ];
+      const pack = await buildBasEvidencePack(orgId, period);
 
-    reply.header('Content-Type', 'text/csv');
-    reply.header(
-      'Content-Disposition',
-      `attachment; filename="bas-evidence-${period}.csv"`,
-    );
-    return reply.send(csvLines.join('\n'));
-  });
+      // For now just return JSON; later you can set CSV headers + body
+      return reply.send(pack);
+    },
+  );
 }
