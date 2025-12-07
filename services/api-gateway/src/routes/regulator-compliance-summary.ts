@@ -1,30 +1,20 @@
-﻿import type { FastifyInstance } from "fastify";
-import type { AppConfig } from "../config.js";
-import { getLedgerBalanceForPeriod } from "@apgms/domain-policy/ledger/tax-ledger";
+﻿// services/api-gateway/src/routes/regulator-compliance-summary.ts
 
-/**
- * Shape of the statutory obligations returned by the domain layer.
- * TODO: replaced once PAYGW/GST engine is completed.
- */
-interface PeriodObligations {
-  paygwCents: number;
-  gstCents: number;
-}
+import type { FastifyInstance } from "fastify";
+import type { AppConfig } from "../config.js";
+
+import { getLedgerBalanceForPeriod } from "@apgms/domain-policy/ledger/tax-ledger";
+import { computeOrgObligationsForPeriod } from "@apgms/domain-policy/obligations/computeOrgObligationsForPeriod";
 
 type RiskBand = "LOW" | "MEDIUM" | "HIGH";
 
-/**
- * TODO: Replace with real domain call, e.g.
- * import { computeOrgObligationsForPeriod } from "@apgms/domain-policy/obligations";
- */
-async function computeOrgObligationsForPeriod(
-  _orgId: string,
-  _period: string
-): Promise<PeriodObligations> {
-  return {
-    paygwCents: 0,
-    gstCents: 0,
-  };
+interface PeriodObligations {
+  paygwCents: number;
+  gstCents: number;
+  breakdown?: {
+    source: "PAYROLL" | "POS" | "MANUAL";
+    amountCents: number;
+  }[];
 }
 
 interface ComplianceSummaryItem {
@@ -48,35 +38,36 @@ interface ComplianceSummaryQuerystring {
 
 export async function registerRegulatorComplianceSummaryRoute(
   app: FastifyInstance,
-  _config: AppConfig
+  _config: AppConfig,
 ): Promise<void> {
   app.get<{
     Querystring: ComplianceSummaryQuerystring;
     Reply: ComplianceSummaryResponse;
   }>("/regulator/compliance/summary", async (request, reply) => {
-    // Extract decorated org context; fallback for demo/test mode.
     const orgContext = (request as any).org ?? {};
     const orgId = String(orgContext.orgId ?? "org-demo-1");
     const orgName = String(orgContext.orgName ?? "Demo Pty Ltd");
 
-    // Bas period override; real inference coming later.
     const period = request.query.period ?? "";
 
-    // Domain data fetch
+    // 1. Ledger balances (PAYGW/GST secure rails)
     const ledgerTotals = await getLedgerBalanceForPeriod(orgId, period);
-    const obligations = await computeOrgObligationsForPeriod(orgId, period);
 
-    // Compute actual shortfalls (never negative)
+    // 2. Statutory obligations from the domain engine
+    const obligations: PeriodObligations = await computeOrgObligationsForPeriod(
+      orgId,
+      period,
+    );
+
     const paygwShortfallCents = Math.max(
       0,
-      obligations.paygwCents - (ledgerTotals.PAYGW ?? 0)
+      (obligations.paygwCents ?? 0) - (ledgerTotals.PAYGW ?? 0),
     );
     const gstShortfallCents = Math.max(
       0,
-      obligations.gstCents - (ledgerTotals.GST ?? 0)
+      (obligations.gstCents ?? 0) - (ledgerTotals.GST ?? 0),
     );
 
-    // Overall BAS Coverage ratio: Recorded funds / Required
     const totalLedgerCents =
       (ledgerTotals.PAYGW ?? 0) + (ledgerTotals.GST ?? 0);
     const totalObligationCents =
@@ -87,7 +78,6 @@ export async function registerRegulatorComplianceSummaryRoute(
         ? Math.max(0, Math.min(1, totalLedgerCents / totalObligationCents))
         : 1;
 
-    // Basic risk band logic
     let riskBand: RiskBand = "LOW";
     if (basCoverageRatio < 0.7 || paygwShortfallCents > 0 || gstShortfallCents > 0) {
       riskBand = "HIGH";
@@ -95,8 +85,7 @@ export async function registerRegulatorComplianceSummaryRoute(
       riskBand = "MEDIUM";
     }
 
-    // TODO: Replace once we track BAS filing timeliness
-    const lateBasCount = 0;
+    const lateBasCount = 0; // TODO: hook into BAS lodgment history
 
     const response: ComplianceSummaryResponse = {
       generatedAt: new Date().toISOString(),
