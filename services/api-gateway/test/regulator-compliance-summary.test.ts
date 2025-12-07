@@ -1,77 +1,67 @@
 // services/api-gateway/test/regulator-compliance-summary.test.ts
 
-import fastify from "fastify";
-import helmet from "@fastify/helmet";
-import { buildHelmetConfig } from "../src/security-headers";
+import Fastify from "fastify";
 import { registerRegulatorComplianceSummaryRoute } from "../src/routes/regulator-compliance-summary";
-import type { AppConfig } from "../src/config";
-import { Buffer } from "node:buffer";
 
-const baseConfig: AppConfig = {
-  env: "test",
-  databaseUrl: "postgres://user:pass@localhost:5432/testdb",
-  shadowDatabaseUrl: undefined,
-  rateLimit: {
-    max: 60,
-    window: "1 minute",
-  },
-  security: {
-    authFailureThreshold: 5,
-    kmsKeysetLoaded: true,
-    requireHttps: false,
-  },
-  cors: {
-    allowedOrigins: ["http://localhost:5173"],
-  },
-  taxEngineUrl: "http://tax-engine:8000",
-  auth: {
-    audience: "test-audience",
-    issuer: "https://auth.localhost",
-    devSecret: "local-dev-secret",
-  },
-  regulator: {
-    accessCode: "test-code",
-    jwtAudience: "urn:apgms:regulator",
-    sessionTtlMinutes: 60,
-  },
-  encryption: {
-    masterKey: Buffer.alloc(32),
-  },
-  webauthn: {
-    rpId: "localhost",
-    rpName: "APGMS Test",
-    origin: "http://localhost:5173",
-  },
-  banking: {
-    providerId: "mock",
-    maxReadTransactions: 1000,
-    maxWriteCents: 5_000_000,
-  },
-  redis: undefined,
-  nats: undefined,
-};
+// Mock domain functions
+jest.mock("@apgms/domain-policy/ledger/tax-ledger", () => ({
+  getLedgerBalanceForPeriod: jest.fn().mockResolvedValue({
+    PAYGW: 7000, // $70.00
+    GST: 3000,   // $30.00
+  }),
+}));
 
-describe("/regulator/compliance/summary", () => {
-  it("returns a compliant demo payload", async () => {
-    const app = fastify();
+jest.mock(
+  "@apgms/domain-policy/obligations/computeOrgObligationsForPeriod",
+  () => ({
+    computeOrgObligationsForPeriod: jest.fn().mockResolvedValue({
+      paygwCents: 10000, // $100.00
+      gstCents: 5000,    // $50.00
+      breakdown: [
+        { source: "PAYROLL", amountCents: 10000 },
+        { source: "POS", amountCents: 5000 },
+      ],
+    }),
+  })
+);
 
-    await app.register(helmet, buildHelmetConfig(baseConfig));
-    await registerRegulatorComplianceSummaryRoute(app, baseConfig);
+describe("regulator compliance summary route", () => {
+  it("returns a summary with correct coverage ratio and risk band", async () => {
+    const app = Fastify();
+    await registerRegulatorComplianceSummaryRoute(app as any, {} as any);
+    await app.ready();
 
     const res = await app.inject({
       method: "GET",
-      url: "/regulator/compliance/summary",
+      url: "/regulator/compliance/summary?period=2025-Q3",
     });
 
     expect(res.statusCode).toBe(200);
 
     const body = res.json() as {
-      generatedAt: string;
-      items: Array<{ orgId: string; riskBand: string }>;
+      items: Array<{
+        orgId: string;
+        basCoverageRatio: number;
+        paygwShortfallCents: number;
+        gstShortfallCents: number;
+        riskBand: string;
+      }>;
     };
 
-    expect(body.items.length).toBeGreaterThan(0);
-    expect(body.items[0]).toHaveProperty("orgId");
-    expect(body.items[0]).toHaveProperty("riskBand");
+    expect(body.items).toHaveLength(1);
+    const item = body.items[0];
+
+    // With mocked data:
+    // - Ledger PAYGW:  7000
+    // - Ledger GST:    3000
+    // - Oblig PAYGW:  10000
+    // - Oblig GST:     5000
+    //
+    // Coverage = (7000+3000)/(10000+5000) = 10000/15000 ≈ 0.6667 -> HIGH
+    expect(item.orgId).toBe("org-demo-1");
+    expect(item.basCoverageRatio).toBeCloseTo(10000 / 15000);
+    expect(item.paygwShortfallCents).toBe(3000); // 10000 - 7000
+    expect(item.gstShortfallCents).toBe(2000);   // 5000 - 3000
+    expect(item.riskBand).toBe("HIGH");
   });
 });

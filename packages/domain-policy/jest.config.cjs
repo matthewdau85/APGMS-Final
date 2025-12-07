@@ -1,28 +1,62 @@
 /** @type {import('jest').Config} */
 module.exports = {
-  // No preset here – we wire ts-jest manually via transform
+  rootDir: __dirname,
+  preset: "ts-jest",
   testEnvironment: "node",
 
-  // Transform TS/JS with ts-jest using the Jest tsconfig
   transform: {
     "^.+\\.[tj]sx?$": [
-      require.resolve("ts-jest"),
+      "ts-jest",
       {
-        tsconfig: "<rootDir>/tsconfig.jest.json",
-        useESM: false
-      }
-    ]
+        tsconfig: "./tsconfig.jest.json",
+      },
+    ],
   },
 
-  // Your test files
-  testMatch: ["**/tests/**/*.test.ts"],
-
-  moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json", "node"],
-
-  // Allow `.js` imports in TS that map back to `.ts` sources
   moduleNameMapper: {
-    "^(\\.{1,2}/.*)\\.js$": "$1"
+    // Allow importing compiled JS without `.js` suffix in TS files
+    "^(\\.{1,2}/.*)\\.js$": "$1",
+
+    // Existing shared-au mocks (keep these)
+    "^@apgms/shared-au/(.*)$":
+      "<rootDir>/test/__mocks__/shared-au-$1.ts",
+
+    // Existing mapping for security log
+    "^@apgms/shared/security-log\\.js$":
+      "<rootDir>/../../shared/src/security-log.ts",
+
+    // Map domain-policy imports into the workspace source
+    "^@apgms/domain-policy/(.*)$":
+      "<rootDir>/../../packages/domain-policy/src/$1",
+
+    // 🔑 NEW: map the shared Prisma client alias used in your tests
+    "^@apgms/shared/db\\.js$":
+      "<rootDir>/../../shared/src/db.ts",
+
+    // (Optional but handy) generic shared mapping
+    "^@apgms/shared/(.*)$":
+      "<rootDir>/../../shared/src/$1",
   },
 
-  clearMocks: true
+  // Only run Jest-style tests
+  testMatch: [
+    "<rootDir>/test/**/*.test.[tj]s?(x)",
+    "<rootDir>/tests/**/*.test.[tj]s?(x)", // supports both test/ and tests/
+    "<rootDir>/src/**/__tests__/**/*.test.[tj]s?(x)",
+  ],
+
+  testPathIgnorePatterns: [
+    "/node_modules/",
+    // explicitly ignore any node:test files
+    ".node.ts$",
+  ],
+
+  // Coverage
+  collectCoverageFrom: [
+    "<rootDir>/src/**/*.[tj]s?(x)",
+  ],
+  coverageDirectory: "<rootDir>/coverage",
+  coverageReporters: ["text", "lcov"],
+
+  clearMocks: true,
 };
