@@ -3,6 +3,8 @@
 import crypto from "node:crypto";
 import { prisma } from "@apgms/shared/db.js";
 
+// --- Types -------------------------------------------------------------------
+
 export type LedgerCategory = "PAYGW" | "GST" | "PENALTY" | "ADJUSTMENT";
 export type LedgerDirection = "DEBIT" | "CREDIT";
 
@@ -15,6 +17,8 @@ export interface LedgerPostArgs {
   description?: string;
   effectiveAt?: Date; // optional override
 }
+
+// --- Hash helper -------------------------------------------------------------
 
 function computeLedgerHashSelf(input: {
   orgId: string;
@@ -38,9 +42,9 @@ function computeLedgerHashSelf(input: {
   return crypto.createHash("sha256").update(payload).digest("hex");
 }
 
-export async function appendLedgerEntry(
-  args: LedgerPostArgs,
-) {
+// --- Append entry (with hash chain) -----------------------------------------
+
+export async function appendLedgerEntry(args: LedgerPostArgs) {
   const effectiveAt = args.effectiveAt ?? new Date();
 
   return prisma.$transaction(async (tx) => {
@@ -84,6 +88,8 @@ export async function appendLedgerEntry(
   });
 }
 
+// --- Balance computation -----------------------------------------------------
+
 export interface LedgerTotals {
   PAYGW?: number;
   GST?: number;
@@ -110,6 +116,7 @@ export async function getLedgerBalanceForPeriod(
   for (const e of entries) {
     const cat = e.category as LedgerCategory;
     const direction = e.direction as LedgerDirection;
+
     const amount =
       typeof e.amountCents === "bigint"
         ? Number(e.amountCents)
@@ -122,12 +129,20 @@ export async function getLedgerBalanceForPeriod(
   return totals;
 }
 
+// --- Chain verification ------------------------------------------------------
+
 export interface LedgerVerificationResult {
   ok: boolean;
   firstInvalidIndex?: number;
   reason?: string;
 }
 
+/**
+ * Verifies the integrity of the hash chain for a given org + period.
+ *
+ * IMPORTANT: chains are maintained per category (PAYGW, GST, etc.), so we
+ * keep an independent hashPrev pointer for each category.
+ */
 export async function verifyLedgerChain(
   orgId: string,
   period: string,
@@ -141,12 +156,21 @@ export async function verifyLedgerChain(
     return { ok: true };
   }
 
-  let expectedPrev: string | null = null;
+  // Track expected previous hash *per category*
+  const expectedPrevByCategory: Record<string, string | null> = {};
 
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
+    const categoryKey = e.category;
 
-    // 1. Check hashPrev matches previous hashSelf
+    const expectedPrev = Object.prototype.hasOwnProperty.call(
+      expectedPrevByCategory,
+      categoryKey,
+    )
+      ? expectedPrevByCategory[categoryKey]
+      : null;
+
+    // 1. Check hashPrev matches previous hashSelf for this category
     if (e.hashPrev !== expectedPrev) {
       return {
         ok: false,
@@ -157,7 +181,9 @@ export async function verifyLedgerChain(
 
     // 2. Recompute hashSelf from stored fields
     const amount =
-      typeof e.amountCents === "bigint" ? Number(e.amountCents) : (e.amountCents as number);
+      typeof e.amountCents === "bigint"
+        ? Number(e.amountCents)
+        : (e.amountCents as number);
 
     const recomputed = computeLedgerHashSelf({
       orgId: e.orgId,
@@ -177,7 +203,8 @@ export async function verifyLedgerChain(
       };
     }
 
-    expectedPrev = e.hashSelf;
+    // 3. Update chain tip for this category
+    expectedPrevByCategory[categoryKey] = e.hashSelf;
   }
 
   return { ok: true };
