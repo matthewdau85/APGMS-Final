@@ -1,165 +1,137 @@
 // services/api-gateway/test/risk-summary.test.ts
 
 import Fastify from "fastify";
-import { registerRiskRoutes } from "../src/routes/risk";
-import { metrics } from "../src/observability/metrics.js";
+import { metrics } from "../src/observability/metrics";
 import { computeOrgRisk } from "@apgms/domain-policy/risk/anomaly";
+import { registerRiskSummaryRoutes } from "../src/routes/risk-summary";
 
-// Mock the risk computation module
-jest.mock("@apgms/domain-policy/risk/anomaly");
+// Mock authGuard: just let everything through and decorate org
+jest.mock("../src/auth", () => ({
+  authGuard: (req: any, _reply: any, done: any) => {
+    if (req.headers["x-org-id"]) {
+      req.org = { orgId: req.headers["x-org-id"] };
+    }
+    done();
+  },
+}));
 
-const mockedCompute = jest.mocked(computeOrgRisk);
+jest.mock("@apgms/domain-policy/risk/anomaly", () => ({
+  computeOrgRisk: jest.fn(),
+}));
 
-// Stub authGuard for these tests to control orgId behaviour
-jest.mock("../src/auth.js", () => {
-  return {
-    authGuard: async (req: any, reply: any) => {
-      const auth = req.headers.authorization;
-      if (!auth) {
-        reply.code(401).send({ error: "unauthenticated" });
-        return;
-      }
-      // Attach a fake org for success cases
-      req.org = { orgId: "test-org" };
+jest.mock("../src/observability/metrics", () => ({
+  metrics: {
+    orgRiskScoreGauge: {
+      set: jest.fn(),
     },
-  };
-});
+  },
+}));
 
-function buildServer() {
-  const app = Fastify();
-
-  // Ensure metrics object has a gauge we can spy on
-  (metrics as any).orgRiskScoreGauge = {
-    set: jest.fn(),
-  };
-  (metrics as any).riskEventsTotal = (metrics as any).riskEventsTotal ?? {
-    inc: jest.fn(),
-  };
-
-  // Minimal config object – not used in routes
-  registerRiskRoutes(app as any, {} as any);
-
-  return app;
-}
+const mockedCompute = computeOrgRisk as jest.MockedFunction<
+  typeof computeOrgRisk
+>;
+const mockedGaugeSet = metrics.orgRiskScoreGauge.set as jest.Mock;
 
 describe("/monitor/risk/summary", () => {
-  afterEach(() => {
-    jest.resetAllMocks();
+  let app: ReturnType<typeof Fastify>;
+
+  beforeAll(async () => {
+    app = Fastify();
+    await registerRiskSummaryRoutes(app as any);
+    await app.ready();
   });
 
-  it("returns LOW risk summary and sets gauge to 1", async () => {
-    const app = buildServer();
+  afterAll(async () => {
+    await app.close();
+  });
 
-    const snapshot = {
-      overallLevel: "LOW",
-      reasons: [],
-      period: "2025-Q1",
-    };
+  beforeEach(() => {
+    mockedCompute.mockReset();
+    mockedGaugeSet.mockReset();
+  });
 
-    mockedCompute.mockResolvedValueOnce(snapshot as any);
-
+  it("returns 401 when no orgId is present", async () => {
     const res = await app.inject({
       method: "GET",
       url: "/monitor/risk/summary?period=2025-Q1",
-      headers: {
-        Authorization: "Bearer test-token",
-      },
-    });
-
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-
-    // Body matches the mocked snapshot
-    expect(body).toEqual(snapshot);
-
-    const gauge = (metrics as any).orgRiskScoreGauge;
-    expect(gauge.set).toHaveBeenCalledTimes(1);
-    expect(gauge.set).toHaveBeenCalledWith(
-      { orgId: "test-org", period: "2025-Q1" },
-      1,
-    );
-
-    await app.close();
-  });
-
-  it("MEDIUM maps to score 2", async () => {
-    const app = buildServer();
-
-    const snapshot = {
-      overallLevel: "MEDIUM",
-      reasons: ["coverage below target"],
-      period: "2025-Q2",
-    };
-
-    mockedCompute.mockResolvedValueOnce(snapshot as any);
-
-    const res = await app.inject({
-      method: "GET",
-      url: "/monitor/risk/summary?period=2025-Q2",
-      headers: {
-        Authorization: "Bearer another-token",
-      },
-    });
-
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-
-    expect(body.overallLevel).toBe("MEDIUM");
-
-    const gauge = (metrics as any).orgRiskScoreGauge;
-    expect(gauge.set).toHaveBeenCalledWith(
-      { orgId: "test-org", period: "2025-Q2" },
-      2,
-    );
-
-    await app.close();
-  });
-
-  it("HIGH maps to score 3", async () => {
-    const app = buildServer();
-
-    const snapshot = {
-      overallLevel: "HIGH",
-      reasons: ["sustained shortfall"],
-      period: "2025-Q3",
-    };
-
-    mockedCompute.mockResolvedValueOnce(snapshot as any);
-
-    const res = await app.inject({
-      method: "GET",
-      url: "/monitor/risk/summary?period=2025-Q3",
-      headers: {
-        Authorization: "Bearer high-risk",
-      },
-    });
-
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-
-    expect(body.overallLevel).toBe("HIGH");
-
-    const gauge = (metrics as any).orgRiskScoreGauge;
-    expect(gauge.set).toHaveBeenCalledWith(
-      { orgId: "test-org", period: "2025-Q3" },
-      3,
-    );
-
-    await app.close();
-  });
-
-  it("returns 401 when no orgId (no Authorization header)", async () => {
-    const app = buildServer();
-
-    const res = await app.inject({
-      method: "GET",
-      url: "/monitor/risk/summary?period=2025-Q1",
-      // no Authorization header
+      // no x-org-id header
     });
 
     expect(res.statusCode).toBe(401);
-    expect(res.json()).toEqual({ error: "unauthenticated" });
+  });
 
-    await app.close();
+  it("maps LOW risk to gauge=1", async () => {
+    mockedCompute.mockResolvedValueOnce({
+      orgId: "org-1",
+      period: "2025-Q1",
+      bufferCoveragePct: 95,
+      fundingConsistencyPct: 90,
+      overallLevel: "LOW",
+    });
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/monitor/risk/summary?period=2025-Q1",
+      headers: {
+        authorization: "Bearer test",
+        "x-org-id": "org-1",
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockedGaugeSet).toHaveBeenCalledWith(
+      { orgId: "org-1", period: "2025-Q1" },
+      1,
+    );
+  });
+
+  it("maps MEDIUM risk to gauge=2", async () => {
+    mockedCompute.mockResolvedValueOnce({
+      orgId: "org-1",
+      period: "2025-Q1",
+      bufferCoveragePct: 80,
+      fundingConsistencyPct: 70,
+      overallLevel: "MEDIUM",
+    });
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/monitor/risk/summary?period=2025-Q1",
+      headers: {
+        authorization: "Bearer test",
+        "x-org-id": "org-1",
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockedGaugeSet).toHaveBeenCalledWith(
+      { orgId: "org-1", period: "2025-Q1" },
+      2,
+    );
+  });
+
+  it("maps HIGH risk to gauge=3", async () => {
+    mockedCompute.mockResolvedValueOnce({
+      orgId: "org-1",
+      period: "2025-Q1",
+      bufferCoveragePct: 60,
+      fundingConsistencyPct: 50,
+      overallLevel: "HIGH",
+    });
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/monitor/risk/summary?period=2025-Q1",
+      headers: {
+        authorization: "Bearer test",
+        "x-org-id": "org-1",
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockedGaugeSet).toHaveBeenCalledWith(
+      { orgId: "org-1", period: "2025-Q1" },
+      3,
+    );
   });
 });

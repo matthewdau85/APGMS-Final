@@ -5,10 +5,9 @@
 // ---------------------------------------------------------------------------
 export * from "./tax-types.js";
 export * from "./bas-period.js";
-export * from "./obligations/types.js";
-export * from "./obligations/types.js";
-export * from "./obligations/calculator.js";
-export * from "./obligations/computeOrgObligationsForPeriod.js";
+export * from "./obligations/computeOrgObligationsForPeriod";
+export * from "./obligations/calculator";
+export * from "./obligations/types";
 
 // ---------------------------------------------------------------------------
 // AU tax configuration + engines + BAS helpers

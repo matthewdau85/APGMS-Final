@@ -368,6 +368,13 @@ model BasCycle {
   @@index([orgId, lodgedAt])
 }
 
+model GstTransaction {
+  id         String   @id @default(cuid())
+  orgId      String
+  period     String   @db.VarChar(16)
+  gstCents   Int
+}
+
 model DesignatedAccount {
   id        String    @id @default(cuid())
   org       Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -510,6 +517,13 @@ model PayrollContribution {
 
   @@unique([orgId, idempotencyKey])
   @@index([orgId, appliedAt])
+}
+
+model PayrollItem {
+  id         String   @id @default(cuid())
+  orgId      String
+  period     String   @db.VarChar(16) // e.g. "2025-Q1" or "2025-09"
+  paygwCents Int
 }
 
 model PosTransaction {

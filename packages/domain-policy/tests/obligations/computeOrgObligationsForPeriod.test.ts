@@ -2,7 +2,7 @@
 
 import { computeOrgObligationsForPeriod } from "../../src/obligations/computeOrgObligationsForPeriod";
 
-// Jest hoists this mock – must be above any imports that use prisma in this file.
+// Jest hoists this mock – keep it above imports that use prisma.
 const mockPayrollFindMany = jest.fn();
 const mockGstFindMany = jest.fn();
 
@@ -19,7 +19,7 @@ jest.mock("@apgms/shared/db.js", () => {
   };
 });
 
-describe("computeOrgObligationsForPeriod (adapter)", () => {
+describe("computeOrgObligationsForPeriod (DB adapter)", () => {
   const orgId = "org-oblig-test";
   const period = "2025-Q1";
 
@@ -28,35 +28,34 @@ describe("computeOrgObligationsForPeriod (adapter)", () => {
     mockGstFindMany.mockReset();
   });
 
-  it("fetches payroll + GST and feeds into the calculator", async () => {
+  it("fetches payroll + GST by orgId and period and aggregates correctly", async () => {
     mockPayrollFindMany.mockResolvedValue([
-      { orgId, paygwCents: 1_000 },
-      { orgId, paygwCents: 2_000 },
+      { orgId, period, paygwCents: 1_000 },
+      { orgId, period, paygwCents: 2_000 },
     ]);
 
     mockGstFindMany.mockResolvedValue([
-      { orgId, gstCents: 500 },
-      { orgId, gstCents: -200 },
+      { orgId, period, gstCents: 500 },
+      { orgId, period, gstCents: -200 },
     ]);
 
     const result = await computeOrgObligationsForPeriod(orgId, period);
 
-    // Adapter should have hit Prisma with orgId filter
     expect(mockPayrollFindMany).toHaveBeenCalledWith({
-      where: { orgId },
+      where: { orgId, period },
       select: { orgId: true, paygwCents: true },
     });
+
     expect(mockGstFindMany).toHaveBeenCalledWith({
-      where: { orgId },
+      where: { orgId, period },
       select: { orgId: true, gstCents: true },
     });
 
-    // And the computed obligations should reflect the mocked data
     expect(result.paygwCents).toBe(3_000);
     expect(result.gstCents).toBe(300);
   });
 
-  it("handles empty arrays from Prisma as zero obligations", async () => {
+  it("treats empty result sets as zero obligations", async () => {
     mockPayrollFindMany.mockResolvedValue([]);
     mockGstFindMany.mockResolvedValue([]);
 
