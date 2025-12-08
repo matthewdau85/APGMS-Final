@@ -1,60 +1,98 @@
-import { PrismaClient } from '@prisma/client';
-import { getLedgerBalanceForPeriod } from '../ledger/tax-ledger';
+// packages/domain-policy/src/settlement/bas-settlement.ts
 
-const prisma = new PrismaClient();
+import { prisma } from "@apgms/shared/db.js";
+import { computeOrgObligationsForPeriod } from "../obligations/computeOrgObligationsForPeriod";
+import { getLedgerBalanceForPeriod } from "../ledger/tax-ledger";
 
-export interface BasSettlementInstruction {
+export type SettlementStatus = "PREPARED" | "SENT" | "ACK" | "FAILED";
+
+export interface BasSettlementPayload {
   orgId: string;
   period: string;
-  paygwCents: number;
-  gstCents: number;
-  totalDebitCents: number;
-  trustAccount: {
-    bankName: string;
-    bsb: string;
-    accountNoMasked: string;
+  totalObligationCents: number;
+  totalRemittedCents: number;
+  netPayableCents: number;
+  obligations: {
+    paygwCents: number;
+    gstCents: number;
+    breakdown?: {
+      source: "PAYROLL" | "POS" | "MANUAL";
+      amountCents: number;
+    }[];
   };
-  payToMandateRef: string;
-  createdAt: string;
+  ledgerTotals: {
+    PAYGW?: number;
+    GST?: number;
+    PENALTY?: number;
+    ADJUSTMENT?: number;
+  };
 }
 
-export async function prepareBasSettlementInstruction(orgId: string, period: string) {
+/**
+ * PREPARED state: compute obligations + ledger, persist a settlement
+ * instruction with a PayTo-ready payload.
+ */
+export async function prepareBasSettlementInstruction(
+  orgId: string,
+  period: string,
+) {
+  const obligations = await computeOrgObligationsForPeriod(orgId, period);
   const ledgerTotals = await getLedgerBalanceForPeriod(orgId, period);
 
-  const payTo = await prisma.payToAgreement.findFirst({
-    where: { orgId, status: 'ACTIVE' },
-    include: { TrustAccount: true },
-  });
+  const totalObligationCents =
+    (obligations.paygwCents ?? 0) + (obligations.gstCents ?? 0);
+  const totalRemittedCents = (ledgerTotals.PAYGW ?? 0) + (ledgerTotals.GST ?? 0);
+  const netPayableCents = totalObligationCents - totalRemittedCents;
 
-  if (!payTo) {
-    throw new Error('NO_ACTIVE_PAYTO_MANDATE');
-  }
-
-  const payload: BasSettlementInstruction = {
+  const payload: BasSettlementPayload = {
     orgId,
     period,
-    paygwCents: ledgerTotals.PAYGW,
-    gstCents: ledgerTotals.GST,
-    totalDebitCents: ledgerTotals.PAYGW + ledgerTotals.GST,
-    trustAccount: {
-      bankName: payTo.TrustAccount.bankName,
-      bsb: payTo.TrustAccount.bsb,
-      accountNoMasked:
-        'XXXXXX' + payTo.TrustAccount.accountNo.slice(-4),
-    },
-    payToMandateRef: payTo.mandateRef,
-    createdAt: new Date().toISOString(),
+    totalObligationCents,
+    totalRemittedCents,
+    netPayableCents,
+    obligations,
+    ledgerTotals,
   };
 
   const record = await prisma.settlementInstruction.create({
     data: {
       orgId,
       period,
-      payToAgreementId: payTo.id,
-      payloadJson: JSON.stringify(payload),
-      status: 'PREPARED',
+      channel: "PAYTO", // adjust if you have an enum
+      status: "PREPARED",
+      payloadJson: payload,
     },
   });
 
-  return { payload, record };
+  return record;
+}
+
+export async function markBasSettlementSent(id: string) {
+  return prisma.settlementInstruction.update({
+    where: { id },
+    data: {
+      status: "SENT",
+    },
+  });
+}
+
+export async function markBasSettlementAck(id: string) {
+  return prisma.settlementInstruction.update({
+    where: { id },
+    data: {
+      status: "ACK",
+    },
+  });
+}
+
+export async function markBasSettlementFailed(id: string, reason: string) {
+  return prisma.settlementInstruction.update({
+    where: { id },
+    data: {
+      status: "FAILED",
+      // If you don't have a dedicated error field, you can instead
+      // merge it into payloadJson in a follow-up revision.
+      failureReason: reason, // adjust to your schema
+    },
+  });
 }
