@@ -1,60 +1,85 @@
 // services/api-gateway/src/routes/export.ts
 
-import { FastifyInstance } from "fastify";
-import { buildBasEvidencePack } from "@apgms/domain-policy/export/evidence";
+import type { FastifyInstance } from "fastify";
+import { authGuard } from "../auth.js";
+import { AppError } from "../errors.js";
+import { PERIOD_REGEX } from "../schema/period.js"; // or inline regex if you prefer
 
-const PERIOD_PATTERN = "^[0-9]{4}-(Q[1-4]|0[1-9]|1[0-2])$";
-
-export async function exportRoutes(fastify: FastifyInstance): Promise<void> {
-  fastify.get(
+export async function registerExportRoutes(app: FastifyInstance) {
+  app.get(
     "/export/bas/v1",
     {
+      preHandler: [authGuard],
       schema: {
         querystring: {
           type: "object",
           required: ["period"],
           properties: {
-            period: {
-              type: "string",
-              pattern: PERIOD_PATTERN,
-            },
+            period: { type: "string" },
           },
         },
       },
     },
     async (request, reply) => {
-      const orgId = (request as any).org?.orgId;
-      const { period } = request.query as { period: string };
+      const orgId = request.headers["x-org-id"];
 
-      const pack = await buildBasEvidencePack(orgId, period);
-      return reply.send(pack);
+      if (!orgId || typeof orgId !== "string") {
+        throw new AppError("missing_org", 400, "x-org-id header is required");
+      }
+
+      const period = (request.query as { period: string }).period;
+
+      if (!PERIOD_REGEX.test(period)) {
+        throw new AppError(
+          "invalid_period",
+          400,
+          "Period must be YYYY-Qn or YYYY-MM",
+        );
+      }
+
+      // TODO: real implementation; stub for now
+      return reply.code(200).send({
+        orgId,
+        period,
+        lines: [],
+      });
     },
   );
 
-  fastify.get(
+  app.get(
     "/export/bas.csv",
     {
+      preHandler: [authGuard],
       schema: {
         querystring: {
           type: "object",
           required: ["period"],
           properties: {
-            period: {
-              type: "string",
-              pattern: PERIOD_PATTERN,
-            },
+            period: { type: "string" },
           },
         },
       },
     },
     async (request, reply) => {
-      const orgId = (request as any).org?.orgId;
-      const { period } = request.query as { period: string };
+      const orgId = request.headers["x-org-id"];
 
-      const pack = await buildBasEvidencePack(orgId, period);
+      if (!orgId || typeof orgId !== "string") {
+        throw new AppError("missing_org", 400, "x-org-id header is required");
+      }
 
-      // For now just return JSON; later you can set CSV headers + body
-      return reply.send(pack);
+      const period = (request.query as { period: string }).period;
+
+      if (!PERIOD_REGEX.test(period)) {
+        throw new AppError(
+          "invalid_period",
+          400,
+          "Period must be YYYY-Qn or YYYY-MM",
+        );
+      }
+
+      // TODO: real CSV export; stub for now
+      reply.header("content-type", "text/csv");
+      reply.send("orgId,period\n" + `${orgId},${period}\n`);
     },
   );
 }
