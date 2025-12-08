@@ -1,8 +1,8 @@
 // packages/domain-policy/src/settlement/bas-settlement.ts
 
 import { prisma } from "@apgms/shared/db.js";
-import { computeOrgObligationsForPeriod } from "../obligations/computeOrgObligationsForPeriod";
-import { getLedgerBalanceForPeriod } from "../ledger/tax-ledger";
+import { computeOrgObligationsForPeriod } from "../obligations/computeOrgObligationsForPeriod.js";
+import { getLedgerBalanceForPeriod } from "../ledger/tax-ledger.js";
 
 export type SettlementStatus = "PREPARED" | "SENT" | "ACK" | "FAILED";
 
@@ -58,9 +58,12 @@ export async function prepareBasSettlementInstruction(
     data: {
       orgId,
       period,
-      channel: "PAYTO", // adjust if you have an enum
+      // Prisma schema currently has payloadJson as String,
+      // so store the JSON string here:
+      payloadJson: JSON.stringify(payload),
       status: "PREPARED",
-      payloadJson: payload,
+      // If you add fields like channel or failureReason later,
+      // wire them in here and regenerate Prisma client.
     },
   });
 
@@ -85,14 +88,13 @@ export async function markBasSettlementAck(id: string) {
   });
 }
 
-export async function markBasSettlementFailed(id: string, reason: string) {
+export async function markBasSettlementFailed(id: string, _reason: string) {
+  // NOTE: SettlementInstruction currently has no failureReason field.
+  // You can later add one to the Prisma schema and persist `_reason` here.
   return prisma.settlementInstruction.update({
     where: { id },
     data: {
       status: "FAILED",
-      // If you don't have a dedicated error field, you can instead
-      // merge it into payloadJson in a follow-up revision.
-      failureReason: reason, // adjust to your schema
     },
   });
 }

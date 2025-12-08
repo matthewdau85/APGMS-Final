@@ -5,7 +5,10 @@
     "outDir": "dist",
     "composite": true,
     "declaration": true,
-    "declarationMap": true
+    "declarationMap": true,
+    "moduleResolution": "NodeNext",
+    "paths": {
+      "@apgms/shared/db.js": ["shims/apgms-shared-db.d.ts"]
   },
   "include": ["src/**/*.ts"],
   "exclude": [

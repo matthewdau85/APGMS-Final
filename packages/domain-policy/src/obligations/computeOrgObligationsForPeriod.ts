@@ -1,12 +1,13 @@
 // packages/domain-policy/src/obligations/computeOrgObligationsForPeriod.ts
 
 import { prisma } from "@apgms/shared/db.js";
+
 import type {
   PeriodObligations,
   PayrollItemDTO,
   GstTransactionDTO,
-} from "./types";
-import { computePeriodObligationsFromDtos } from "./calculator";
+} from "./types.js";
+import { computePeriodObligationsFromDtos } from "./calculator.js";
 
 /**
  * Adapter: fetches raw data for an org + period and feeds it into the
@@ -26,6 +27,7 @@ export async function computeOrgObligationsForPeriod(
       },
       select: {
         orgId: true,
+        period: true,
         paygwCents: true,
       },
     }),
@@ -36,6 +38,7 @@ export async function computeOrgObligationsForPeriod(
       },
       select: {
         orgId: true,
+        period: true,
         gstCents: true,
       },
     }),
@@ -43,11 +46,13 @@ export async function computeOrgObligationsForPeriod(
 
   const payrollDtos: PayrollItemDTO[] = payrollItems.map((p) => ({
     orgId: p.orgId,
+    period: p.period,
     paygwCents: Number(p.paygwCents ?? 0),
   }));
 
   const gstDtos: GstTransactionDTO[] = gstTransactions.map((g) => ({
     orgId: g.orgId,
+    period: g.period,
     gstCents: Number(g.gstCents ?? 0),
   }));
 

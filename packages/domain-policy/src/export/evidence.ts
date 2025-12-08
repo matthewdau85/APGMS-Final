@@ -1,25 +1,33 @@
-import { PrismaClient } from '@prisma/client';
-import { getLedgerBalanceForPeriod } from '../ledger/tax-ledger';
+// packages/domain-policy/src/export/evidence.ts
 
-const prisma = new PrismaClient();
+import type { PeriodObligations } from "../obligations/types.js";
+import { computeOrgObligationsForPeriod } from "../obligations/computeOrgObligationsForPeriod.js";
+import type { LedgerTotals } from "../ledger/tax-ledger.js";
+import { getLedgerBalanceForPeriod } from "../ledger/tax-ledger.js";
 
 export interface BasEvidencePack {
   orgId: string;
   period: string;
-  ledgerTotals: Record<string, number>;
-  createdAt: string;
-  ledgerEntryCount: number;
+  obligations: PeriodObligations;
+  ledgerTotals: LedgerTotals;
 }
 
-export async function buildBasEvidencePack(orgId: string, period: string): Promise<BasEvidencePack> {
+/**
+ * Build a BAS "evidence pack" combining:
+ * - computed PAYGW/GST obligations for the period
+ * - ledger totals for that same period
+ */
+export async function buildBasEvidencePack(
+  orgId: string,
+  period: string,
+): Promise<BasEvidencePack> {
+  const obligations = await computeOrgObligationsForPeriod(orgId, period);
   const ledgerTotals = await getLedgerBalanceForPeriod(orgId, period);
-  const count = await prisma.taxLedgerEntry.count({ where: { orgId, period } });
 
   return {
     orgId,
     period,
+    obligations,
     ledgerTotals,
-    ledgerEntryCount: count,
-    createdAt: new Date().toISOString(),
   };
 }

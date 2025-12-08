@@ -29,6 +29,7 @@ describe("computeOrgObligationsForPeriod (DB adapter)", () => {
   });
 
   it("fetches payroll + GST by orgId and period and aggregates correctly", async () => {
+    // 🔹 THIS IS WHERE THOSE LINES GO
     mockPayrollFindMany.mockResolvedValue([
       { orgId, period, paygwCents: 1_000 },
       { orgId, period, paygwCents: 2_000 },
@@ -43,12 +44,12 @@ describe("computeOrgObligationsForPeriod (DB adapter)", () => {
 
     expect(mockPayrollFindMany).toHaveBeenCalledWith({
       where: { orgId, period },
-      select: { orgId: true, paygwCents: true },
+      select: { orgId: true, period: true, paygwCents: true },
     });
 
     expect(mockGstFindMany).toHaveBeenCalledWith({
       where: { orgId, period },
-      select: { orgId: true, gstCents: true },
+      select: { orgId: true, period: true, gstCents: true },
     });
 
     expect(result.paygwCents).toBe(3_000);
