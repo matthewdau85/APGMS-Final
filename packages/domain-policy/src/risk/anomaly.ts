@@ -1,7 +1,7 @@
 // packages/domain-policy/src/risk/anomaly.ts
 
 import { PrismaClient } from "@prisma/client";
-import { verifyLedgerChain } from "../ledger/tax-ledger";
+import { verifyLedgerChain } from "../ledger/tax-ledger.js";
 
 const prisma = new PrismaClient();
 

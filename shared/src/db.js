@@ -11,3 +11,4 @@ export const prisma = new PrismaClient({
 });
 // Re-export a convenience alias if you import { db } elsewhere
 export const db = prisma;
+//# sourceMappingURL=db.js.map
