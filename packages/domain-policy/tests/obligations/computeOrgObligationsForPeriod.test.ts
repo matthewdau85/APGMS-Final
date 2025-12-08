@@ -2,33 +2,67 @@
 
 import { computeOrgObligationsForPeriod } from "../../src/obligations/computeOrgObligationsForPeriod";
 
-// Mock the shared Prisma client by path that matches moduleNameMapper
-jest.mock("@apgms/shared/db.js", () => ({
-  prisma: {
-    payrollItem: {
-      findMany: jest.fn().mockResolvedValue([
-        { orgId: "org-1", paygwCents: 100 },
-        { orgId: "org-1", paygwCents: 200 },
-      ]),
-    },
-    gstTransaction: {
-      findMany: jest.fn().mockResolvedValue([
-        { orgId: "org-1", gstCents: 50 },
-        { orgId: "org-1", gstCents: 50 },
-      ]),
-    },
-  },
-}));
+// Jest hoists this mock – must be above any imports that use prisma in this file.
+const mockPayrollFindMany = jest.fn();
+const mockGstFindMany = jest.fn();
 
-describe("computeOrgObligationsForPeriod (DB adapter)", () => {
-  it("aggregates PAYGW and GST from Prisma", async () => {
-    const result = await computeOrgObligationsForPeriod("org-1", "2025-Q3");
+jest.mock("@apgms/shared/db.js", () => {
+  return {
+    prisma: {
+      payrollItem: {
+        findMany: mockPayrollFindMany,
+      },
+      gstTransaction: {
+        findMany: mockGstFindMany,
+      },
+    },
+  };
+});
 
-    expect(result.paygwCents).toBe(300);
-    expect(result.gstCents).toBe(100);
-    expect(result.breakdown).toEqual([
-      { source: "PAYROLL", amountCents: 300 },
-      { source: "POS", amountCents: 100 },
+describe("computeOrgObligationsForPeriod (adapter)", () => {
+  const orgId = "org-oblig-test";
+  const period = "2025-Q1";
+
+  beforeEach(() => {
+    mockPayrollFindMany.mockReset();
+    mockGstFindMany.mockReset();
+  });
+
+  it("fetches payroll + GST and feeds into the calculator", async () => {
+    mockPayrollFindMany.mockResolvedValue([
+      { orgId, paygwCents: 1_000 },
+      { orgId, paygwCents: 2_000 },
     ]);
+
+    mockGstFindMany.mockResolvedValue([
+      { orgId, gstCents: 500 },
+      { orgId, gstCents: -200 },
+    ]);
+
+    const result = await computeOrgObligationsForPeriod(orgId, period);
+
+    // Adapter should have hit Prisma with orgId filter
+    expect(mockPayrollFindMany).toHaveBeenCalledWith({
+      where: { orgId },
+      select: { orgId: true, paygwCents: true },
+    });
+    expect(mockGstFindMany).toHaveBeenCalledWith({
+      where: { orgId },
+      select: { orgId: true, gstCents: true },
+    });
+
+    // And the computed obligations should reflect the mocked data
+    expect(result.paygwCents).toBe(3_000);
+    expect(result.gstCents).toBe(300);
+  });
+
+  it("handles empty arrays from Prisma as zero obligations", async () => {
+    mockPayrollFindMany.mockResolvedValue([]);
+    mockGstFindMany.mockResolvedValue([]);
+
+    const result = await computeOrgObligationsForPeriod(orgId, period);
+
+    expect(result.paygwCents).toBe(0);
+    expect(result.gstCents).toBe(0);
   });
 });

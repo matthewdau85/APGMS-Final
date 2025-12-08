@@ -1,47 +1,40 @@
 // packages/domain-policy/src/obligations/computeOrgObligationsForPeriod.ts
 
 import { prisma } from "@apgms/shared/db.js";
-
-import {
-  computePeriodObligationsFromDtos,
-} from "./calculator.js";
-
 import type {
   PeriodObligations,
   PayrollItemDTO,
   GstTransactionDTO,
-} from "./types.js";
+} from "./types";
+import { computePeriodObligationsFromDtos } from "./calculator";
 
 /**
- * Adapter that pulls data from Prisma, converts to DTOs,
- * and delegates to the pure calculator.
+ * Adapter: fetches raw data for an org + period and feeds it into the
+ * pure calculator (computePeriodObligationsFromDtos).
  *
- * NOTE: Period filtering is not implemented yet – everything is by orgId only.
- * Once you add a proper period field or mapping to dates, you can refine the
- * Prisma where clauses.
+ * Right now we only filter by orgId and inject the period into DTOs.
+ * Once you have a native period column on payroll/gst tables, you can
+ * uncomment/tighten the where-clauses.
  */
 export async function computeOrgObligationsForPeriod(
   orgId: string,
   period: string,
 ): Promise<PeriodObligations> {
-  // TODO: Filter on period once the model supports it
   const [payrollItems, gstTransactions] = await Promise.all([
     prisma.payrollItem.findMany({
       where: {
         orgId,
-        // When period is modelled, wire it like:
-        // period: period,
+        // period,
       },
       select: {
         orgId: true,
-        grossCents: true, // not strictly needed, but here if you need it later
         paygwCents: true,
       },
     }),
     prisma.gstTransaction.findMany({
       where: {
         orgId,
-        // period: period,
+        // period,
       },
       select: {
         orgId: true,
@@ -62,5 +55,6 @@ export async function computeOrgObligationsForPeriod(
     gstCents: Number(g.gstCents ?? 0),
   }));
 
+  // This is effectively your “summariseObligations({ payroll, gstTx })”
   return computePeriodObligationsFromDtos(payrollDtos, gstDtos);
 }
