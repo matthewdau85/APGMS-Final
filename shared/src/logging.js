@@ -5,3 +5,4 @@ export function safeLogAttributes(payload) {
 export function safeLogError(err) {
     return redactError(err);
 }
+//# sourceMappingURL=logging.js.map

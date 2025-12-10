@@ -1,54 +1,56 @@
 // services/api-gateway/src/routes/ingest-csv.ts
 
-import type { FastifyInstance } from "fastify";
+import type {
+  FastifyInstance,
+  FastifyPluginAsync,
+  FastifyReply,
+  FastifyRequest,
+} from "fastify";
+
 import { authGuard } from "../auth.js";
-import { AppError } from "../errors.js";
+import { PERIOD_REGEX } from "../schemas/period.js";
 
-const PERIOD_REGEX = /^\d{4}-(Q[1-4]|0[1-9]|1[0-2])$/;
+type IngestBody = {
+  period?: string;
+  rows?: Array<Record<string, unknown>>;
+};
 
-export async function registerIngestCsvRoutes(app: FastifyInstance) {
+export const csvIngestRoutes: FastifyPluginAsync = async (
+  app: FastifyInstance,
+) => {
   app.post(
     "/ingest/csv",
-    {
-      preHandler: [authGuard],
-      schema: {
-        body: {
-          type: "object",
-          required: ["period", "rows"],
-          properties: {
-            period: { type: "string" },
-            rows: {
-              type: "array",
-              items: { type: "object" }, // refine later if you want
-            },
-          },
-        },
-      },
-    },
-    async (request, reply) => {
+    { preHandler: [authGuard] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
       const orgId = request.headers["x-org-id"];
-      const body = request.body as { period: string; rows: unknown[] };
+      const body = request.body as IngestBody;
 
       if (!orgId || typeof orgId !== "string") {
-        throw new AppError("missing_org", 400, "x-org-id header is required");
+        reply
+          .code(401)
+          .send({ error: { code: "missing_org", message: "x-org-id required" } });
+        return;
       }
 
-      if (!PERIOD_REGEX.test(body.period)) {
-        throw new AppError(
-          "invalid_period",
-          400,
-          "Period must be YYYY-Qn or YYYY-MM",
-        );
+      const period = body?.period ?? "";
+      if (!PERIOD_REGEX.test(period)) {
+        reply.code(400).send({
+          error: {
+            code: "invalid_period",
+            message: "Period must be YYYY-Qn or YYYY-MM",
+          },
+        });
+        return;
       }
 
-      // TODO: actual ingestion; stub for now:
-      const ingestedRows = body.rows.length;
+      const rows = body?.rows ?? [];
+      const ingestedRows = rows.length;
 
-      return reply.code(202).send({
+      reply.code(202).send({
         orgId,
-        period: body.period,
+        period,
         ingestedRows,
       });
     },
   );
-}
+};

@@ -43,3 +43,4 @@ export async function evaluateDesignatedAccountPolicy(..._args) {
     throw new Error("evaluateDesignatedAccountPolicy shim in @apgms/shared/ledger was called. " +
         "This logic has moved; imports should be updated to use @apgms/domain-policy directly.");
 }
+//# sourceMappingURL=index.js.map

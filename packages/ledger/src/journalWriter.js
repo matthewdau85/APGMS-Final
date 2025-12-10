@@ -90,3 +90,4 @@ function isUniqueViolation(error) {
     const candidate = error;
     return candidate?.code === "P2002";
 }
+//# sourceMappingURL=journalWriter.js.map

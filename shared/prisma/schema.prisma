@@ -96,6 +96,22 @@ model PayRun {
   @@index([orgId], map: "PayRun_orgId_idx")
 }
 
+model IdempotencyEntry {
+  id              String   @id @default(cuid())
+  orgId           String
+  actorId         String
+  key             String
+  requestHash     String
+  responseHash    String
+  statusCode      Int
+  responsePayload Json?
+  resource        String?
+  resourceId      String?
+  createdAt       DateTime @default(now())
+
+  @@unique([orgId, key])
+}
+
 model Payslip {
   id String @id
 

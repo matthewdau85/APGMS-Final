@@ -127,3 +127,4 @@ function fromWeekly(weeklyAmount, period) {
             return weeklyAmount;
     }
 }
+//# sourceMappingURL=index.js.map

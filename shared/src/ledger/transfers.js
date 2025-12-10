@@ -20,3 +20,4 @@ export async function markTransferStatus(id, status) {
         },
     });
 }
+//# sourceMappingURL=transfers.js.map

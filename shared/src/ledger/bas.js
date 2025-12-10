@@ -6,7 +6,8 @@ export async function recordBasLodgment(params) {
             initiatedBy: params.initiatedBy,
             taxTypes: params.taxTypes,
             status: params.status ?? "queued",
-            result: params.result ? params.result : null,
+            // Avoid raw null – let Prisma handle optional JSON via undefined
+            result: params.result ? params.result : undefined,
         },
     });
 }
@@ -20,3 +21,4 @@ export async function finalizeBasLodgment(id, result, status) {
         },
     });
 }
+//# sourceMappingURL=bas.js.map

@@ -4,3 +4,4 @@ export const DESIGNATED_TRANSFER_SOURCES = [
     "GST_CAPTURE",
     "BAS_ESCROW",
 ];
+//# sourceMappingURL=types.js.map

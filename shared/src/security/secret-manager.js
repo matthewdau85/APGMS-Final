@@ -64,3 +64,4 @@ function extractVaultData(body) {
     }
     return body.data;
 }
+//# sourceMappingURL=secret-manager.js.map

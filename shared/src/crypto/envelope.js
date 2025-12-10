@@ -64,3 +64,4 @@ export function decryptJson(masterKey, envelope, associatedData) {
     const payload = decryptEnvelope(masterKey, envelope, associatedData);
     return JSON.parse(payload.toString("utf8"));
 }
+//# sourceMappingURL=envelope.js.map

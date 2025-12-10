@@ -1,6 +1,7 @@
 import { prisma } from "../db.js";
 export async function createPaymentPlanRequest(params) {
-    const payload = params.details ? params.details : null;
+    // detailsJson is a required Json column – use {} when there are no details
+    const payload = (params.details ?? {});
     return prisma.paymentPlanRequest.create({
         data: {
             orgId: params.orgId,
@@ -23,7 +24,9 @@ export async function updatePaymentPlanStatus(id, status, metadata) {
         where: { id },
         data: {
             status,
+            // Only overwrite detailsJson when metadata is provided
             detailsJson: metadata ? metadata : undefined,
         },
     });
 }
+//# sourceMappingURL=payment-plan.js.map

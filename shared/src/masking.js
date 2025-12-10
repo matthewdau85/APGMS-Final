@@ -97,3 +97,4 @@ export function maskError(err) {
     }
     return { error: maskValue(err) };
 }
+//# sourceMappingURL=masking.js.map
