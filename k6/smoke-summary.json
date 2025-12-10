@@ -1,0 +1,12 @@
+{
+  "metrics": {
+    "http_reqs": {
+      "rate": 0.0
+    },
+    "http_req_duration": {
+      "percentiles": {
+        "95": 100
+      }
+    }
+  }
+}
