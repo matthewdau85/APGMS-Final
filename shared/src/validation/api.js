@@ -85,3 +85,4 @@ const PasskeyAuthenticationPayloadSchema = z
     message: "authentication payload is required",
 });
 export const PasskeyVerifyBodySchema = PasskeyAuthenticationPayloadSchema;
+//# sourceMappingURL=api.js.map

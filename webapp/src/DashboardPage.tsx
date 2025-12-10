@@ -5,7 +5,7 @@ import {
   createBankLine,
   fetchDesignatedAccounts,
 } from "./api";
-import { getToken } from "./auth";
+import { getToken } from "./auth.js";
 import { ErrorState, SkeletonBlock, StatCard, StatusChip } from "./components/UI";
 
 type Obligations = Awaited<ReturnType<typeof fetchCurrentObligations>>;

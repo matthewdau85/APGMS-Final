@@ -1,7 +1,7 @@
+// shared/src/ledger/ingest.ts
 import { Decimal } from "@prisma/client/runtime/library";
 import { withIdempotency } from "../idempotency.js";
 import { getDesignatedAccountByType } from "./designated-account.js";
-import { applyDesignatedAccountTransfer } from "@apgms/domain-policy";
 const PAYROLL_SOURCE = "payroll_system";
 const POS_SOURCE = "pos_system";
 export async function recordPayrollContribution(params) {
@@ -18,15 +18,14 @@ export async function recordPayrollContribution(params) {
             payload: params.payload,
         },
         resource: "payrollContribution",
-    }, 
-    // Don’t import HandlerResult – just return a generic “ok” object.
-    async ({ idempotencyKey }) => {
+    }, async ({ idempotencyKey }) => {
         await params.prisma.payrollContribution.create({
             data: {
                 orgId: params.orgId,
                 amount: new Decimal(params.amount),
                 source: PAYROLL_SOURCE,
-                payload: params.payload ?? null,
+                // Avoid null for JSON – cast to InputJsonValue/undefined
+                payload: params.payload,
                 actorId: params.actorId,
                 idempotencyKey,
             },
@@ -54,7 +53,7 @@ export async function recordPosTransaction(params) {
                 orgId: params.orgId,
                 amount: new Decimal(params.amount),
                 source: POS_SOURCE,
-                payload: params.payload ?? null,
+                payload: params.payload,
                 actorId: params.actorId,
                 idempotencyKey,
             },
@@ -71,7 +70,11 @@ export async function applyPendingContributions(params) {
         where: { orgId: params.orgId, appliedAt: null },
         orderBy: { createdAt: "asc" },
     });
-    const context = { prisma: params.prisma, auditLogger: params.auditLogger };
+    const context = {
+        prisma: params.prisma,
+        auditLogger: params.auditLogger,
+        applyTransfer: params.applyTransfer,
+    };
     for (const contribution of pendingPayroll) {
         await applyContribution(contribution, {
             orgId: params.orgId,
@@ -97,7 +100,7 @@ export async function applyPendingContributions(params) {
 }
 async function applyContribution(contribution, params) {
     const account = await getDesignatedAccountByType(params.context.prisma, params.orgId, params.accountType);
-    const transfer = await applyDesignatedAccountTransfer({
+    const transfer = await params.context.applyTransfer({
         prisma: params.context.prisma,
         auditLogger: params.context.auditLogger,
     }, {
@@ -138,3 +141,4 @@ export async function summarizeContributions(prisma, orgId) {
         gstSecured: Number(posSummary._sum.amount ?? 0),
     };
 }
+//# sourceMappingURL=ingest.js.map

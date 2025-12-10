@@ -17,3 +17,4 @@ export function buildPaymentPlanNarrative(plan) {
     const detailsDescription = describeDetails(plan.detailsJson);
     return `Payment plan ${plan.id} for cycle ${plan.basCycleId} is ${plan.status}. Reason: ${plan.reason}. Details: ${detailsDescription}. Requested at ${formattedDate}; org ${plan.orgId}.`;
 }
+//# sourceMappingURL=payment-plan-summary.js.map

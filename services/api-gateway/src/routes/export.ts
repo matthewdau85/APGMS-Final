@@ -1,44 +1,45 @@
 // services/api-gateway/src/routes/export.ts
 
-import type { FastifyInstance } from "fastify";
-import { authGuard } from "../auth.js";
-import { AppError } from "../errors.js";
-import { PERIOD_REGEX } from "../schema/period.js"; // or inline regex if you prefer
+import type {
+  FastifyInstance,
+  FastifyPluginAsync,
+  FastifyReply,
+  FastifyRequest,
+} from "fastify";
 
-export async function registerExportRoutes(app: FastifyInstance) {
+import { authGuard } from "../auth.js";
+import { PERIOD_REGEX } from "../schemas/period.js";
+
+export const exportRoutes: FastifyPluginAsync = async (
+  app: FastifyInstance,
+) => {
+  // JSON export
   app.get(
     "/export/bas/v1",
-    {
-      preHandler: [authGuard],
-      schema: {
-        querystring: {
-          type: "object",
-          required: ["period"],
-          properties: {
-            period: { type: "string" },
-          },
-        },
-      },
-    },
-    async (request, reply) => {
+    { preHandler: [authGuard] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
       const orgId = request.headers["x-org-id"];
+      const qs = request.query as { period?: string };
 
       if (!orgId || typeof orgId !== "string") {
-        throw new AppError("missing_org", 400, "x-org-id header is required");
+        reply
+          .code(401)
+          .send({ error: { code: "missing_org", message: "x-org-id required" } });
+        return;
       }
 
-      const period = (request.query as { period: string }).period;
-
+      const period = qs?.period ?? "";
       if (!PERIOD_REGEX.test(period)) {
-        throw new AppError(
-          "invalid_period",
-          400,
-          "Period must be YYYY-Qn or YYYY-MM",
-        );
+        reply.code(400).send({
+          error: {
+            code: "invalid_period",
+            message: "Period must be YYYY-Qn or YYYY-MM",
+          },
+        });
+        return;
       }
 
-      // TODO: real implementation; stub for now
-      return reply.code(200).send({
+      reply.code(200).send({
         orgId,
         period,
         lines: [],
@@ -46,40 +47,34 @@ export async function registerExportRoutes(app: FastifyInstance) {
     },
   );
 
+  // CSV export
   app.get(
     "/export/bas.csv",
-    {
-      preHandler: [authGuard],
-      schema: {
-        querystring: {
-          type: "object",
-          required: ["period"],
-          properties: {
-            period: { type: "string" },
-          },
-        },
-      },
-    },
-    async (request, reply) => {
+    { preHandler: [authGuard] },
+    async (request: FastifyRequest, reply: FastifyReply) => {
       const orgId = request.headers["x-org-id"];
+      const qs = request.query as { period?: string };
 
       if (!orgId || typeof orgId !== "string") {
-        throw new AppError("missing_org", 400, "x-org-id header is required");
+        reply
+          .code(401)
+          .send({ error: { code: "missing_org", message: "x-org-id required" } });
+        return;
       }
 
-      const period = (request.query as { period: string }).period;
-
+      const period = qs?.period ?? "";
       if (!PERIOD_REGEX.test(period)) {
-        throw new AppError(
-          "invalid_period",
-          400,
-          "Period must be YYYY-Qn or YYYY-MM",
-        );
+        reply.code(400).send({
+          error: {
+            code: "invalid_period",
+            message: "Period must be YYYY-Qn or YYYY-MM",
+          },
+        });
+        return;
       }
 
-      // TODO: real CSV export; stub for now
       reply.header("content-type", "text/csv");
-      reply.send("orgId,period\n" + `${orgId},${period}\n`);
+      reply.send(`orgId,period\n${orgId},${period}\n`);
     },
   );
-}
+};

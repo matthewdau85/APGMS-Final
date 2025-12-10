@@ -1,20 +1,14 @@
-import { FastifyInstance } from 'fastify';
-// import domain mapping helper once you write it
+// services/api-gateway/src/routes/connectors-bank.ts
 
-export async function connectorsBankRoutes(fastify: FastifyInstance) {
-  fastify.post('/connectors/bank/xero-csv', {
-    schema: {
-      consumes: ['text/csv'],
-      body: { type: 'string' }, // raw CSV
-    },
-  }, async (request, reply) => {
-    const orgId = request.org.orgId;
-    const csvBody = request.body as string;
+import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 
-    // TODO: implement mapping to bank-lines + ledger
-    // await importXeroBankCsv(orgId, csvBody);
+export const registerBankLinesRoutes: FastifyPluginAsync = async (
+  app: FastifyInstance,
+) => {
+  // Stub – extend later with real ingestion endpoints
+  app.get("/bank-lines", async () => ({
+    supported: true,
+  }));
+};
 
-    request.log.info({ orgId }, 'Received Xero bank CSV');
-    return reply.code(202).send({ status: 'ACCEPTED' });
-  });
-}
+export default registerBankLinesRoutes;

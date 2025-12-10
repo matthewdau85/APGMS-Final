@@ -1,297 +1,210 @@
 ﻿// services/api-gateway/src/app.ts
 
-import Fastify, {
-  FastifyInstance,
-  FastifyPluginAsync,
-} from "fastify";
-import cors from "@fastify/cors";
-import helmet from "@fastify/helmet";
-import { context, trace } from "@opentelemetry/api";
-import "dotenv/config.js";
+import type { FastifyPluginAsync } from "fastify";
 
-import rateLimit from "./plugins/rate-limit.js";
-import { config } from "./config.js";
-
-import { AppError } from "@apgms/shared";
-import { ERROR_MESSAGES } from "./lib/errors.js";
+import fastify from "fastify";
+import fastifyCors from "@fastify/cors";
+import fastifyHelmet from "@fastify/helmet";
 
 import {
-  authGuard,
-  createAuthGuard,
-  REGULATOR_AUDIENCE,
-} from "./auth.js";
-
-import { prisma } from "./db.js";
-import { initProviders, closeProviders } from "./providers.js";
-
-// Core routes
-import { registerAuthRoutes } from "./routes/auth.js";
-import { registerRegulatorAuthRoutes } from "./routes/regulator-auth.js";
-import { registerRegulatorRoutes } from "./routes/regulator.js";
-import { registerRegulatorComplianceSummaryRoute } from "./routes/regulator-compliance-summary.js";
-import { registerAdminDataRoutes } from "./routes/admin.data.js";
-import { registerBankLinesRoutes } from "./routes/bank-lines.js";
-import { registerTaxRoutes } from "./routes/tax.js";
-import { registerIntegrationEventRoutes } from "./routes/integration-events.js";
-import { registerBasRoutes } from "./routes/bas.js";
-import { registerTransferRoutes } from "./routes/transfers.js";
-import { registerPaymentPlanRoutes } from "./routes/payment-plans.js";
-import { registerAtoRoutes } from "./routes/ato.js";
-import { registerMonitoringRoutes } from "./routes/monitoring.js";
-import { registerRiskRoutes } from "./routes/risk.js";
-import { registerDemoRoutes } from "./routes/demo.js";
-import { registerComplianceMonitorRoutes } from "./routes/compliance-monitor.js";
-import { registerOnboardingRoutes } from "./routes/onboarding.js";
-import { registerForecastRoutes } from "./routes/forecast.js";
-import { registerComplianceProxy } from "./routes/compliance-proxy.js";
-import registerConnectorRoutes from "./routes/connectors.js";
-
-// Observability
+  installLogging,
+  installRequestId,
+  installSecurityLog,
+} from "./observability/logging.js";
 import {
-  metrics,
+  installOpenTelemetry,
+  installTracing,
+} from "./observability/tracing.js";
+import {
+  installMetrics,
   installHttpMetrics,
   registerMetricsRoute,
 } from "./observability/metrics.js";
 import { helmetConfigFor } from "./security-headers.js";
 
 // Domain-led routes
-import { basSettlementRoutes } from "./routes/bas-settlement.js";
+import { registerBasSettlementRoutes } from "./routes/bas-settlement.js";
 import { exportRoutes } from "./routes/export.js";
 import { csvIngestRoutes } from "./routes/ingest-csv.js";
 
 import { ensureRegulatorSessionActive } from "./lib/regulator-session.js";
+import { installPrisma } from "./observability/prisma-metrics.js";
 
-type BuildServerOptions = {
-  bankLinesPlugin?: FastifyPluginAsync;
-};
+import {
+  AppError,
+  badRequest,
+  httpError,
+  internalError,
+  notFound,
+  validationError,
+} from "./errors.js";
 
-export async function buildServer(
-  options: BuildServerOptions = {},
-): Promise<FastifyInstance> {
-  const app: FastifyInstance = Fastify({
-    trustProxy: true,
-    logger: true,
+import { configSchema, loadConfig } from "./config.js";
+import { installPrismaClient } from "./prisma.js";
+
+import { registerAuthRoutes, createAuthGuard } from "./routes/auth.js";
+import { registerBankRoutes } from "./routes/bank-lines.js";
+import { registerBasRoutes } from "./routes/bas.js";
+import { registerDemoRoutes } from "./routes/demo.js";
+import { registerOnboardingRoutes } from "./routes/onboarding.js";
+import { registerForecastRoutes } from "./routes/forecast.js";
+import { registerRiskRoutes } from "./routes/risk.js";
+import { registerTaxRoutes } from "./routes/tax.js";
+import { registerComplianceProxyRoutes } from "./routes/compliance-proxy.js";
+
+import { regulatorAuthGuard, registerRegulatorRoutes } from "./routes/regulator.js";
+
+const REGULATOR_AUDIENCE = "apgms-regulator-api";
+const REGULATOR_ISSUER = "apgms-regulator-gw";
+
+export const buildServer: FastifyPluginAsync = async (app) => {
+  const config = loadConfig();
+  app.decorate("config", config);
+
+  // --- Core plumbing & middleware ---
+  await installLogging(app);
+  await installRequestId(app);
+  await installSecurityLog(app);
+  await installPrisma(app);
+  await installOpenTelemetry(app, config);
+  installTracing(app);
+
+  // CORS
+  await app.register(fastifyCors, {
+    origin: config.corsOrigins,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "content-type",
+      "authorization",
+      "x-org-id",
+      "x-request-id",
+      "x-reg-api-key",
+      "x-reg-session-id",
+      "x-reg-user-id",
+    ],
+    exposedHeaders: ["x-request-id"],
+    credentials: true,
   });
 
-  const bankLinesPlugin = options.bankLinesPlugin ?? registerBankLinesRoutes;
+  // Helmet – security headers
+  await app.register(fastifyHelmet, helmetConfigFor(config.env));
 
-  // ---- Observability: metrics hooks ----
-  installHttpMetrics(app);
+  // Metrics endpoints and HTTP metrics
+  await installMetrics(app);
+  await installHttpMetrics(app);
+  await registerMetricsRoute(app);
 
-  // ---- Providers bootstrap (db/redis/etc) ----
-  const providers = await initProviders(app.log);
-  (app as any).providers = providers;
+  // Prisma client (DB)
+  await installPrismaClient(app);
 
-  app.addHook("onClose", async () => {
-    await closeProviders(providers, app.log);
+  // --- Health checks ---
+  app.get("/health", async () => ({ ok: true }));
+
+  // --- Public auth routes (login, token, etc.) ---
+  await registerAuthRoutes(app);
+
+  // ---- Secure application routes (require JWT org context) ----
+  await app.register(async (secureScope) => {
+    const authGuard = createAuthGuard({
+      audience: config.authAudience,
+      issuer: config.authIssuer,
+    });
+
+    // Health check for authenticated org users
+    secureScope.get(
+      "/api/whoami",
+      { preHandler: authGuard },
+      async (request, reply) => {
+        const user = (request as any).user ?? null;
+        reply.send({ user });
+      },
+    );
+
+    // Core org-scoped routes
+    await registerBasRoutes(secureScope, authGuard);
+    await registerTaxRoutes(secureScope, authGuard);
+    await registerForecastRoutes(secureScope);
+    await registerOnboardingRoutes(secureScope);
+    await registerDemoRoutes(secureScope);
+    await registerRiskRoutes(secureScope);
+    await registerComplianceProxyRoutes(secureScope, authGuard);
+    await registerBankRoutes(secureScope, authGuard);
+
+    // BAS settlement routes (stubbed for now)
+    secureScope.register(registerBasSettlementRoutes, { prefix: "/api" });
+
+    // Export and CSV ingest routes
+    secureScope.register(exportRoutes, {
+      prefix: "/api/export",
+    });
+
+    secureScope.register(csvIngestRoutes, { prefix: "/api" });
   });
 
-  // ---- Draining state ----
-  const drainingState = { value: false };
-  (app as any).isDraining = () => drainingState.value;
-  (app as any).setDraining = (v: boolean) => {
-    drainingState.value = v;
-  };
+  // ---- Regulator scope ----
+  await app.register(async (regulatorScope) => {
+    // JWT-based auth for regulators, using dedicated audience/issuer
+    const regulatorJwtGuard = createAuthGuard({
+      audience: REGULATOR_AUDIENCE,
+      issuer: REGULATOR_ISSUER,
+    });
 
-  // ---- Trace ID injection into logs ----
-  app.addHook("onRequest", (request, reply, done) => {
-    const span = trace.getSpan(context.active());
-    if (span) {
-      const traceId = span.spanContext().traceId;
-      request.log = request.log.child({ traceId });
-      reply.log = reply.log.child({ traceId });
-    }
-    done();
+    // Ensure regulator JWT and API key are present for all /regulator routes
+    regulatorScope.addHook("onRequest", regulatorJwtGuard);
+    regulatorScope.addHook("onRequest", regulatorAuthGuard);
+    regulatorScope.addHook("onRequest", ensureRegulatorSessionActive);
+
+    await regulatorScope.register(registerRegulatorRoutes, {
+      prefix: "/regulator",
+    });
+
+    // Regulator compliance summary endpoint (uses its own file)
+    await regulatorScope.register(
+      async (inner) => {
+        const { registerRegulatorComplianceSummaryRoute } = await import(
+          "./routes/regulator-compliance-summary.js"
+        );
+        registerRegulatorComplianceSummaryRoute(inner);
+      },
+      { prefix: "/regulator" },
+    );
   });
 
-  // ---- Per-request metrics ----
-  app.addHook("onRequest", (request, reply, done) => {
-    const metricState: any = {
+  // --- 404 handler ---
+  app.setNotFoundHandler((request, reply) => {
+    const error = notFound("Route not found", {
       method: request.method,
-      route: request.routerPath ?? request.url,
-      timer: metrics.httpRequestDuration.startTimer({
-        method: request.method,
-        route: request.routerPath ?? request.url,
-      }),
-    };
-    (reply as any).__metrics = metricState;
-    done();
+      url: request.url,
+    });
+    reply.code(error.statusCode).send({ error });
   });
 
-  app.addHook("onResponse", (request, reply, done) => {
-    try {
-      const metricState = (reply as any).__metrics;
-      if (!metricState) return done();
-
-      const method = metricState.method ?? request.method;
-      const route = metricState.route ?? request.routerPath ?? request.url;
-      const status = reply.statusCode;
-
-      metrics.httpRequestTotal.labels(method, route, status).inc();
-
-      if (typeof metricState.timer === "function") {
-        metricState.timer({ status });
-      }
-    } catch (err) {
-      request.log.warn({ err }, "metrics_record_failed");
-    } finally {
-      (reply as any).__metrics = undefined;
-    }
-    done();
-  });
-
-  // ---- Error handler ----
+  // --- Error handler ---
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof AppError) {
-      reply.status(error.status).send({
-        error: {
-          code: error.code,
-          message: error.message,
-          fields: error.fields,
-        },
-      });
+      request.log.warn({ err: error }, "AppError");
+      reply.code(error.statusCode).send({ error });
       return;
     }
 
     if ((error as any)?.validation) {
-      reply.status(400).send({ error: { code: "invalid_body" } });
+      const vErr = validationError("Request validation failed", {
+        details: (error as any).validation,
+      });
+      reply.code(vErr.statusCode).send({ error: vErr });
       return;
     }
 
     if ((error as any)?.code === "FST_CORS_FORBIDDEN_ORIGIN") {
-      reply.status(403).send({
-        error: {
-          code: "cors_forbidden",
-          message: ERROR_MESSAGES.cors_forbidden,
-        },
-      });
+      const cErr = badRequest("CORS origin not allowed");
+      reply.code(cErr.statusCode).send({ error: cErr });
       return;
     }
 
-    request.log.error({ err: error }, "unhandled_error");
-    reply.status(500).send({
-      error: {
-        code: "internal_error",
-        message: ERROR_MESSAGES.internal_error,
-      },
+    const wrapped = internalError("Internal server error", {
+      cause: error,
     });
+    request.log.error({ err: error }, "Unhandled error");
+    reply.code(wrapped.statusCode).send({ error: httpError(wrapped) });
   });
-
-  // ---- Global plugins: rate limit & security headers ----
-  await app.register(rateLimit);
-  await app.register(helmet, helmetConfigFor(config));
-
-  // ---- CORS ----
-  const allowedOrigins = new Set(config.cors.allowedOrigins);
-  await app.register(cors, {
-    origin: (origin, cb) => {
-      if (!origin) return cb(null, false);
-      if (allowedOrigins.has(origin)) return cb(null, true);
-
-      const err: any = new Error(`Origin ${origin} is not allowed`);
-      err.code = "FST_CORS_FORBIDDEN_ORIGIN";
-      err.statusCode = 403;
-
-      cb(err, false);
-    },
-    methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "Idempotency-Key"],
-    exposedHeaders: ["Idempotent-Replay"],
-  });
-
-  // ---- Health / readiness ----
-  app.get("/health", async () => ({
-    ok: true,
-    service: "api-gateway",
-  }));
-
-  app.get("/ready", async (_request, reply) => {
-    if ((app as any).isDraining()) {
-      reply.code(503).send({ ok: false, draining: true });
-      return;
-    }
-
-    try {
-      await prisma.$queryRaw`SELECT 1`;
-    } catch (_err) {
-      reply.code(503).send({ ok: false, db: false });
-      return;
-    }
-
-    reply.send({ ok: true });
-  });
-
-  // Metrics exposition
-  registerMetricsRoute(app);
-
-  // ---- Public auth routes ----
-  await registerAuthRoutes(app);
-  await registerRegulatorAuthRoutes(app);
-
-  // ---- Authenticated tenant scope ----
-  await app.register(async (secureScope) => {
-    secureScope.addHook("onRequest", authGuard);
-
-    await secureScope.register(bankLinesPlugin);
-    await secureScope.register(registerAdminDataRoutes);
-
-    // ⚠️ NEW: guard tax routes plugin so tests don’t explode when it’s undefined
-    if (typeof registerTaxRoutes === "function") {
-      await secureScope.register(registerTaxRoutes);
-    } else {
-      app.log.warn(
-        "registerTaxRoutes plugin is undefined, skipping registration (test env?)",
-      );
-    }
-
-    await secureScope.register(registerIntegrationEventRoutes);
-    await secureScope.register(registerBasRoutes);
-    await secureScope.register(registerTransferRoutes);
-    await secureScope.register(registerPaymentPlanRoutes);
-    await secureScope.register(registerAtoRoutes);
-    await secureScope.register(registerMonitoringRoutes);
-    await secureScope.register(registerRiskRoutes);
-    await secureScope.register(registerDemoRoutes);
-    await secureScope.register(registerComplianceMonitorRoutes);
-    await secureScope.register(registerOnboardingRoutes);
-    await secureScope.register(registerForecastRoutes);
-
-    // Proxy + connectors
-    await registerComplianceProxy(app, {} as any);
-    await secureScope.register(registerConnectorRoutes);
-
-    // Domain-led routes under /api
-    secureScope.register(basSettlementRoutes, { prefix: "/api" });
-    secureScope.register(exportRoutes, { prefix: "/api" });
-    secureScope.register(csvIngestRoutes, { prefix: "/api/ingest/csv" });
-  });
-
-  // ---- Regulator scope ----
-  const regulatorAuthGuard = createAuthGuard(REGULATOR_AUDIENCE, {
-    validate: async (principal, request) => {
-      const sessionId = (principal.sessionId ?? principal.id) as string;
-      await ensureRegulatorSessionActive(sessionId, request.log);
-    },
-  });
-
-  await app.register(
-    async (regulatorScope) => {
-      regulatorScope.addHook("onRequest", regulatorAuthGuard);
-
-      // All existing regulator-side routes
-      await regulatorScope.register(registerRegulatorRoutes);
-
-      // ✅ New: compliance summary route under /regulator/compliance/summary
-      await regulatorScope.register(registerRegulatorComplianceSummaryRoute);
-    },
-    { prefix: "/regulator" },
-  );
-
-  return app;
-}
-
-export async function createApp(
-  options: BuildServerOptions = {},
-): Promise<FastifyInstance> {
-  return buildServer(options);
-}
+};

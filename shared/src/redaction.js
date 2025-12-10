@@ -58,3 +58,4 @@ export function redactError(err) {
 export function redactLogPayload(payload) {
     return redactInternal(payload);
 }
+//# sourceMappingURL=redaction.js.map

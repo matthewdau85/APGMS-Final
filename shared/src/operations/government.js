@@ -5,8 +5,10 @@ export async function logGovernmentSubmission(params) {
             orgId: params.orgId,
             method: params.method,
             payload: params.payload,
-            response: params.response ? params.response : null,
+            // Use undefined instead of raw null for optional JSON field
+            response: params.response ? params.response : undefined,
             status: params.status ?? "pending",
         },
     });
 }
+//# sourceMappingURL=government.js.map

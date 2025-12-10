@@ -28,6 +28,18 @@ export interface BasSettlementPayload {
   };
 }
 
+// Optional runtime integration hook for your real bank API.
+// If nothing provides this at runtime, we still proceed with PREPARED state.
+declare const bankApi:
+  | {
+      createPayToMandate: (args: {
+        orgId: string;
+        period: string;
+        netPayableCents: number;
+      }) => Promise<{ id: string }>;
+    }
+  | undefined;
+
 /**
  * PREPARED state: compute obligations + ledger, persist a settlement
  * instruction with a PayTo-ready payload.
@@ -54,16 +66,54 @@ export async function prepareBasSettlementInstruction(
     ledgerTotals,
   };
 
+  // Default mandateRef; can be overridden by bankApi below.
+  let mandateRef = `BAS-${orgId}-${period}`;
+
+  // Optional: call bank API for side-effect (mandate creation) and
+  // use its ID as the mandateRef if available.
+  if (typeof bankApi !== "undefined" && bankApi.createPayToMandate) {
+    const mandate = await bankApi.createPayToMandate({
+      orgId,
+      period,
+      netPayableCents,
+    });
+
+    if (mandate && mandate.id) {
+      mandateRef = mandate.id;
+    }
+  }
+
   const record = await prisma.settlementInstruction.create({
     data: {
       orgId,
       period,
-      // Prisma schema currently has payloadJson as String,
-      // so store the JSON string here:
       payloadJson: JSON.stringify(payload),
       status: "PREPARED",
-      // If you add fields like channel or failureReason later,
-      // wire them in here and regenerate Prisma client.
+
+      // Create a linked PayToAgreement row now to satisfy the Prisma schema.
+      payToAgreement: {
+        create: {
+          orgId,
+          status: "PENDING",
+
+          // REQUIRED by your PayToAgreement model:
+          mandateRef,
+          maxDebitCents: netPayableCents > 0 ? netPayableCents : 0,
+
+          // REQUIRED relation: TrustAccountCreateNestedOneWithoutPayToAgreementsInput
+          // For now we create a dummy trust account; later this can be replaced
+          // with real banking details or a connect() to an existing trust account.
+          trustAccount: {
+            create: {
+              orgId,
+              bankName: "TBD",
+              bsb: "000-000",
+              accountNo: "00000000",
+              nickname: `Trust for ${orgId}`,
+            },
+          },
+        },
+      },
     },
   });
 

@@ -77,18 +77,16 @@ export async function ensureDesignatedAccountCoverage(prisma, orgId, type, requi
     const balance = await currentAdapter.getBalance(account);
     const shortfall = requiredAmount - balance;
     if (shortfall > 0) {
+        const baseMessage = `Designated ${type} account is short by ${shortfall.toFixed(2)} (required: ${requiredAmount.toFixed(2)}, actual: ${balance.toFixed(2)})`;
+        const decoratedMessage = baseMessage +
+            (context?.cycleId ? ` [cycle=${context.cycleId}]` : "") +
+            (context?.description ? ` - ${context.description}` : "");
         await prisma.alert.create({
             data: {
                 orgId,
                 type: "DESIGNATED_FUNDS_SHORTFALL",
                 severity: "HIGH",
-                message: `Designated ${type} account is short by ${shortfall.toFixed(2)}`,
-                metadata: {
-                    requiredAmount,
-                    balance,
-                    cycleId: context?.cycleId ?? null,
-                    description: context?.description ?? null,
-                },
+                message: decoratedMessage,
             },
         });
         await currentAdapter.blockTransfer?.(account, shortfall);
@@ -124,3 +122,4 @@ export async function reconcileAccountSnapshot(prisma, orgId, type) {
         locked: account.locked,
     };
 }
+//# sourceMappingURL=designated-account.js.map

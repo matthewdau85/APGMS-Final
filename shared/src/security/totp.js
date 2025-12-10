@@ -15,3 +15,4 @@ export function verifyTotpToken(secret, token) {
 export function buildTotpUri(secret, label, issuer) {
     return authenticator.keyuri(label, issuer, secret);
 }
+//# sourceMappingURL=totp.js.map

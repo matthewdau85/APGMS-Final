@@ -35,3 +35,4 @@ export async function listRiskEvents(orgId) {
         take: 20,
     });
 }
+//# sourceMappingURL=risk.js.map

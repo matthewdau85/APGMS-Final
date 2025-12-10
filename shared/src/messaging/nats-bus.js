@@ -98,3 +98,4 @@ async function ensureStream(jetStreamManager, stream, prefix) {
 function hashSubject(subject) {
     return createHash("sha1").update(subject).digest("hex").slice(0, 8);
 }
+//# sourceMappingURL=nats-bus.js.map

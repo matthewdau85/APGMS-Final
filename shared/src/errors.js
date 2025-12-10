@@ -23,3 +23,4 @@ export const validationError = (error) => {
     }
     return badRequest("invalid_body", "Validation failed", toFieldErrors(error.issues));
 };
+//# sourceMappingURL=errors.js.map

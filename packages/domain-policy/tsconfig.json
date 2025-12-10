@@ -7,13 +7,16 @@
     "declaration": true,
     "declarationMap": true,
     "moduleResolution": "NodeNext",
+    "baseUrl": ".",
     "paths": {
-      "@apgms/shared/db.js": ["shims/apgms-shared-db.d.ts"]
+      "@apgms/shared/db.js": ["src/shims/apgms-shared-db.d.ts"]
+    }
   },
   "include": ["src/**/*.ts"],
   "exclude": [
     "dist",
     "node_modules",
-    "src/au-tax/prisma-repository.ts"
+    "**/*.test.ts",
+    "**/__tests__/**"
   ]
 }

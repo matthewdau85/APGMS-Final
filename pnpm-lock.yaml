@@ -70,6 +70,9 @@ importers:
       jest:
         specifier: ^29.7.0
         version: 29.7.0(@types/node@24.7.1)(ts-node@10.9.2(@types/node@24.7.1)(typescript@5.9.3))
+      jsonwebtoken:
+        specifier: ^9.0.3
+        version: 9.0.3
       prisma:
         specifier: 6.19.0
         version: 6.19.0(typescript@5.9.3)
