@@ -1,30 +1,20 @@
-import { buildServer } from "./app.js";
-import { startTracing, stopTracing } from "./observability/tracing.js";
+import { createApp } from "./app.js";
 
-const PORT = Number(process.env.PORT ?? "3000");
-const HOST = process.env.HOST ?? "0.0.0.0";
+export async function main() {
+  const app = await createApp();
+  const port = Number(process.env.PORT ?? 3000);
+  const host = process.env.HOST ?? "0.0.0.0";
 
-async function main() {
-  await startTracing();
-
-  const app = await buildServer();
-  await app.listen({ port: PORT, host: HOST });
-
-  const shutdown = async () => {
-    try {
-      await app.close();
-    } finally {
-      await stopTracing();
-      process.exit(0);
-    }
-  };
-
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+  await app.listen({ port, host });
+  // eslint-disable-next-line no-console
+  console.log(`api-gateway listening on http://${host}:${port}`);
 }
 
-main().catch((err) => {
-  // eslint-disable-next-line no-console
-  console.error("Fatal boot error:", err);
-  stopTracing().finally(() => process.exit(1));
-});
+// Only run the server when this file is executed directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((err) => {
+    // eslint-disable-next-line no-console
+    console.error("Fatal error starting api-gateway server", err);
+    process.exit(1);
+  });
+}

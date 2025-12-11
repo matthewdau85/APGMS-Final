@@ -1,5 +1,4 @@
-﻿// services/api-gateway/src/config.ts
-import { Buffer } from "node:buffer";
+﻿import { Buffer } from "node:buffer";
 import { URL } from "node:url";
 import { z } from "zod";
 
@@ -16,7 +15,7 @@ export interface AppConfig {
     readonly authFailureThreshold: number;
     readonly kmsKeysetLoaded?: boolean;
     readonly requireHttps: boolean;
-    readonly enableIsolation?: boolean; 
+    readonly enableIsolation?: boolean;
   };
   readonly cors: {
     readonly allowedOrigins: string[];
@@ -64,9 +63,13 @@ const jwksKeySchema = z.object({
   alg: z.string().min(1),
 });
 
-const envString = (name: string): string => {
+// envString now supports an optional default (used only when env var is missing/empty)
+const envString = (name: string, defaultValue?: string): string => {
   const value = process.env[name];
   if (!value || value.trim().length === 0) {
+    if (defaultValue !== undefined) {
+      return defaultValue;
+    }
     throw new Error(`${name} is required`);
   }
   return value.trim();
@@ -209,15 +212,29 @@ const splitOrigins = (raw: string | undefined): string[] => {
     .filter((entry) => entry.length > 0);
 };
 
-// This builds a config object from process.env with validation.
 export function loadConfig(): AppConfig {
-  const rawEnv = process.env.APP_ENV ?? process.env.NODE_ENV ?? "local";
+  // Normalise app env vs node env
+  const nodeEnvRaw = process.env.NODE_ENV ?? "local";
+  const rawEnv = process.env.APP_ENV ?? nodeEnvRaw ?? "local";
   const env = (rawEnv && rawEnv.trim().length > 0
     ? rawEnv.trim()
     : "local") as AppConfig["env"];
-  // DB URLs
+
+  // Treat either NODE_ENV or APP_ENV === "test" as test mode
+  const isTestEnv = nodeEnvRaw === "test" || env === "test";
+
+  // Static 32-byte base64 value used only in tests (not secure, just valid)
+  const testKeyMaterial =
+    "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=";
+
+  // === Database URLs ===
   const databaseUrl = ensureUrl(
-    envString("DATABASE_URL"),
+    envString(
+      "DATABASE_URL",
+      isTestEnv
+        ? "postgresql://apgms_test:apgms_test@localhost:5432/apgms_test"
+        : undefined,
+    ),
     "DATABASE_URL",
   );
 
@@ -230,17 +247,10 @@ export function loadConfig(): AppConfig {
         )
       : undefined;
 
-  // auth inputs must exist / be sane
-  const audience =
-    envDefault("AUTH_AUDIENCE", "http://localhost:3000");
-  const issuer = envDefault(
-    "AUTH_ISSUER",
-    "https://auth.localhost",
-  );
-  const devSecret = envDefault(
-    "AUTH_DEV_SECRET",
-    "local-dev-secret",
-  );
+  // === Auth basics ===
+  const audience = envDefault("AUTH_AUDIENCE", "http://localhost:3000");
+  const issuer = envDefault("AUTH_ISSUER", "https://auth.localhost");
+  const devSecret = envDefault("AUTH_DEV_SECRET", "local-dev-secret");
 
   const jwksRaw = envDefault(
     "AUTH_JWKS",
@@ -248,58 +258,73 @@ export function loadConfig(): AppConfig {
   );
   ensureJwksConfigured(jwksRaw);
 
-  // encryption/key material must exist / be sane
-  const keySet = ensureKeyMaterial(
-    envString("PII_KEYS"),
+  // === PII key material (with test defaults) ===
+  const piiKeysRaw = envString(
     "PII_KEYS",
+    isTestEnv
+      ? JSON.stringify([
+          { kid: "test-key-1", material: testKeyMaterial },
+        ])
+      : undefined,
   );
-  const activeKid = envString("PII_ACTIVE_KEY");
+  const keySet = ensureKeyMaterial(piiKeysRaw, "PII_KEYS");
+
+  const activeKid = envString(
+    "PII_ACTIVE_KEY",
+    isTestEnv ? "test-key-1" : undefined,
+  );
   if (!keySet.some((entry) => entry.kid === activeKid)) {
     throw new Error(
       `PII_ACTIVE_KEY ${activeKid} does not exist in PII_KEYS`,
     );
   }
 
-  const saltSet = ensureSaltMaterial(
-    envString("PII_SALTS"),
+  const piiSaltsRaw = envString(
     "PII_SALTS",
+    isTestEnv
+      ? JSON.stringify([
+          { sid: "test-salt-1", secret: testKeyMaterial },
+        ])
+      : undefined,
   );
-  const activeSid = envString("PII_ACTIVE_SALT");
+  const saltSet = ensureSaltMaterial(piiSaltsRaw, "PII_SALTS");
+
+  const activeSid = envString(
+    "PII_ACTIVE_SALT",
+    isTestEnv ? "test-salt-1" : undefined,
+  );
   if (!saltSet.some((entry) => entry.sid === activeSid)) {
     throw new Error(
       `PII_ACTIVE_SALT ${activeSid} does not exist in PII_SALTS`,
     );
   }
 
-  const masterKey = ensureMasterKey(envString("ENCRYPTION_MASTER_KEY"));
+  const masterKey = ensureMasterKey(
+    envString(
+      "ENCRYPTION_MASTER_KEY",
+      isTestEnv ? testKeyMaterial : undefined,
+    ),
+  );
 
-  // if we reached here, PII is valid
   const kmsKeysetLoaded = true;
   const requireHttps = process.env.REQUIRE_TLS === "true";
   const enableIsolation = process.env.SECURITY_ENABLE_ISOLATION === "true";
 
-
-  // rate limit config
-  const rateLimitMax = parseIntegerEnv(
-    "API_RATE_LIMIT_MAX",
-    60,
-  );
+  // === Rate limit config ===
+  const rateLimitMax = parseIntegerEnv("API_RATE_LIMIT_MAX", 60);
   const rateLimitWindow = (
     process.env.API_RATE_LIMIT_WINDOW ?? "1 minute"
   ).trim();
   if (rateLimitWindow.length === 0) {
-    throw new Error(
-      "API_RATE_LIMIT_WINDOW must not be empty",
-    );
+    throw new Error("API_RATE_LIMIT_WINDOW must not be empty");
   }
 
-  // auth brute force threshold
   const authFailureThreshold = parseIntegerEnv(
     "AUTH_FAILURE_THRESHOLD",
     5,
   );
 
-  // tax-engine URL
+  // === Tax engine URL ===
   const taxEngineUrl = ensureUrl(
     process.env.TAX_ENGINE_URL?.trim() &&
       process.env.TAX_ENGINE_URL.trim().length > 0
@@ -308,24 +333,34 @@ export function loadConfig(): AppConfig {
     "TAX_ENGINE_URL",
   );
 
-  const regulatorAccessCode = envString("REGULATOR_ACCESS_CODE");
+  // === Regulator config ===
+  const regulatorAccessCode = envString(
+    "REGULATOR_ACCESS_CODE",
+    isTestEnv ? "TEST-ACCESS-CODE" : undefined,
+  );
+
   const regulatorAudience =
     process.env.REGULATOR_JWT_AUDIENCE &&
     process.env.REGULATOR_JWT_AUDIENCE.trim().length > 0
       ? process.env.REGULATOR_JWT_AUDIENCE.trim()
       : "urn:apgms:regulator";
+
   const regulatorSessionTtl = parseIntegerEnv(
     "REGULATOR_SESSION_TTL_MINUTES",
     60,
   );
 
+  // === WebAuthn ===
   const webauthnRpId = process.env.WEBAUTHN_RP_ID?.trim() ?? "localhost";
-  const webauthnRpName = process.env.WEBAUTHN_RP_NAME?.trim() ?? "APGMS Admin";
+  const webauthnRpName =
+    process.env.WEBAUTHN_RP_NAME?.trim() ?? "APGMS Admin";
   const webauthnOrigin = ensureUrl(
-    process.env.WEBAUTHN_ORIGIN?.trim() ?? "http://localhost:5173",
+    process.env.WEBAUTHN_ORIGIN?.trim() ??
+      "http://localhost:5173",
     "WEBAUTHN_ORIGIN",
   );
 
+  // === Banking ===
   const bankingProvider =
     process.env.BANKING_PROVIDER?.trim().toLowerCase() ?? "mock";
   const bankingMaxRead = parseIntegerEnv(
@@ -337,10 +372,12 @@ export function loadConfig(): AppConfig {
     5_000_000,
   );
 
+  // === CORS ===
   const corsAllowedOrigins = splitOrigins(
     envDefault("CORS_ALLOWED_ORIGINS", "http://localhost:5173"),
   );
 
+  // === Redis / NATS ===
   const redisUrlRaw = process.env.REDIS_URL?.trim();
   const redis =
     redisUrlRaw && redisUrlRaw.length > 0
@@ -362,7 +399,6 @@ export function loadConfig(): AppConfig {
 
   return {
     env,
-
     databaseUrl,
     shadowDatabaseUrl,
     rateLimit: {
@@ -407,5 +443,5 @@ export function loadConfig(): AppConfig {
   };
 }
 
-// 🔥 THIS is what app.ts imports
+// Eager config – imports will throw early if envs are broken outside test
 export const config: AppConfig = loadConfig();
