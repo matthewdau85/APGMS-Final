@@ -1,18 +1,19 @@
-// webapp/src/main.tsx
+// src/main.tsx
 import React from "react";
-import { createRoot } from "react-dom/client";
+import ReactDOM from "react-dom/client";
 import App from "./App";
-import { ThemeProvider } from "./theme";
-import "./styles/themes.css";
+import "./index.css"; // Keep if you already have this; otherwise remove this line.
 
-const el = document.getElementById("root");
-if (!el) {
-  throw new Error("no #root element");
+const rootElement = document.getElementById("root");
+
+if (!rootElement) {
+  throw new Error("Root element #root not found");
 }
-createRoot(el).render(
+
+const root = ReactDOM.createRoot(rootElement);
+
+root.render(
   <React.StrictMode>
-    <ThemeProvider>
-      <App />
-    </ThemeProvider>
+    <App />
   </React.StrictMode>
 );

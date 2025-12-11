@@ -14,30 +14,29 @@ module.exports = {
   },
 
   moduleNameMapper: {
-    // Allow importing compiled JS without `.js` suffix in TS files
+    // Strip .js extension on relative imports so Jest can find the TS sources
     "^(\\.{1,2}/.*)\\.js$": "$1",
 
-    // Existing shared-au mocks
+    // shared-au mocks
     "^@apgms/shared-au/(.*)$":
       "<rootDir>/test/__mocks__/shared-au-$1.ts",
 
-    // Existing mapping for security log
+    // Security log
     "^@apgms/shared/security-log\\.js$":
       "<rootDir>/../../shared/src/security-log.ts",
 
-    // NEW: resolve the shared Prisma client for tests
+    // Shared Prisma client
     "^@apgms/shared/db\\.js$":
       "<rootDir>/../../shared/src/db.js",
 
-    // Map domain-policy imports into workspace source
+    // domain-policy workspace
     "^@apgms/domain-policy/(.*)$":
       "<rootDir>/../../packages/domain-policy/src/$1",
 
-    // Mock jose (so Jest doesn't choke on ESM)
+    // Mock jose (ESM)
     "^jose$": "<rootDir>/test/__mocks__/jose.ts",
   },
 
-  // Only run Jest-style tests
   testMatch: [
     "<rootDir>/test/**/*.test.[tj]s?(x)",
     "<rootDir>/src/**/__tests__/**/*.test.[tj]s?(x)",
@@ -45,11 +44,9 @@ module.exports = {
 
   testPathIgnorePatterns: [
     "/node_modules/",
-    // explicitly ignore any node:test files
     ".node.ts$",
   ],
 
-  // Coverage
   collectCoverageFrom: [
     "<rootDir>/src/**/*.[tj]s?(x)",
   ],
