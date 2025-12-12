@@ -16,7 +16,7 @@
         "db:deploy": "pnpm --filter @apgms/shared exec prisma migrate deploy --schema prisma/schema.prisma",
         "db:gen": "pnpm --filter @apgms/shared exec prisma generate --schema prisma/schema.prisma",
         "build:api-gateway": "pnpm --filter @apgms/shared build && pnpm --filter @apgms/domain-policy build && pnpm --filter @apgms/api-gateway build",
-        "test": "pnpm -r test",
+        "test": "NODE_ENV=test jest --config ./jest.config.cjs --runInBand",
         "test:e2e": "pnpm exec playwright test",
         "jest": "jest",
         "build": "pnpm -r build",

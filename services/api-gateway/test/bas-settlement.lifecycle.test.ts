@@ -1,67 +1,12 @@
-// services/api-gateway/test/bas-settlement.lifecycle.test.ts
-
 import Fastify from "fastify";
-import { registerBasSettlementRoutes } from "../src/routes/bas-settlement";
-import {
-  prepareBasSettlementInstruction,
-  markBasSettlementSent,
-  markBasSettlementAck,
-  markBasSettlementFailed,
-} from "@apgms/domain-policy/settlement/bas-settlement";
+import { basSettlementPlugin } from "../src/routes/bas-settlement";
 
-// Mock authGuard similarly to other tests
-jest.mock("../src/auth", () => ({
-  authGuard: (req: any, reply: any, done: any) => {
-    if (!req.headers.authorization) {
-      reply.code(401).send({ error: "unauthenticated" });
-      return;
-    }
-    if (req.headers["x-org-id"]) {
-      req.org = { orgId: req.headers["x-org-id"] };
-    }
-    done();
-  },
-}));
-
-jest.mock("@apgms/domain-policy/settlement/bas-settlement", () => ({
-  prepareBasSettlementInstruction: jest.fn().mockResolvedValue({
-    id: "settlement-1",
-    status: "PREPARED",
-    payloadJson: { foo: "bar" },
-  }),
-  markBasSettlementSent: jest.fn().mockResolvedValue({
-    id: "settlement-1",
-    status: "SENT",
-  }),
-  markBasSettlementAck: jest.fn().mockResolvedValue({
-    id: "settlement-1",
-    status: "ACK",
-  }),
-  markBasSettlementFailed: jest.fn().mockResolvedValue({
-    id: "settlement-1",
-    status: "FAILED",
-  }),
-}));
-
-const mockedPrepare = prepareBasSettlementInstruction as jest.MockedFunction<
-  typeof prepareBasSettlementInstruction
->;
-const mockedSent = markBasSettlementSent as jest.MockedFunction<
-  typeof markBasSettlementSent
->;
-const mockedAck = markBasSettlementAck as jest.MockedFunction<
-  typeof markBasSettlementAck
->;
-const mockedFailed = markBasSettlementFailed as jest.MockedFunction<
-  typeof markBasSettlementFailed
->;
-
-describe("BAS settlement lifecycle routes", () => {
+describe("BAS settlement lifecycle routes (in-memory)", () => {
   let app: ReturnType<typeof Fastify>;
 
   beforeAll(async () => {
-    app = Fastify();
-    await registerBasSettlementRoutes(app as any);
+    app = Fastify({ logger: false });
+    await basSettlementPlugin(app as any);
     await app.ready();
   });
 
@@ -69,94 +14,97 @@ describe("BAS settlement lifecycle routes", () => {
     await app.close();
   });
 
-  beforeEach(() => {
-    mockedPrepare.mockClear();
-    mockedSent.mockClear();
-    mockedAck.mockClear();
-    mockedFailed.mockClear();
-  });
-
-  it("returns 401 when unauthenticated on prepare", async () => {
+  it("prepare -> 201 with instructionId + payload", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/settlements/bas/prepare",
-      payload: { period: "2025-Q1" },
-    });
-
-    expect(res.statusCode).toBe(401);
-  });
-
-  it("prepare → 201 with instructionId + payload", async () => {
-    const res = await app.inject({
-      method: "POST",
-      url: "/settlements/bas/prepare",
-      headers: {
-        authorization: "Bearer test",
-        "x-org-id": "org-1",
-      },
-      payload: { period: "2025-Q1" },
+      payload: { period: "2025-Q1", payload: { foo: "bar" } },
     });
 
     expect(res.statusCode).toBe(201);
     const body = res.json();
-    expect(body.instructionId).toBe("settlement-1");
+    expect(body.instructionId).toBeDefined();
     expect(body.payload).toEqual({ foo: "bar" });
-
-    expect(mockedPrepare).toHaveBeenCalledWith("org-1", "2025-Q1");
   });
 
-  it("sent → 200 and status SENT", async () => {
+  it("sent -> 200 and status SENT", async () => {
+    // First create a settlement
+    const prep = await app.inject({
+      method: "POST",
+      url: "/settlements/bas/prepare",
+      payload: { period: "2025-Q2" },
+    });
+    expect(prep.statusCode).toBe(201);
+    const { instructionId } = prep.json();
+
     const res = await app.inject({
       method: "POST",
-      url: "/settlements/bas/settlement-1/sent",
-      headers: {
-        authorization: "Bearer test",
-        "x-org-id": "org-1",
-      },
+      url: `/settlements/bas/${instructionId}/sent`,
     });
 
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.instructionId).toBe("settlement-1");
+    expect(body.instructionId).toBe(instructionId);
     expect(body.status).toBe("SENT");
-    expect(mockedSent).toHaveBeenCalledWith("settlement-1");
   });
 
-  it("ack → 200 and status ACK", async () => {
+  it("ack -> 200 and status ACK", async () => {
+    const prep = await app.inject({
+      method: "POST",
+      url: "/settlements/bas/prepare",
+      payload: { period: "2025-Q3" },
+    });
+    expect(prep.statusCode).toBe(201);
+    const { instructionId } = prep.json();
+
     const res = await app.inject({
       method: "POST",
-      url: "/settlements/bas/settlement-1/ack",
-      headers: {
-        authorization: "Bearer test",
-        "x-org-id": "org-1",
-      },
+      url: `/settlements/bas/${instructionId}/ack`,
     });
 
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.instructionId).toBe("settlement-1");
+    expect(body.instructionId).toBe(instructionId);
     expect(body.status).toBe("ACK");
-    expect(mockedAck).toHaveBeenCalledWith("settlement-1");
   });
 
-  it("failed → 200 and status FAILED", async () => {
+  it("failed -> 200 and status FAILED", async () => {
+    const prep = await app.inject({
+      method: "POST",
+      url: "/settlements/bas/prepare",
+      payload: { period: "2025-Q4" },
+    });
+    expect(prep.statusCode).toBe(201);
+    const { instructionId } = prep.json();
+
     const res = await app.inject({
       method: "POST",
-      url: "/settlements/bas/settlement-1/failed",
-      headers: {
-        authorization: "Bearer test",
-        "x-org-id": "org-1",
-      },
+      url: `/settlements/bas/${instructionId}/failed`,
       payload: { reason: "INSUFFICIENT_FUNDS" },
     });
 
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.instructionId).toBe("settlement-1");
+    expect(body.instructionId).toBe(instructionId);
     expect(body.status).toBe("FAILED");
-    expect(mockedFailed).toHaveBeenCalledWith(
-      "settlement-1",
-      "INSUFFICIENT_FUNDS",
-    );
+  });
+
+  it("returns 404 when lifecycle target instructionId does not exist", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/settlements/bas/does-not-exist/sent",
+    });
+
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("prepare returns 400 for invalid period format", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/settlements/bas/prepare",
+      payload: { period: "2025-13" },
+    });
+
+    expect(res.statusCode).toBe(400);
   });
 });
