@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { prisma } from "./db";
+import { adminServiceModePlugin } from "./routes/admin-service-mode";
 
 type Environment = "development" | "test" | "production";
 
@@ -70,19 +71,24 @@ export function buildFastifyApp(options: BuildFastifyAppOptions = {}): FastifyIn
   // DB wiring: src/db exports prisma
   app.decorate("db", prisma);
 
+  // Internal admin endpoint (token-guarded inside plugin)
+  app.register(adminServiceModePlugin, { prefix: "/admin" });
+
   // Secure scope: everything here requires auth
   app.register(async (secureScope) => {
     const authMod: any = await import("./auth");
     const authGuard = authMod.authGuard ?? authMod.default;
+
     if (typeof authGuard !== "function") {
       throw new Error("authGuard is not exported from ./auth (expected named authGuard or default export).");
     }
 
     secureScope.addHook("preHandler", authGuard);
 
-    // BAS settlement (required by your tests)
+    // BAS settlement (required)
     const basMod: any = await import("./routes/bas-settlement");
     const basSettlementPlugin = basMod.basSettlementPlugin ?? basMod.default;
+
     if (typeof basSettlementPlugin !== "function") {
       throw new Error("basSettlementPlugin is not exported from ./routes/bas-settlement.");
     }
