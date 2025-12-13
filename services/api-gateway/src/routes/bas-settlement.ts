@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { requireWritesEnabled } from "../guards/service-mode";
+import { requireWritesEnabled } from "../guards/service-mode.js";
 
 type SettlementStatus = "PREPARED" | "SENT" | "ACK" | "FAILED";
 
