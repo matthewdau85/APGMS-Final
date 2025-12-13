@@ -16,7 +16,7 @@
         "db:deploy": "pnpm --filter @apgms/shared exec prisma migrate deploy --schema prisma/schema.prisma",
         "db:gen": "pnpm --filter @apgms/shared exec prisma generate --schema prisma/schema.prisma",
         "build:api-gateway": "pnpm --filter @apgms/shared build && pnpm --filter @apgms/domain-policy build && pnpm --filter @apgms/api-gateway build",
-        "test": "NODE_ENV=test jest --config ./jest.config.cjs --runInBand",
+        "test": "pnpm --filter @apgms/api-gateway test",
         "test:e2e": "pnpm exec playwright test",
         "jest": "jest",
         "build": "pnpm -r build",
@@ -54,7 +54,10 @@
         "readiness:k6": "node ./scripts/readiness/k6-summary.cjs",
         "readiness:log-scan": "node ./scripts/readiness/log-scan.cjs",
         "readiness:availability-and-performance": "node ./scripts/readiness/availability-and-performance.cjs",
-        "readiness:all": "node ./scripts/readiness/all.cjs"
+        "readiness:all": "node ./scripts/readiness/all.cjs",
+        "assess:fast": "node assessment/assessor-10of10/scripts/apgms-assess.cjs --fast --req assessment/assessor-10of10/docs/assessor/requirements.v2.json --outdir assessment/reports",
+        "assess:all": "node assessment/assessor-10of10/scripts/apgms-assess.cjs --all --req assessment/assessor-10of10/docs/assessor/requirements.v2.json --outdir assessment/reports",
+        "assess:production": "node assessment/assessor-10of10/scripts/apgms-assess.cjs --all --production --req assessment/assessor-10of10/docs/assessor/requirements.v2.json --outdir assessment/reports"
     },
     "devDependencies": {
         "@axe-core/playwright": "^4.9.2",
