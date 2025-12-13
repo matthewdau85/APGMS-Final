@@ -1,6 +1,8 @@
 import Fastify, { type FastifyInstance } from "fastify";
-import { prisma } from "./db";
-import { adminServiceModePlugin } from "./routes/admin-service-mode";
+import { prisma } from "./db.js";
+import { adminServiceModePlugin } from "./routes/admin-service-mode.js";
+import { regulatorComplianceSummaryPlugin } from "./routes/regulator-compliance-summary.js";
+
 
 type Environment = "development" | "test" | "production";
 
@@ -49,7 +51,6 @@ async function tryImport(path: string): Promise<any | null> {
 
 export function buildFastifyApp(options: BuildFastifyAppOptions = {}): FastifyInstance {
   const logger = options.logger ?? true;
-
   const baseConfig: AppConfig = {
     environment: (process.env.NODE_ENV as Environment) ?? "development",
     auth: {
@@ -74,9 +75,11 @@ export function buildFastifyApp(options: BuildFastifyAppOptions = {}): FastifyIn
   // Internal admin endpoint (token-guarded inside plugin)
   app.register(adminServiceModePlugin, { prefix: "/admin" });
 
+  app.register(regulatorComplianceSummaryPlugin);
+
   // Secure scope: everything here requires auth
   app.register(async (secureScope) => {
-    const authMod: any = await import("./auth");
+    const authMod: any = await import("./auth.js");
     const authGuard = authMod.authGuard ?? authMod.default;
 
     if (typeof authGuard !== "function") {
@@ -86,7 +89,7 @@ export function buildFastifyApp(options: BuildFastifyAppOptions = {}): FastifyIn
     secureScope.addHook("preHandler", authGuard);
 
     // BAS settlement (required)
-    const basMod: any = await import("./routes/bas-settlement");
+    const basMod: any = await import("./routes/bas-settlement.js");
     const basSettlementPlugin = basMod.basSettlementPlugin ?? basMod.default;
 
     if (typeof basSettlementPlugin !== "function") {
@@ -117,4 +120,6 @@ export function buildFastifyApp(options: BuildFastifyAppOptions = {}): FastifyIn
   return app;
 }
 
-export { buildFastifyApp };
+// Back-compat exports used by server/index/tests
+export const createApp = buildFastifyApp;
+export const buildServer = buildFastifyApp;

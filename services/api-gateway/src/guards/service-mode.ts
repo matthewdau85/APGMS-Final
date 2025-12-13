@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { getServiceMode } from "../service-mode";
+import { getServiceMode } from "../service-mode.js";
 
 function sendSuspended(reply: FastifyReply) {
   const s = getServiceMode();

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { getServiceMode, setServiceMode, type ServiceMode } from "../service-mode";
+import { getServiceMode, setServiceMode, type ServiceMode } from "../service-mode.js";
 
 function requireAdminToken() {
   return async (req: any, reply: any) => {

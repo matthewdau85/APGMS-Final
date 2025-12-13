@@ -7,6 +7,12 @@ import {
   register as promRegister,
 } from 'prom-client';
 
+export const orgRiskScoreGauge = new Gauge({
+  name: "apgms_org_risk_score",
+  help: "Organisation risk score",
+  labelNames: ["orgId"],
+});
+
 // ---- Registry & default process metrics ----
 collectDefaultMetrics({ register: promRegister });
 
