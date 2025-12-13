@@ -1,0 +1,1175 @@
+{
+  "meta": {
+    "name": "APGMS Assessor 10of10",
+    "version": "2.0.0",
+    "generated": "2025-12-12T16:51:50.689685Z",
+    "principles": [
+      "Conservative scoring: if a production control is not verifiable, it is scored as FAIL (or SKIP->FAIL).",
+      "Traceability-first: each prod requirement must map to evidence (file/doc/script/test) and a verification method.",
+      "Two truth layers: (1) control catalogue (requirements) and (2) proof (checks + evidence artifacts)."
+    ]
+  },
+  "thresholds": {
+    "prototype": 0.8,
+    "production": 0.95
+  },
+  "paths": {
+    "osfMatrix": "docs/compliance/dsp-operational-framework.md",
+    "osfEvidenceIndexes": [
+      "docs/compliance/dsp-osf-evidence-index.md",
+      "docs/dsp-osf/evidence-index.md"
+    ],
+    "evidenceDir": "artifacts/compliance"
+  },
+  "statusOrder": [
+    "Planned",
+    "In progress",
+    "Implemented"
+  ],
+  "liveSuites": {
+    "fast": [
+      {
+        "id": "typecheck",
+        "cmd": "pnpm -r typecheck",
+        "timeoutMs": 900000
+      },
+      {
+        "id": "unit_tests",
+        "cmd": "pnpm --filter @apgms/api-gateway test",
+        "timeoutMs": 1200000
+      }
+    ],
+    "full": [
+      {
+        "id": "typecheck",
+        "cmd": "pnpm -r typecheck",
+        "timeoutMs": 900000
+      },
+      {
+        "id": "tests_coverage",
+        "cmd": "pnpm -r test -- --coverage",
+        "timeoutMs": 1800000
+      },
+      {
+        "id": "readiness_all",
+        "cmd": "pnpm readiness:all",
+        "timeoutMs": 1200000
+      },
+      {
+        "id": "audit_prod",
+        "cmd": "pnpm audit:prod",
+        "timeoutMs": 1200000
+      }
+    ],
+    "all": [
+      {
+        "id": "typecheck",
+        "cmd": "pnpm -r typecheck",
+        "timeoutMs": 900000
+      },
+      {
+        "id": "tests_coverage",
+        "cmd": "pnpm -r test -- --coverage",
+        "timeoutMs": 1800000
+      },
+      {
+        "id": "readiness_all",
+        "cmd": "pnpm readiness:all",
+        "timeoutMs": 1200000
+      },
+      {
+        "id": "scan_secrets",
+        "cmd": "pnpm scan:secrets",
+        "timeoutMs": 1200000
+      },
+      {
+        "id": "scan_fs",
+        "cmd": "pnpm scan:fs",
+        "timeoutMs": 1800000
+      },
+      {
+        "id": "sbom",
+        "cmd": "pnpm sbom",
+        "timeoutMs": 1200000
+      },
+      {
+        "id": "check_sbom",
+        "cmd": "pnpm check:sbom",
+        "timeoutMs": 1200000
+      },
+      {
+        "id": "audit_prod",
+        "cmd": "pnpm audit:prod",
+        "timeoutMs": 1200000
+      },
+      {
+        "id": "sca",
+        "cmd": "pnpm sca",
+        "timeoutMs": 1200000
+      },
+      {
+        "id": "compliance_evidence",
+        "cmd": "pnpm compliance:evidence -- --tag assessor-latest",
+        "timeoutMs": 1800000
+      }
+    ]
+  },
+  "stages": {
+    "prototype": {
+      "skipCountsAsFail": false
+    },
+    "production": {
+      "skipCountsAsFail": true
+    }
+  },
+  "pillars": [
+    {
+      "id": "foundations",
+      "name": "Foundations (build/test/quality gates)",
+      "requirements": [
+        {
+          "id": "repo_workspace",
+          "title": "Monorepo + pnpm workspaces wired",
+          "weight": 2,
+          "prototype": {
+            "required": true,
+            "gate": true
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": "package.json"
+            },
+            {
+              "type": "fileExists",
+              "path": "pnpm-workspace.yaml"
+            },
+            {
+              "type": "dirExists",
+              "path": "services"
+            },
+            {
+              "type": "dirExists",
+              "path": "packages"
+            }
+          ]
+        },
+        {
+          "id": "ci_workflows",
+          "title": "CI workflows present (core, readiness, e2e)",
+          "weight": 2,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": ".github/workflows/ci.yml"
+            },
+            {
+              "type": "fileExists",
+              "path": ".github/workflows/readiness.yml"
+            },
+            {
+              "type": "fileExists",
+              "path": ".github/workflows/e2e.yml"
+            }
+          ]
+        },
+        {
+          "id": "coverage_gate_exists",
+          "title": "Coverage gate exists",
+          "weight": 1,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "packageJsonHasAnyScript",
+              "scripts": [
+                "check:coverage",
+                "coverage"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "live_typecheck_tests_pass",
+          "title": "Typecheck/tests/coverage pass (live)",
+          "weight": 3,
+          "prototype": {
+            "required": true,
+            "gate": true
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "liveCommandPass",
+              "id": "typecheck"
+            },
+            {
+              "type": "liveCommandPassAny",
+              "ids": [
+                "tests_coverage",
+                "unit_tests"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "prototype_demo",
+      "name": "Prototype credibility (deterministic demo + golden paths)",
+      "requirements": [
+        {
+          "id": "demo_seed_script",
+          "title": "Deterministic demo fixtures (seed generator)",
+          "weight": 2,
+          "prototype": {
+            "required": true,
+            "gate": true
+          },
+          "production": {
+            "required": false,
+            "gate": false
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": "scripts/assessor/demo-seed.cjs"
+            },
+            {
+              "type": "fileExists",
+              "path": "docs/assessor/contracts/demo-stories.md"
+            }
+          ]
+        },
+        {
+          "id": "e2e_contract_runner",
+          "title": "E2E contract runner exists",
+          "weight": 2,
+          "prototype": {
+            "required": true,
+            "gate": true
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": "scripts/assessor/e2e-runner.cjs"
+            },
+            {
+              "type": "fileExists",
+              "path": "docs/assessor/contracts/e2e-contract.json"
+            }
+          ]
+        },
+        {
+          "id": "golden_path_contract",
+          "title": "Golden path contract defined (ingest->ledger->settlement->export->audit)",
+          "weight": 3,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "jsonHasPath",
+              "path": "docs/assessor/contracts/e2e-contract.json",
+              "jsonPointer": "/contracts/goldenPath"
+            },
+            {
+              "type": "jsonHasPath",
+              "path": "docs/assessor/contracts/e2e-contract.json",
+              "jsonPointer": "/contracts/tenantIsolation"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "iam_admin",
+      "name": "Identity, access, and admin security",
+      "requirements": [
+        {
+          "id": "admin_controls_runbook",
+          "title": "Admin controls runbook exists",
+          "weight": 2,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": "docs/runbooks/admin-controls.md"
+            },
+            {
+              "type": "fileExists",
+              "path": "docs/security/access-control-policy.md"
+            }
+          ]
+        },
+        {
+          "id": "authz_matrix",
+          "title": "AuthN/AuthZ matrix exists and is versioned",
+          "weight": 3,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": "docs/security/authz-matrix.md"
+            },
+            {
+              "type": "fileRegex",
+              "path": "docs/security/authz-matrix.md",
+              "pattern": "\\|\\s*Route\\s*\\|\\s*Role"
+            }
+          ]
+        },
+        {
+          "id": "mfa_policy",
+          "title": "MFA policy exists (prod)",
+          "weight": 2,
+          "prototype": {
+            "required": false,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": "docs/security/mfa-policy.md"
+            }
+          ]
+        },
+        {
+          "id": "privileged_audit",
+          "title": "Privileged actions are auditable (spec + tests)",
+          "weight": 3,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": "docs/assessor/specs/privileged-actions.md"
+            },
+            {
+              "type": "anyFileExists",
+              "paths": [
+                "services/api-gateway/test/admin-audit.test.ts",
+                "services/api-gateway/test/audit/admin-audit.test.ts"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tenancy_governance",
+      "name": "Tenant isolation & data governance",
+      "requirements": [
+        {
+          "id": "tenant_isolation_spec",
+          "title": "Tenant isolation spec exists",
+          "weight": 2,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": "docs/assessor/specs/tenant-isolation.md"
+            }
+          ]
+        },
+        {
+          "id": "tenant_isolation_e2e",
+          "title": "Tenant isolation E2E contract is executable",
+          "weight": 4,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "e2eContractPass",
+              "contractId": "tenantIsolation"
+            }
+          ]
+        },
+        {
+          "id": "data_classification",
+          "title": "Data classification + PII handling rules exist",
+          "weight": 2,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": "docs/security/data-classification.md"
+            },
+            {
+              "type": "fileExists",
+              "path": "docs/privacy/pii-handling.md"
+            }
+          ]
+        },
+        {
+          "id": "retention_deletion_policy",
+          "title": "Data retention/deletion policy exists and is implemented as a job (or documented for prototype)",
+          "weight": 4,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": "docs/privacy/data-retention.md"
+            },
+            {
+              "type": "anyFileExists",
+              "paths": [
+                "worker/src/jobs/data-retention.ts",
+                "worker/src/jobs/retention.ts",
+                "services/api-gateway/src/jobs/data-retention.ts"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "crypto_keys",
+      "name": "Cryptography, secrets, and key management",
+      "requirements": [
+        {
+          "id": "tfn_controls",
+          "title": "TFN SOP exists",
+          "weight": 2,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": "docs/security/TFN-SOP.md"
+            }
+          ]
+        },
+        {
+          "id": "key_management",
+          "title": "Key management policy + rotation procedure exists",
+          "weight": 3,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": "docs/security/key-management.md"
+            },
+            {
+              "type": "packageJsonHasAnyScript",
+              "scripts": [
+                "security:rotate-keys"
+              ]
+            },
+            {
+              "type": "fileExists",
+              "path": "scripts/rotate-pii-keys.mjs"
+            }
+          ]
+        },
+        {
+          "id": "secrets_management_runbook",
+          "title": "Secrets management runbook exists + secret scanning is wired",
+          "weight": 3,
+          "prototype": {
+            "required": true,
+            "gate": true
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": "docs/runbooks/secrets-management.md"
+            },
+            {
+              "type": "packageJsonHasAllScripts",
+              "scripts": [
+                "scan:secrets",
+                "scan:fs",
+                "sbom",
+                "check:sbom"
+              ]
+            },
+            {
+              "type": "liveCommandPass",
+              "id": "scan_secrets"
+            }
+          ]
+        },
+        {
+          "id": "no_secrets_in_evidence",
+          "title": "Evidence pack has no obvious secrets (pattern scan)",
+          "weight": 3,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "evidenceLatestNoSecretPatterns"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "auditability",
+      "name": "Auditability & tamper evidence",
+      "requirements": [
+        {
+          "id": "ledger_present",
+          "title": "Ledger implementation exists",
+          "weight": 2,
+          "prototype": {
+            "required": true,
+            "gate": true
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "anyFileExists",
+              "paths": [
+                "packages/ledger/src/index.ts",
+                "packages/domain-policy/src/ledger/tax-ledger.ts"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "ledger_invariants_tests",
+          "title": "Ledger invariants tests exist (hash chain / replay / ordering)",
+          "weight": 4,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "anyFileExists",
+              "paths": [
+                "packages/domain-policy/tests/ledger/tax-ledger.hash.test.ts",
+                "packages/ledger/test/ledger.invariants.test.ts",
+                "packages/ledger/tests/ledger.invariants.test.ts"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "audit_store_append_only",
+          "title": "Audit events are append-only (spec + tests)",
+          "weight": 4,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": "docs/assessor/specs/audit-immutability.md"
+            },
+            {
+              "type": "anyFileExists",
+              "paths": [
+                "services/api-gateway/test/audit.append-only.test.ts",
+                "services/api-gateway/test/audit/audit.append-only.test.ts"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "observability",
+      "name": "Observability (logs/metrics/tracing/alerts)",
+      "requirements": [
+        {
+          "id": "otel_instrumentation",
+          "title": "Tracing/metrics instrumentation exists",
+          "weight": 2,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": "services/api-gateway/src/observability/tracing.ts"
+            },
+            {
+              "type": "fileExists",
+              "path": "services/api-gateway/src/observability/metrics.ts"
+            }
+          ]
+        },
+        {
+          "id": "ops_slo_alerts",
+          "title": "SLO + alerting docs exist",
+          "weight": 2,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": "docs/ops/slo.md"
+            },
+            {
+              "type": "fileExists",
+              "path": "docs/ops/alerts.md"
+            }
+          ]
+        },
+        {
+          "id": "dashboards_defined",
+          "title": "Dashboards defined (infra or docs)",
+          "weight": 1,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": false
+          },
+          "checks": [
+            {
+              "type": "anyFileExists",
+              "paths": [
+                "infra/observability/grafana/dashboards.json",
+                "docs/ops/dashboards.md"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "supply_chain",
+      "name": "Supply chain security & secure SDLC",
+      "requirements": [
+        {
+          "id": "dependabot",
+          "title": "Dependabot configured",
+          "weight": 1,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": ".github/dependabot.yml"
+            }
+          ]
+        },
+        {
+          "id": "security_policy",
+          "title": "SECURITY policy exists",
+          "weight": 1,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": "SECURITY.md"
+            }
+          ]
+        },
+        {
+          "id": "supply_chain_scans_pass",
+          "title": "Supply chain scans pass (secrets/fs/sbom/audit)",
+          "weight": 4,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "liveCommandPass",
+              "id": "scan_fs"
+            },
+            {
+              "type": "liveCommandPass",
+              "id": "check_sbom"
+            },
+            {
+              "type": "liveCommandPass",
+              "id": "audit_prod"
+            }
+          ]
+        },
+        {
+          "id": "policy_exceptions_register",
+          "title": "Security exceptions register exists (time-boxed)",
+          "weight": 2,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": "docs/security/exceptions/README.md"
+            },
+            {
+              "type": "fileRegex",
+              "path": "docs/security/exceptions/README.md",
+              "pattern": "Expiry"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "infra_envs",
+      "name": "Infrastructure, environments, and deployment hygiene",
+      "requirements": [
+        {
+          "id": "docker_compose_stack",
+          "title": "Local stack is defined (docker compose)",
+          "weight": 2,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": false
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": "docker-compose.yml"
+            },
+            {
+              "type": "dockerComposeHasServices",
+              "path": "docker-compose.yml",
+              "services": [
+                "db",
+                "redis"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "env_examples",
+          "title": "Environment variable examples exist (.env.example)",
+          "weight": 2,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "anyFileExists",
+              "paths": [
+                ".env.example",
+                "docs/ops/env-vars.md"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "iac_present",
+          "title": "Infrastructure-as-code exists for production deployment (even minimal skeleton)",
+          "weight": 4,
+          "prototype": {
+            "required": false,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "dirExists",
+              "path": "infra/iac"
+            },
+            {
+              "type": "fileExists",
+              "path": "infra/iac/README.md"
+            }
+          ]
+        },
+        {
+          "id": "env_separation",
+          "title": "Environment separation documented (dev/staging/prod)",
+          "weight": 2,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": "docs/ops/environments.md"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "resilience_dr",
+      "name": "Resilience, backup/restore, and disaster recovery",
+      "requirements": [
+        {
+          "id": "backup_workflow",
+          "title": "Backup workflow exists in CI",
+          "weight": 2,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": ".github/workflows/backup.yml"
+            }
+          ]
+        },
+        {
+          "id": "dr_plan",
+          "title": "Disaster recovery plan exists (RTO/RPO, restore steps)",
+          "weight": 3,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": "docs/ops/disaster-recovery.md"
+            },
+            {
+              "type": "fileRegex",
+              "path": "docs/ops/disaster-recovery.md",
+              "pattern": "RTO"
+            },
+            {
+              "type": "fileRegex",
+              "path": "docs/ops/disaster-recovery.md",
+              "pattern": "RPO"
+            }
+          ]
+        },
+        {
+          "id": "restore_drill_script",
+          "title": "Restore drill script exists (local/CI)",
+          "weight": 4,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": "scripts/assessor/restore-drill.cjs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ir_change_mgmt",
+      "name": "Incident response & change management",
+      "requirements": [
+        {
+          "id": "incident_response_plan",
+          "title": "Incident response plan exists",
+          "weight": 3,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": "docs/ops/incident-response.md"
+            }
+          ]
+        },
+        {
+          "id": "change_mgmt_policy",
+          "title": "Change management policy exists (release approvals, rollback)",
+          "weight": 2,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": "docs/ops/change-management.md"
+            }
+          ]
+        },
+        {
+          "id": "release_gate_workflow",
+          "title": "Assessment workflow exists and gates merges",
+          "weight": 3,
+          "prototype": {
+            "required": false,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": ".github/workflows/assess.yml"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "compliance_traceability",
+      "name": "DSP/OSF traceability and evidence quality",
+      "requirements": [
+        {
+          "id": "osf_matrix_exists",
+          "title": "OSF matrix exists",
+          "weight": 2,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "fileExists",
+              "path": "docs/compliance/dsp-operational-framework.md"
+            }
+          ]
+        },
+        {
+          "id": "osf_evidence_index_exists",
+          "title": "OSF evidence index exists (at least one location)",
+          "weight": 2,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "anyFileExists",
+              "paths": [
+                "docs/compliance/dsp-osf-evidence-index.md",
+                "docs/dsp-osf/evidence-index.md"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "osf_links_resolve",
+          "title": "OSF evidence links resolve to real files/scripts",
+          "weight": 4,
+          "prototype": {
+            "required": true,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "osfEvidenceLinksResolve"
+            }
+          ]
+        },
+        {
+          "id": "osf_min_status_prod",
+          "title": "OSF maturity: minimum status for production is at least In progress for all required controls",
+          "weight": 4,
+          "prototype": {
+            "required": false,
+            "gate": false
+          },
+          "production": {
+            "required": true,
+            "gate": true
+          },
+          "checks": [
+            {
+              "type": "osfMinStatusForRequired",
+              "minStatus": "In progress"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

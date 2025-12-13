@@ -1,0 +1,20 @@
+APGMS Assessor 10/10 - Quickstart
+
+1) Copy these files into your repo root (merge, do not overwrite existing docs unless desired).
+
+2) Patch package.json:
+   node scripts/assessor/patch-package-json.cjs
+
+3) Run (prototype):
+   pnpm assess:all
+
+4) Run (production gates):
+   pnpm assess:production
+
+Outputs:
+- reports/apgms-assess.v2.json
+- reports/apgms-assess.v2.md
+
+Notes:
+- For a true 10/10 production score, you must implement the TODO endpoints in the E2E contract:
+  docs/assessor/contracts/e2e-contract.json
