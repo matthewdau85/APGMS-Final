@@ -170,6 +170,20 @@ Partner expectations:
 
 ---
 
+### Identity validation (ABN/TFN)
+
+- ABN validation: When a partner registers/updates an ABN, APGMS validates the ABN format and verifies it via the ABR lookup integration (configured per environment).
+- TFN handling: APGMS does not “verify TFNs” against ATO systems. TFNs are treated as highly sensitive. Where TFN input exists, APGMS validates format/checksum only and partners remain responsible for collecting and storing TFNs in their own compliant systems.
+
+### Risk-based behaviour (deletion and retention)
+
+APGMS applies risk constraints to destructive actions:
+
+- If a record is constrained by audit/ledger/settlement retention requirements, APGMS will anonymise (remove PII) rather than hard delete.
+- If no constraints exist, hard delete may occur.
+- Admin delete responses explicitly indicate the action taken (ANONYMISED vs HARD_DELETED).
+
+
 ## Onboarding checklist
 
 1) Exchange sandbox endpoint + auth configuration
