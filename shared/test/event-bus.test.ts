@@ -1,4 +1,3 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
 import { InMemoryEventBus } from "../src/messaging/in-memory-bus.js";

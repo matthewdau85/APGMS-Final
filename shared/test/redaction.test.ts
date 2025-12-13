@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
 import { maskValue, maskObject, maskError } from "../src/masking";
 import { redactValue, redactError, redactLogPayload } from "../src/redaction";
 

@@ -1,27 +1,31 @@
 {
-    "name":  "@apgms/shared",
-    "version":  "0.1.0",
-    "private":  true,
-    "type":  "module",
-    "main":  "./dist/index.js",
-    "types":  "./dist/index.d.ts",
-    "exports":  {
-                    ".":  "./dist/index.js"
-                },
-    "scripts":  {
-                    "clean-dist":  "echo skipping clean-dist for now",
-                    "build":  "tsc -p tsconfig.json",
-                    "typecheck":  "tsc --noEmit -p tsconfig.json",
-                    "generate":  "node ./scripts/run-prisma-generate.mjs",
-                    "prebuild":  "pnpm prisma:generate",
-                    "prisma:generate": "prisma generate --schema=./prisma/schema.prisma"
-                },
-    "dependencies":  {
-                         "@prisma/client":  "6.19.0",
-                         "otplib":  "^12.0.1"
-                     },
-    "devDependencies":  {
-                            "prisma":  "6.19.0",
-                            "typescript":  "^5.6.3"
-                        }
+  "name": "@apgms/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./operations/risk/safe-delete": {
+      "types": "./dist/operations/risk/safe-delete.d.ts",
+      "default": "./dist/operations/risk/safe-delete.js"
+    }
+  },
+  "scripts": {
+    "clean-dist": "echo skipping clean-dist for now",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "generate": "node ./scripts/run-prisma-generate.mjs",
+    "prebuild": "pnpm prisma:generate",
+    "prisma:generate": "prisma generate --schema=./prisma/schema.prisma"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.0",
+    "otplib": "^12.0.1"
+  },
+  "devDependencies": {
+    "prisma": "6.19.0",
+    "typescript": "^5.6.3"
+  }
 }
