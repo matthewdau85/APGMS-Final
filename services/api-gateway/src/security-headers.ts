@@ -28,29 +28,23 @@ function buildCsp(config: Partial<AppConfig>): CspDirectives {
     "base-uri": ["'self'"],
     "form-action": ["'self'"],
   };
-}
-
-/**
- * Helmet configuration derived from AppConfig.
- *
- * - In production/staging, enable CSP with directives from config.
- * - In test/local/dev, leave Helmet on but disable CSP (simpler tests, no crashes).
- */
-export function helmetConfigFor(
-  config: Partial<AppConfig>,
-): FastifyHelmetOptions {
-  const env = (config as any).env ?? process.env.NODE_ENV ?? "test";
-  const enableCsp = env === "production" || env === "staging";
-
-  if (!enableCsp) {
-    return {
-      contentSecurityPolicy: false,
-    };
-  }
-
+}export function helmetConfigFor(cfg: any) {
+  const allowedOrigins = (cfg?.cors?.allowedOrigins ?? []) as string[];
   return {
+    frameguard: { action: "deny" },
+    referrerPolicy: { policy: "no-referrer" },
+    crossOriginResourcePolicy: { policy: "same-site" },
     contentSecurityPolicy: {
-      directives: buildCsp(config),
+      directives: {
+        defaultSrc: ["'self'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+        frameAncestors: ["'none'"],
+        objectSrc: ["'none'"],
+        connectSrc: ["'self'", ...allowedOrigins],
+        upgradeInsecureRequests: [],
+      },
     },
   };
 }
+
