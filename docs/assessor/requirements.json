@@ -1,0 +1,263 @@
+{
+  "meta": {
+    "name": "APGMS Assessor",
+    "version": "1.0.0",
+    "notes": [
+      "This is a conservative assessor: it checks presence + runnable evidence + OSF status.",
+      "Add/replace checks with stronger live/E2E probes over time for regulator-grade certainty."
+    ]
+  },
+  "thresholds": {
+    "prototype": 0.65,
+    "production": 0.85
+  },
+  "osf": {
+    "path": "docs/compliance/dsp-operational-framework.md",
+    "statusOrder": ["Planned", "In progress", "Implemented"]
+  },
+  "liveCommands": {
+    "fast": [
+      { "id": "typecheck", "cmd": "pnpm -r typecheck", "timeoutMs": 900000 }
+    ],
+    "full": [
+      { "id": "typecheck", "cmd": "pnpm -r typecheck", "timeoutMs": 900000 },
+      { "id": "tests_coverage", "cmd": "pnpm -r test -- --coverage", "timeoutMs": 1800000 },
+      { "id": "readiness_all", "cmd": "pnpm readiness:all", "timeoutMs": 1200000 }
+    ],
+    "all": [
+      { "id": "typecheck", "cmd": "pnpm -r typecheck", "timeoutMs": 900000 },
+      { "id": "tests_coverage", "cmd": "pnpm -r test -- --coverage", "timeoutMs": 1800000 },
+      { "id": "readiness_all", "cmd": "pnpm readiness:all", "timeoutMs": 1200000 },
+      { "id": "scan_secrets", "cmd": "pnpm scan:secrets", "timeoutMs": 1200000 },
+      { "id": "scan_fs", "cmd": "pnpm scan:fs", "timeoutMs": 1800000 },
+      { "id": "sbom", "cmd": "pnpm sbom", "timeoutMs": 1200000 },
+      { "id": "check_sbom", "cmd": "pnpm check:sbom", "timeoutMs": 1200000 },
+      { "id": "compliance_evidence", "cmd": "pnpm compliance:evidence", "timeoutMs": 1200000 }
+    ]
+  },
+  "pillars": [
+    {
+      "id": "foundations",
+      "name": "Foundations (build, test, workspace health)",
+      "requirements": [
+        {
+          "id": "repo_structure",
+          "title": "Monorepo structure present",
+          "prototype": { "required": true, "gate": true },
+          "production": { "required": true, "gate": true },
+          "checks": [
+            { "type": "fileExists", "path": "package.json" },
+            { "type": "fileExists", "path": "pnpm-lock.yaml" },
+            { "type": "dirExists", "path": "services" },
+            { "type": "dirExists", "path": "packages" }
+          ]
+        },
+        {
+          "id": "typecheck_script_exists",
+          "title": "Typecheck is wired across workspaces",
+          "prototype": { "required": true, "gate": true },
+          "production": { "required": true, "gate": true },
+          "checks": [
+            { "type": "packageJsonHasAnyScript", "scripts": ["typecheck", "typecheck:all", "check"] }
+          ]
+        },
+        {
+          "id": "readiness_suite_present",
+          "title": "Readiness suite exists (availability/performance/log scan)",
+          "prototype": { "required": true, "gate": false },
+          "production": { "required": true, "gate": true },
+          "checks": [
+            { "type": "fileExists", "path": "scripts/readiness/all.cjs" },
+            { "type": "fileExists", "path": "scripts/readiness/availability.cjs" },
+            { "type": "fileExists", "path": "scripts/readiness/availability-and-performance.cjs" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "core_api",
+      "name": "Core API surface & demo credibility",
+      "requirements": [
+        {
+          "id": "api_routes_present",
+          "title": "Key API routes exist (bank-lines, BAS settlement, exports, regulator summaries)",
+          "prototype": { "required": true, "gate": true },
+          "production": { "required": true, "gate": true },
+          "checks": [
+            { "type": "fileExists", "path": "services/api-gateway/src/routes/bank-lines.ts" },
+            { "type": "fileExists", "path": "services/api-gateway/src/routes/bas-settlement.ts" },
+            { "type": "fileExists", "path": "services/api-gateway/src/routes/export.ts" },
+            { "type": "fileExists", "path": "services/api-gateway/src/routes/regulator-compliance-summary.ts" },
+            { "type": "fileExists", "path": "services/api-gateway/src/routes/risk-summary.ts" }
+          ]
+        },
+        {
+          "id": "api_auth_tests_present",
+          "title": "Auth/validation tests exist for key routes",
+          "prototype": { "required": true, "gate": false },
+          "production": { "required": true, "gate": true },
+          "checks": [
+            { "type": "fileExists", "path": "services/api-gateway/test/bank-lines.validation.test.ts" },
+            { "type": "fileExists", "path": "services/api-gateway/test/bas-settlement.auth-validation.test.ts" },
+            { "type": "fileExists", "path": "services/api-gateway/test/regulator-compliance-summary.auth-validation.test.ts" }
+          ]
+        },
+        {
+          "id": "demo_route_exists",
+          "title": "Demo route exists (prototype story support)",
+          "prototype": { "required": true, "gate": false },
+          "production": { "required": false, "gate": false },
+          "checks": [
+            { "type": "fileExists", "path": "services/api-gateway/src/routes/demo.ts" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "auditability",
+      "name": "Auditability & tamper-evidence",
+      "requirements": [
+        {
+          "id": "tax_ledger_present",
+          "title": "Tax ledger implementation present",
+          "prototype": { "required": true, "gate": true },
+          "production": { "required": true, "gate": true },
+          "checks": [
+            { "type": "fileExists", "path": "packages/domain-policy/src/ledger/tax-ledger.ts" }
+          ]
+        },
+        {
+          "id": "ledger_hash_tests_present",
+          "title": "Ledger tamper-evidence test exists",
+          "prototype": { "required": true, "gate": false },
+          "production": { "required": true, "gate": true },
+          "checks": [
+            { "type": "fileExists", "path": "packages/domain-policy/tests/ledger/tax-ledger.hash.test.ts" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "observability",
+      "name": "Observability (metrics, tracing, db timing)",
+      "requirements": [
+        {
+          "id": "otel_present",
+          "title": "Tracing/metrics instrumentation present in api-gateway",
+          "prototype": { "required": true, "gate": false },
+          "production": { "required": true, "gate": true },
+          "checks": [
+            { "type": "fileExists", "path": "services/api-gateway/src/observability/tracing.ts" },
+            { "type": "fileExists", "path": "services/api-gateway/src/observability/metrics.ts" },
+            { "type": "fileExists", "path": "services/api-gateway/src/observability/prisma-metrics.ts" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "privacy_security",
+      "name": "Privacy, TFN controls, and security governance artifacts",
+      "requirements": [
+        {
+          "id": "tfn_sop_present",
+          "title": "TFN SOP exists (policy/control reference)",
+          "prototype": { "required": true, "gate": false },
+          "production": { "required": true, "gate": true },
+          "checks": [
+            { "type": "fileExists", "path": "docs/security/TFN-SOP.md" }
+          ]
+        },
+        {
+          "id": "dpia_present",
+          "title": "DPIA exists (privacy impact assessment)",
+          "prototype": { "required": true, "gate": false },
+          "production": { "required": true, "gate": true },
+          "checks": [
+            { "type": "fileExists", "path": "docs/privacy/dpia.md" }
+          ]
+        },
+        {
+          "id": "secrets_runbook_present",
+          "title": "Secrets management runbook exists",
+          "prototype": { "required": true, "gate": false },
+          "production": { "required": true, "gate": true },
+          "checks": [
+            { "type": "fileExists", "path": "docs/runbooks/secrets-management.md" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "supply_chain",
+      "name": "Supply chain security (scans, SBOM, evidence)",
+      "requirements": [
+        {
+          "id": "scan_scripts_wired",
+          "title": "Secret scan, filesystem scan, and SBOM scripts are wired",
+          "prototype": { "required": true, "gate": false },
+          "production": { "required": true, "gate": true },
+          "checks": [
+            { "type": "packageJsonHasAllScripts", "scripts": ["scan:secrets", "scan:fs", "sbom", "check:sbom"] }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "resilience_ops",
+      "name": "Operational readiness (runbooks, backups, incident response stubs)",
+      "requirements": [
+        {
+          "id": "ops_slo_present",
+          "title": "SLO doc exists",
+          "prototype": { "required": true, "gate": false },
+          "production": { "required": true, "gate": true },
+          "checks": [
+            { "type": "fileExists", "path": "docs/ops/slo.md" }
+          ]
+        },
+        {
+          "id": "backup_workflow_present",
+          "title": "Backup workflow exists (CI evidence)",
+          "prototype": { "required": true, "gate": false },
+          "production": { "required": true, "gate": true },
+          "checks": [
+            { "type": "fileExists", "path": ".github/workflows/backup.yml" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dsp_osf",
+      "name": "DSP Operational Framework matrix (control maturity & evidence)",
+      "requirements": [
+        {
+          "id": "osf_matrix_present",
+          "title": "OSF control matrix exists",
+          "prototype": { "required": true, "gate": false },
+          "production": { "required": true, "gate": true },
+          "checks": [
+            { "type": "fileExists", "path": "docs/compliance/dsp-operational-framework.md" }
+          ]
+        },
+        {
+          "id": "osf_evidence_index_present",
+          "title": "OSF evidence index exists",
+          "prototype": { "required": true, "gate": false },
+          "production": { "required": true, "gate": true },
+          "checks": [
+            { "type": "anyFileExists", "paths": ["docs/compliance/dsp-osf-evidence-index.md", "docs/dsp-osf/evidence-index.md"] }
+          ]
+        },
+        {
+          "id": "osf_min_status_for_prod",
+          "title": "OSF matrix: minimum status for production gates",
+          "prototype": { "required": false, "gate": false },
+          "production": { "required": true, "gate": true, "minStatus": "In progress" },
+          "checks": [
+            { "type": "osfStatusAtLeast", "minStatus": "In progress" }
+          ]
+        }
+      ]
+    }
+  ]
+}

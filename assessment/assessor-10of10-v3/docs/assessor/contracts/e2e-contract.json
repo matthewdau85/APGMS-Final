@@ -1,0 +1,73 @@
+{
+  "version": "1.0",
+  "contracts": {
+    "goldenPath": {
+      "name": "Golden path (demo)",
+      "steps": [
+        {
+          "id": "seed",
+          "action": "seedDemo",
+          "expects": {
+            "orgId": "string",
+            "adminToken": "string"
+          }
+        },
+        {
+          "id": "upload",
+          "action": "uploadPayroll",
+          "expects": {
+            "status": "accepted"
+          }
+        },
+        {
+          "id": "forecast",
+          "action": "getForecast",
+          "expects": {
+            "obligationTotal": "number"
+          }
+        },
+        {
+          "id": "settle",
+          "action": "createBasSettlement",
+          "expects": {
+            "status": "created"
+          }
+        },
+        {
+          "id": "regulator",
+          "action": "getRegulatorSummary",
+          "expects": {
+            "risk": "LOW|MED|HIGH"
+          }
+        }
+      ]
+    },
+    "tenantIsolation": {
+      "name": "Tenant isolation contract",
+      "steps": [
+        {
+          "id": "setup",
+          "action": "seedTwoTenants",
+          "expects": {
+            "tenantA": "orgId",
+            "tenantB": "orgId"
+          }
+        },
+        {
+          "id": "attack",
+          "action": "crossTenantRead",
+          "expects": {
+            "httpStatus": 403
+          }
+        },
+        {
+          "id": "verify",
+          "action": "noLeakage",
+          "expects": {
+            "responseContainsOtherTenantData": false
+          }
+        }
+      ]
+    }
+  }
+}

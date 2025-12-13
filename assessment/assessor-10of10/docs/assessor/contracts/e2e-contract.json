@@ -1,0 +1,94 @@
+{
+  "meta": {
+    "name": "APGMS E2E Contract",
+    "version": "1.0.0",
+    "baseUrlEnv": "APGMS_BASE_URL",
+    "defaultBaseUrl": "http://localhost:3000",
+    "auth": {
+      "adminTokenEnv": "APGMS_ADMIN_TOKEN",
+      "userTokenEnv": "APGMS_USER_TOKEN"
+    }
+  },
+  "contracts": {
+    "smoke": [
+      {
+        "name": "health",
+        "method": "GET",
+        "path": "/health",
+        "expectStatus": 200
+      }
+    ],
+    "authBoundaries": [
+      {
+        "name": "bank-lines requires auth",
+        "method": "GET",
+        "path": "/api/bank-lines",
+        "expectStatus": 401
+      },
+      {
+        "name": "bas-settlement requires auth",
+        "method": "GET",
+        "path": "/api/bas-settlement",
+        "expectStatus": 401
+      },
+      {
+        "name": "export requires auth",
+        "method": "GET",
+        "path": "/api/export",
+        "expectStatus": 401
+      }
+    ],
+    "goldenPath": {
+      "notes": [
+        "This is a scaffold. Replace endpoints/flows to match your implemented admin + workflow API.",
+        "For production gating, make this fully executable and remove TODO steps."
+      ],
+      "steps": [
+        {
+          "todo": "Create org A (admin endpoint) and capture orgIdA"
+        },
+        {
+          "todo": "Ingest simulated payroll event for orgIdA"
+        },
+        {
+          "todo": "Verify ledger entries for orgIdA"
+        },
+        {
+          "todo": "Attempt settlement before BAS lodgment -> expect 409/400"
+        },
+        {
+          "todo": "Mark BAS lodged -> expect 200"
+        },
+        {
+          "todo": "Settle -> expect 200 and capture exportId"
+        },
+        {
+          "todo": "Export -> expect 200 and validate payload fields"
+        },
+        {
+          "todo": "Audit readback -> expect chain of correlated events"
+        }
+      ]
+    },
+    "tenantIsolation": {
+      "notes": [
+        "Requires an admin flow to create orgs and mint tokens scoped to those orgs.",
+        "For production gating, implement the endpoints and remove TODOs."
+      ],
+      "steps": [
+        {
+          "todo": "Create org A and org B"
+        },
+        {
+          "todo": "Mint tokenA for org A, tokenB for org B"
+        },
+        {
+          "todo": "Use tokenA to read org B resource -> expect 403/404"
+        },
+        {
+          "todo": "Use tokenB to read org A resource -> expect 403/404"
+        }
+      ]
+    }
+  }
+}

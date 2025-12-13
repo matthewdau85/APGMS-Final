@@ -1,0 +1,1482 @@
+{
+  "version": "3.0",
+  "meta": {
+    "name": "APGMS 10of10 Assessor",
+    "intent": "Pillar + process based readiness for prototype vs production"
+  },
+  "pillars": [
+    {
+      "id": "foundations",
+      "name": "Foundations (build + tests)"
+    },
+    {
+      "id": "prototype_demo",
+      "name": "Prototype demo & simulation"
+    },
+    {
+      "id": "iam_admin",
+      "name": "IAM & admin controls"
+    },
+    {
+      "id": "tenancy_governance",
+      "name": "Tenancy & data governance"
+    },
+    {
+      "id": "auditability",
+      "name": "Auditability & evidence"
+    },
+    {
+      "id": "crypto_keys",
+      "name": "Crypto & key management"
+    },
+    {
+      "id": "observability",
+      "name": "Observability & SLOs"
+    },
+    {
+      "id": "resilience_dr",
+      "name": "Resilience & disaster recovery"
+    },
+    {
+      "id": "supply_chain",
+      "name": "Supply chain security"
+    },
+    {
+      "id": "infra_envs",
+      "name": "Infrastructure & environments"
+    },
+    {
+      "id": "ir_change_mgmt",
+      "name": "Incident response & change mgmt"
+    },
+    {
+      "id": "compliance_traceability",
+      "name": "Compliance traceability"
+    }
+  ],
+  "processes": [
+    {
+      "id": "build_quality",
+      "name": "Build quality (typecheck + unit tests)",
+      "stage": "both"
+    },
+    {
+      "id": "demo_bootstrap",
+      "name": "Demo bootstrap (seed + stories)",
+      "stage": "prototype"
+    },
+    {
+      "id": "stakeholder_sim",
+      "name": "Stakeholder simulation (contracts + e2e runner)",
+      "stage": "prototype"
+    },
+    {
+      "id": "admin_access",
+      "name": "Admin access & privileged actions",
+      "stage": "both"
+    },
+    {
+      "id": "tenant_isolation",
+      "name": "Tenant isolation & authz model",
+      "stage": "both"
+    },
+    {
+      "id": "data_governance",
+      "name": "Data governance (PII, retention, classification)",
+      "stage": "both"
+    },
+    {
+      "id": "ledger_integrity",
+      "name": "Ledger integrity & idempotency",
+      "stage": "both"
+    },
+    {
+      "id": "bas_gating",
+      "name": "BAS gating & settlement lifecycle",
+      "stage": "both"
+    },
+    {
+      "id": "exports_reporting",
+      "name": "Exports, regulator views & reporting",
+      "stage": "both"
+    },
+    {
+      "id": "audit_events",
+      "name": "Audit events & immutability",
+      "stage": "both"
+    },
+    {
+      "id": "secrets_keys",
+      "name": "Secrets & key management",
+      "stage": "both"
+    },
+    {
+      "id": "monitoring",
+      "name": "Monitoring, logs & performance readiness",
+      "stage": "both"
+    },
+    {
+      "id": "backup_restore",
+      "name": "Backup, restore & DR drill",
+      "stage": "both"
+    },
+    {
+      "id": "incident_change",
+      "name": "Incident & change processes",
+      "stage": "both"
+    },
+    {
+      "id": "release_evidence",
+      "name": "Release evidence pack (OSF, requirements, reports)",
+      "stage": "both"
+    },
+    {
+      "id": "_unmapped",
+      "name": "Unmapped",
+      "stage": "both"
+    }
+  ],
+  "liveCommands": [
+    {
+      "id": "typecheck",
+      "cmd": "pnpm -r typecheck",
+      "timeoutMs": 900000,
+      "suites": [
+        "fast",
+        "all",
+        "production"
+      ]
+    },
+    {
+      "id": "api_gateway_tests",
+      "cmd": "pnpm --filter @apgms/api-gateway test",
+      "timeoutMs": 1800000,
+      "suites": [
+        "fast",
+        "all",
+        "production"
+      ]
+    },
+    {
+      "id": "readiness_all",
+      "cmd": "pnpm readiness:all",
+      "timeoutMs": 1800000,
+      "suites": [
+        "all",
+        "production"
+      ]
+    },
+    {
+      "id": "scan_secrets",
+      "cmd": "pnpm scan:secrets",
+      "timeoutMs": 1800000,
+      "suites": [
+        "production"
+      ]
+    },
+    {
+      "id": "scan_fs",
+      "cmd": "pnpm scan:fs",
+      "timeoutMs": 1800000,
+      "suites": [
+        "production"
+      ]
+    },
+    {
+      "id": "check_sbom",
+      "cmd": "pnpm check:sbom",
+      "timeoutMs": 1800000,
+      "suites": [
+        "production"
+      ]
+    }
+  ],
+  "requirements": [
+    {
+      "id": "foundations/typecheck_passes",
+      "title": "TypeScript typecheck passes across workspace",
+      "pillar": "foundations",
+      "processes": [
+        "build_quality"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": true,
+        "production": true
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "liveCommandPass",
+            "commandId": "typecheck"
+          }
+        ],
+        "production": [
+          {
+            "type": "liveCommandPass",
+            "commandId": "typecheck"
+          }
+        ]
+      }
+    },
+    {
+      "id": "foundations/api_gateway_unit_tests_pass",
+      "title": "API Gateway unit tests pass",
+      "pillar": "foundations",
+      "processes": [
+        "build_quality"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": true,
+        "production": true
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "liveCommandPass",
+            "commandId": "api_gateway_tests"
+          }
+        ],
+        "production": [
+          {
+            "type": "liveCommandPass",
+            "commandId": "api_gateway_tests"
+          }
+        ]
+      }
+    },
+    {
+      "id": "foundations/readiness_suite_wired",
+      "title": "Readiness scripts exist (availability, log scan, k6 summary)",
+      "pillar": "foundations",
+      "processes": [
+        "monitoring"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": false
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "anyFileExists",
+            "paths": [
+              "scripts/readiness/availability.cjs",
+              "scripts/readiness/availability.js"
+            ],
+            "base": "repo"
+          },
+          {
+            "type": "anyFileExists",
+            "paths": [
+              "scripts/readiness/log-scan.cjs",
+              "scripts/readiness/log-scan.js"
+            ],
+            "base": "repo"
+          },
+          {
+            "type": "anyFileExists",
+            "paths": [
+              "scripts/readiness/k6-summary.cjs",
+              "scripts/readiness/k6-summary.js"
+            ],
+            "base": "repo"
+          }
+        ],
+        "production": [
+          {
+            "type": "liveCommandPass",
+            "commandId": "readiness_all"
+          }
+        ]
+      }
+    },
+    {
+      "id": "prototype_demo/demo_seed_script",
+      "title": "Demo seed script exists (creates fake org/stakeholders/transactions)",
+      "pillar": "prototype_demo",
+      "processes": [
+        "demo_bootstrap"
+      ],
+      "stage": [
+        "prototype"
+      ],
+      "gate": {
+        "prototype": true,
+        "production": false
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "fileExists",
+            "path": "scripts/assessor/demo-seed.cjs",
+            "base": "assessor"
+          },
+          {
+            "type": "fileRegex",
+            "path": "scripts/assessor/demo-seed.cjs",
+            "pattern": "seed|fake|demo",
+            "flags": "m",
+            "base": "assessor"
+          }
+        ]
+      }
+    },
+    {
+      "id": "prototype_demo/demo_stories_doc",
+      "title": "Demo stories exist (scripted walkthroughs per stakeholder)",
+      "pillar": "prototype_demo",
+      "processes": [
+        "demo_bootstrap"
+      ],
+      "stage": [
+        "prototype"
+      ],
+      "gate": {
+        "prototype": true,
+        "production": false
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "fileExists",
+            "path": "docs/assessor/contracts/demo-stories.md",
+            "base": "assessor"
+          },
+          {
+            "type": "fileRegex",
+            "path": "docs/assessor/contracts/demo-stories.md",
+            "pattern": "##\\s+Story",
+            "flags": "m",
+            "base": "assessor"
+          }
+        ]
+      }
+    },
+    {
+      "id": "prototype_demo/e2e_runner_script",
+      "title": "E2E runner exists (plays golden paths against API gateway)",
+      "pillar": "prototype_demo",
+      "processes": [
+        "stakeholder_sim"
+      ],
+      "stage": [
+        "prototype"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": false
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "fileExists",
+            "path": "scripts/assessor/e2e-runner.cjs",
+            "base": "assessor"
+          }
+        ],
+        "production": [
+          {
+            "type": "fileExists",
+            "path": "scripts/assessor/e2e-runner.cjs",
+            "base": "assessor"
+          }
+        ]
+      }
+    },
+    {
+      "id": "prototype_demo/e2e_contract",
+      "title": "E2E contract JSON exists (golden path + tenant isolation contracts)",
+      "pillar": "prototype_demo",
+      "processes": [
+        "stakeholder_sim"
+      ],
+      "stage": [
+        "prototype"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": false
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "fileExists",
+            "path": "docs/assessor/contracts/e2e-contract.json",
+            "base": "assessor"
+          },
+          {
+            "type": "jsonHasPath",
+            "path": "docs/assessor/contracts/e2e-contract.json",
+            "pointer": "/contracts/goldenPath",
+            "base": "assessor"
+          },
+          {
+            "type": "jsonHasPath",
+            "path": "docs/assessor/contracts/e2e-contract.json",
+            "pointer": "/contracts/tenantIsolation",
+            "base": "assessor"
+          }
+        ]
+      }
+    },
+    {
+      "id": "iam_admin/access_control_policy",
+      "title": "Access control policy documented",
+      "pillar": "iam_admin",
+      "processes": [
+        "admin_access"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "fileExists",
+            "path": "docs/security/access-control-policy.md",
+            "base": "assessor"
+          }
+        ],
+        "production": [
+          {
+            "type": "fileExists",
+            "path": "docs/security/access-control-policy.md",
+            "base": "assessor"
+          }
+        ]
+      }
+    },
+    {
+      "id": "iam_admin/authz_matrix",
+      "title": "Authorization matrix documented (roles -> actions)",
+      "pillar": "iam_admin",
+      "processes": [
+        "tenant_isolation",
+        "admin_access"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "fileExists",
+            "path": "docs/security/authz-matrix.md",
+            "base": "assessor"
+          }
+        ],
+        "production": [
+          {
+            "type": "fileExists",
+            "path": "docs/security/authz-matrix.md",
+            "base": "assessor"
+          }
+        ]
+      }
+    },
+    {
+      "id": "iam_admin/session_policy",
+      "title": "Session policy documented",
+      "pillar": "iam_admin",
+      "processes": [
+        "admin_access"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "fileExists",
+            "path": "docs/security/session-policy.md",
+            "base": "assessor"
+          }
+        ],
+        "production": [
+          {
+            "type": "fileExists",
+            "path": "docs/security/session-policy.md",
+            "base": "assessor"
+          }
+        ]
+      }
+    },
+    {
+      "id": "iam_admin/mfa_policy",
+      "title": "MFA policy documented",
+      "pillar": "iam_admin",
+      "processes": [
+        "admin_access"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "fileExists",
+            "path": "docs/security/mfa-policy.md",
+            "base": "assessor"
+          }
+        ],
+        "production": [
+          {
+            "type": "fileExists",
+            "path": "docs/security/mfa-policy.md",
+            "base": "assessor"
+          }
+        ]
+      }
+    },
+    {
+      "id": "iam_admin/privileged_actions_spec",
+      "title": "Privileged actions spec exists (admin actions, approvals, break-glass)",
+      "pillar": "iam_admin",
+      "processes": [
+        "admin_access"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "fileExists",
+            "path": "docs/assessor/specs/privileged-actions.md",
+            "base": "assessor"
+          }
+        ],
+        "production": [
+          {
+            "type": "fileExists",
+            "path": "docs/assessor/specs/privileged-actions.md",
+            "base": "assessor"
+          }
+        ]
+      }
+    },
+    {
+      "id": "iam_admin/api_auth_guard_present",
+      "title": "API gateway has an auth guard module",
+      "pillar": "iam_admin",
+      "processes": [
+        "admin_access"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "anyFileExists",
+            "paths": [
+              "services/api-gateway/src/auth.ts",
+              "services/api-gateway/src/routes/auth.ts"
+            ],
+            "base": "repo"
+          }
+        ],
+        "production": [
+          {
+            "type": "anyFileExists",
+            "paths": [
+              "services/api-gateway/src/auth.ts",
+              "services/api-gateway/src/routes/auth.ts"
+            ],
+            "base": "repo"
+          }
+        ]
+      }
+    },
+    {
+      "id": "tenancy_governance/tenant_isolation_spec",
+      "title": "Tenant isolation spec exists (orgId scoping, RLS/filters, leakage tests)",
+      "pillar": "tenancy_governance",
+      "processes": [
+        "tenant_isolation"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "fileExists",
+            "path": "docs/assessor/specs/tenant-isolation.md",
+            "base": "assessor"
+          }
+        ],
+        "production": [
+          {
+            "type": "fileExists",
+            "path": "docs/assessor/specs/tenant-isolation.md",
+            "base": "assessor"
+          }
+        ]
+      }
+    },
+    {
+      "id": "tenancy_governance/data_classification",
+      "title": "Data classification policy documented",
+      "pillar": "tenancy_governance",
+      "processes": [
+        "data_governance"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "fileExists",
+            "path": "docs/security/data-classification.md",
+            "base": "assessor"
+          }
+        ],
+        "production": [
+          {
+            "type": "fileExists",
+            "path": "docs/security/data-classification.md",
+            "base": "assessor"
+          }
+        ]
+      }
+    },
+    {
+      "id": "tenancy_governance/pii_handling",
+      "title": "PII handling guide documented",
+      "pillar": "tenancy_governance",
+      "processes": [
+        "data_governance"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "fileExists",
+            "path": "docs/privacy/pii-handling.md",
+            "base": "assessor"
+          }
+        ],
+        "production": [
+          {
+            "type": "fileExists",
+            "path": "docs/privacy/pii-handling.md",
+            "base": "assessor"
+          }
+        ]
+      }
+    },
+    {
+      "id": "tenancy_governance/data_retention_policy",
+      "title": "Data retention policy documented",
+      "pillar": "tenancy_governance",
+      "processes": [
+        "data_governance"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "fileExists",
+            "path": "docs/privacy/data-retention.md",
+            "base": "assessor"
+          }
+        ],
+        "production": [
+          {
+            "type": "fileExists",
+            "path": "docs/privacy/data-retention.md",
+            "base": "assessor"
+          }
+        ]
+      }
+    },
+    {
+      "id": "tenancy_governance/retention_job_present",
+      "title": "Retention job exists in worker/service (enforces retention policy)",
+      "pillar": "tenancy_governance",
+      "processes": [
+        "data_governance"
+      ],
+      "stage": [
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "production": [
+          {
+            "type": "anyFileExists",
+            "paths": [
+              "services/worker/src/jobs/retention.ts",
+              "services/worker/src/jobs/data-retention.ts",
+              "services/worker/src/cron/retention.ts",
+              "services/worker/src/cron/data-retention.ts"
+            ],
+            "base": "repo"
+          }
+        ]
+      }
+    },
+    {
+      "id": "auditability/audit_immutability_spec",
+      "title": "Audit immutability spec exists (append-only, chaining, retention)",
+      "pillar": "auditability",
+      "processes": [
+        "audit_events"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "fileExists",
+            "path": "docs/assessor/specs/audit-immutability.md",
+            "base": "assessor"
+          }
+        ],
+        "production": [
+          {
+            "type": "fileExists",
+            "path": "docs/assessor/specs/audit-immutability.md",
+            "base": "assessor"
+          }
+        ]
+      }
+    },
+    {
+      "id": "auditability/admin_audit_test_present",
+      "title": "Admin audit tests exist (API gateway)",
+      "pillar": "auditability",
+      "processes": [
+        "audit_events"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "anyFileExists",
+            "paths": [
+              "services/api-gateway/test/admin-audit.test.ts",
+              "services/api-gateway/test/audit.test.ts"
+            ],
+            "base": "repo"
+          }
+        ],
+        "production": [
+          {
+            "type": "anyFileExists",
+            "paths": [
+              "services/api-gateway/test/admin-audit.test.ts",
+              "services/api-gateway/test/audit.test.ts"
+            ],
+            "base": "repo"
+          }
+        ]
+      }
+    },
+    {
+      "id": "auditability/evidence_pack_generated",
+      "title": "Assessment report outputs are generated to assessment/reports",
+      "pillar": "auditability",
+      "processes": [
+        "release_evidence"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": false
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "anyFileExists",
+            "paths": [
+              "assessment/reports/apgms-assess.v2.json",
+              "assessment/reports/apgms-assess.v3.json"
+            ],
+            "base": "repo"
+          }
+        ],
+        "production": [
+          {
+            "type": "anyFileExists",
+            "paths": [
+              "assessment/reports/apgms-assess.v2.json",
+              "assessment/reports/apgms-assess.v3.json"
+            ],
+            "base": "repo"
+          }
+        ]
+      }
+    },
+    {
+      "id": "crypto_keys/key_management_policy",
+      "title": "Key management policy documented",
+      "pillar": "crypto_keys",
+      "processes": [
+        "secrets_keys"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "fileExists",
+            "path": "docs/security/key-management.md",
+            "base": "assessor"
+          }
+        ],
+        "production": [
+          {
+            "type": "fileExists",
+            "path": "docs/security/key-management.md",
+            "base": "assessor"
+          }
+        ]
+      }
+    },
+    {
+      "id": "crypto_keys/exceptions_doc",
+      "title": "Security exceptions process documented",
+      "pillar": "crypto_keys",
+      "processes": [
+        "secrets_keys"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "fileExists",
+            "path": "docs/security/exceptions/README.md",
+            "base": "assessor"
+          }
+        ],
+        "production": [
+          {
+            "type": "fileExists",
+            "path": "docs/security/exceptions/README.md",
+            "base": "assessor"
+          }
+        ]
+      }
+    },
+    {
+      "id": "crypto_keys/secrets_scanning_wired",
+      "title": "Secrets scanning is wired (package script)",
+      "pillar": "crypto_keys",
+      "processes": [
+        "secrets_keys"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "packageJsonScript",
+            "path": "package.json",
+            "script": "scan:secrets"
+          }
+        ],
+        "production": [
+          {
+            "type": "packageJsonScript",
+            "path": "package.json",
+            "script": "scan:secrets"
+          },
+          {
+            "type": "liveCommandPass",
+            "commandId": "scan_secrets"
+          }
+        ]
+      }
+    },
+    {
+      "id": "observability/metrics_module_exists",
+      "title": "API gateway metrics module exists",
+      "pillar": "observability",
+      "processes": [
+        "monitoring"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "anyFileExists",
+            "paths": [
+              "services/api-gateway/src/observability/metrics.ts",
+              "services/api-gateway/src/observability/metrics.js"
+            ],
+            "base": "repo"
+          }
+        ],
+        "production": [
+          {
+            "type": "anyFileExists",
+            "paths": [
+              "services/api-gateway/src/observability/metrics.ts",
+              "services/api-gateway/src/observability/metrics.js"
+            ],
+            "base": "repo"
+          }
+        ]
+      }
+    },
+    {
+      "id": "observability/logging_module_exists",
+      "title": "API gateway logging module exists",
+      "pillar": "observability",
+      "processes": [
+        "monitoring"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "anyFileExists",
+            "paths": [
+              "services/api-gateway/src/observability/logging.ts",
+              "services/api-gateway/src/observability/logging.js"
+            ],
+            "base": "repo"
+          }
+        ],
+        "production": [
+          {
+            "type": "anyFileExists",
+            "paths": [
+              "services/api-gateway/src/observability/logging.ts",
+              "services/api-gateway/src/observability/logging.js"
+            ],
+            "base": "repo"
+          }
+        ]
+      }
+    },
+    {
+      "id": "observability/incident_runbook_exists",
+      "title": "Incident response runbook exists",
+      "pillar": "observability",
+      "processes": [
+        "incident_change"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "fileExists",
+            "path": "docs/ops/incident-response.md",
+            "base": "assessor"
+          }
+        ],
+        "production": [
+          {
+            "type": "fileExists",
+            "path": "docs/ops/incident-response.md",
+            "base": "assessor"
+          }
+        ]
+      }
+    },
+    {
+      "id": "resilience_dr/dr_plan_doc",
+      "title": "Disaster recovery plan documented (RTO/RPO, restore steps)",
+      "pillar": "resilience_dr",
+      "processes": [
+        "backup_restore"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "fileExists",
+            "path": "docs/ops/disaster-recovery.md",
+            "base": "assessor"
+          },
+          {
+            "type": "fileRegex",
+            "path": "docs/ops/disaster-recovery.md",
+            "pattern": "RTO|RPO|restore",
+            "flags": "mi",
+            "base": "assessor"
+          }
+        ],
+        "production": [
+          {
+            "type": "fileExists",
+            "path": "docs/ops/disaster-recovery.md",
+            "base": "assessor"
+          },
+          {
+            "type": "fileRegex",
+            "path": "docs/ops/disaster-recovery.md",
+            "pattern": "RTO|RPO|restore",
+            "flags": "mi",
+            "base": "assessor"
+          }
+        ]
+      }
+    },
+    {
+      "id": "resilience_dr/restore_drill_script",
+      "title": "Restore drill script exists (repeatable restore validation)",
+      "pillar": "resilience_dr",
+      "processes": [
+        "backup_restore"
+      ],
+      "stage": [
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "production": [
+          {
+            "type": "fileExists",
+            "path": "scripts/assessor/restore-drill.cjs",
+            "base": "assessor"
+          }
+        ]
+      }
+    },
+    {
+      "id": "supply_chain/fs_scan_wired",
+      "title": "Filesystem scanning is wired (package script)",
+      "pillar": "supply_chain",
+      "processes": [
+        "release_evidence"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "packageJsonScript",
+            "path": "package.json",
+            "script": "scan:fs"
+          }
+        ],
+        "production": [
+          {
+            "type": "packageJsonScript",
+            "path": "package.json",
+            "script": "scan:fs"
+          },
+          {
+            "type": "liveCommandPass",
+            "commandId": "scan_fs"
+          }
+        ]
+      }
+    },
+    {
+      "id": "supply_chain/sbom_check_wired",
+      "title": "SBOM check is wired (script exists + package script)",
+      "pillar": "supply_chain",
+      "processes": [
+        "release_evidence"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "anyFileExists",
+            "paths": [
+              "scripts/check-sbom.mjs",
+              "scripts/check-sbom.js"
+            ],
+            "base": "repo"
+          },
+          {
+            "type": "packageJsonScript",
+            "path": "package.json",
+            "script": "check:sbom"
+          }
+        ],
+        "production": [
+          {
+            "type": "anyFileExists",
+            "paths": [
+              "scripts/check-sbom.mjs",
+              "scripts/check-sbom.js"
+            ],
+            "base": "repo"
+          },
+          {
+            "type": "packageJsonScript",
+            "path": "package.json",
+            "script": "check:sbom"
+          },
+          {
+            "type": "liveCommandPass",
+            "commandId": "check_sbom"
+          }
+        ]
+      }
+    },
+    {
+      "id": "infra_envs/env_docs_present",
+      "title": "Environment documentation exists (env vars + environments)",
+      "pillar": "infra_envs",
+      "processes": [
+        "release_evidence"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "fileExists",
+            "path": "docs/ops/env-vars.md",
+            "base": "assessor"
+          },
+          {
+            "type": "fileExists",
+            "path": "docs/ops/environments.md",
+            "base": "assessor"
+          }
+        ],
+        "production": [
+          {
+            "type": "fileExists",
+            "path": "docs/ops/env-vars.md",
+            "base": "assessor"
+          },
+          {
+            "type": "fileExists",
+            "path": "docs/ops/environments.md",
+            "base": "assessor"
+          }
+        ]
+      }
+    },
+    {
+      "id": "infra_envs/iac_readme_present",
+      "title": "Infrastructure-as-code README exists in repo",
+      "pillar": "infra_envs",
+      "processes": [
+        "release_evidence"
+      ],
+      "stage": [
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "production": [
+          {
+            "type": "fileExists",
+            "path": "infra/iac/README.md",
+            "base": "repo"
+          }
+        ]
+      }
+    },
+    {
+      "id": "infra_envs/assess_workflow_present",
+      "title": "CI workflow exists for assessments",
+      "pillar": "infra_envs",
+      "processes": [
+        "release_evidence"
+      ],
+      "stage": [
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "production": [
+          {
+            "type": "workflowExists",
+            "path": ".github/workflows/assess.yml"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ir_change_mgmt/incident_response_doc",
+      "title": "Incident response process documented",
+      "pillar": "ir_change_mgmt",
+      "processes": [
+        "incident_change"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "fileExists",
+            "path": "docs/ops/incident-response.md",
+            "base": "assessor"
+          }
+        ],
+        "production": [
+          {
+            "type": "fileExists",
+            "path": "docs/ops/incident-response.md",
+            "base": "assessor"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ir_change_mgmt/change_management_doc",
+      "title": "Change management process documented",
+      "pillar": "ir_change_mgmt",
+      "processes": [
+        "incident_change"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": true
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "fileExists",
+            "path": "docs/ops/change-management.md",
+            "base": "assessor"
+          }
+        ],
+        "production": [
+          {
+            "type": "fileExists",
+            "path": "docs/ops/change-management.md",
+            "base": "assessor"
+          }
+        ]
+      }
+    },
+    {
+      "id": "compliance_traceability/osf_matrix_exists",
+      "title": "OSF matrix exists (status tracking of controls/features)",
+      "pillar": "compliance_traceability",
+      "processes": [
+        "release_evidence"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": false
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "fileExists",
+            "path": "status/osf-matrix.json",
+            "base": "repo"
+          }
+        ],
+        "production": [
+          {
+            "type": "fileExists",
+            "path": "status/osf-matrix.json",
+            "base": "repo"
+          }
+        ]
+      }
+    },
+    {
+      "id": "compliance_traceability/requirements_file_present",
+      "title": "Requirements file present (v3)",
+      "pillar": "compliance_traceability",
+      "processes": [
+        "release_evidence"
+      ],
+      "stage": [
+        "prototype",
+        "production"
+      ],
+      "gate": {
+        "prototype": false,
+        "production": false
+      },
+      "checks": {
+        "prototype": [
+          {
+            "type": "fileExists",
+            "path": "docs/assessor/requirements.v3.json",
+            "base": "assessor"
+          }
+        ],
+        "production": [
+          {
+            "type": "fileExists",
+            "path": "docs/assessor/requirements.v3.json",
+            "base": "assessor"
+          }
+        ]
+      }
+    }
+  ]
+}
