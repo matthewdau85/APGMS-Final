@@ -83,3 +83,5 @@ status/incidents/
 # zips / exports
 *.zip
 
+.tmp/
+services/api-gateway/src/routes/*.bak.*
