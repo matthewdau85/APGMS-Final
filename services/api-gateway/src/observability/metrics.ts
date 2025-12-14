@@ -1,4 +1,4 @@
-﻿import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
   Counter,
   Histogram,
@@ -8,9 +8,9 @@ import {
 } from 'prom-client';
 
 export const orgRiskScoreGauge = new Gauge({
-  name: "apgms_org_risk_score",
-  help: "Organisation risk score",
-  labelNames: ["orgId"],
+  name: 'apgms_org_risk_score',
+  help: 'Organisation risk score',
+  labelNames: ['orgId'],
 });
 
 // ---- Registry & default process metrics ----
@@ -121,20 +121,27 @@ const riskEventsTotal = new Counter({
 
 // ---- Public API for DB/jobs instrumentation ----
 export const metrics = {
+  orgRiskScoreGauge,
+
   httpRequestTotal,
   httpRequestDuration,
+
   dbQueryDuration,
   dbQueryTotal,
+
   jobDuration,
+
   integrationEventDuration,
   integrationEventsTotal,
   integrationDiscrepanciesTotal,
   obligationsTotal,
   integrationAnomalyScore,
+
   basLodgmentsTotal,
   transferInstructionTotal,
   transferExecutionTotal,
   paymentPlanRequestsTotal,
+
   atoReportsTotal,
   riskEventsTotal,
 
@@ -198,3 +205,52 @@ export function installHttpMetrics(app: FastifyInstance) {
     done();
   });
 }
+
+// ---- Risk band gauge (1=LOW, 2=MEDIUM, 3=HIGH) ----
+export type RiskBandGaugeLabels = {
+  orgId: string;
+  period: string;
+};
+
+let __apgmsRiskBandGauge: Gauge<'orgId' | 'period'> | undefined;
+
+function getRiskBandGauge(): Gauge<'orgId' | 'period'> {
+  if (__apgmsRiskBandGauge) return __apgmsRiskBandGauge;
+
+  const existing = promRegister.getSingleMetric(
+    'apgms_risk_band_gauge',
+  ) as Gauge<'orgId' | 'period'> | undefined;
+
+  if (existing) {
+    __apgmsRiskBandGauge = existing;
+    return existing;
+  }
+
+  try {
+    __apgmsRiskBandGauge = new Gauge<'orgId' | 'period'>({
+      name: 'apgms_risk_band_gauge',
+      help: 'APGMS risk band gauge (1=LOW, 2=MEDIUM, 3=HIGH)',
+      labelNames: ['orgId', 'period'],
+    });
+  } catch {
+    // If parallel init registered it first, reuse it.
+    const fallback = promRegister.getSingleMetric(
+      'apgms_risk_band_gauge',
+    ) as Gauge<'orgId' | 'period'> | undefined;
+
+    if (!fallback) throw new Error('Failed to init apgms_risk_band_gauge');
+    __apgmsRiskBandGauge = fallback;
+  }
+
+  return __apgmsRiskBandGauge;
+}
+
+// Exported wrapper so routes + Jest can mock .set() cleanly
+export const apgmsRiskBandGauge = {
+  set(labels: RiskBandGaugeLabels, value: number) {
+    getRiskBandGauge().set(labels, value);
+  },
+};
+
+// Back-compat alias (if existing code imports riskBandGauge)
+export const riskBandGauge = apgmsRiskBandGauge;
