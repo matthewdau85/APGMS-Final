@@ -1,21 +1,34 @@
-export type DeleteOutcome =
-  | { action: "ANONYMISED"; reason: string }
-  | { action: "HARD_DELETED"; reason: string };
-
-export type RiskDeleteStore = {
-  hasConstraints(userId: string): Promise<boolean>;
-  anonymiseUser(userId: string): Promise<void>;
-  hardDeleteUser(userId: string): Promise<void>;
+export type RiskDeleteInput = {
+  orgId: string;
+  userId: string;
+  actor: string;
 };
 
-export async function deleteUserWithRisk(store: RiskDeleteStore, userId: string): Promise<DeleteOutcome> {
-  const constrained = await store.hasConstraints(userId);
+export type RiskDeleteResult =
+  | {
+      action: "ANONYMISED";
+      reason: string;
+    }
+  | {
+      action: "DELETED";
+    };
+
+export interface RiskDeleteStore {
+  hasConstraints(input: RiskDeleteInput): Promise<boolean>;
+}
+
+export async function deleteUserWithRisk(
+  store: RiskDeleteStore,
+  input: RiskDeleteInput,
+): Promise<RiskDeleteResult> {
+  const constrained = await store.hasConstraints(input);
 
   if (constrained) {
-    await store.anonymiseUser(userId);
-    return { action: "ANONYMISED", reason: "Constraints present; retained records require anonymisation" };
+    return {
+      action: "ANONYMISED",
+      reason: "Constraints present; retained records require anonymisation",
+    };
   }
 
-  await store.hardDeleteUser(userId);
-  return { action: "HARD_DELETED", reason: "No constraints detected; hard delete permitted" };
+  return { action: "DELETED" };
 }
