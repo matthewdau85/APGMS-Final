@@ -1,7 +1,7 @@
 // services/api-gateway/test/risk-summary.test.ts
 
 import Fastify from "fastify";
-import { metrics } from "../src/observability/metrics";
+import { metrics } from "../src/observability/metrics.js";
 import { computeOrgRisk } from "@apgms/domain-policy/risk/anomaly";
 import { registerRiskSummaryRoutes } from "../src/routes/risk-summary";
 
@@ -19,7 +19,7 @@ jest.mock("@apgms/domain-policy/risk/anomaly", () => ({
   computeOrgRisk: jest.fn(),
 }));
 
-jest.mock("../src/observability/metrics", () => ({
+jest.mock("../src/observability/metrics.js", () => ({
   metrics: {
     orgRiskScoreGauge: {
       set: jest.fn(),

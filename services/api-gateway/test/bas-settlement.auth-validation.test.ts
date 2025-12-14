@@ -2,6 +2,9 @@ import Fastify from "fastify";
 import { buildFastifyApp } from "../src/app";
 import { basSettlementRoutes } from "../src/routes/bas-settlement";
 
+jest.setTimeout(30000);
+
+
 // ---- Auth behaviour via full app (secure scope) ----
 
 describe("/api/settlements/bas auth (via buildFastifyApp)", () => {

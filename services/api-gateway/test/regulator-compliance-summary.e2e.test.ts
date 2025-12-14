@@ -16,7 +16,7 @@ jest.mock("../src/auth", () => {
 });
 
 // 2) Mock obligations domain: we simulate one org with PAYGW 300c + GST 100c
-jest.mock("@apgms/domain-policy/obligations/computeOrgObligationsForPeriod", () => ({
+jest.mock("@apgms/domain-policy/obligations/computeOrgObligationsForPeriod.js", () => ({
   computeOrgObligationsForPeriod: jest.fn().mockResolvedValue({
     paygwCents: 300,
     gstCents: 100,
