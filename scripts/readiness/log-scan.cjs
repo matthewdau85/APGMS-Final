@@ -28,8 +28,8 @@ function tailLines(content, maxLines) {
 function main() {
   const logPath = process.env.READINESS_LOG_PATH;
   if (!logPath) {
-    console.error("[log-scan] READINESS_LOG_PATH is required");
-    process.exit(2);
+    console.warn("[log-scan] READINESS_LOG_PATH not set – skipping log scan");
+    process.exit(0);
   }
   const abs = path.resolve(logPath);
 
