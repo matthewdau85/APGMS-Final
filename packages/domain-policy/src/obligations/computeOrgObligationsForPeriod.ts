@@ -44,13 +44,13 @@ export async function computeOrgObligationsForPeriod(
     }),
   ]);
 
-  const payrollDtos: PayrollItemDTO[] = payrollItems.map((p) => ({
+  const payrollDtos: PayrollItemDTO[] = payrollItems.map((p: any) => ({
     orgId: p.orgId,
     period: p.period,
     paygwCents: Number(p.paygwCents ?? 0),
   }));
 
-  const gstDtos: GstTransactionDTO[] = gstTransactions.map((g) => ({
+  const gstDtos: GstTransactionDTO[] = gstTransactions.map((g: any) => ({
     orgId: g.orgId,
     period: g.period,
     gstCents: Number(g.gstCents ?? 0),

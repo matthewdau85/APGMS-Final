@@ -9,10 +9,16 @@
     "moduleResolution": "NodeNext",
     "baseUrl": ".",
     "paths": {
-      "@apgms/shared/db.js": ["src/shims/apgms-shared-db.d.ts"]
-    }
+      "@apgms/shared/db.js": [
+        "src/shims/apgms-shared-db.d.ts"
+      ]
+    },
+    "noEmit": false,
+    "emitDeclarationOnly": false
   },
-  "include": ["src/**/*.ts"],
+  "include": [
+    "src/**/*.ts"
+  ],
   "exclude": [
     "dist",
     "node_modules",

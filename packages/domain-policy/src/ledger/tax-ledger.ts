@@ -47,7 +47,7 @@ function computeLedgerHashSelf(input: {
 export async function appendLedgerEntry(args: LedgerPostArgs) {
   const effectiveAt = args.effectiveAt ?? new Date();
 
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx: any) => {
     // Find the last ledger entry for this org/period/category
     const last = await tx.taxLedgerEntry.findFirst({
       where: {

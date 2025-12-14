@@ -1,22 +1,74 @@
 {
-    "name":  "@apgms/domain-policy",
-    "version":  "0.1.0",
-    "private":  true,
-    "type":  "module",
-    "main":  "dist/index.js",
-    "types":  "dist/index.d.ts",
-    "exports":  {
-                    ".":  "./dist/index.js"
-                },
-    "dependencies":  {
-                         "@prisma/client":  "6.19.0"
-                     },
-    "devDependencies":  {
-                            "@types/jest":  "^29.5.14",
-                            "ts-jest":  "^29.4.5"
-                        },
-    "scripts":  {
-                    "build":  "tsc -p tsconfig.json",
-                    "test":  "jest --config ./jest.config.cjs --runInBand"
-                }
+  "name": "@apgms/domain-policy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./obligations/computeOrgObligationsForPeriod": {
+      "types": "./dist/obligations/computeOrgObligationsForPeriod.d.ts",
+      "import": "./dist/obligations/computeOrgObligationsForPeriod.js",
+      "require": "./dist/obligations/computeOrgObligationsForPeriod.js"
+    },
+    "./obligations/computeOrgObligationsForPeriod.js": {
+      "types": "./dist/obligations/computeOrgObligationsForPeriod.d.ts",
+      "import": "./dist/obligations/computeOrgObligationsForPeriod.js",
+      "require": "./dist/obligations/computeOrgObligationsForPeriod.js"
+    },
+    "./risk/anomaly": {
+      "types": "./dist/risk/anomaly-public.d.ts",
+      "import": "./dist/risk/anomaly-public.js",
+      "default": "./dist/risk/anomaly-public.js"
+    },
+    "./risk/anomaly.js": {
+      "types": "./dist/risk/anomaly-public.d.ts",
+      "import": "./dist/risk/anomaly-public.js",
+      "require": "./dist/risk/anomaly-public.js"
+    },
+    "./ledger/tax-ledger": {
+      "types": "./dist/ledger/tax-ledger-public.d.ts",
+      "import": "./dist/ledger/tax-ledger-public.js",
+      "require": "./dist/ledger/tax-ledger-public.js"
+    },
+    "./ledger/tax-ledger.js": {
+      "types": "./dist/ledger/tax-ledger-public.d.ts",
+      "import": "./dist/ledger/tax-ledger-public.js",
+      "require": "./dist/ledger/tax-ledger-public.js"
+    }
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "ts-jest": "^29.4.5"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "jest --config ./jest.config.cjs --runInBand"
+  },
+  "typesVersions": {
+    "*": {
+      "obligations/computeOrgObligationsForPeriod": [
+        "dist/obligations/computeOrgObligationsForPeriod.d.ts"
+      ],
+      "obligations/computeOrgObligationsForPeriod.js": [
+        "dist/obligations/computeOrgObligationsForPeriod.d.ts"
+      ],
+      "risk/anomaly": [
+        "dist/risk/anomaly-public.d.ts"
+      ],
+      "risk/anomaly.js": [
+        "dist/risk/anomaly-public.d.ts"
+      ],
+      "ledger/tax-ledger": [
+        "dist/ledger/tax-ledger-public.d.ts"
+      ],
+      "ledger/tax-ledger.js": [
+        "dist/ledger/tax-ledger-public.d.ts"
+      ]
+    }
+  }
 }
