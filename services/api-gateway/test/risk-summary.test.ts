@@ -15,7 +15,7 @@ jest.mock("../src/auth", () => ({
   },
 }));
 
-jest.mock("@apgms/domain-policy/risk/anomaly", () => ({
+jest.mock("@apgms/domain-policy/risk/anomaly.js", () => ({
   computeOrgRisk: jest.fn(),
 }));
 
@@ -30,7 +30,7 @@ jest.mock("../src/observability/metrics.js", () => ({
 const mockedCompute = computeOrgRisk as jest.MockedFunction<
   typeof computeOrgRisk
 >;
-const mockedGaugeSet = metrics.orgRiskScoreGauge.set as jest.Mock;
+const mockedGaugeSet = riskBandGauge.set as jest.Mock;
 
 describe("/monitor/risk/summary", () => {
   let app: ReturnType<typeof Fastify>;

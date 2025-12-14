@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { computeOrgRisk } from "@apgms/domain-policy/risk/anomaly";
+import { computeOrgRisk } from "@apgms/domain-policy/risk/anomaly.js";
 
 // IMPORTANT: no ".js" here so Jest mocks that target "../observability/metrics" actually match.
 import { riskBandGauge } from "../observability/metrics.js";
