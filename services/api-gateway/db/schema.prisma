@@ -1,6 +1,5 @@
 // services/api-gateway/db/schema.prisma
 
-// services/api-gateway/db/schema.prisma
 datasource db {
   provider          = "postgresql"
   url               = env("DATABASE_URL")
@@ -23,6 +22,7 @@ model Organization {
 
   // Who created this organisation record (onboarding user)
   createdByUserId String?
+  createdByUser   User?   @relation("Organization_createdByUserId", fields: [createdByUserId], references: [id])
 
   // Schedule + shortfall threshold for secured tax buffers
   schedule              Schedule @default(QUARTERLY)
@@ -61,12 +61,105 @@ model ObligationHistory {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
+  id           String @id @default(cuid())
+  email        String @unique
   passwordHash String
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   organizationsCreated Organization[] @relation("Organization_createdByUserId")
+}
+
+// =============================
+// AU Tax Config (versioned, provenance-friendly)
+// =============================
+
+enum AuTaxType {
+  PAYGW
+  GST
+  HELP
+  STSL
+}
+
+enum AuTaxRateTableKind {
+  PAYGW_WITHHOLDING
+  GST_RULES
+  HELP_STSL_SCHEDULE
+}
+
+enum TaxConfigStatus {
+  DRAFT
+  ACTIVE
+  RETIRED
+}
+
+model AuTaxParameterSet {
+  id            String           @id @default(cuid())
+  taxType        AuTaxType
+  status         TaxConfigStatus @default(ACTIVE)
+
+  /// Inclusive start date for this parameter set.
+  effectiveFrom  DateTime
+  /// Inclusive end date (optional). When a new set becomes effective, you close the old one.
+  effectiveTo    DateTime?
+
+  /// Provenance (ATO source reference + hash for evidence)
+  sourceName     String
+  sourceRef      String?
+  sourceHash     String
+  retrievedAt    DateTime?
+
+  tables         AuTaxRateTable[]
+
+  /// Change audit (optional but useful for the rule-update worker)
+  changesAsNew   AuTaxRuleChange[] @relation("AuTaxRuleChange_NewSet")
+  changesAsOld   AuTaxRuleChange[] @relation("AuTaxRuleChange_OldSet")
+
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([taxType, effectiveFrom])
+  @@index([taxType, effectiveFrom, effectiveTo])
+}
+
+model AuTaxRateTable {
+  id              String            @id @default(cuid())
+  parameterSetId  String
+  parameterSet    AuTaxParameterSet @relation(fields: [parameterSetId], references: [id], onDelete: Cascade)
+
+  kind            AuTaxRateTableKind
+  name            String?
+  /// Canonical table payload (brackets, rates, rules) lives here.
+  payload         Json
+  /// Optional content hash of the payload for evidence/provenance.
+  payloadHash     String?
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@unique([parameterSetId, kind])
+  @@index([kind])
+}
+
+model AuTaxRuleChange {
+  id                String            @id @default(cuid())
+  taxType            AuTaxType
+  kind               AuTaxRateTableKind
+
+  oldParameterSetId  String?
+  oldParameterSet    AuTaxParameterSet? @relation("AuTaxRuleChange_OldSet", fields: [oldParameterSetId], references: [id])
+
+  newParameterSetId  String
+  newParameterSet    AuTaxParameterSet  @relation("AuTaxRuleChange_NewSet", fields: [newParameterSetId], references: [id])
+
+  effectiveFrom      DateTime
+  diffSummary        Json?
+  sourceRef          String?
+  sourceHash         String
+
+  appliedBy          String            @default("system")
+  appliedAt          DateTime          @default(now())
+
+  @@index([taxType, kind, effectiveFrom])
 }
