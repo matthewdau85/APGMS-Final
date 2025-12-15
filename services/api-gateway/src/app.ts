@@ -3,6 +3,7 @@ import { prisma } from "./db.js";
 import { adminServiceModePlugin } from "./routes/admin-service-mode.js";
 import registerRiskSummaryRoutes from "./routes/risk-summary.js";
 import { regulatorComplianceSummaryPlugin } from "./routes/regulator-compliance-summary.js";
+import { regulatorComplianceEvidencePackPlugin } from "./routes/regulator-compliance-evidence-pack.js";
 import adminUsersPlugin from "./routes/admin-users.js";
 import { prototypeAdminGuard } from "./guards/prototype-admin.js";
 
@@ -78,7 +79,7 @@ export function buildFastifyApp(options: BuildFastifyAppOptions = {}): FastifyIn
   // Internal admin endpoint (token-guarded inside plugin)
   app.register(adminServiceModePlugin, { prefix: "/admin" });
 
-  // 🔒 Prototype-only scope (admin only)
+  // Prototype-only scope (admin only)
   app.register(async (protoScope) => {
     protoScope.addHook("preHandler", prototypeAdminGuard());
 
@@ -87,6 +88,9 @@ export function buildFastifyApp(options: BuildFastifyAppOptions = {}): FastifyIn
 
     // Regulator compliance summary (mounted under /regulator/*)
     protoScope.register(regulatorComplianceSummaryPlugin, { prefix: "/regulator" });
+
+    // Evidence pack export (prototype reporting / audit support)
+    protoScope.register(regulatorComplianceEvidencePackPlugin, { prefix: "/regulator" });
 
     // Admin-only prototype route group under /admin/*
     // (safe, deterministic placeholder store for now)
@@ -109,7 +113,9 @@ export function buildFastifyApp(options: BuildFastifyAppOptions = {}): FastifyIn
     const authGuard = authMod.authGuard ?? authMod.default;
 
     if (typeof authGuard !== "function") {
-      throw new Error("authGuard is not exported from ./auth (expected named authGuard or default export).");
+      throw new Error(
+        "authGuard is not exported from ./auth (expected named authGuard or default export)."
+      );
     }
 
     secureScope.addHook("preHandler", authGuard);
