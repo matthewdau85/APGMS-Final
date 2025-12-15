@@ -1,8 +1,10 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { prisma } from "./db.js";
 import { adminServiceModePlugin } from "./routes/admin-service-mode.js";
+import registerRiskSummaryRoutes from "./routes/risk-summary.js";
 import { regulatorComplianceSummaryPlugin } from "./routes/regulator-compliance-summary.js";
-
+import adminUsersPlugin from "./routes/admin-users.js";
+import { prototypeAdminGuard } from "./guards/prototype-admin.js";
 
 type Environment = "development" | "test" | "production";
 
@@ -51,6 +53,7 @@ async function tryImport(path: string): Promise<any | null> {
 
 export function buildFastifyApp(options: BuildFastifyAppOptions = {}): FastifyInstance {
   const logger = options.logger ?? true;
+
   const baseConfig: AppConfig = {
     environment: (process.env.NODE_ENV as Environment) ?? "development",
     auth: {
@@ -75,7 +78,30 @@ export function buildFastifyApp(options: BuildFastifyAppOptions = {}): FastifyIn
   // Internal admin endpoint (token-guarded inside plugin)
   app.register(adminServiceModePlugin, { prefix: "/admin" });
 
-  app.register(regulatorComplianceSummaryPlugin);
+  // 🔒 Prototype-only scope (admin only)
+  app.register(async (protoScope) => {
+    protoScope.addHook("preHandler", prototypeAdminGuard());
+
+    // Monitoring / risk prototype route
+    registerRiskSummaryRoutes(protoScope);
+
+    // Regulator compliance summary (mounted under /regulator/*)
+    protoScope.register(regulatorComplianceSummaryPlugin, { prefix: "/regulator" });
+
+    // Admin-only prototype route group under /admin/*
+    // (safe, deterministic placeholder store for now)
+    protoScope.register(
+      adminUsersPlugin,
+      {
+        prefix: "/admin",
+        riskStore: {
+          async recordRiskEvent() {
+            // no-op (prototype). Replace with durable store later.
+          },
+        },
+      } as any
+    );
+  });
 
   // Secure scope: everything here requires auth
   app.register(async (secureScope) => {

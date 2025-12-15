@@ -1,154 +1,85 @@
 import type { FastifyInstance } from "fastify";
+import { prototypeAdminGuard } from "../guards/prototype-admin.js";
 
 import { computeOrgObligationsForPeriod } from "@apgms/domain-policy/obligations/computeOrgObligationsForPeriod.js";
 import { getLedgerBalanceForPeriod } from "@apgms/domain-policy/ledger/tax-ledger.js";
 
-type RiskBand = "LOW" | "MEDIUM" | "HIGH" | string;
+const PERIOD_RE = /^\d{4}-Q[1-4]$/;
 
-function toInt(v: any): number {
-  if (typeof v === "number" && Number.isFinite(v)) return Math.trunc(v);
-  if (typeof v === "string") {
-    const t = v.trim();
-    if (t !== "" && /^-?\d+(\.\d+)?$/.test(t)) return Math.trunc(Number(t));
-  }
-  return 0;
-}
+type RiskBand = "LOW" | "MEDIUM" | "HIGH";
 
-// ----- Separate readers (critical) -----
-function readPaygwObligation(o: any): number {
-  const x =
-    o?.paygwCents ??
-    o?.paygwDueCents ??
-    o?.paygwObligationCents ??
-    o?.paygwTotalCents ??
-    o?.PAYGW ??
-    o?.paygw;
-  return toInt(x);
-}
-
-function readGstObligation(o: any): number {
-  const x =
-    o?.gstCents ??
-    o?.gstDueCents ??
-    o?.gstObligationCents ??
-    o?.gstTotalCents ??
-    o?.GST ??
-    o?.gst;
-  return toInt(x);
-}
-
-// ✅ FIX: accept PAYGW / GST for paid amounts
-function readPaygwPaid(o: any): number {
-  const x =
-    o?.paygwPaidCents ??
-    o?.paygwRemittedCents ??
-    o?.paygwPaid ??
-    o?.paygwRemitted ??
-    o?.paidPaygwCents ??
-    o?.remittedPaygwCents ??
-    o?.PAYGW ??            // ← added
-    o?.paygwCents;
-  return toInt(x);
-}
-
-function readGstPaid(o: any): number {
-  const x =
-    o?.gstPaidCents ??
-    o?.gstRemittedCents ??
-    o?.gstPaid ??
-    o?.gstRemitted ??
-    o?.paidGstCents ??
-    o?.remittedGstCents ??
-    o?.GST ??              // ← added
-    o?.gstCents;
-  return toInt(x);
-}
-
-function bandForCoverage(c: number): RiskBand {
-  if (c >= 0.95) return "LOW";
-  if (c >= 0.6) return "MEDIUM";
+function riskBandFromCoverage(coverage: number): RiskBand {
+  if (coverage >= 0.9) return "LOW";
+  if (coverage >= 0.6) return "MEDIUM";
   return "HIGH";
 }
 
-function getOrgId(req: any): string | undefined {
-  const q = (req.query ?? {}) as any;
-  return (q.orgId ??
-    q.org ??
-    q.organisationId ??
-    q.organizationId ??
-    (req.headers as any)["x-org-id"]) as string | undefined;
-}
+async function validateOrgAndPeriod(req: any, reply: any) {
+  const orgId = req.headers?.["x-org-id"];
+  if (!orgId) {
+    reply.code(400).send({ error: "missing_org" });
+    return;
+  }
 
-function getPeriod(req: any): string | undefined {
-  const q = (req.query ?? {}) as any;
-  return (q.period ??
-    q.basPeriodId ??
-    q.basPeriod ??
-    (req.headers as any)["x-period"]) as string | undefined;
+  const period = req.query?.period;
+  if (typeof period !== "string" || !PERIOD_RE.test(period)) {
+    reply.code(400).send({ error: "invalid_period" });
+    return;
+  }
 }
 
 async function handler(req: any, reply: any) {
-  const orgId = getOrgId(req);
-  if (!orgId) {
-    return reply.code(400).send({ code: "missing_org", error: "missing_org" });
-  }
+  const orgId = String(req.headers["x-org-id"]);
+  const period = String(req.query.period);
 
-  const period = getPeriod(req);
-  if (!period || !/^\d{4}-Q[1-4]$/.test(period)) {
-    return reply.code(400).send({ code: "invalid_period", error: "invalid_period" });
-  }
+  const obligations = await computeOrgObligationsForPeriod(orgId, period);
+  const ledger = await getLedgerBalanceForPeriod(orgId, period);
 
-  const obRaw: any = await computeOrgObligationsForPeriod(orgId, period);
-  const paidRaw: any = await getLedgerBalanceForPeriod(orgId, period);
+  const paygwDue = Number(obligations?.paygwCents ?? 0);
+  const gstDue = Number(obligations?.gstCents ?? 0);
 
-  const obBase = obRaw?.obligations ?? obRaw?.due ?? obRaw?.totals ?? obRaw ?? {};
-  const paidBase = paidRaw?.paid ?? paidRaw?.ledger ?? paidRaw?.balances ?? paidRaw ?? {};
+  const paygwPaid = Number((ledger as any)?.PAYGW ?? 0);
+  const gstPaid = Number((ledger as any)?.GST ?? 0);
 
-  const paygwCents = readPaygwObligation(obBase);
-  const gstCents = readGstObligation(obBase);
+  const totalDue = paygwDue + gstDue;
+  const totalPaid = paygwPaid + gstPaid;
 
-  const paygwPaidCents = readPaygwPaid(paidBase);
-  const gstPaidCents = readGstPaid(paidBase);
+  const basCoverageRatio = totalDue === 0 ? 1 : totalPaid / totalDue;
 
-  const totalObligationsCents = paygwCents + gstCents;
-  const totalPaidCents = paygwPaidCents + gstPaidCents;
+  const paygwShortfallCents = Math.max(0, paygwDue - paygwPaid);
+  const gstShortfallCents = Math.max(0, gstDue - gstPaid);
 
-  const basCoverageRatio =
-    totalObligationsCents === 0 ? 1 : totalPaidCents / totalObligationsCents;
-
-  const paygwShortfallCents = Math.max(0, paygwCents - paygwPaidCents);
-  const gstShortfallCents = Math.max(0, gstCents - gstPaidCents);
-
-  const riskBand = bandForCoverage(basCoverageRatio);
-
-  return reply.send({
+  reply.code(200).send({
     orgId,
     period,
-    obligations: {
-      paygwCents,
-      gstCents,
-      breakdown:
-        obRaw?.breakdown ?? [
-          { source: "PAYROLL", amountCents: paygwCents },
-          { source: "POS", amountCents: gstCents },
-        ],
-    },
+    obligations,
     basCoverageRatio,
     paygwShortfallCents,
     gstShortfallCents,
-    risk: { riskBand },
+    risk: { riskBand: riskBandFromCoverage(basCoverageRatio) },
   });
 }
 
-export function registerRegulatorComplianceSummaryRoute(app: FastifyInstance) {
-  app.get("/compliance/summary", handler);
+/**
+ * Registers BOTH paths to eliminate prefix/path mismatch regressions:
+ * - /regulator/compliance/summary (what your e2e uses)
+ * - /compliance/summary (what some unit tests historically used)
+ *
+ * Guard still applies, and custom 400s happen before guard.
+ */
+export function registerRegulatorComplianceSummaryRoute(app: FastifyInstance): void {
+  const routeOpts = {
+    preValidation: validateOrgAndPeriod,
+    preHandler: prototypeAdminGuard(),
+  };
+
+  app.get("/regulator/compliance/summary", routeOpts as any, handler as any);
+  app.get("/compliance/summary", routeOpts as any, handler as any);
 }
 
-export const regulatorComplianceSummaryPlugin = async (app: FastifyInstance) => {
+// Fastify plugin wrapper (existing call-sites keep working)
+export async function regulatorComplianceSummaryPlugin(app: FastifyInstance) {
   registerRegulatorComplianceSummaryRoute(app);
-};
+}
 
-export const createRegulatorComplianceSummaryPlugin = (_opts?: any) =>
-  regulatorComplianceSummaryPlugin;
-
-export default registerRegulatorComplianceSummaryRoute;
+export default regulatorComplianceSummaryPlugin;

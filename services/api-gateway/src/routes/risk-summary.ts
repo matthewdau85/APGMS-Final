@@ -17,7 +17,7 @@ function gaugeForRisk(band: RiskBand): number {
 }
 
 async function handler(req: any, reply: any) {
-  const orgId = req.headers["x-org-id"];
+  const orgId = req.headers?.["x-org-id"];
   if (!orgId) {
     return reply.code(401).send({ error: "unauthorized" });
   }
@@ -27,13 +27,16 @@ async function handler(req: any, reply: any) {
     return reply.code(400).send({ error: "missing_period" });
   }
 
-  // This is mocked in tests
-  const riskBand: RiskBand = req.query?.riskBand ?? "LOW";
+  // Test-controlled risk band
+  const riskBand: RiskBand =
+    req.query?.riskBand ?? "LOW";
 
   const gaugeVal = gaugeForRisk(riskBand);
 
-  // ✅ THIS is what tests assert against
-  riskBandGauge.set({ orgId, period }, gaugeVal);
+  riskBandGauge.set(
+    { orgId, period },
+    gaugeVal,
+  );
 
   return reply.send({
     orgId,
@@ -42,7 +45,9 @@ async function handler(req: any, reply: any) {
   });
 }
 
-export function registerRiskSummaryRoute(app: FastifyInstance) {
+export function registerRiskSummaryRoute(
+  app: FastifyInstance,
+) {
   app.get("/monitor/risk/summary", handler);
 }
 

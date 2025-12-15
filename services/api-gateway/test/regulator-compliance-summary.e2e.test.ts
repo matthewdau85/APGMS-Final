@@ -43,9 +43,11 @@ describe("/regulator/compliance/summary e2e", () => {
 
     const res = await app.inject({
   method: "GET",
-  url: "/compliance/summary?period=2025-Q3",
+  url: "/regulator/compliance/summary?period=2025-Q3",
   headers: {
     "x-org-id": "org-demo-1", // so you don't hit the missing_org AppError
+    authorization: "Bearer admin-token",
+    "x-prototype-admin": "1",
   },
 });
 

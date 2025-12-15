@@ -1,4 +1,4 @@
-import { buildSecurityLogEntry } from "@apgms/shared/security-log.js";
+import { buildSecurityLogEntry } from "@apgms/shared";
 
 describe("security log redaction", () => {
   it("redacts TFN/ABN/bank account numbers in metadata", () => {
