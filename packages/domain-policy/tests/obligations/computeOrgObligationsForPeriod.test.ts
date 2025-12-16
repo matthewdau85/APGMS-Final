@@ -2,18 +2,24 @@
 
 import { computeOrgObligationsForPeriod } from "../../src/obligations/computeOrgObligationsForPeriod";
 
-// Jest hoists this mock – keep it above imports that use prisma.
-const mockPayrollFindMany = jest.fn();
-const mockGstFindMany = jest.fn();
+// IMPORTANT: jest.mock is hoisted. If you reference const/let here, you can hit TDZ.
+// Use `var` and assign inside the factory.
+// eslint-disable-next-line no-var
+var mockPayrollFindMany: jest.Mock;
+// eslint-disable-next-line no-var
+var mockGstFindMany: jest.Mock;
 
 jest.mock("@apgms/shared/db.js", () => {
+  mockPayrollFindMany = jest.fn();
+  mockGstFindMany = jest.fn();
+
   return {
     prisma: {
       payrollItem: {
-        findMany: mockPayrollFindMany,
+        findMany: (...args: any[]) => mockPayrollFindMany(...args),
       },
       gstTransaction: {
-        findMany: mockGstFindMany,
+        findMany: (...args: any[]) => mockGstFindMany(...args),
       },
     },
   };
@@ -29,7 +35,6 @@ describe("computeOrgObligationsForPeriod (DB adapter)", () => {
   });
 
   it("fetches payroll + GST by orgId and period and aggregates correctly", async () => {
-    // 🔹 THIS IS WHERE THOSE LINES GO
     mockPayrollFindMany.mockResolvedValue([
       { orgId, period, paygwCents: 1_000 },
       { orgId, period, paygwCents: 2_000 },
