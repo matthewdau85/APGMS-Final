@@ -5,13 +5,13 @@ async function main() {
   const prisma = new PrismaClient();
   try {
     await seedAu(prisma);
+    console.log("\n🌱  The seed command has been executed.");
   } finally {
     await prisma.$disconnect();
   }
 }
 
 main().catch((err) => {
-  // eslint-disable-next-line no-console
   console.error(err);
   process.exit(1);
 });

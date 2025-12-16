@@ -1,35 +1,51 @@
-import { AuTaxRateTableKind, type PrismaClient } from "@prisma/client";
-import { hashJson } from "./hash-json.js";
+import crypto from "node:crypto";
+import type { PrismaClient } from "@prisma/client";
 
-export async function seedPaygwWithholdingTable(prisma: PrismaClient, parameterSetId: string) {
-  // Scaffold payload. Replace with canonical ATO table payload later (Step 2+).
+function sha256Hex(input: string): string {
+  return crypto.createHash("sha256").update(input).digest("hex");
+}
+function hashJson(value: unknown): string {
+  return sha256Hex(JSON.stringify(value));
+}
+function requireDelegate(prisma: PrismaClient, key: string): any {
+  const delegate = (prisma as any)[key];
+  if (!delegate) {
+    const keys = Object.keys(prisma as any).filter((k) => /tax|au/i.test(k));
+    throw new Error(
+      `PrismaClient is missing ${key} delegate. Debug keys: ${JSON.stringify(keys)}`,
+    );
+  }
+  return delegate;
+}
+
+export async function seedPaygwWithholdingTable(
+  prisma: PrismaClient,
+  parameterSetId: string,
+): Promise<void> {
+  const auTaxRateTable = requireDelegate(prisma, "auTaxRateTable");
+
   const payload = {
-    schemaVersion: 1,
     kind: "PAYGW_WITHHOLDING",
-    notes: "Scaffold table. Replace with canonical ATO withholding schedules.",
+    version: "scaffold-2025-07-01",
+    notes: "Placeholder table – replace with ATO schedule / bracket tables",
     brackets: [],
   };
 
-  const payloadHash = hashJson(payload);
-
-  await prisma.auTaxRateTable.upsert({
+  await auTaxRateTable.upsert({
     where: {
-      parameterSetId_kind: {
-        parameterSetId,
-        kind: AuTaxRateTableKind.PAYGW_WITHHOLDING,
-      },
+      parameterSetId_kind: { parameterSetId, kind: "PAYGW_WITHHOLDING" },
     },
     update: {
-      name: "PAYGW withholding (scaffold)",
+      name: "AU PAYGW withholding (scaffold)",
       payload,
-      payloadHash,
+      payloadHash: hashJson(payload),
     },
     create: {
       parameterSetId,
-      kind: AuTaxRateTableKind.PAYGW_WITHHOLDING,
-      name: "PAYGW withholding (scaffold)",
+      kind: "PAYGW_WITHHOLDING",
+      name: "AU PAYGW withholding (scaffold)",
       payload,
-      payloadHash,
+      payloadHash: hashJson(payload),
     },
   });
 }

@@ -1,61 +1,84 @@
-import { AuTaxType, TaxConfigStatus, type PrismaClient } from "@prisma/client";
+import crypto from "node:crypto";
+import type { PrismaClient } from "@prisma/client";
 
-export async function seedAuTaxParameterSets(prisma: PrismaClient) {
-  const retrievedAt = new Date();
+/**
+ * Seed scaffolding for AU Tax Parameter Sets.
+ */
+function sha256Hex(input: string): string {
+  return crypto.createHash("sha256").update(input).digest("hex");
+}
 
-  // NOTE: These are scaffold values. Step 2+ will make engines require ACTIVE sets,
-  // and Step 5 worker will manage versioning/updates.
-  const paygw = await prisma.auTaxParameterSet.upsert({
+function requireDelegate(prisma: PrismaClient, key: string): any {
+  const delegate = (prisma as any)[key];
+  if (!delegate) {
+    const keys = Object.keys(prisma as any).filter((k) => /tax|au/i.test(k));
+    throw new Error(
+      [
+        `PrismaClient is missing ${key} delegate.`,
+        `This usually means @prisma/client was generated from a schema that does NOT include the AU tax config models.`,
+        ``,
+        `Run (from services/api-gateway):`,
+        `  pnpm db:generate`,
+        ``,
+        `Debug: prisma keys containing 'tax' or 'au': ${JSON.stringify(keys)}`,
+      ].join("\n"),
+    );
+  }
+  return delegate;
+}
+
+export async function seedAuTaxParameterSets(
+  prisma: PrismaClient,
+): Promise<{ paygwId: string; gstId: string }> {
+  const auTaxParameterSet = requireDelegate(prisma, "auTaxParameterSet");
+
+  const effectiveFrom = new Date("2025-07-01T00:00:00.000Z");
+
+  const paygw = await auTaxParameterSet.upsert({
     where: {
-      taxType_effectiveFrom: {
-        taxType: AuTaxType.PAYGW,
-        effectiveFrom: new Date("2025-07-01"),
-      },
+      taxType_effectiveFrom: { taxType: "PAYGW", effectiveFrom },
     },
     update: {
-      status: TaxConfigStatus.ACTIVE,
-      sourceName: "ATO",
-      sourceRef: "seed:paygw:2025-07-01",
-      sourceHash: "seed:paygw:2025-07-01",
-      retrievedAt,
+      status: "ACTIVE",
+      sourceName: "ATO (scaffold)",
+      sourceRef: "seed:au:paygw:2025-07-01",
+      sourceHash: sha256Hex("seed:au:paygw:2025-07-01"),
+      retrievedAt: new Date(),
     },
     create: {
-      taxType: AuTaxType.PAYGW,
-      status: TaxConfigStatus.ACTIVE,
-      effectiveFrom: new Date("2025-07-01"),
+      taxType: "PAYGW",
+      status: "ACTIVE",
+      effectiveFrom,
       effectiveTo: null,
-      sourceName: "ATO",
-      sourceRef: "seed:paygw:2025-07-01",
-      sourceHash: "seed:paygw:2025-07-01",
-      retrievedAt,
+      sourceName: "ATO (scaffold)",
+      sourceRef: "seed:au:paygw:2025-07-01",
+      sourceHash: sha256Hex("seed:au:paygw:2025-07-01"),
+      retrievedAt: new Date(),
     },
   });
 
-  const gst = await prisma.auTaxParameterSet.upsert({
+  const gst = await auTaxParameterSet.upsert({
     where: {
-      taxType_effectiveFrom: {
-        taxType: AuTaxType.GST,
-        effectiveFrom: new Date("2000-07-01"),
-      },
+      taxType_effectiveFrom: { taxType: "GST", effectiveFrom },
     },
     update: {
-      status: TaxConfigStatus.ACTIVE,
-      sourceName: "ATO",
-      sourceRef: "seed:gst:2000-07-01",
-      sourceHash: "seed:gst:2000-07-01",
-      retrievedAt,
+      status: "ACTIVE",
+      sourceName: "ATO (scaffold)",
+      sourceRef: "seed:au:gst:2025-07-01",
+      sourceHash: sha256Hex("seed:au:gst:2025-07-01"),
+      retrievedAt: new Date(),
     },
     create: {
-      taxType: AuTaxType.GST,
-      status: TaxConfigStatus.ACTIVE,
-      effectiveFrom: new Date("2000-07-01"),
+      taxType: "GST",
+      status: "ACTIVE",
+      effectiveFrom,
       effectiveTo: null,
-      sourceName: "ATO",
-      sourceRef: "seed:gst:2000-07-01",
-      sourceHash: "seed:gst:2000-07-01",
-      retrievedAt,
+      sourceName: "ATO (scaffold)",
+      sourceRef: "seed:au:gst:2025-07-01",
+      sourceHash: sha256Hex("seed:au:gst:2025-07-01"),
+      retrievedAt: new Date(),
     },
   });
 
-  return { paygwSetId: paygw.id, gstSetId: gst.id };
+  return { paygwId: paygw.id, gstId: gst.id };
 }

@@ -1,36 +1,56 @@
-import { AuTaxRateTableKind, type PrismaClient } from "@prisma/client";
-import { hashJson } from "./hash-json.js";
+import crypto from "node:crypto";
+import type { PrismaClient } from "@prisma/client";
 
-export async function seedGstRules(prisma: PrismaClient, parameterSetId: string) {
-  // Scaffold payload: GST rate rule is stable at 10% historically.
-  // Still: we keep it in config to enforce “no hard-coded rates” in engines.
+function sha256Hex(input: string): string {
+  return crypto.createHash("sha256").update(input).digest("hex");
+}
+function hashJson(value: unknown): string {
+  return sha256Hex(JSON.stringify(value));
+}
+function requireDelegate(prisma: PrismaClient, key: string): any {
+  const delegate = (prisma as any)[key];
+  if (!delegate) {
+    const keys = Object.keys(prisma as any).filter((k) => /tax|au/i.test(k));
+    throw new Error(
+      `PrismaClient is missing ${key} delegate. Debug keys: ${JSON.stringify(keys)}`,
+    );
+  }
+  return delegate;
+}
+
+export async function seedGstRules(
+  prisma: PrismaClient,
+  parameterSetId: string,
+): Promise<void> {
+  const auTaxRateTable = requireDelegate(prisma, "auTaxRateTable");
+
   const payload = {
-    schemaVersion: 1,
     kind: "GST_RULES",
+    version: "scaffold-2025-07-01",
+    notes: "Placeholder rules – replace with ATO-guided GST classification rules",
     gstRate: 0.1,
-    notes: "Scaffold rules. Expand to include taxable/GST-free/input-taxed classification rules.",
+    categories: {
+      taxable: ["DEFAULT"],
+      gstFree: [],
+      inputTaxed: [],
+    },
   };
 
-  const payloadHash = hashJson(payload);
-
-  await prisma.auTaxRateTable.upsert({
+  await auTaxRateTable.upsert({
     where: {
-      parameterSetId_kind: {
-        parameterSetId,
-        kind: AuTaxRateTableKind.GST_RULES,
-      },
+      parameterSetId_kind: { parameterSetId, kind: "GST_RULES" },
     },
     update: {
-      name: "GST rules (scaffold)",
+      name: "AU GST rules (scaffold)",
       payload,
-      payloadHash,
+      payloadHash: hashJson(payload),
     },
     create: {
       parameterSetId,
-      kind: AuTaxRateTableKind.GST_RULES,
-      name: "GST rules (scaffold)",
+      kind: "GST_RULES",
+      name: "AU GST rules (scaffold)",
       payload,
-      payloadHash,
+      payloadHash: hashJson(payload),
     },
   });
 }
