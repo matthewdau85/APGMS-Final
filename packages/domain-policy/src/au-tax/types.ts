@@ -31,6 +31,7 @@ export interface TaxParameterSetMeta {
   versionTag?: string;
 }
 
+/** Canonical bracket shape used by the PAYGW engine */
 export interface PaygwBracket {
   /** Income threshold (in cents) at which this bracket starts. */
   thresholdCents: number;
@@ -42,6 +43,8 @@ export interface PaygwBracket {
 }
 
 export interface PaygwConfig {
+  /** Discriminant (your engine checks this) */
+  kind: "PAYGW";
   meta: TaxParameterSetMeta;
   jurisdiction?: JurisdictionCode;
   taxType?: TaxType.PAYGW;
@@ -51,6 +54,8 @@ export interface PaygwConfig {
 }
 
 export interface GstConfig {
+  /** Discriminant (nice to have, not required by current engine) */
+  kind: "GST";
   meta: TaxParameterSetMeta;
   jurisdiction: JurisdictionCode;
   taxType: TaxType.GST;
@@ -62,6 +67,45 @@ export interface GstConfig {
 
 export type AuTaxConfig = PaygwConfig | GstConfig;
 
+/**
+ * Provider interface: domain-policy does NOT know Prisma.
+ * api-gateway implements this using Prisma + AuTaxParameterSet/AuTaxRateTable.
+ */
+export type AuTaxType = "PAYGW" | "GST" | "HELP" | "STSL";
+export type AuTaxRateTableKind =
+  | "PAYGW_WITHHOLDING"
+  | "GST_RULES"
+  | "HELP_STSL_SCHEDULE";
+
+export type TaxConfigStatus = "DRAFT" | "ACTIVE" | "RETIRED";
+
+export type AuTaxRateTableRow = {
+  kind: AuTaxRateTableKind;
+  name?: string | null;
+  payload: unknown;
+  payloadHash?: string | null;
+};
+
+export type AuTaxParameterSetRow = {
+  id: string;
+  taxType: AuTaxType;
+  status: TaxConfigStatus;
+  effectiveFrom: Date;
+  effectiveTo: Date | null;
+  sourceName: string;
+  sourceRef?: string | null;
+  sourceHash: string;
+  retrievedAt?: Date | null;
+  tables: AuTaxRateTableRow[];
+};
+
+export interface AuTaxConfigProvider {
+  getActiveParameterSetWithTables(params: {
+    taxType: AuTaxType;
+    onDate: Date;
+  }): Promise<AuTaxParameterSetRow | null>;
+}
+
 export interface TaxConfigRepository {
   getActiveConfig(params: {
     jurisdiction: JurisdictionCode;
@@ -72,12 +116,12 @@ export interface TaxConfigRepository {
   getPaygwConfigForSchedule?(
     jurisdiction: JurisdictionCode,
     payPeriod: PayPeriod,
-    onDate: Date
+    onDate: Date,
   ): Promise<PaygwConfig | null>;
 
   getGstConfig?(
     jurisdiction: JurisdictionCode,
-    onDate: Date
+    onDate: Date,
   ): Promise<GstConfig | null>;
 }
 
