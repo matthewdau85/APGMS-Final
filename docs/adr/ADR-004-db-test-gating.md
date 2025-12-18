@@ -1,4 +1,4 @@
-\# ADR-004: Database-backed Test Gating
+\# ADR-004: Database-backed test gating via RUN\_DB\_TESTS
 
 
 
@@ -10,45 +10,73 @@ Accepted
 
 \## Context
 
-Certain domain-policy tests validate cryptographic ledger integrity and require
+Some domain-policy tests (ledger hash-chain integrity) require a real database
 
-a real database (Prisma + Postgres). Running these unconditionally causes
+to validate cryptographic chaining and tamper detection.
 
-non-deterministic failures in local and CI environments.
+
+
+Running these tests unconditionally causes:
+
+\- Local developer friction
+
+\- CI instability
+
+\- Slower feedback cycles
 
 
 
 \## Decision
 
-Database-backed tests are gated behind the environment variable `RUN\_DB\_TESTS=1`.
+We gate database-backed tests behind an explicit environment variable:
 
-When unset, these tests are explicitly skipped using `describe.skip`.
+
+
+&nbsp;   RUN\_DB\_TESTS=1
+
+
+
+Tests default to being skipped unless explicitly enabled.
 
 
 
 \## Consequences
 
-\- Unit tests remain fast and deterministic
+\### Positive
 
-\- DB tests are opt-in and explicit
+\- Fast default test runs
 
-\- CI behavior is predictable
+\- Deterministic CI
 
-\- Operational dependencies are documented
+\- Clear separation of unit vs integrity tests
+
+\- Explicit audit signal for DB-backed controls
 
 
 
-\## Alternatives Considered
+\### Negative
 
-\- Always running DB tests (rejected)
+\- Developers must opt-in to DB tests locally
 
-\- Mocking database behavior (rejected)
+
+
+\## Implementation
+
+\- Jest uses `describe.skip` when `RUN\_DB\_TESTS` is unset
+
+\- CI runs DB tests in a dedicated step with Postgres
 
 
 
 \## Compliance Notes
 
-This approach aligns with DSP expectations for explicit operational controls.
+This pattern aligns with ATO DSP expectations for:
+
+\- Control isolation
+
+\- Repeatable integrity verification
+
+\- Evidence-based assurance
 
 
 

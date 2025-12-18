@@ -1,34 +1,29 @@
-\# EV-012: Ledger Integrity Testing
+# EV-LEDGER-INTEGRITY — Tax Ledger Hash-Chain Integrity
 
+## Control Objective
+Ensure tax ledger entries cannot be modified without detection.
 
+## Control Description
+Each tax ledger entry includes:
+- hashSelf: SHA-256 of entry contents
+- hashPrev: SHA-256 of previous entry
 
-\## Control Objective
+This forms an append-only hash chain.
 
-Ensure financial ledger entries cannot be tampered with undetected.
+## Verification Method
+Automated tests:
+- Create valid ledger chains
+- Tamper with amountCents and hashPrev
+- Assert detection via verifyChain()
 
+## Evidence
+- Test: `tests/ledger/tax-ledger.hash.test.ts`
+- Execution requires `RUN_DB_TESTS=1`
+- CI executes DB-backed tests on every PR
 
+## Result
+- Untampered chains pass verification
+- Any mutation is detected with index and reason
 
-\## Implementation
-
-Ledger entries are chained using cryptographic hashes (`hashSelf`, `hashPrev`).
-
-Integrity is verified using a database-backed test suite.
-
-
-
-\## Evidence
-
-\- Test: `tax-ledger.hash.test.ts`
-
-\- Execution gated via `RUN\_DB\_TESTS`
-
-\- CI execution documented
-
-
-
-\## Status
-
-Implemented and verified
-
-
-
+## Assurance Level
+High — cryptographic integrity + automated verification

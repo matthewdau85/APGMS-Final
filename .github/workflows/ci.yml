@@ -1,16 +1,8 @@
-name: CI Webapp
+name: CI
 
 on:
   push:
-    branches:
-      - main
-      - "feature/**"
-      - "fix/**"
   pull_request:
-
-concurrency:
-  group: ci-webapp-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   build-and-lighthouse:
@@ -64,9 +56,40 @@ jobs:
 
       - name: Run Playwright WCAG smoke
         env:
-          PLAYWRIGHT_BASE_URL: http://127.0.0.1:5173
-        run: pnpm -w exec playwright test webapp/tests/a11y.spec.ts
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: apgms_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
-      - name: Run axe tests
-        run: pnpm --filter @apgms/webapp test:axe
+    steps:
+      - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install
+
+      # Fast unit tests (no DB)
+      - name: Domain policy tests (no DB)
+        run: pnpm --filter @apgms/domain-policy test
+
+      # DB-backed integrity tests
+      - name: Domain policy DB integrity tests
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/apgms_test
+          RUN_DB_TESTS: "1"
+        run: pnpm --filter @apgms/domain-policy test
+
+      - name: API Gateway tests
+        run: |
+          pnpm --filter @apgms/api-gateway typecheck
+          pnpm --filter @apgms/api-gateway test

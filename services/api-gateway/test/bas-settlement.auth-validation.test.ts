@@ -4,20 +4,22 @@ import { basSettlementRoutes } from "../src/routes/bas-settlement";
 
 jest.setTimeout(30000);
 
-
-// ---- Auth behaviour via full app (secure scope) ----
+// ---------------------------------------------------------------------------
+// Auth behaviour via full app (secure scope)
+// ---------------------------------------------------------------------------
 
 describe("/api/settlements/bas auth (via buildFastifyApp)", () => {
   it("returns 401 when Authorization header is missing", async () => {
-    const app = buildFastifyApp({ configOverrides: { environment: "test", inMemoryDb: true } });
+    const app = buildFastifyApp({
+      configOverrides: { environment: "test", inMemoryDb: true },
+    });
+
     await app.ready();
 
     const res = await app.inject({
       method: "POST",
       url: "/api/settlements/bas/finalise",
-      payload: {
-        period: "2025-Q3",
-      },
+      payload: { period: "2025-Q3" },
     });
 
     expect(res.statusCode).toBe(401);
@@ -26,12 +28,14 @@ describe("/api/settlements/bas auth (via buildFastifyApp)", () => {
   });
 });
 
-// ---- Route-level validation tests (no full auth) ----
+// ---------------------------------------------------------------------------
+// Route-level validation tests (no auth)
+// ---------------------------------------------------------------------------
 
 function buildRouteServer() {
   const app = Fastify();
 
-  // Route-only validation: no auth hook here
+  // Route-only validation: no auth hooks, no prefixes
   basSettlementRoutes(app as any);
 
   return app;
@@ -49,6 +53,7 @@ describe("BAS settlement route validation", () => {
     });
 
     expect(res.statusCode).toBe(400);
+
     await app.close();
   });
 
@@ -59,12 +64,11 @@ describe("BAS settlement route validation", () => {
     const res = await app.inject({
       method: "POST",
       url: "/settlements/bas/finalise",
-      payload: {
-        period: "2025-13",
-      },
+      payload: { period: "2025-13" },
     });
 
     expect(res.statusCode).toBe(400);
+
     await app.close();
   });
 
@@ -75,12 +79,11 @@ describe("BAS settlement route validation", () => {
     const res = await app.inject({
       method: "POST",
       url: "/settlements/bas/finalise",
-      payload: {
-        period: "2025-Q3",
-      },
+      payload: { period: "2025-Q3" },
     });
 
     expect(res.statusCode).toBe(201);
+
     const body = res.json();
     expect(body.instructionId).toBeDefined();
     expect(body.period).toBe("2025-Q3");
