@@ -201,7 +201,7 @@ f0bb792 2025-11-11 02:08:16 +1000 — fix(ml-core): guard positive label metrics
 
 80bd55c 2025-11-11 02:08:00 +1000 — Map discrepancy telemetry models to snake_case tables
   inferred=chore(db) prefix= scope= domDir=shared files=1 +34/-31
-  paths: shared/prisma/schema.prisma
+  paths: infra/prisma/schema.prisma
   flags: possible-breaking-missing-marker
 
 ec10396 2025-11-11 02:07:53 +1000 — Preserve feedback metadata on partial updates
@@ -501,17 +501,17 @@ f6dcadc 2025-10-31 09:08:54 +1000 — chore(repo): enable safety guards & baseli
 
 38866dc 2025-10-30 03:48:52 +1000 — feat(compliance): enable payment plan flow and evidence reporting
   inferred=feat(db) prefix=feat(compliance) scope=compliance domDir=webapp files=7 +616/-53
-  paths: db/init.sql;services/api-gateway/src/app.ts;shared/prisma/migrations/20251102120000_phase4_payment_plan/migration.sql;shared/prisma/schema.prisma;webapp/src/BasPage.tsx;webapp/src/CompliancePage.tsx
+  paths: db/init.sql;services/api-gateway/src/app.ts;shared/prisma/migrations/20251102120000_phase4_payment_plan/migration.sql;infra/prisma/schema.prisma;webapp/src/BasPage.tsx;webapp/src/CompliancePage.tsx
   flags: subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=compliance vs dir=webapp), possible-breaking-missing-marker
 
 b2850c6 2025-10-30 02:56:36 +1000 — feat(compliance): add designated holding accounts and surface balances in API/UI
   inferred=feat(db) prefix=feat(compliance) scope=compliance domDir=webapp files=8 +739/-35
-  paths: db/init.sql;services/api-gateway/src/app.ts;shared/prisma/migrations/20251102103000_phase3_designated_accounts/migration.sql;shared/prisma/schema.prisma;webapp/src/BasPage.tsx;webapp/src/CompliancePage.tsx
+  paths: db/init.sql;services/api-gateway/src/app.ts;shared/prisma/migrations/20251102103000_phase3_designated_accounts/migration.sql;infra/prisma/schema.prisma;webapp/src/BasPage.tsx;webapp/src/CompliancePage.tsx
   flags: subject>72, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=compliance vs dir=webapp), possible-breaking-missing-marker
 
 d9fa8bf 2025-10-30 01:59:08 +1000 — feat(platform): persist alerts/BAS cycles and wire Phase 2 UI flows
   inferred=feat(db) prefix=feat(platform) scope=platform domDir=webapp files=9 +752/-111
-  paths: db/init.sql;services/api-gateway/src/app.ts;shared/prisma/migrations/20251102090000_phase2_alerts_bascycle/migration.sql;shared/prisma/schema.prisma;webapp/src/AlertsPage.tsx;webapp/src/BasPage.tsx
+  paths: db/init.sql;services/api-gateway/src/app.ts;shared/prisma/migrations/20251102090000_phase2_alerts_bascycle/migration.sql;infra/prisma/schema.prisma;webapp/src/AlertsPage.tsx;webapp/src/BasPage.tsx
   flags: subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=platform vs dir=webapp), possible-breaking-missing-marker
 
 78a3367 2025-10-30 00:37:07 +1000 — chore(repo): snapshot before full history rewrite
@@ -521,7 +521,7 @@ d9fa8bf 2025-10-30 01:59:08 +1000 — feat(platform): persist alerts/BAS cycles 
 
 06d6550 2025-10-30 00:32:37 +1000 — chore(db): finalize schema, db init, and client wiring after auth integration
   inferred=feat(db) prefix=chore(db) scope=db domDir=webapp files=7 +628/-79
-  paths: db/init.sql;pnpm-lock.yaml;services/api-gateway/src/app.ts;shared/prisma/schema.prisma;webapp/package.json;webapp/src/App.tsx
+  paths: db/init.sql;pnpm-lock.yaml;services/api-gateway/src/app.ts;infra/prisma/schema.prisma;webapp/package.json;webapp/src/App.tsx
   flags: subject>72, subject-not-capitalized, scope-mismatch(scope=db vs dir=webapp), possible-breaking-missing-marker
 
 6ef1ad5 2025-10-28 18:51:39 +1000 — feat(auth): wire end-to-end login/session between webapp and api-gateway
@@ -654,7 +654,7 @@ dd5135c 2025-10-23 04:36:38 +1000 — feat(platform): introduce auth layer, data
   paths: services/api-gateway/package.json
   flags: deps-looks-like-chore, subject>72, subject-not-capitalized, scope-mismatch(scope=api-gateway vs dir=services)
 
-9805a96 2025-10-21 20:31:23 +1000 — chore(repo): ignore shared/prisma/.env in git
+9805a96 2025-10-21 20:31:23 +1000 — chore(repo): ignore infra/prisma/.env in git
   inferred=chore prefix=chore(repo) scope=repo domDir=gitignore files=1 +2/-0
   paths: .gitignore
   flags: subject-not-capitalized, scope-mismatch(scope=repo vs dir=gitignore)
@@ -691,7 +691,7 @@ d827258 2025-10-21 20:08:44 +1000 — chore(repo): update .gitignore to exclude 
 
 5059faa 2025-10-21 19:44:34 +1000 — chore(db): check in BankLine idempotencyKey uniqueness migration
   inferred=chore(db) prefix=chore(db) scope=db domDir=shared files=2 +15/-11
-  paths: shared/prisma/migrations/20251021094315_bankline_idempotency/migration.sql;shared/prisma/schema.prisma
+  paths: shared/prisma/migrations/20251021094315_bankline_idempotency/migration.sql;infra/prisma/schema.prisma
   flags: subject-not-capitalized, scope-mismatch(scope=db vs dir=shared)
 
 924767d 2025-10-21 19:02:54 +1000 — test(api-gateway): add /ready health probe spec
@@ -711,7 +711,7 @@ d827258 2025-10-21 20:08:44 +1000 — chore(repo): update .gitignore to exclude 
 
 ee3a0af 2025-10-21 04:41:38 +1000 — feat(db): add BankLine.idempotencyKey and unique (orgId, idempotencyKey)
   inferred=chore(db) prefix=feat(db) scope=db domDir=shared files=2 +25/-8
-  paths: shared/prisma/migrations/20251020183646_add_bankline_idempotency/migration.sql;shared/prisma/schema.prisma
+  paths: shared/prisma/migrations/20251020183646_add_bankline_idempotency/migration.sql;infra/prisma/schema.prisma
   flags: subject-not-capitalized, scope-mismatch(scope=db vs dir=shared)
 
 f3ead2f 2025-10-21 04:23:00 +1000 — chore(db): check in Prisma migration for deleted_at sync
@@ -1071,17 +1071,17 @@ c46a481 2025-10-31 03:11:28 +1000 — feat(platform): enforce MFA for high-risk 
 
 6c5d677 2025-10-30 03:48:52 +1000 — eat(compliance): enable payment plan flow and evidence reporting
   inferred=feat(db) prefix=eat(compliance) scope=compliance domDir=webapp files=7 +616/-53
-  paths: db/init.sql;services/api-gateway/src/app.ts;shared/prisma/migrations/20251102120000_phase4_payment_plan/migration.sql;shared/prisma/schema.prisma;webapp/src/BasPage.tsx;webapp/src/CompliancePage.tsx
+  paths: db/init.sql;services/api-gateway/src/app.ts;shared/prisma/migrations/20251102120000_phase4_payment_plan/migration.sql;infra/prisma/schema.prisma;webapp/src/BasPage.tsx;webapp/src/CompliancePage.tsx
   flags: subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=compliance vs dir=webapp), possible-breaking-missing-marker
 
 1502288 2025-10-30 02:56:36 +1000 — feat(compliance): add designated holding accounts and surface balances in API/UI
   inferred=feat(db) prefix=feat(compliance) scope=compliance domDir=webapp files=8 +739/-35
-  paths: db/init.sql;services/api-gateway/src/app.ts;shared/prisma/migrations/20251102103000_phase3_designated_accounts/migration.sql;shared/prisma/schema.prisma;webapp/src/BasPage.tsx;webapp/src/CompliancePage.tsx
+  paths: db/init.sql;services/api-gateway/src/app.ts;shared/prisma/migrations/20251102103000_phase3_designated_accounts/migration.sql;infra/prisma/schema.prisma;webapp/src/BasPage.tsx;webapp/src/CompliancePage.tsx
   flags: subject>72, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=compliance vs dir=webapp), possible-breaking-missing-marker
 
 b1a9781 2025-10-30 01:59:08 +1000 — feat(api): persist alerts/bas cycles and wire Phase 2 UI flows
   inferred=feat(db) prefix=feat(api) scope=api domDir=webapp files=9 +752/-111
-  paths: db/init.sql;services/api-gateway/src/app.ts;shared/prisma/migrations/20251102090000_phase2_alerts_bascycle/migration.sql;shared/prisma/schema.prisma;webapp/src/AlertsPage.tsx;webapp/src/BasPage.tsx
+  paths: db/init.sql;services/api-gateway/src/app.ts;shared/prisma/migrations/20251102090000_phase2_alerts_bascycle/migration.sql;infra/prisma/schema.prisma;webapp/src/AlertsPage.tsx;webapp/src/BasPage.tsx
   flags: subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=api vs dir=webapp), possible-breaking-missing-marker
 
 633dd64 2025-10-30 00:37:07 +1000 — chore(history): snapshot before full history rewrite
@@ -1091,7 +1091,7 @@ b1a9781 2025-10-30 01:59:08 +1000 — feat(api): persist alerts/bas cycles and w
 
 71db586 2025-10-30 00:32:37 +1000 — chore(sync): finalize schema, db init, and client wiring after auth integration
   inferred=feat(db) prefix=chore(sync) scope=sync domDir=webapp files=7 +628/-79
-  paths: db/init.sql;pnpm-lock.yaml;services/api-gateway/src/app.ts;shared/prisma/schema.prisma;webapp/package.json;webapp/src/App.tsx
+  paths: db/init.sql;pnpm-lock.yaml;services/api-gateway/src/app.ts;infra/prisma/schema.prisma;webapp/package.json;webapp/src/App.tsx
   flags: subject>72, subject-not-capitalized, scope-mismatch(scope=sync vs dir=webapp), possible-breaking-missing-marker
 
 3b93dcb 2025-10-28 18:51:39 +1000 — feat(auth): wire end-to-end login/session between webapp and api-gateway
@@ -1224,7 +1224,7 @@ aac6186 2025-10-23 05:08:57 +1000 — chore(ops): improve service operability an
   paths: services/api-gateway/package.json
   flags: deps-looks-like-chore, subject-not-capitalized, scope-mismatch(scope=api vs dir=services)
 
-38f9b86 2025-10-21 20:31:23 +1000 — chore(security): ignore shared/prisma/.env in git
+38f9b86 2025-10-21 20:31:23 +1000 — chore(security): ignore infra/prisma/.env in git
   inferred=chore prefix=chore(security) scope=security domDir=gitignore files=1 +2/-0
   paths: .gitignore
   flags: subject-not-capitalized, scope-mismatch(scope=security vs dir=gitignore)
@@ -1261,7 +1261,7 @@ c92e475 2025-10-21 19:52:07 +1000 — chore(repo): normalize line endings via .g
 
 c1f99d9 2025-10-21 19:44:34 +1000 — chore(db): check in BankLine idempotencyKey uniqueness migration
   inferred=chore(db) prefix=chore(db) scope=db domDir=shared files=2 +15/-11
-  paths: shared/prisma/migrations/20251021094315_bankline_idempotency/migration.sql;shared/prisma/schema.prisma
+  paths: shared/prisma/migrations/20251021094315_bankline_idempotency/migration.sql;infra/prisma/schema.prisma
   flags: subject-not-capitalized, scope-mismatch(scope=db vs dir=shared)
 
 ab4fbaf 2025-10-21 19:02:54 +1000 — test(api): add /ready health probe spec
@@ -1281,7 +1281,7 @@ c92b1b3 2025-10-21 18:23:51 +1000 — feat(api): add /ready probe and idempotent
 
 1ea0f5d 2025-10-21 04:41:38 +1000 — feat(db): add BankLine.idempotencyKey and unique (orgId, idempotencyKey)
   inferred=chore(db) prefix=feat(db) scope=db domDir=shared files=2 +25/-8
-  paths: shared/prisma/migrations/20251020183646_add_bankline_idempotency/migration.sql;shared/prisma/schema.prisma
+  paths: shared/prisma/migrations/20251020183646_add_bankline_idempotency/migration.sql;infra/prisma/schema.prisma
   flags: subject-not-capitalized, scope-mismatch(scope=db vs dir=shared)
 
 7c64e61 2025-10-21 04:23:00 +1000 — chore(db): check in Prisma migration for deleted_at sync
@@ -1696,7 +1696,7 @@ df26637 2025-10-22 10:06:53 +1000 — feat(api-gateway): secure admin routes wit
 
 f90e1a7 2025-10-22 10:06:31 +1000 — feat(api-gateway): add audit logging for admin operations
   inferred=feat+test prefix=feat(api-gateway) scope=api-gateway domDir=services files=4 +210/-7
-  paths: services/api-gateway/src/app.ts;services/api-gateway/src/lib/audit.ts;services/api-gateway/test/privacy.spec.ts;shared/prisma/schema.prisma
+  paths: services/api-gateway/src/app.ts;services/api-gateway/src/lib/audit.ts;services/api-gateway/test/privacy.spec.ts;infra/prisma/schema.prisma
   flags: test-claimed-mismatch, subject-not-capitalized, needs-body(>=150 LOC), scope-mismatch(scope=api-gateway vs dir=services), possible-breaking-missing-marker
 
 581ec43 2025-10-22 10:06:18 +1000 — feat(api-gateway): wire PII providers and admin guard
@@ -1769,7 +1769,7 @@ a90274c 2025-10-21 20:46:20 +1000 — test(api): use directory discovery to avoi
   paths: services/api-gateway/package.json
   flags: deps-looks-like-chore, subject-not-capitalized, scope-mismatch(scope=api vs dir=services)
 
-5fcc53b 2025-10-21 20:31:23 +1000 — chore(gitignore): ignore shared/prisma/.env
+5fcc53b 2025-10-21 20:31:23 +1000 — chore(gitignore): ignore infra/prisma/.env
   inferred=chore prefix=chore(gitignore) scope=gitignore domDir=gitignore files=1 +2/-0
   paths: .gitignore
   flags: subject-not-capitalized
@@ -1806,7 +1806,7 @@ a90274c 2025-10-21 20:46:20 +1000 — test(api): use directory discovery to avoi
 
 02fd87d 2025-10-21 19:44:34 +1000 — migrations(shared): add BankLine idempotencyKey unique constraint
   inferred=chore(db) prefix=migrations(shared) scope=shared domDir=shared files=2 +15/-11
-  paths: shared/prisma/migrations/20251021094315_bankline_idempotency/migration.sql;shared/prisma/schema.prisma
+  paths: shared/prisma/migrations/20251021094315_bankline_idempotency/migration.sql;infra/prisma/schema.prisma
   flags: subject-not-capitalized
 
 79757a0 2025-10-21 19:02:54 +1000 — test(api): add /ready probe spec
@@ -1826,7 +1826,7 @@ c538818 2025-10-21 18:02:03 +1000 — feat(webapp): WCAG AA status-badge colors 
 
 d45a98f 2025-10-21 04:41:38 +1000 — feat(db): BankLine.idempotencyKey + unique(orgId,idempotencyKey)
   inferred=chore(db) prefix=feat(db) scope=db domDir=shared files=2 +25/-8
-  paths: shared/prisma/migrations/20251020183646_add_bankline_idempotency/migration.sql;shared/prisma/schema.prisma
+  paths: shared/prisma/migrations/20251020183646_add_bankline_idempotency/migration.sql;infra/prisma/schema.prisma
   flags: subject-not-capitalized, scope-mismatch(scope=db vs dir=shared)
 
 1a75b5f 2025-10-21 04:23:00 +1000 — chore(db): commit Prisma migrations

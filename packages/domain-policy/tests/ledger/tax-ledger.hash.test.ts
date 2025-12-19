@@ -1,5 +1,10 @@
 const runDbTests = process.env.RUN_DB_TESTS === "1";
 
+if (process.env.RUN_DB_TESTS !== "1") {
+  describe.skip("TaxLedger hash-chain integrity (db)", () => {});
+  return;
+}
+
 (runDbTests ? describe : describe.skip)(
   "TaxLedger hash-chain integrity (db)",
   () => {

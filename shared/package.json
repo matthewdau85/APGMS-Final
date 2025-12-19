@@ -16,9 +16,9 @@
     "clean-dist": "echo skipping clean-dist for now",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "generate": "node ./scripts/run-prisma-generate.mjs",
+    "prisma:generate": "...",
     "prebuild": "pnpm prisma:generate",
-    "prisma:generate": "prisma generate --schema=./prisma/schema.prisma"
+    "prisma:generate": "prisma generate --schema=../infra/prisma/schema.prisma"
   },
   "dependencies": {
     "@prisma/client": "6.19.0",

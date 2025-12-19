@@ -41,7 +41,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Generate Prisma client for @apgms/shared
-        # Uses the shared/prisma/schema.prisma inside the shared workspace.
+        # Uses the infra/prisma/schema.prisma inside the shared workspace.
         run: pnpm --filter @apgms/shared exec prisma generate --schema prisma/schema.prisma
 
       - name: Lint

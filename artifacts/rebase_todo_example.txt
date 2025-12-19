@@ -88,7 +88,7 @@ reword 366864b Feat(webapp)(webapp): Extend tailwind theme for finance ui
 reword 36686f5 Feat(webapp)(webapp): Add AppShell layout and new dashboards
 reword 3723308 Feat(apgms-ml): Add GST-free model training and evaluation scripts
 reword 38866dc Feat(compliance)(compliance): Enable payment plan flow and evidence repo
-reword 38f9b86 Chore(security)(security): Ignore shared/prisma/.env in git
+reword 38f9b86 Chore(security)(security): Ignore infra/prisma/.env in git
 reword 39142c1 Chore(compliance)(compliance): Add compliance checklist and wire it into
 reword 3aa5dfe Feat(webapp): Improve workflow alerts accessibility
 reword 3ac003c Ci: Document security procedures and enable dependabot
@@ -140,7 +140,7 @@ reword 5cd858b Feat(webapp)(webapp): Add WCAG AA-compliant status badges and bro
 reword 5d101d4 Feat(apgms-ml): Add BAS configuration training pipeline
 reword 5dd99fe Chore(services): Enforce CORS allowlist and add CSP protections
 reword 5f54244 Feat(services): Harden api gateway cors and csp
-reword 5fcc53b Chore(gitignore)(gitignore): Ignore shared/prisma/.env
+reword 5fcc53b Chore(gitignore)(gitignore): Ignore infra/prisma/.env
 reword 5fcd26d Feat(webapp): Add security monitoring dashboard
 reword 61eb31d Chore(package.json): Run Prisma generate on install
 reword 6208716 Refactor(domain): Track remaining designated balances per BAS cycle
@@ -225,7 +225,7 @@ reword 96e523c Feat(ml-core)(ml-core): Scaffold package and baseline analytics
 reword 97726d9 Docs: Document ASVS coverage and TFN SOP
 reword 97c1bcc Chore(services): Share jwt guard via auth package
 reword 97d386b Feat(apps): Add security command center route
-reword 9805a96 Chore(repo)(repo): Ignore shared/prisma/.env in git
+reword 9805a96 Chore(repo)(repo): Ignore infra/prisma/.env in git
 reword 984d64f Feat(api-gateway)(api-gateway): Add admin data routes plugin
 reword 9a86c6a Docs: Document compliance attestation execution plan
 reword 9aa6ceb Chore(packages): Scaffold model service workspace

@@ -15,8 +15,8 @@
 3. Commit and deploy the updated env secrets, then trigger a controlled decrypt/export to confirm Prometheus counters increment.
 
 ## Incident Response
-- On suspected TFN leak, revoke JWT credentials, rotate KMS keys, and inspect AuditLog records for the time window (shared/prisma/schema.prisma:47).
+- On suspected TFN leak, revoke JWT credentials, rotate KMS keys, and inspect AuditLog records for the time window (infra/prisma/schema.prisma:47).
 - Run security workflow manually to regenerate SBOM and ensure dependencies remain patched (.github/workflows/security.yml:16).
 
 ## Review
-- SOP reviewed quarterly or after any schema changes to TFN-bearing tables (shared/prisma/schema.prisma:33).
+- SOP reviewed quarterly or after any schema changes to TFN-bearing tables (infra/prisma/schema.prisma:33).

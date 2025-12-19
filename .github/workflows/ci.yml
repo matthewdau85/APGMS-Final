@@ -1,8 +1,13 @@
 name: CI
 
 on:
-  push:
   pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    # Nightly at 02:00 UTC
+    - cron: "0 2 * * *"
 
 jobs:
   build-and-lighthouse:
@@ -56,40 +61,63 @@ jobs:
 
       - name: Run Playwright WCAG smoke
         env:
+          POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: apgms_test
         options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          --health-cmd="pg_isready"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/apgms_test
+
+      # Default: DB tests OFF
+      RUN_DB_TESTS: "0"
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: pnpm
+          cache: "pnpm"
 
-      - run: pnpm install
+      - name: Install pnpm
+        run: npm install -g pnpm
 
-      # Fast unit tests (no DB)
-      - name: Domain policy tests (no DB)
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prisma path guard
+        run: pnpm check:prisma-paths
+
+      - name: Prisma generate
+        run: pnpm db:gen
+
+      - name: Prisma migrate (CI)
+        run: pnpm db:deploy
+
+      # ----------------------------------------
+      # Enable DB tests ONLY when appropriate
+      # ----------------------------------------
+      - name: Enable DB-backed tests
+        if: >
+          github.ref == 'refs/heads/main' ||
+          github.event_name == 'schedule'
+        run: echo "RUN_DB_TESTS=1" >> $GITHUB_ENV
+
+      # ----------------------------------------
+      # Tests
+      # ----------------------------------------
+      - name: Domain-policy tests
         run: pnpm --filter @apgms/domain-policy test
 
-      # DB-backed integrity tests
-      - name: Domain policy DB integrity tests
-        env:
-          DATABASE_URL: postgres://postgres:postgres@localhost:5432/apgms_test
-          RUN_DB_TESTS: "1"
-        run: pnpm --filter @apgms/domain-policy test
+      - name: API Gateway typecheck
+        run: pnpm --filter @apgms/api-gateway typecheck
 
       - name: API Gateway tests
-        run: |
-          pnpm --filter @apgms/api-gateway typecheck
-          pnpm --filter @apgms/api-gateway test
+        run: pnpm --filter @apgms/api-gateway test

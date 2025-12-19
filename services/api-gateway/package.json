@@ -14,12 +14,12 @@
     "test:node": "if ls test/*.node.* >/dev/null 2>&1; then node --test ./test/*.node.*; else echo \"[test:node] no .node.* files, skipping\"; fi",
     "check:coverage": "node ./scripts/check-coverage.mjs",
 
-    "db:generate": "prisma generate --schema=../../shared/prisma/schema.prisma",
-    "db:migrate:dev": "prisma migrate dev --schema=../../shared/prisma/schema.prisma",
-    "db:migrate:deploy": "prisma migrate deploy --schema=../../shared/prisma/schema.prisma",
-    "db:reset": "prisma migrate reset --schema=../../shared/prisma/schema.prisma",
-    "db:seed": "prisma db seed --schema=../../shared/prisma/schema.prisma",
-    "db:studio": "prisma studio --schema=../../shared/prisma/schema.prisma",
+    "db:generate": "prisma generate --schema=../../infra/prisma/schema.prisma",
+    "db:migrate:dev": "prisma migrate dev --schema=../../infra/prisma/schema.prisma",
+    "db:migrate:deploy": "prisma migrate deploy --schema=../../infra/prisma/schema.prisma",
+    "db:reset": "prisma migrate reset --schema=../../infra/prisma/schema.prisma",
+    "db:seed": "prisma db seed --schema=../../infra/prisma/schema.prisma",
+    "db:studio": "prisma studio --schema=../../infra/prisma/schema.prisma",
 
     "prisma:generate": "pnpm db:generate",
     "prisma:migrate": "pnpm db:migrate:dev",
@@ -28,7 +28,7 @@
     "readiness:all": "pnpm -C ../.. assess:all"
   },
   "prisma": {
-    "schema": "../../shared/prisma/schema.prisma",
+    "schema": "../../infra/prisma/schema.prisma",
     "seed": "tsx ./db/seed.ts"
   },
   "dependencies": {

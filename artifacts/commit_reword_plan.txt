@@ -266,9 +266,9 @@
 38866dc - Feat(compliance)(compliance): Enable payment plan flow and evidence repo
     flags: subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=compliance vs dir=webapp);possible-breaking-missing-marker
     was : feat(compliance): enable payment plan flow and evidence reporting
-38f9b86 - Chore(security)(security): Ignore shared/prisma/.env in git
+38f9b86 - Chore(security)(security): Ignore infra/prisma/.env in git
     flags: subject-not-capitalized;scope-mismatch(scope=security vs dir=gitignore)
-    was : chore(security): ignore shared/prisma/.env in git
+    was : chore(security): ignore infra/prisma/.env in git
 39142c1 - Chore(compliance)(compliance): Add compliance checklist and wire it into
     flags: docs-claimed-mismatch;subject-not-capitalized;scope-mismatch(scope=compliance vs dir=package.json)
     was : chore(compliance): add compliance checklist and wire it into workspace
@@ -422,9 +422,9 @@
 5f54244 - Feat(services): Harden api gateway cors and csp
     flags: test-claimed-mismatch;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope= vs dir=services);possible-breaking-missing-marker
     was : feat: harden api gateway cors and csp
-5fcc53b - Chore(gitignore)(gitignore): Ignore shared/prisma/.env
+5fcc53b - Chore(gitignore)(gitignore): Ignore infra/prisma/.env
     flags: subject-not-capitalized
-    was : chore(gitignore): ignore shared/prisma/.env
+    was : chore(gitignore): ignore infra/prisma/.env
 5fcd26d - Feat(webapp): Add security monitoring dashboard
     flags: code-additions-look-like-feat;needs-body(>=150 LOC)
     was : Add security monitoring dashboard
@@ -677,9 +677,9 @@
 97d386b - Feat(apps): Add security command center route
     flags: code-additions-look-like-feat;needs-body(>=150 LOC)
     was : Add security command center route
-9805a96 - Chore(repo)(repo): Ignore shared/prisma/.env in git
+9805a96 - Chore(repo)(repo): Ignore infra/prisma/.env in git
     flags: subject-not-capitalized;scope-mismatch(scope=repo vs dir=gitignore)
-    was : chore(repo): ignore shared/prisma/.env in git
+    was : chore(repo): ignore infra/prisma/.env in git
 984d64f - Feat(api-gateway)(api-gateway): Add admin data routes plugin
     flags: test-claimed-mismatch;subject-not-capitalized;needs-body(>=150 LOC);scope-mismatch(scope=api-gateway vs dir=services);possible-breaking-missing-marker
     was : feat(api-gateway): add admin data routes plugin

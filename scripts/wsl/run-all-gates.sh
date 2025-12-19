@@ -33,7 +33,7 @@ pnpm --filter @apgms/api-gateway run check:coverage
 
 # ---------- 3. Prisma drift ----------
 step "3. Prisma migrate status (drift check)"
-pnpm -w exec prisma migrate status --schema shared/prisma/schema.prisma
+pnpm -w exec prisma migrate status --schema infra/prisma/schema.prisma
 
 # ---------- 4. SBOM + SCA ----------
 step "4. SBOM generation and SCA (npm audit via pnpm scripts)"

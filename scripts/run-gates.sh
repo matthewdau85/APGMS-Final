@@ -14,7 +14,7 @@ pnpm --filter @apgms/api-gateway run check:coverage
 
 echo
 echo "== Prisma drift =="
-pnpm -w exec prisma migrate status --schema shared/prisma/schema.prisma
+pnpm -w exec prisma migrate status --schema infra/prisma/schema.prisma
 
 echo
 echo "== SBOM + check =="

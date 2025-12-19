@@ -158,7 +158,7 @@
     "prisma:generate": "prisma generate"
   },
   "prisma": {
-    "schema": "../../shared/prisma/schema.prisma"
+    "schema": "../../infra/prisma/schema.prisma"
   },
   "dependencies": {
     "@apgms/connectors": "workspace:*",

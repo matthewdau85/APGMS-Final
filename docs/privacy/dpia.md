@@ -7,7 +7,7 @@
 ## Data Inventory & Flow
 - User credentials are hashed with bcrypt via `verifyCredentials` before comparison and are never stored or logged in plaintext (`services/api-gateway/src/auth.ts`).
 - `/bank-lines` accepts ciphertext for payee/description fields and persists them verbatim; only redacted metadata is returned to callers (`services/api-gateway/src/routes/bank-lines.ts`).
-- Auth and regulator actions append entries through `recordAuditLog`, providing actor, action, and timestamps in the shared Prisma schema (`services/api-gateway/src/lib/audit.ts`, `shared/prisma/schema.prisma`).
+- Auth and regulator actions append entries through `recordAuditLog`, providing actor, action, and timestamps in the shared Prisma schema (`services/api-gateway/src/lib/audit.ts`, `infra/prisma/schema.prisma`).
 
 ## Risk Assessment
 - **Unauthorised access**: Fastify `authGuard` enforces HS256 JWTs with issuer/audience validation and populates `request.user`, while `assertOrgAccess` and `assertRoleForBankLines` ensure requests stay within the caller's org and role (`services/api-gateway/src/auth.ts`, `services/api-gateway/src/utils/orgScope.ts`).

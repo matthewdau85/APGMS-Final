@@ -1,4 +1,4 @@
-import { prisma } from "../db.js";
+import { prisma } from "@apgms/shared/db";
 
 import type { AuTaxConfigProvider } from "@apgms/domain-policy/au/tax-config/resolveTaxParams.js";
 import type { AuTaxType } from "@apgms/domain-policy/au/tax-config/types.js";

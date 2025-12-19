@@ -12,6 +12,7 @@ export * from "./validation/index.js";
 export * from "./idempotency.js";
 export * from "./ledger/index.js";
 export * from "./operations/risk/safe-delete.js";
+export * from "./db.js";
 
 export {
   deleteUserWithRisk,

@@ -78,5 +78,16 @@ This pattern aligns with ATO DSP expectations for:
 
 \- Evidence-based assurance
 
+## CI Enforcement
+
+Database-backed tests execute when:
+- `RUN_DB_TESTS=1`
+- On protected branches (e.g. `main`)
+- On scheduled nightly runs
+
+This ensures ledger integrity and other stateful invariants are
+continuously validated without introducing flakiness or cost into
+pull-request workflows.
+
 
 
