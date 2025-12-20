@@ -14,7 +14,7 @@
     "test:node": "if ls test/*.node.* >/dev/null 2>&1; then node --test ./test/*.node.*; else echo \"[test:node] no .node.* files, skipping\"; fi",
     "check:coverage": "node ./scripts/check-coverage.mjs",
 
-    "db:generate": "prisma generate --schema=../../infra/prisma/schema.prisma",
+    "db:generate": "node ../../scripts/ensure-linux.mjs && prisma generate --schema=../../infra/prisma/schema.prisma",
     "db:migrate:dev": "prisma migrate dev --schema=../../infra/prisma/schema.prisma",
     "db:migrate:deploy": "prisma migrate deploy --schema=../../infra/prisma/schema.prisma",
     "db:reset": "prisma migrate reset --schema=../../infra/prisma/schema.prisma",
