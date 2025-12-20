@@ -16,7 +16,6 @@ jobs:
   security:
     runs-on: ubuntu-latest
 
-    # Needed so Prisma can load the schema config
     env:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres?schema=public
 
@@ -28,7 +27,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22.12.x"
-          # IMPORTANT: no cache: "pnpm" here, since pnpm isn't installed yet
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -44,9 +42,11 @@ jobs:
           scan-type: fs
           ignore-unfixed: true
           format: table
-          exit-code: '1'
+          exit-code: "1"
           cache-dir: .trivy-cache
           severity: HIGH,CRITICAL
 
       - name: Prisma migrate status (drift check)
-        run: pnpm --filter @apgms/shared exec prisma migrate status --schema prisma/schema.prisma
+        run: |
+          pnpm --filter @apgms/shared exec prisma migrate status \
+            --schema ../infra/prisma/schema.prisma
