@@ -40,7 +40,7 @@ jobs:
 
       - name: Generate Prisma client for @apgms/shared
         # Uses the infra/prisma/schema.prisma inside the shared workspace.
-        run: pnpm --filter @apgms/shared exec prisma generate --schema prisma/schema.prisma
+        run: pnpm --filter @apgms/shared exec prisma generate
 
       - name: Lint
         run: pnpm -r lint
