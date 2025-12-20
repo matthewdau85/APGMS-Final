@@ -20,9 +20,11 @@
     "outDir": "dist",
     "baseUrl": ".",
     "paths": {
-      "@apgms/shared/*": ["shared/src/*"],
       "@apgms/shared": ["shared/src/index"],
-      "@apgms/domain-policy": ["packages/domain-policy/dist/index"]
+      "@apgms/shared/*": ["shared/src/*"],
+      // Map domain-policy to source (no dist)
+      "@apgms/domain-policy": ["packages/domain-policy/src/index"],
+      "@apgms/domain-policy/*": ["packages/domain-policy/src/*"]
     },
     "types": ["node", "jest"]
   },

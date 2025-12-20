@@ -30,13 +30,13 @@ export class GstEngine {
     const { jurisdiction, asOf } = input;
 
     const config =
-      (this.repo.getGstConfig
-        ? await this.repo.getGstConfig(jurisdiction, asOf)
+      (this.repo as any).getGstConfig
+        ? await (this.repo as any).getGstConfig(jurisdiction, asOf)
         : ((await this.repo.getActiveConfig({
             jurisdiction,
             taxType: TaxType.GST,
             onDate: asOf,
-          })) as GstConfig | null));
+          })) as GstConfig | null);
 
     if (!config) {
       throw new Error("No GST config for jurisdiction/date");

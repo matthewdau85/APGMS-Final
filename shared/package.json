@@ -10,15 +10,22 @@
     "./operations/risk/safe-delete": {
       "types": "./dist/operations/risk/safe-delete.d.ts",
       "default": "./dist/operations/risk/safe-delete.js"
+    },
+    "./db": {
+      "types": "./dist/db.d.ts",
+      "default": "./dist/db.js"
+    },
+    "./db.js": {
+      "types": "./dist/db.d.ts",
+      "default": "./dist/db.js"
     }
   },
   "scripts": {
     "clean-dist": "echo skipping clean-dist for now",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "prisma:generate": "...",
-    "prebuild": "pnpm prisma:generate",
-    "prisma:generate": "prisma generate --schema=../infra/prisma/schema.prisma"
+    "prisma:generate": "prisma generate --schema=../infra/prisma/schema.prisma",
+    "prebuild": "pnpm prisma:generate"
   },
   "dependencies": {
     "@prisma/client": "6.19.0",

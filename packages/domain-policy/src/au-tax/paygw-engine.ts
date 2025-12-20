@@ -1,77 +1,55 @@
-import { TaxConfigRepository } from "./tax-config-repository";
+// packages/domain-policy/src/au-tax/paygw-engine.ts
 
-type PayPeriod = "WEEKLY" | "FORTNIGHTLY" | "MONTHLY" | "ANNUAL";
-
-interface CalculateInput {
-  grossCents: number;
-  payPeriod: PayPeriod;
-  jurisdiction: string;
-  onDate: Date;
-}
-
-interface PaygwBracket {
-  thresholdCents: number;
-  baseCents: number;
-  rate: number;
-}
+import type { TaxConfigRepository, PayPeriod } from "./types.js";
+import { TaxType } from "./types.js";
 
 export class PaygwEngine {
   constructor(
     private readonly repo: Pick<TaxConfigRepository, "getActiveConfig">,
   ) {}
 
-  async calculate(input: CalculateInput) {
+  async calculate(input: {
+    grossCents: number;
+    payPeriod: PayPeriod;
+    jurisdiction: string;
+    onDate: Date;
+  }) {
     const { grossCents, payPeriod, jurisdiction, onDate } = input;
 
     const config = await this.repo.getActiveConfig({
       jurisdiction,
-      taxType: "PAYGW",
+      taxType: TaxType.PAYGW,
       onDate,
     });
 
-    if (!config || config.kind !== "PAYGW" || !Array.isArray(config.brackets)) {
-      throw new Error(
-        "TAX_CONFIG_MISSING: No PAYGW config or brackets found for active parameter set",
-      );
+    if (!config || config.kind !== "PAYGW") {
+      throw new Error("TAX_CONFIG_MISSING");
     }
 
     if (grossCents <= 0) {
-      return {
-        withholding: {
-          cents: 0,
-          currency: "AUD",
-        },
-      };
+      return { withholding: { cents: 0, currency: "AUD" } };
     }
 
-    const annualisedCents = annualise(grossCents, payPeriod);
-
+    const annualised = annualise(grossCents, payPeriod);
     const bracket = [...config.brackets]
       .reverse()
-      .find((b: PaygwBracket) => annualisedCents >= b.thresholdCents);
+      .find((b) => annualised >= b.thresholdCents);
 
     if (!bracket) {
-      throw new Error("No PAYGW bracket found");
+      return { withholding: { cents: 0, currency: "AUD" } };
     }
 
-    const excess = annualisedCents - bracket.thresholdCents;
-    const annualTax =
-      bracket.baseCents + Math.floor(excess * bracket.rate);
-
-    const perPeriodCents = deannualise(annualTax, payPeriod);
+    const excess = annualised - bracket.thresholdCents;
+    const annualTax = bracket.baseCents + Math.floor(excess * bracket.rate);
 
     return {
       withholding: {
-        cents: perPeriodCents,
+        cents: deannualise(annualTax, payPeriod),
         currency: "AUD",
       },
     };
   }
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function annualise(cents: number, period: PayPeriod): number {
   switch (period) {
@@ -82,8 +60,6 @@ function annualise(cents: number, period: PayPeriod): number {
     case "MONTHLY":
       return cents * 12;
     case "ANNUAL":
-      return cents;
-    default:
       return cents;
   }
 }
@@ -97,8 +73,6 @@ function deannualise(cents: number, period: PayPeriod): number {
     case "MONTHLY":
       return Math.floor(cents / 12);
     case "ANNUAL":
-      return cents;
-    default:
       return cents;
   }
 }

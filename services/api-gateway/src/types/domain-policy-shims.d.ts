@@ -17,6 +17,6 @@ declare module "@apgms/domain-policy/ledger/tax-ledger.js" {
 declare module "@apgms/shared/db.js" {
   export const prisma: any;
 }
-declare module "@apgms/shared/db" {
+declare module "@apgms/shared/db.js" {
   export const prisma: any;
 }

@@ -13,17 +13,14 @@
   ],
   "scripts": {
     "check:prisma-paths": "bash scripts/check-prisma-schema-paths.sh",
-
     "prisma:format": "pnpm exec prisma format --schema infra/prisma/schema.prisma",
     "prisma:validate": "pnpm exec prisma validate --schema infra/prisma/schema.prisma",
     "prisma:generate": "pnpm exec prisma generate --schema infra/prisma/schema.prisma",
     "prisma:status": "pnpm exec prisma migrate status --schema infra/prisma/schema.prisma",
-
     "db:migrate": "pnpm exec prisma migrate dev --schema infra/prisma/schema.prisma",
     "db:deploy": "pnpm exec prisma migrate deploy --schema infra/prisma/schema.prisma",
     "db:gen": "pnpm exec prisma generate --schema infra/prisma/schema.prisma",
     "migrate:status": "pnpm exec prisma migrate status --schema infra/prisma/schema.prisma",
-
     "build:api-gateway": "pnpm --filter @apgms/shared build && pnpm --filter @apgms/domain-policy build && pnpm --filter @apgms/api-gateway build",
     "test": "pnpm --filter @apgms/api-gateway test",
     "test:e2e": "pnpm exec playwright test",
@@ -104,5 +101,6 @@
       "jws": "3.2.3",
       "glob": "10.5.0"
     }
-  }
+  },
+  "packageManager": "pnpm@9.15.9+sha512.68046141893c66fad01c079231128e9afb89ef87e2691d69e4d40eee228988295fd4682181bae55b58418c3a253bde65a505ec7c5f9403ece5cc3cd37dcf2531"
 }

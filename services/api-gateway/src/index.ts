@@ -1,3 +1,5 @@
+import "./load-root-env.js";
+
 ﻿// services/api-gateway/src/index.ts
 
 import { createApp } from "./app.js"; // <-- import createApp from app.ts (compiled to app.js)

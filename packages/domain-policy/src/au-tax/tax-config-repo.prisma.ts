@@ -1,26 +1,16 @@
 import type { PrismaClient } from "@prisma/client";
-import { TaxType, type TaxConfigRepository } from "./types.js";
-import type { JurisdictionCode } from "../tax-types.js";
-import { resolveAuTaxConfig } from "./resolve-au-tax-config.js";
+import type { TaxConfigRepository } from "./types.js";
+import { createTaxConfigRepositoryFromProvider } from "./tax-config-repo.from-provider.js";
+import { auTaxConfigProvider } from "./au-tax-config-provider.js";
 
-export function prismaTaxConfigRepository(
-  prisma: PrismaClient
-): TaxConfigRepository {
-  return {
-    async getActiveConfig({ jurisdiction, taxType, onDate }) {
-      return resolveAuTaxConfig(prisma, {
-        jurisdiction,
-        taxType,
-        onDate,
-      });
-    },
-
-    async getGstConfig(jurisdiction: JurisdictionCode, onDate: Date) {
-      return (await resolveAuTaxConfig(prisma, {
-        jurisdiction,
-        taxType: TaxType.GST,
-        onDate,
-      })) as any;
-    },
-  };
+/**
+ * Prisma-backed repository constructor.
+ *
+ * Mechanical fix:
+ * - Do not pass PrismaClient into resolveAuTaxConfig().
+ * - Wrap the provider using createTaxConfigRepositoryFromProvider().
+ * - Keep the PrismaClient param for API compatibility, but unused here.
+ */
+export function prismaTaxConfigRepository(_prisma: PrismaClient): TaxConfigRepository {
+  return createTaxConfigRepositoryFromProvider(auTaxConfigProvider);
 }

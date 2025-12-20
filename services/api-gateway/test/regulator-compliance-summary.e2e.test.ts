@@ -28,7 +28,7 @@ jest.mock("@apgms/domain-policy/obligations/computeOrgObligationsForPeriod.js", 
 }));
 
 // 3) Mock ledger totals: no money has yet been remitted to ATO
-jest.mock("@apgms/domain-policy/ledger/tax-ledger", () => ({
+jest.mock("@apgms/domain-policy/ledger/tax-ledger.js", () => ({
   getLedgerBalanceForPeriod: jest.fn().mockResolvedValue({
     PAYGW: 0,
     GST: 0,

@@ -66,7 +66,7 @@ export function buildFastifyApp(options: BuildFastifyAppOptions = {}): FastifyIn
 
   const config = mergeConfig(baseConfig, options.configOverrides);
 
-  const app = Fastify({ logger });
+  const app = Fastify({ pluginTimeout: 60000, logger });
 
   app.decorate("config", config);
 

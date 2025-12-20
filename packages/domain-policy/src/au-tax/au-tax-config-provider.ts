@@ -1,16 +1,26 @@
-import { prisma } from "@apgms/shared/db";
+import { prisma } from "@apgms/shared/db.js";
+import { TaxType, type AuTaxConfigProvider } from "./types.js";
 
-import type { AuTaxConfigProvider } from "@apgms/domain-policy/au/tax-config/resolveTaxParams.js";
-import type { AuTaxType } from "@apgms/domain-policy/au/tax-config/types.js";
-
+/**
+ * Prisma-backed AU tax config provider.
+ *
+ * IMPORTANT:
+ * - For package subpaths, DO NOT include ".js" unless the package exports it.
+ * - Implements getActiveParameterSetWithTables(), which resolveAuTaxConfig() expects.
+ */
 export const auTaxConfigProvider: AuTaxConfigProvider = {
-  async findActiveParameterSet({ taxType, asOf }) {
+  async getActiveParameterSetWithTables(args: {
+    taxType: TaxType.PAYGW | TaxType.GST;
+    onDate: Date;
+  }) {
+    const { taxType, onDate } = args;
+
     const row = await prisma.auTaxParameterSet.findFirst({
       where: {
         taxType: taxType as any,
         status: "ACTIVE",
-        effectiveFrom: { lte: asOf },
-        OR: [{ effectiveTo: null }, { effectiveTo: { gte: asOf } }],
+        effectiveFrom: { lte: onDate },
+        OR: [{ effectiveTo: null }, { effectiveTo: { gte: onDate } }],
       },
       include: { tables: true },
       orderBy: { effectiveFrom: "desc" },
@@ -20,7 +30,7 @@ export const auTaxConfigProvider: AuTaxConfigProvider = {
 
     return {
       id: row.id,
-      taxType: row.taxType as AuTaxType,
+      taxType: row.taxType as any,
       status: row.status as any,
       effectiveFrom: row.effectiveFrom,
       effectiveTo: row.effectiveTo,
@@ -28,8 +38,8 @@ export const auTaxConfigProvider: AuTaxConfigProvider = {
       sourceRef: row.sourceRef,
       sourceHash: row.sourceHash,
       retrievedAt: row.retrievedAt,
-      tables: row.tables.map((t) => ({
-        kind: t.kind as any,
+      tables: row.tables.map((t: any) => ({
+        kind: t.kind,
         payload: t.payload,
         payloadHash: t.payloadHash,
         name: t.name,

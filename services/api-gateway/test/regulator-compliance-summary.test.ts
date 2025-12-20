@@ -1,6 +1,11 @@
 import Fastify from "fastify";
 import type { FastifyInstance } from "fastify";
 
+
+import * as obligationsMod from "@apgms/domain-policy/obligations/computeOrgObligationsForPeriod.js";
+import * as ledgerMod from "@apgms/domain-policy/ledger/tax-ledger.js";
+
+
 /**
  * These routes are prototype-only and sit behind prototypeAdminGuard().
  *
@@ -48,8 +53,6 @@ async function registerRoute(app: FastifyInstance): Promise<void> {
 }
 
 // IMPORTANT: import the exact modules the route imports (so our spies affect the handler)
-import * as obligationsMod from "@apgms/domain-policy/obligations/computeOrgObligationsForPeriod.js";
-import * as ledgerMod from "@apgms/domain-policy/ledger/tax-ledger";
 
 describe("regulator compliance summary route", () => {
   beforeEach(() => {

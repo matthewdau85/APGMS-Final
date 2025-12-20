@@ -1,3 +1,8 @@
+test("DB-only tests are gated by RUN_DB_TESTS", () => {
+  // Prevents Jest from erroring when this file conditionally defines tests.
+  expect(true).toBe(true);
+});
+
 const runDbTests = process.env.RUN_DB_TESTS === "1";
 
 if (process.env.RUN_DB_TESTS !== "1") {
@@ -8,7 +13,7 @@ if (process.env.RUN_DB_TESTS !== "1") {
 (runDbTests ? describe : describe.skip)(
   "TaxLedger hash-chain integrity (db)",
   () => {
-    const { prisma } = require("@apgms/shared/db");
+    const { prisma } = require("@apgms/shared/db.js");
     const {
       appendLedgerEntry,
       verifyLedgerChain,
