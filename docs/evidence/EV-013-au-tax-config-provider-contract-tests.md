@@ -24,3 +24,6 @@ This control allows:
 - `src/au-tax/tax-config-repo.from-provider.ts`
 - `src/au-tax/resolve-au-tax-config.ts`
 - PAYGW engine unit tests
+
+## DSP OSF Index
+- `docs/compliance/dsp-osf-evidence-index.md`

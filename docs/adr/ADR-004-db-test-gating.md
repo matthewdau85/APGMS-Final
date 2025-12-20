@@ -89,5 +89,12 @@ This ensures ledger integrity and other stateful invariants are
 continuously validated without introducing flakiness or cost into
 pull-request workflows.
 
+## Evidence
+
+- EV-012: Ledger integrity testing (`docs/evidence/EV-012-ledger-integrity-testing.md`)
+
+## Evidence Index
+
+- DSP OSF evidence index: `docs/compliance/dsp-osf-evidence-index.md`
 
 

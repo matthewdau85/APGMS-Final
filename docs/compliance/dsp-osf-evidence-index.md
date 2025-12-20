@@ -14,6 +14,12 @@ Terminology:
 - In progress: partial implementation; gaps documented.
 - Planned: intended control; evidence not yet present.
 
+## Evidence cross-references
+
+- ADR-001 -> EV-001 (`docs/evidence/EV-001-platform-architecture.md`)
+- ADR-004 -> EV-012 (`docs/evidence/EV-012-ledger-integrity-testing.md`)
+- EV-012 / EV-013 are indexed here for DSP OSF review
+
 ## How to assemble an evidence pack (combined-code-export)
 
 The repo already contains evidence collection and export scripts. For a regulator/partner snapshot, generate all of the following from a tagged commit:
@@ -244,8 +250,26 @@ Gaps / next actions:
 
 ---
 
+### 9) SDLC testing governance (DB-backed integrity checks)
+
+Control summary:
+- Database-backed tests are gated to run only when explicitly enabled.
+- Integrity checks remain verifiable in controlled environments.
+
+Evidence:
+- ADR-004 (`docs/adr/ADR-004-db-test-gating.md`)
+- EV-012 (`docs/evidence/EV-012-ledger-integrity-testing.md`)
+- EV-013 (`docs/evidence/EV-013-au-tax-config-provider-contract-tests.md`)
+
+Verification:
+- Default runs skip DB-backed tests unless `RUN_DB_TESTS=1`.
+- Dedicated runs execute ledger integrity and AU tax config contract tests.
+
+Status: Implemented
+
+---
+
 ## Appendix: Partner-facing documentation pointers
 
 - Bank integration: `docs/partners/bank-packet.md`
 - POS integration reference model: `docs/partners/pos-integration.md`
-

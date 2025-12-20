@@ -27,3 +27,6 @@ Automated tests:
 
 ## Assurance Level
 High — cryptographic integrity + automated verification
+
+## DSP OSF Index
+- `docs/compliance/dsp-osf-evidence-index.md`

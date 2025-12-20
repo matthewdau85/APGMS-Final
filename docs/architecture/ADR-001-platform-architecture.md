@@ -30,3 +30,7 @@ Tenancy is enforced through the event payloads: every emitted event carries an `
 - Implement ledger persistence and schema validation (Phase 1/2).
 - Replace in-memory bus with Kafka/NATS bindings once infrastructure is provisioned.
 - Extend ADR catalogue with decisions on vault integration, reconciliation storage, and orchestrator workflow engine when those components are implemented.
+
+## Evidence
+
+- EV-001: Platform architecture evidence (`docs/evidence/EV-001-platform-architecture.md`)
