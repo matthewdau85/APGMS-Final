@@ -27,6 +27,8 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -45,8 +47,14 @@ jobs:
       - name: Lint
         run: pnpm -r lint
 
+      - name: Build domain-policy
+        run: pnpm --filter @apgms/domain-policy build
+
       - name: Build
         run: pnpm -r build
+
+      - name: A11y smoke (webapp)
+        run: pnpm --filter apgms-webapp test:a11y
 
       - name: Test
         run: pnpm -r test
