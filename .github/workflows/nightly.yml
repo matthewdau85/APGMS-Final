@@ -5,9 +5,15 @@ on:
     - cron: '0 18 * * *' # 4am AEST ~ 18:00 UTC
   workflow_dispatch:
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   nightly-tests:
     runs-on: ubuntu-latest
+    env:
+      RUN_DB_TESTS: "1"
 
     services:
       db:
@@ -45,5 +51,12 @@ jobs:
         run: pnpm --filter @apgms/shared exec prisma migrate status --schema prisma/schema.prisma
 
       - name: Run full test matrix (nightly tier)
-        run: |
-          pnpm -r test
+        run: pnpm -r test -- --coverage
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: |
+            **/coverage/**

@@ -5,6 +5,11 @@ on:
     - cron: "0 2 * * *"
   workflow_dispatch:
 
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify-reconciliation:
     runs-on: ubuntu-latest
