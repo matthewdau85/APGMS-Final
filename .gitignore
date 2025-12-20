@@ -4,7 +4,6 @@
 # Goal:
 # - Keep repo clean (no local env, caches, logs, scans, reports, zips)
 # - Ignore normal build outputs everywhere
-# - EXCEPT: keep packages/domain-policy/dist/** committed (prototype deliverable)
 # -----------------------------------------------------------------------------
 
 # -------------------------
@@ -29,9 +28,6 @@ build/
 *.map
 **/tsconfig.tsbuildinfo
 
-# Keep domain-policy built artifacts (override dist/*.map ignores above)
-!packages/domain-policy/dist/
-!packages/domain-policy/dist/**
 
 # Avoid committing emitted JS/typings in src (if any tools accidentally write there)
 packages/domain-policy/src/**/*.js
