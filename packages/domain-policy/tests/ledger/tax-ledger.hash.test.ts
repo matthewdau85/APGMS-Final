@@ -1,13 +1,13 @@
-test("DB-only tests are gated by RUN_DB_TESTS", () => {
-  // Prevents Jest from erroring when this file conditionally defines tests.
-  expect(true).toBe(true);
-});
-
 const runDb = process.env.RUN_DB_TESTS === "1";
+const isLinux = process.platform === "linux";
 
-(runDb ? describe : describe.skip)(
-  "TaxLedger hash-chain integrity (db)",
-  () => {
+if (runDb && !isLinux) {
+  throw new Error(
+    `RUN_DB_TESTS=1 is only supported on Linux/WSL. Current platform: ${process.platform}`,
+  );
+}
+
+((runDb && isLinux) ? describe : describe.skip)("tax ledger hash", () => {
     const { prisma } = require("@apgms/shared/db");
     const {
       appendLedgerEntry,
@@ -23,6 +23,7 @@ const runDb = process.env.RUN_DB_TESTS === "1";
 
     afterAll(async () => {
       await prisma.taxLedgerEntry.deleteMany({ where: { orgId, period } });
+      await prisma.$disconnect();
     });
 
     it("returns ok=true for a normal, untampered chain", async () => {
@@ -50,5 +51,4 @@ const runDb = process.env.RUN_DB_TESTS === "1";
       expect(result.firstInvalidIndex).toBeUndefined();
       expect(result.reason).toBeUndefined();
     });
-  },
-);
+});
