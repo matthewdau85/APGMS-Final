@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "@apgms/connectors",
   "version": "0.1.0",
   "private": true,
@@ -19,5 +19,8 @@
   "devDependencies": {
     "prisma": "6.17.1",
     "typescript": "^5.9.3"
+  },
+  "prisma": {
+    "schema": "../../infra/prisma/schema.prisma"
   }
 }

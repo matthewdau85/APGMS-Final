@@ -7,23 +7,18 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
-
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "jest --config ./jest.config.cjs --runInBand --passWithNoTests",
-
     "test:node": "if ls test/*.node.* >/dev/null 2>&1; then node --test ./test/*.node.*; else echo \"[test:node] no .node.* files, skipping\"; fi",
     "check:coverage": "node ./scripts/check-coverage.mjs",
-
     "db:generate": "node ../../scripts/ensure-linux.mjs && prisma generate --schema=../../infra/prisma/schema.prisma",
     "db:migrate:dev": "prisma migrate dev --schema=../../infra/prisma/schema.prisma",
     "db:migrate:deploy": "prisma migrate deploy --schema=../../infra/prisma/schema.prisma",
     "db:reset": "prisma migrate reset --schema=../../infra/prisma/schema.prisma",
     "db:seed": "prisma db seed --schema=../../infra/prisma/schema.prisma",
     "db:studio": "prisma studio --schema=../../infra/prisma/schema.prisma",
-
     "prisma:generate": "pnpm db:generate",
     "prisma:migrate": "pnpm db:migrate:dev",
-
     "assess:all": "node ../../assessment/assessor-10of10/scripts/apgms-assess.cjs --all --req ../../assessment/assessor-10of10/docs/assessor/requirements.v4.1.json --outdir ../../assessment/reports",
     "readiness:all": "pnpm -C ../.. assess:all"
   },

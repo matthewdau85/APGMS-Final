@@ -1,11 +1,14 @@
 {
-    "name":  "@apgms/worker",
-    "version":  "0.1.0",
-    "type":  "module",
-    "main":  "dist/index.js",
-    "scripts":  {
-                    "build":  "echo build worker",
-                    "test":  "echo test worker",
-                    "typecheck":  "echo no typecheck for worker"
-                }
+  "name": "@apgms/worker",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "echo build worker",
+    "test": "echo test worker",
+    "typecheck": "echo no typecheck for worker"
+  },
+  "prisma": {
+    "schema": "../infra/prisma/schema.prisma"
+  }
 }

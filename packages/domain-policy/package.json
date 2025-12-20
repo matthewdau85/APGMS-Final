@@ -71,5 +71,8 @@
         "dist/ledger/tax-ledger-public.d.ts"
       ]
     }
+  },
+  "prisma": {
+    "schema": "../../infra/prisma/schema.prisma"
   }
 }
