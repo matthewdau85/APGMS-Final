@@ -1,20 +1,19 @@
+import type { PrismaClient } from "@prisma/client";
 import type { JurisdictionCode } from "../tax-types.js";
-import { TaxType, type AuTaxConfigProvider, type TaxConfigRepository } from "./types.js";
+import { TaxType, type TaxConfigRepository } from "./types.js";
 import { resolveAuTaxConfig } from "./resolve-au-tax-config.js";
 
 /**
- * Build a TaxConfigRepository from a provider.
+ * Build a TaxConfigRepository from Prisma.
  *
- * NOTE: This is intentionally simple and uses relative imports
- * (preferred inside a package).
+ * NOTE: This uses direct Prisma access to the AU tax config tables.
  */
 export function createTaxConfigRepositoryFromProvider(
-  provider: AuTaxConfigProvider,
+  prisma: PrismaClient,
 ): TaxConfigRepository {
   return {
     async getPaygwConfig(jurisdiction: JurisdictionCode, onDate: Date) {
-      return resolveAuTaxConfig({
-        provider,
+      return resolveAuTaxConfig(prisma, {
         jurisdiction,
         taxType: TaxType.PAYGW,
         onDate,
@@ -22,8 +21,7 @@ export function createTaxConfigRepositoryFromProvider(
     },
 
     async getGstConfig(jurisdiction: JurisdictionCode, onDate: Date) {
-      return resolveAuTaxConfig({
-        provider,
+      return resolveAuTaxConfig(prisma, {
         jurisdiction,
         taxType: TaxType.GST,
         onDate,

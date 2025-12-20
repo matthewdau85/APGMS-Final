@@ -1,4 +1,4 @@
-import { auTaxConfigProvider } from "./au-tax-config-provider.js";
+import { prisma } from "@apgms/shared/db";
 import { createTaxConfigRepositoryFromProvider } from "../au-tax/tax-config-repo.from-provider.js";
 
 /**
@@ -8,4 +8,4 @@ import { createTaxConfigRepositoryFromProvider } from "../au-tax/tax-config-repo
  * - Prefer relative imports inside a package.
  * - Do not self-import from "@apgms/domain-policy" (causes export/cycle issues).
  */
-export const taxConfigRepository = createTaxConfigRepositoryFromProvider(auTaxConfigProvider);
+export const taxConfigRepository = createTaxConfigRepositoryFromProvider(prisma);

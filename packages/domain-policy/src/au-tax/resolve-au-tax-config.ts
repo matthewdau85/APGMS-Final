@@ -1,10 +1,6 @@
+import type { PrismaClient } from "@prisma/client";
 import type { JurisdictionCode } from "../tax-types.js";
-import {
-  TaxType,
-  type AuTaxConfigProvider,
-  type PaygwConfig,
-  type GstConfig,
-} from "./types.js";
+import { TaxType, type PaygwConfig, type GstConfig } from "./types.js";
 
 /**
  * Resolve AU tax configuration for a given tax type + date.
@@ -15,25 +11,55 @@ import {
  * - PAYGW brackets must match engine shape (baseCents, rate).
  * - Do not attach unknown properties (e.g. meta) unless types permit.
  */
-export async function resolveAuTaxConfig(params: {
-  provider: AuTaxConfigProvider;
-  jurisdiction: JurisdictionCode;
-  taxType: TaxType.PAYGW | TaxType.GST;
-  onDate: Date;
-}): Promise<PaygwConfig | GstConfig> {
-  const { provider, jurisdiction, taxType, onDate } = params;
 
-  const set: any = await provider.getActiveParameterSetWithTables({
-    taxType,
-    onDate,
-  });
+type AuTaxRateTableRow = {
+  kind: string;
+  payload: unknown;
+  payloadHash?: string | null;
+  name?: string | null;
+};
+
+type AuTaxParameterSetRow = {
+  id: string;
+  taxType: string;
+  status: string;
+  effectiveFrom: Date;
+  effectiveTo: Date | null;
+  sourceName?: string | null;
+  sourceRef?: string | null;
+  sourceHash?: string | null;
+  retrievedAt?: Date | null;
+  tables: AuTaxRateTableRow[];
+};
+
+export async function resolveAuTaxConfig(
+  prisma: PrismaClient,
+  params: {
+    jurisdiction: JurisdictionCode;
+    taxType: TaxType.PAYGW | TaxType.GST;
+    onDate: Date;
+  },
+): Promise<PaygwConfig | GstConfig> {
+  const { jurisdiction, taxType, onDate } = params;
+
+  const set = (await prisma.auTaxParameterSet.findFirst({
+    where: {
+      taxType: taxType as any,
+      status: "ACTIVE",
+      effectiveFrom: { lte: onDate },
+      OR: [{ effectiveTo: null }, { effectiveTo: { gte: onDate } }],
+    },
+    include: { tables: true },
+    orderBy: { effectiveFrom: "desc" },
+  })) as unknown as AuTaxParameterSetRow | null;
 
   if (!set || set.status !== "ACTIVE") {
     throw new Error(`TAX_CONFIG_MISSING: No ACTIVE ${taxType} config`);
   }
+  const activeSet = set;
 
-  function getTable(kind: string): any {
-    const t = set.tables?.find((x: any) => x.kind === kind);
+  function getTable(kind: string): AuTaxRateTableRow {
+    const t = activeSet.tables?.find((x) => x.kind === kind);
     if (!t) {
       throw new Error(`TAX_CONFIG_MISSING: No ${kind} table for ${taxType}`);
     }
@@ -43,39 +69,46 @@ export async function resolveAuTaxConfig(params: {
   if (taxType === TaxType.PAYGW) {
     const table = getTable("PAYGW_WITHHOLDING");
 
-    const payload: any = table.payload ?? {};
-    const rawBrackets: any[] = Array.isArray(payload)
+    const payload = (table.payload ?? {}) as Record<string, unknown> | unknown[];
+    const bracketSource = Array.isArray(payload)
       ? payload
-      : Array.isArray(payload.brackets)
-        ? payload.brackets
+      : Array.isArray((payload as Record<string, unknown>).brackets)
+        ? ((payload as Record<string, unknown>).brackets as unknown[])
         : [];
+    const rawBrackets: Array<Record<string, unknown>> = bracketSource.filter(
+      (entry): entry is Record<string, unknown> =>
+        typeof entry === "object" && entry !== null,
+    );
 
-    const brackets = rawBrackets.map((b: any) => ({
-      thresholdCents: Number(b.thresholdCents ?? b.threshold ?? 0),
-      baseCents: Number(b.baseCents ?? b.baseWithholdingCents ?? b.base ?? 0),
-      rate: Number(b.rate ?? b.marginalRateMilli ?? b.rateMilli ?? 0),
-      flags: b.flags ?? undefined,
+    const brackets = rawBrackets.map((b) => ({
+      thresholdCents: Number((b as any).thresholdCents ?? (b as any).threshold ?? 0),
+      baseCents: Number(
+        (b as any).baseCents ?? (b as any).baseWithholdingCents ?? (b as any).base ?? 0,
+      ),
+      rate: Number((b as any).rate ?? (b as any).marginalRateMilli ?? (b as any).rateMilli ?? 0),
     }));
 
-    return {
+    const config: PaygwConfig = {
+      kind: "PAYGW",
       jurisdiction,
       taxType: TaxType.PAYGW,
-      effectiveFrom: set.effectiveFrom,
-      effectiveTo: set.effectiveTo ?? null,
       brackets,
-    } as any;
+    };
+
+    return config;
   }
 
   // GST
   const gstTable = getTable("GST_RATES");
-  const gstPayload: any = gstTable.payload ?? {};
-  const rateMilli = Number(gstPayload.rateMilli ?? gstPayload.rate ?? 100);
+  const gstPayload = (gstTable.payload ?? {}) as Record<string, unknown>;
+  const rateMilli = Number((gstPayload as any).rateMilli ?? (gstPayload as any).rate ?? 100);
 
-  return {
+  const gstConfig: GstConfig = {
+    kind: "GST",
     jurisdiction,
     taxType: TaxType.GST,
-    effectiveFrom: set.effectiveFrom,
-    effectiveTo: set.effectiveTo ?? null,
     rateMilli,
-  } as any;
+  };
+
+  return gstConfig;
 }

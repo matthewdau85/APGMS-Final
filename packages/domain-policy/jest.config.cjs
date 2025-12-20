@@ -30,6 +30,8 @@ module.exports = {
       "<rootDir>/../../packages/domain-policy/src/$1",
 
     // 🔑 NEW: map the shared Prisma client alias used in your tests
+    "^@apgms/shared/db$":
+      "<rootDir>/../../shared/src/db.ts",
     "^@apgms/shared/db\\.js$":
       "<rootDir>/../../shared/src/db.ts",
 

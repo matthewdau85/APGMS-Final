@@ -5,11 +5,11 @@ import { computeOrgObligationsForPeriod } from "../../src/obligations/computeOrg
 // IMPORTANT: jest.mock is hoisted. If you reference const/let here, you can hit TDZ.
 // Use `var` and assign inside the factory.
 // eslint-disable-next-line no-var
-var mockPayrollFindMany: jest.Mock;
+var mockPayrollFindMany: jest.Mock = jest.fn();
 // eslint-disable-next-line no-var
-var mockGstFindMany: jest.Mock;
+var mockGstFindMany: jest.Mock = jest.fn();
 
-jest.mock("@apgms/shared/db.js", () => {
+jest.mock("@apgms/shared/db", () => {
   mockPayrollFindMany = jest.fn();
   mockGstFindMany = jest.fn();
 
