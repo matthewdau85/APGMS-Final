@@ -3,17 +3,12 @@ test("DB-only tests are gated by RUN_DB_TESTS", () => {
   expect(true).toBe(true);
 });
 
-const runDbTests = process.env.RUN_DB_TESTS === "1";
+const runDb = process.env.RUN_DB_TESTS === "1";
 
-if (process.env.RUN_DB_TESTS !== "1") {
-  describe.skip("TaxLedger hash-chain integrity (db)", () => {});
-  return;
-}
-
-(runDbTests ? describe : describe.skip)(
+(runDb ? describe : describe.skip)(
   "TaxLedger hash-chain integrity (db)",
   () => {
-    const { prisma } = require("@apgms/shared/db.js");
+    const { prisma } = require("@apgms/shared/db");
     const {
       appendLedgerEntry,
       verifyLedgerChain,
