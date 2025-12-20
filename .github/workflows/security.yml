@@ -16,6 +16,21 @@ jobs:
   security:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:15
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
     env:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres?schema=public
 
@@ -49,4 +64,4 @@ jobs:
       - name: Prisma migrate status (drift check)
         run: |
           pnpm --filter @apgms/shared exec prisma migrate status \
-            --schema ../infra/prisma/schema.prisma
+            --schema infra/prisma/schema.prisma
