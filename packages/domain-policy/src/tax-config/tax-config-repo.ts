@@ -1,4 +1,4 @@
-import { prisma } from "@apgms/shared/db";
+import { prisma } from "@apgms/shared/db.js";
 import { createTaxConfigRepositoryFromProvider } from "../au-tax/tax-config-repo.from-provider.js";
 
 /**
