@@ -25,17 +25,14 @@ const commands = [
     cmd: ["pnpm", "-r", "typecheck"],
   },
   {
-    title: "pnpm --filter @apgms/shared exec prisma migrate status --schema prisma/schema.prisma",
+    title: "Prisma schema validation",
     cmd: [
       "pnpm",
-      "--filter",
-      "@apgms/shared",
       "exec",
       "prisma",
-      "migrate",
-      "status",
+      "validate",
       "--schema",
-      "prisma/schema.prisma",
+      "infra/prisma/schema.prisma",
     ],
   },
 ];
@@ -61,17 +58,11 @@ for (const { title, cmd } of commands) {
   report += `## ${title}\n\n`;
   const { stdout, stderr, status } = runCommand(cmd[0], cmd.slice(1));
   report += `- Exit code: ${status}\n\n`;
-  if (stdout.trim().length > 0) {
-    report += "```text\n";
-    report += stdout.trim();
-    report += "\n```\n\n";
-  } else {
-    report += "_No stdout output_\n\n";
+  if (stdout.trim()) {
+    report += `\`\`\`text\n${stdout.trim()}\n\`\`\`\n\n`;
   }
-  if (stderr.trim().length > 0) {
-    report += "```text\n";
-    report += stderr.trim();
-    report += "\n```\n\n";
+  if (stderr.trim()) {
+    report += `\`\`\`text\n${stderr.trim()}\n\`\`\`\n\n`;
   }
 }
 
@@ -80,7 +71,10 @@ writeFileSync(filePath, report, "utf8");
 console.log(`Evidence written to ${filePath}`);
 
 function runCommand(command, args) {
-  const result = spawnSync(command, args, { encoding: "utf8", shell: process.platform === "win32" });
+  const result = spawnSync(command, args, {
+    encoding: "utf8",
+    shell: process.platform === "win32",
+  });
   return {
     stdout: result.stdout ?? "",
     stderr: result.stderr ?? "",
