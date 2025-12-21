@@ -1,20 +1,75 @@
-import { createApp } from "./app.js";
+import Fastify from "fastify";
+import cors from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
 
-export async function main() {
-  const app = await createApp();
-  const port = Number(process.env.PORT ?? 3000);
-  const host = process.env.HOST ?? "0.0.0.0";
+import { registerRiskSummaryRoute } from "./routes/risk-summary.js";
 
-  await app.listen({ port, host });
-  // eslint-disable-next-line no-console
-  console.log(`api-gateway listening on http://${host}:${port}`);
-}
-
-// Only run the server when this file is executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch((err) => {
-    // eslint-disable-next-line no-console
-    console.error("Fatal error starting api-gateway server", err);
-    process.exit(1);
+export function buildServer() {
+  const app = Fastify({
+    logger: true,
+    trustProxy: true,
   });
+
+  /**
+   * =========================================================
+   * CORS — EXPLICIT + WEBAPP SAFE
+   * =========================================================
+   */
+  const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map(o => o.trim())
+    .filter(Boolean);
+
+  app.register(cors, {
+    origin: (origin, cb) => {
+      if (!origin) {
+        cb(null, true);
+        return;
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        cb(null, true);
+        return;
+      }
+
+      cb(new Error(`CORS blocked origin: ${origin}`), false);
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Authorization",
+      "Content-Type",
+      "X-Request-Id",
+      "X-Regulator-Code",
+      "X-Org-Id",
+    ],
+    exposedHeaders: ["X-Request-Id"],
+  });
+
+  /**
+   * =========================================================
+   * RATE LIMITING
+   * =========================================================
+   */
+  app.register(rateLimit, {
+    max: Number(process.env.API_RATE_LIMIT_MAX ?? 120),
+    timeWindow: process.env.API_RATE_LIMIT_WINDOW ?? "1 minute",
+  });
+
+  /**
+   * =========================================================
+   * HEALTH / READINESS
+   * =========================================================
+   */
+  app.get("/health", async () => ({ ok: true }));
+  app.get("/ready", async () => ({ ok: true }));
+
+  /**
+   * =========================================================
+   * ROUTES
+   * =========================================================
+   */
+  registerRiskSummaryRoute(app);
+
+  return app;
 }

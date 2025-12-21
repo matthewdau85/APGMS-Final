@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from "fastify";
+import cors from "@fastify/cors";
 import { prisma } from "./db.js";
 import { adminServiceModePlugin } from "./routes/admin-service-mode.js";
 import registerRiskSummaryRoutes from "./routes/risk-summary.js";

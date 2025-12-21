@@ -22,14 +22,11 @@ async function handler(req: any, reply: any) {
     return reply.code(401).send({ error: "unauthorized" });
   }
 
-  const period = req.query?.period;
-  if (!period) {
-    return reply.code(400).send({ error: "missing_period" });
-  }
+  // Default period so dashboard never hard-fails
+  const period = req.query?.period ?? "current";
 
-  // Test-controlled risk band
-  const riskBand: RiskBand =
-    req.query?.riskBand ?? "LOW";
+  // Test / prototype controlled
+  const riskBand: RiskBand = req.query?.riskBand ?? "LOW";
 
   const gaugeVal = gaugeForRisk(riskBand);
 
@@ -45,10 +42,9 @@ async function handler(req: any, reply: any) {
   });
 }
 
-export function registerRiskSummaryRoute(
-  app: FastifyInstance,
-) {
+/**
+ * ✅ NAMED EXPORT — this is what server.ts imports
+ */
+export function registerRiskSummaryRoute(app: FastifyInstance) {
   app.get("/monitor/risk/summary", handler);
 }
-
-export default registerRiskSummaryRoute;
