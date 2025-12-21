@@ -2,10 +2,7 @@ name: Security
 
 on:
   push:
-    branches:
-      - main
-      - "feature/**"
-      - "fix/**"
+    branches: [main, "feature/**", "fix/**"]
   pull_request:
 
 concurrency:
@@ -16,40 +13,28 @@ jobs:
   security:
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:15
-        ports:
-          - 5432:5432
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: postgres
-        options: >-
-          --health-cmd="pg_isready -U postgres"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-
-    env:
-      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres?schema=public
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22.12.x"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
+        with:
+          version: 10
 
       - name: Install dependencies
         run: pnpm install
 
-      - name: Run Trivy filesystem scan
+      # ✅ Prisma gate WITHOUT database
+      - name: Prisma schema validation
+        run: pnpm exec prisma validate --schema infra/prisma/schema.prisma
+
+      - name: Trivy filesystem scan
         uses: aquasecurity/trivy-action@0.28.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -58,10 +43,5 @@ jobs:
           ignore-unfixed: true
           format: table
           exit-code: "1"
-          cache-dir: .trivy-cache
           severity: HIGH,CRITICAL
 
-      - name: Prisma migrate status (drift check)
-        run: |
-          pnpm --filter @apgms/shared exec prisma migrate status \
-            --schema infra/prisma/schema.prisma

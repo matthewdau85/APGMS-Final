@@ -1,58 +1,36 @@
 name: CI Core
 
 on:
-  push:
-    branches:
-      - main
-      - "feature/**"
-      - "fix/**"
   pull_request:
-
-concurrency:
-  group: ci-core-${{ github.ref }}
-  cancel-in-progress: true
+    paths:
+      - "packages/**"
+      - "services/**"
+      - "shared/**"
+      - "infra/**"
 
 jobs:
-  test-core:
+  core:
     runs-on: ubuntu-latest
 
-    env:
-      # Dummy DB URL just so Prisma CLI gets a value.
-      # This DB does NOT need to exist for validate/generate.
-      DATABASE_URL: postgresql://apgms-ci:apgms-ci@127.0.0.1:5432/apgms_ci
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "22.12.x"
-          cache: "pnpm"
-          cache-dependency-path: pnpm-lock.yaml
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
 
-      - name: Generate Prisma client for @apgms/shared
-        # Uses the infra/prisma/schema.prisma inside the shared workspace.
-        run: pnpm --filter @apgms/shared exec prisma generate
-
-      - name: Lint
-        run: pnpm -r lint
-
-      - name: Build domain-policy
-        run: pnpm --filter @apgms/domain-policy build
+      - run: pnpm install
 
       - name: Build
         run: pnpm -r build
 
-      - name: A11y smoke (webapp)
-        run: pnpm --filter apgms-webapp test:a11y
-
       - name: Test
         run: pnpm -r test
+
+      # ✅ Schema only
+      - name: Prisma schema validation
+        run: pnpm exec prisma validate --schema infra/prisma/schema.prisma

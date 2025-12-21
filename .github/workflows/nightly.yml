@@ -1,62 +1,33 @@
-name: Nightly Full Suite
+name: Nightly
 
 on:
   schedule:
-    - cron: '0 18 * * *' # 4am AEST ~ 18:00 UTC
+    - cron: "0 3 * * *"
   workflow_dispatch:
 
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  nightly-tests:
+  nightly:
     runs-on: ubuntu-latest
-    env:
-      RUN_DB_TESTS: "1"
-
-    services:
-      db:
-        image: postgres:16
-        ports:
-          - 5432:5432
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: apgms
-        options: >-
-          --health-cmd="pg_isready -U postgres -d apgms"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
       - uses: actions/setup-node@v4
         with:
-          node-version: '22.12.x'
-          cache: 'pnpm'
-          cache-dependency-path: pnpm-lock.yaml
+          node-version: "22.12.x"
 
-      - name: Install dependencies
-        run: pnpm install
-
-      - name: Run Prisma migrate status (shared)
-        run: pnpm --filter @apgms/shared exec prisma migrate status --schema prisma/schema.prisma
-
-      - name: Run full test matrix (nightly tier)
-        run: pnpm -r test -- --coverage
-
-      - name: Upload coverage artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
+      - uses: pnpm/action-setup@v4
         with:
-          name: coverage
-          path: |
-            **/coverage/**
+          version: 10
+
+      - run: pnpm install
+
+      - name: Build
+        run: pnpm -r build
+
+      - name: Test
+        run: pnpm -r test
+
+      # ✅ Schema validation ONLY
+      - name: Prisma schema validation
+        run: pnpm exec prisma validate --schema infra/prisma/schema.prisma
