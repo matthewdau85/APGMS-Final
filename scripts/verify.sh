@@ -28,6 +28,9 @@ step "Workspace typecheck" \
 step "Domain-policy tests (WITH coverage)" \
   pnpm --filter @apgms/domain-policy test -- --coverage
 
+step "Assurance drills" \
+  pnpm --filter @apgms/domain-policy test -- assurance
+
 step "Ledger tests (NO coverage)" \
   pnpm --filter @apgms/ledger test
 
@@ -53,3 +56,5 @@ else
 fi
 
 echo "========================================"
+
+exit "$FAIL"
