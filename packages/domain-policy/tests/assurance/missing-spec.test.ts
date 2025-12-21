@@ -1,4 +1,4 @@
-import { computeObligations } from "../..";
+import { computeObligations } from "../../src/compute/computeObligations.js";
 
 test("fails explicitly when tax spec is missing", () => {
   expect(() =>
