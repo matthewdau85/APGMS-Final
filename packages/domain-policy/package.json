@@ -36,6 +36,14 @@
       "types": "./dist/ledger/tax-ledger-public.d.ts",
       "import": "./dist/ledger/tax-ledger-public.js",
       "require": "./dist/ledger/tax-ledger-public.js"
+    },
+    "./outcomes/bas-outcome": {
+      "types": "./dist/outcomes/bas-outcome.d.ts",
+      "import": "./dist/outcomes/bas-outcome.js"
+    },
+    "./outcomes/bas-outcome.js": {
+      "types": "./dist/outcomes/bas-outcome.d.ts",
+      "import": "./dist/outcomes/bas-outcome.js"
     }
   },
   "dependencies": {
@@ -69,6 +77,12 @@
       ],
       "ledger/tax-ledger.js": [
         "dist/ledger/tax-ledger-public.d.ts"
+      ],
+      "outcomes/bas-outcome": [
+        "dist/outcomes/bas-outcome.d.ts"
+      ],
+      "outcomes/bas-outcome.js": [
+        "dist/outcomes/bas-outcome.d.ts"
       ]
     }
   },
