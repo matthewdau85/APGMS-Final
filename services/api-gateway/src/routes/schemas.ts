@@ -1,86 +1,129 @@
 // services/api-gateway/src/routes/schemas.ts
 
-/**
- * Fastify JSON Schemas (Ajv) for regulator endpoints.
- * Keep these minimal + compatible with tests.
- */
+export const MoneyCentsSchema = { type: "integer" } as const;
+
+export const ObligationsBreakdownItemSchema = {
+  type: "object",
+  properties: {
+    source: { type: "string" },
+    amountCents: MoneyCentsSchema,
+  },
+  required: ["source", "amountCents"],
+  additionalProperties: true,
+} as const;
+
+export const ObligationsSchema = {
+  type: "object",
+  properties: {
+    paygwCents: MoneyCentsSchema,
+    gstCents: MoneyCentsSchema,
+    breakdown: {
+      type: "array",
+      items: ObligationsBreakdownItemSchema,
+    },
+  },
+  required: ["paygwCents", "gstCents"],
+  additionalProperties: true,
+} as const;
+
+export const LedgerSchema = {
+  type: "object",
+  properties: {
+    paygwCents: MoneyCentsSchema,
+    gstCents: MoneyCentsSchema,
+    totalCents: MoneyCentsSchema,
+  },
+  required: ["paygwCents", "gstCents", "totalCents"],
+  additionalProperties: true,
+} as const;
+
+export const RiskSchema = {
+  type: "object",
+  properties: {
+    riskBand: { type: "string", enum: ["LOW", "MEDIUM", "HIGH"] },
+    coverageStatus: { type: "string", enum: ["OK", "WARN", "ALERT"] },
+  },
+  required: ["riskBand", "coverageStatus"],
+  additionalProperties: true,
+} as const;
 
 export const RegulatorComplianceSummaryQuerySchema = {
   type: "object",
-  additionalProperties: false,
-  required: ["orgId", "period"],
   properties: {
     orgId: { type: "string" },
     period: { type: "string" },
   },
+  required: ["period"],
+  additionalProperties: false,
 } as const;
 
 export const RegulatorComplianceSummaryReplySchema = {
   type: "object",
-  additionalProperties: true,
-  required: ["orgId", "period", "basCoverageRatio", "risk"],
   properties: {
     orgId: { type: "string" },
     period: { type: "string" },
 
-    paygwDueCents: { type: "integer" },
-    gstDueCents: { type: "integer" },
-    totalDueCents: { type: "integer" },
+    obligations: ObligationsSchema,
+    ledger: LedgerSchema,
 
-    paygwHeldCents: { type: "integer" },
-    gstHeldCents: { type: "integer" },
-    totalHeldCents: { type: "integer" },
-
-    paygwShortfallCents: { type: "integer" },
-    gstShortfallCents: { type: "integer" },
-    totalShortfallCents: { type: "integer" },
+    paygwShortfallCents: MoneyCentsSchema,
+    gstShortfallCents: MoneyCentsSchema,
+    totalShortfallCents: MoneyCentsSchema,
 
     basCoverageRatio: { type: "number" },
-
-    risk: {
-      type: "object",
-      additionalProperties: false,
-      required: ["riskBand", "coverageStatus"],
-      properties: {
-        riskBand: { type: "string", enum: ["LOW", "MEDIUM", "HIGH"] },
-        coverageStatus: { type: "string", enum: ["OK", "WARNING", "ALERT"] },
-      },
-    },
+    risk: RiskSchema,
   },
+  required: [
+    "orgId",
+    "period",
+    "obligations",
+    "ledger",
+    "paygwShortfallCents",
+    "gstShortfallCents",
+    "totalShortfallCents",
+    "basCoverageRatio",
+    "risk",
+  ],
+  // IMPORTANT: keep this true so Fastify doesn't strip anything unexpected
+  additionalProperties: true,
 } as const;
 
 export const RegulatorComplianceEvidencePackQuerySchema = {
   type: "object",
-  additionalProperties: false,
-  required: ["orgId", "period"],
   properties: {
     orgId: { type: "string" },
     period: { type: "string" },
   },
+  required: ["period"],
+  additionalProperties: false,
 } as const;
 
 export const RegulatorComplianceEvidencePackReplySchema = {
   type: "object",
-  additionalProperties: true,
-  required: ["version", "generatedAt", "orgId", "period", "evidenceChecksum", "payload"],
   properties: {
     version: { type: "integer", enum: [1] },
-    generatedAt: { type: "string" },
-
     orgId: { type: "string" },
     period: { type: "string" },
+    generatedAt: { type: "string" },
 
-    specIdFull: { type: "string" },
-    specVersionHash: { type: "string" },
+    obligations: ObligationsSchema,
+    ledger: LedgerSchema,
 
-    inputHash: { type: "string" },
-    outputHash: { type: "string" },
+    basCoverageRatio: { type: "number" },
+    risk: RiskSchema,
 
-    evidenceChecksum: { type: "string" },
-
-    payload: {
-      type: "object",
-      additionalProperties: true,
-    },
+    checksum: { type: "string" },
   },
+  required: [
+    "version",
+    "orgId",
+    "period",
+    "generatedAt",
+    "obligations",
+    "ledger",
+    "basCoverageRatio",
+    "risk",
+    "checksum",
+  ],
+  additionalProperties: true,
 } as const;
