@@ -5,55 +5,40 @@ import crypto from "node:crypto";
 import {
   computeOrgObligationsForPeriod,
   getLedgerBalanceForPeriod,
-  // NOTE: you must export this from @apgms/domain-policy (see patch note below)
   runBasOutcomeV1FromContext,
 } from "@apgms/domain-policy";
 import {
   RegulatorComplianceEvidencePackQuerySchema,
   RegulatorComplianceEvidencePackReplySchema,
 } from "./schemas.js";
+import { prototypeAdminGuard } from "../guards/prototype-admin.js";
 
-function riskBandFromCoverage(r: number): "LOW" | "MEDIUM" | "HIGH" {
-  if (r >= 0.95) return "LOW";
+type RiskBand = "LOW" | "MEDIUM" | "HIGH";
+type CoverageStatus = "OK" | "WARNING" | "ALERT";
+
+function toIntCents(v: unknown): number {
+  if (typeof v === "bigint") return Number(v);
+  if (typeof v === "number" && Number.isFinite(v)) return Math.trunc(v);
+  return 0;
+}
+
+function clamp01(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  if (n < 0) return 0;
+  if (n > 1) return 1;
+  return n;
+}
+
+function riskBandFromCoverage(r: number): RiskBand {
+  if (r >= 0.9) return "LOW";
   if (r >= 0.8) return "MEDIUM";
   return "HIGH";
 }
 
-function coverageStatusFromRatio(r: number): "OK" | "WARNING" | "ALERT" {
-  if (r >= 0.95) return "OK";
+function coverageStatusFromRatio(r: number): CoverageStatus {
+  if (r >= 0.9) return "OK";
   if (r >= 0.8) return "WARNING";
   return "ALERT";
-}
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return !!v && typeof v === "object" && !Array.isArray(v);
-}
-
-function safeGetByPath(obj: unknown, path: string): unknown {
-  const parts = path.split(".");
-  let cur: unknown = obj;
-  for (const p of parts) {
-    if (!isRecord(cur)) return undefined;
-    if (!(p in cur)) return undefined;
-    cur = cur[p];
-  }
-  return cur;
-}
-
-function pickNumber(obj: unknown, paths: string[], fallback: number): number {
-  for (const p of paths) {
-    const v = safeGetByPath(obj, p);
-    if (typeof v === "number" && Number.isFinite(v)) return v;
-  }
-  return fallback;
-}
-
-function pickString<T extends string>(obj: unknown, paths: string[], fallback: T): T {
-  for (const p of paths) {
-    const v = safeGetByPath(obj, p);
-    if (typeof v === "string") return v as T;
-  }
-  return fallback;
 }
 
 // Deterministic JSON stringify (stable key ordering)
@@ -61,25 +46,25 @@ function stableStringify(value: unknown): string {
   const seen = new WeakSet<object>();
 
   const walk = (v: unknown): unknown => {
-    if (v === null) return null;
-    const t = typeof v;
-    if (t === "number" || t === "string" || t === "boolean") return v;
-    if (t === "bigint") return v.toString();
-    if (t === "undefined") return null;
-    if (t === "function" || t === "symbol") return null;
+    if (v === null || v === undefined) return null;
+
+    if (typeof v === "number" || typeof v === "string" || typeof v === "boolean") return v;
+    if (typeof v === "bigint") return v.toString();
+    if (typeof v === "function" || typeof v === "symbol") return null;
 
     if (Array.isArray(v)) return v.map(walk);
 
-    if (isRecord(v)) {
-      if (seen.has(v)) return "[Circular]";
-      seen.add(v);
+    if (typeof v === "object") {
+      const o = v as Record<string, unknown>;
+      if (seen.has(o)) return "[Circular]";
+      seen.add(o);
 
       const out: Record<string, unknown> = {};
-      for (const k of Object.keys(v).sort()) out[k] = walk(v[k]);
+      for (const k of Object.keys(o).sort()) out[k] = walk(o[k]);
       return out;
     }
 
-    return String(v);
+    return null;
   };
 
   return JSON.stringify(walk(value));
@@ -89,109 +74,150 @@ function sha256Hex(s: string): string {
   return crypto.createHash("sha256").update(s, "utf8").digest("hex");
 }
 
+function computeEvidenceChecksum(pack: Record<string, unknown>): string {
+  const clone: Record<string, unknown> = { ...pack };
+  delete clone.evidenceChecksum;
+  return sha256Hex(stableStringify(clone));
+}
+
 export async function registerRegulatorComplianceEvidencePackRoutes(app: FastifyInstance) {
   app.get(
-    "/regulator/compliance/evidence-pack",
+    // IMPORTANT: app.ts registers this plugin under prefix "/regulator"
+    // so the effective URL becomes "/regulator/compliance/evidence-pack"
+    "/compliance/evidence-pack",
     {
       schema: {
         querystring: RegulatorComplianceEvidencePackQuerySchema,
         response: { 200: RegulatorComplianceEvidencePackReplySchema },
       },
-      preHandler: async (request) => {
-        await request.jwtVerify();
-      },
+      preHandler: prototypeAdminGuard(),
     },
     async (request) => {
-      const { orgId, period } = request.query as { orgId: string; period: string };
+      const { orgId, period } = request.query as unknown as { orgId: string; period: string };
 
       const obligations = await computeOrgObligationsForPeriod(orgId, period);
       const ledger = await getLedgerBalanceForPeriod(orgId, period);
 
-      const paygwDueCents = obligations.paygwDueCents;
-      const gstDueCents = obligations.gstDueCents;
+      const paygwDueCents = toIntCents((obligations as any).paygwCents);
+      const gstDueCents = toIntCents((obligations as any).gstCents);
 
-      // Replace these with your real “paid” derivation if your ledger splits PAYGW vs GST.
-      // For now, treat ledger.balanceCents as “total paid towards BAS liabilities”.
-      const totalPaidCents = ledger.balanceCents;
+      const paygwHeldCents = toIntCents((ledger as any).PAYGW ?? 0);
+      const gstHeldCents = toIntCents((ledger as any).GST ?? 0);
 
-      // Simple split logic (keeps prior behavior stable). If you already have proper splits, use them instead.
       const totalDueCents = paygwDueCents + gstDueCents;
-      const paygwPaidCents = totalDueCents === 0 ? 0 : Math.trunc((totalPaidCents * paygwDueCents) / totalDueCents);
-      const gstPaidCents = Math.max(0, totalPaidCents - paygwPaidCents);
+      const totalHeldCents = paygwHeldCents + gstHeldCents;
+
+      let basCoverageRatio = totalDueCents === 0 ? 1 : clamp01(totalHeldCents / totalDueCents);
+      let riskBand: RiskBand = riskBandFromCoverage(basCoverageRatio);
+      let coverageStatus: CoverageStatus = coverageStatusFromRatio(basCoverageRatio);
+
+      const paygwShortfallCents = Math.max(0, paygwDueCents - paygwHeldCents);
+      const gstShortfallCents = Math.max(0, gstDueCents - gstHeldCents);
+      const totalShortfallCents = paygwShortfallCents + gstShortfallCents;
 
       const generatedAt = new Date().toISOString();
 
-      // Canonical “facts” used for the outcome engine
       const basFacts = {
         orgId,
         period,
-        paygwDueCents,
-        gstDueCents,
-        paygwPaidCents,
-        gstPaidCents,
+        obligations: { paygwCents: paygwDueCents, gstCents: gstDueCents },
+        ledger: { paygwCents: paygwHeldCents, gstCents: gstHeldCents },
       };
 
-      // Run the domain-policy BAS outcome. If it throws, fall back to computed metrics.
       let basOutcome: unknown = undefined;
       try {
-        basOutcome = runBasOutcomeV1FromContext(basFacts);
+        basOutcome = runBasOutcomeV1FromContext(basFacts as any);
+
+        if (basOutcome && typeof basOutcome === "object" && (basOutcome as any).metrics) {
+          const m = (basOutcome as any).metrics;
+          if (typeof m.basCoverageRatio === "number") basCoverageRatio = m.basCoverageRatio;
+          if (typeof m.riskBand === "string") riskBand = m.riskBand as RiskBand;
+          if (typeof m.coverageStatus === "string") coverageStatus = m.coverageStatus as CoverageStatus;
+        }
       } catch {
         basOutcome = undefined;
       }
 
-      // Prefer engine outputs if present; otherwise use deterministic fallback.
-      const fallbackCoverageRatio = totalDueCents === 0 ? 1 : totalPaidCents / totalDueCents;
-
-      const basCoverageRatio = pickNumber(
-        basOutcome,
-        [
-          "basCoverageRatio",
-          "derived.basCoverageRatio",
-          "outputs.basCoverageRatio",
-          "result.basCoverageRatio",
-        ],
-        fallbackCoverageRatio
-      );
-
-      const riskBand = pickString(
-        basOutcome,
-        ["riskBand", "derived.riskBand", "outputs.riskBand", "result.riskBand"],
-        riskBandFromCoverage(basCoverageRatio)
-      );
-
-      const coverageStatus = pickString(
-        basOutcome,
-        ["coverageStatus", "derived.coverageStatus", "outputs.coverageStatus", "result.coverageStatus"],
-        coverageStatusFromRatio(basCoverageRatio)
+      const inputHash = sha256Hex(stableStringify({ orgId, period, obligations, ledger }));
+      const outputHash = sha256Hex(
+        stableStringify({
+          basFacts,
+          basOutcome,
+          computed: {
+            paygwDueCents,
+            gstDueCents,
+            paygwHeldCents,
+            gstHeldCents,
+            paygwShortfallCents,
+            gstShortfallCents,
+            basCoverageRatio,
+            riskBand,
+            coverageStatus,
+          },
+        }),
       );
 
       const outcomeChecksum =
         basOutcome === undefined ? null : sha256Hex(stableStringify({ basFacts, basOutcome }));
 
-      return {
-        orgId,
-        period,
+      const pack: Record<string, unknown> = {
+        version: 1,
         generatedAt,
 
-        paygwDueCents,
-        gstDueCents,
-        paygwPaidCents,
-        gstPaidCents,
+        orgId,
+        period,
 
-        basCoverageRatio,
-        riskBand,
-        coverageStatus,
+        // Optional fields (fill later if you have proper spec identity)
+        specIdFull: "bas-outcome-spec-v1",
+        specVersionHash: null,
 
-        // If your response schema is strict (additionalProperties:false), you must add these fields to the reply schema.
-        basOutcome,
-        outcomeChecksum,
+        inputHash,
+        outputHash,
 
-        notes: [
-          "Evidence pack is derived from obligations snapshot and ledger balance for the period.",
-          "Paid amounts are currently allocated proportionally across PAYGW vs GST unless a tax-type split is available in the ledger.",
-          "Outcome engine output is included (basOutcome) when available; outcomeChecksum is a SHA-256 over {basFacts, basOutcome}.",
-        ],
+        payload: {
+          obligations: {
+            paygwDueCents,
+            gstDueCents,
+            totalDueCents,
+          },
+          ledger: {
+            paygwHeldCents,
+            gstHeldCents,
+            totalHeldCents,
+          },
+          shortfall: {
+            paygwShortfallCents,
+            gstShortfallCents,
+            totalShortfallCents,
+          },
+          coverage: {
+            basCoverageRatio,
+            riskBand,
+            coverageStatus,
+          },
+          basOutcome,
+          outcomeChecksum,
+        },
       };
-    }
+
+      pack.evidenceChecksum = computeEvidenceChecksum(pack);
+
+      return pack;
+    },
   );
 }
+
+/**
+ * Back-compat export (tests may import this symbol)
+ */
+export async function registerRegulatorComplianceEvidencePackRoute(app: FastifyInstance) {
+  await registerRegulatorComplianceEvidencePackRoutes(app);
+}
+
+/**
+ * Plugin wrapper + default export
+ */
+export async function regulatorComplianceEvidencePackPlugin(app: FastifyInstance) {
+  await registerRegulatorComplianceEvidencePackRoutes(app);
+}
+export default regulatorComplianceEvidencePackPlugin;

@@ -1,3 +1,5 @@
+// services/api-gateway/src/routes/risk-summary.ts
+
 import type { FastifyInstance } from "fastify";
 import { riskBandGauge } from "../observability/metrics.js";
 
@@ -30,10 +32,7 @@ async function handler(req: any, reply: any) {
 
   const gaugeVal = gaugeForRisk(riskBand);
 
-  riskBandGauge.set(
-    { orgId, period },
-    gaugeVal,
-  );
+  riskBandGauge.set({ orgId, period }, gaugeVal);
 
   return reply.send({
     orgId,
@@ -43,8 +42,15 @@ async function handler(req: any, reply: any) {
 }
 
 /**
- * ✅ NAMED EXPORT — this is what server.ts imports
+ * ✅ NAMED EXPORT — used by server/app wiring in places
  */
-export function registerRiskSummaryRoute(app: FastifyInstance) {
+export function registerRiskSummaryRoute(app: FastifyInstance): void {
   app.get("/monitor/risk/summary", handler);
+}
+
+/**
+ * ✅ DEFAULT EXPORT — satisfies app.ts default import
+ */
+export default function registerRiskSummaryRoutes(app: FastifyInstance): void {
+  registerRiskSummaryRoute(app);
 }

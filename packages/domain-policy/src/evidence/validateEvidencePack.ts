@@ -1,4 +1,4 @@
-import { EvidencePack } from "./evidence-pack";
+import type { EvidencePack } from "./evidence-pack.js";
 
 export function validateEvidencePack(pack: EvidencePack): void {
   if (!pack.inputDataHash) {

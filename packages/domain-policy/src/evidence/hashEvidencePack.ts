@@ -1,7 +1,7 @@
-import crypto from "crypto";
-import { EvidencePack } from "./evidence-pack";
+import { createHash } from "node:crypto";
+import type { EvidencePack } from "./evidence-pack.js";
 
 export function hashEvidencePack(pack: EvidencePack): string {
-  const stable = JSON.stringify(pack, Object.keys(pack).sort());
-  return crypto.createHash("sha256").update(stable).digest("hex");
+  const json = JSON.stringify(pack, Object.keys(pack as object).sort());
+  return createHash("sha256").update(json, "utf8").digest("hex");
 }

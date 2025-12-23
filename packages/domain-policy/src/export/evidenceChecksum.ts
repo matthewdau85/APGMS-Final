@@ -1,11 +1,8 @@
-import crypto from "crypto";
-import { canonicalJson } from "./canonicalJson";
-import { EvidencePackV1 } from "./evidence.schema";
+import { createHash } from "node:crypto";
+import { canonicalJson } from "./canonicalJson.js";
+import type { EvidencePackV1 } from "./evidence.schema.js";
 
-export function computeEvidenceChecksum(e: EvidencePackV1): string {
-  const clone = { ...e };
-  delete (clone as any).checksum;
-
-  const canonical = canonicalJson(clone);
-  return crypto.createHash("sha256").update(canonical).digest("hex");
+export function computeEvidenceChecksum(pack: EvidencePackV1): string {
+  const json = canonicalJson(pack);
+  return createHash("sha256").update(json, "utf8").digest("hex");
 }
