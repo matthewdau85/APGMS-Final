@@ -84,31 +84,35 @@ export function buildFastifyApp(options: BuildFastifyAppOptions = {}): FastifyIn
   app.register(adminServiceModePlugin, { prefix: "/admin" });
 
   // Prototype-only scope (admin only)
-  app.register(async (protoScope) => {
-    protoScope.addHook("preHandler", prototypeAdminGuard());
+  // SECURITY: Never ship prototype routes in production.
+  if (config.environment !== "production") {
+    app.register(async (protoScope) => {
+      // Pass config so the guard doesn't rely on NODE_ENV (Jest forces NODE_ENV="test").
+      protoScope.addHook("preHandler", prototypeAdminGuard({ config }));
 
-    // Monitoring route(s)
-    registerRiskSummaryRoute(protoScope);
+      // Monitoring route(s)
+      registerRiskSummaryRoute(protoScope);
 
-    // IMPORTANT:
-    // These route modules already include "/regulator/..." in their route URLs,
-    // so DO NOT mount them with prefix "/regulator" (that would become "/regulator/regulator/...").
-    protoScope.register(regulatorComplianceSummaryPlugin);
-    protoScope.register(regulatorComplianceEvidencePackPlugin);
+      // IMPORTANT:
+      // These route modules already include "/regulator/..." in their route URLs,
+      // so DO NOT mount them with prefix "/regulator" (that would become "/regulator/regulator/...").
+      protoScope.register(regulatorComplianceSummaryPlugin);
+      protoScope.register(regulatorComplianceEvidencePackPlugin);
 
-    // Admin-only prototype route group under /admin/*
-    protoScope.register(
-      adminUsersPlugin,
-      {
-        prefix: "/admin",
-        riskStore: {
-          async recordRiskEvent() {
-            // no-op (prototype). Replace with durable store later.
+      // Admin-only prototype route group under /admin/*
+      protoScope.register(
+        adminUsersPlugin,
+        {
+          prefix: "/admin",
+          riskStore: {
+            async recordRiskEvent() {
+              // no-op (prototype). Replace with durable store later.
+            },
           },
-        },
-      } as any
-    );
-  });
+        } as any
+      );
+    });
+  }
 
   // Secure scope: everything here requires auth
   app.register(async (secureScope) => {
@@ -146,27 +150,34 @@ export function buildFastifyApp(options: BuildFastifyAppOptions = {}): FastifyIn
     const registerExportRoutes =
       exportMod?.registerExportRoutes ?? exportMod?.exportRoutes ?? exportMod?.default;
     if (typeof registerExportRoutes === "function") {
-      secureScope.register(async (apiScope) => {
-        await registerExportRoutes(apiScope);
-      }, { prefix: "/api" });
+      secureScope.register(
+        async (apiScope) => {
+          await registerExportRoutes(apiScope);
+        },
+        { prefix: "/api" }
+      );
     }
 
     const ingestMod: any = await tryImport("./routes/ingest-csv.js");
-    const registerIngestCsvRoutes =
-      ingestMod?.registerIngestCsvRoutes ?? ingestMod?.default;
+    const registerIngestCsvRoutes = ingestMod?.registerIngestCsvRoutes ?? ingestMod?.default;
     if (typeof registerIngestCsvRoutes === "function") {
-      secureScope.register(async (apiScope) => {
-        await registerIngestCsvRoutes(apiScope);
-      }, { prefix: "/api" });
+      secureScope.register(
+        async (apiScope) => {
+          await registerIngestCsvRoutes(apiScope);
+        },
+        { prefix: "/api" }
+      );
     }
 
     const bankLinesMod: any = await tryImport("./routes/bank-lines.js");
-    const registerBankLinesRoutes =
-      bankLinesMod?.registerBankLinesRoutes ?? bankLinesMod?.default;
+    const registerBankLinesRoutes = bankLinesMod?.registerBankLinesRoutes ?? bankLinesMod?.default;
     if (typeof registerBankLinesRoutes === "function") {
-      secureScope.register(async (apiScope) => {
-        await registerBankLinesRoutes(apiScope);
-      }, { prefix: "/api" });
+      secureScope.register(
+        async (apiScope) => {
+          await registerBankLinesRoutes(apiScope);
+        },
+        { prefix: "/api" }
+      );
     }
   });
 
