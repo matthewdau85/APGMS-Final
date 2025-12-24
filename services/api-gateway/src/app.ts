@@ -8,6 +8,7 @@ import { regulatorComplianceSummaryPlugin } from "./routes/regulator-compliance-
 import { regulatorComplianceEvidencePackPlugin } from "./routes/regulator-compliance-evidence-pack.js";
 import adminUsersPlugin from "./routes/admin-users.js";
 import { prototypeAdminGuard } from "./guards/prototype-admin.js";
+import registerMetricsRoutes from "./routes/metrics.js"
 
 type Environment = "development" | "test" | "production";
 
@@ -111,6 +112,11 @@ export function buildFastifyApp(options: BuildFastifyAppOptions = {}): FastifyIn
   // Admin service-mode (expects /admin prefix)
   app.register(adminServiceModePlugin, { prefix: "/admin" });
 
+// Metrics (Prometheus)
+// Keep this OUTSIDE auth scope so ops can scrape it.
+// If you want it locked down in prod, set METRICS_BEARER_TOKEN.
+registerMetricsRoutes(app, { environment: config.environment });
+
   // Prototype-only scope (admin only)
   // SECURITY: Never ship prototype routes in production.
   if (config.environment !== "production") {
@@ -198,7 +204,8 @@ export function buildFastifyApp(options: BuildFastifyAppOptions = {}): FastifyIn
     }
 
     const bankLinesMod: any = await tryImport("./routes/bank-lines.js");
-    const registerBankLinesRoutes = bankLinesMod?.registerBankLinesRoutes ?? bankLinesMod?.default;
+    const registerBankLinesRoutes =
+      bankLinesMod?.registerBankLinesRoutes ?? bankLinesMod?.default;
     if (typeof registerBankLinesRoutes === "function") {
       secureScope.register(
         async (apiScope) => {
