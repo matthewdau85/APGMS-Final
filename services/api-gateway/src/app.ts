@@ -54,6 +54,15 @@ async function tryImport(path: string): Promise<any | null> {
   }
 }
 
+// ---- CORS (tight in production) ----
+function parseCorsAllowlist(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 export function buildFastifyApp(options: BuildFastifyAppOptions = {}): FastifyInstance {
   const logger = options.logger ?? true;
 
@@ -70,8 +79,27 @@ export function buildFastifyApp(options: BuildFastifyAppOptions = {}): FastifyIn
 
   const app = Fastify({ pluginTimeout: 60000, logger });
 
-  // Useful defaults
-  app.register(cors, { origin: true });
+  // ---- CORS policy ----
+  const isProd = config.environment === "production";
+  const corsAllowlist = parseCorsAllowlist(process.env.CORS_ALLOWED_ORIGINS);
+
+  // In production we set CORS headers only for allowlisted origins.
+  // In non-prod we allow all origins (dev/test convenience).
+  app.register(cors, {
+    origin: isProd ? corsAllowlist : true,
+    credentials: true,
+  });
+
+  // Tight enforcement: if Origin is present in production and not allowlisted, reject.
+  if (isProd) {
+    app.addHook("onRequest", async (req, reply) => {
+      const origin = String(req.headers.origin ?? "");
+      if (!origin) return; // non-browser / server-to-server calls
+      if (!corsAllowlist.includes(origin)) {
+        return reply.code(403).send({ error: "cors_origin_forbidden" });
+      }
+    });
+  }
 
   // Basic health endpoints (tests expect these)
   app.get("/health", async () => ({ ok: true }));
