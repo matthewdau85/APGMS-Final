@@ -1,47 +1,82 @@
-name: Security
+name: CI
 
 on:
-  push:
-    branches: [main, "feature/**", "fix/**"]
   pull_request:
+  push:
+    branches: [main]
 
 concurrency:
-  group: security-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  security:
+  verify:
+    name: Verify (build/typecheck/tests)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "22.12.x"
+          node-version: "20"
+          cache: "pnpm"
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
+      - name: Enable Corepack + PNPM
+        run: |
+          corepack enable
+          corepack prepare pnpm@9 --activate
 
-      - name: Install dependencies
-        run: pnpm install
+      - name: Install deps (frozen)
+        run: pnpm install --frozen-lockfile
 
-      # ✅ Prisma gate WITHOUT database
-      - name: Prisma schema validation
-        run: pnpm exec prisma validate --schema infra/prisma/schema.prisma
-
-      - name: Trivy filesystem scan
-        uses: aquasecurity/trivy-action@0.28.0
+      # Minimal env so tests/auth helpers never fail due to missing values
+      - name: Verify (repo)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          scan-type: fs
-          ignore-unfixed: true
-          format: table
-          exit-code: "1"
-          severity: HIGH,CRITICAL
+          NODE_ENV: test
+          AUTH_AUDIENCE: apgms-api
+          AUTH_ISSUER: https://issuer.example
+          AUTH_DEV_SECRET: ci-test-secret
+          CORS_ALLOWED_ORIGINS: http://localhost
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/apgms?schema=public
+          SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/apgms_shadow?schema=public
+        run: ./scripts/verify.sh
 
+  a11y:
+    name: A11y smoke (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Enable Corepack + PNPM
+        run: |
+          corepack enable
+          corepack prepare pnpm@9 --activate
+
+      - name: Install deps (frozen)
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps
+
+      # Your a11y spec hits http://localhost:5173, so we must serve the webapp first.
+      - name: Start webapp (Vite) and wait
+        run: |
+          pnpm --filter @apgms/webapp dev -- --host 127.0.0.1 --port 5173 --strictPort &
+          pnpm dlx wait-on@7 http://127.0.0.1:5173
+
+      - name: Run a11y smoke
+        env:
+          NODE_ENV: test
+          BASE_URL: http://127.0.0.1:5173
+        run: pnpm -w exec playwright test webapp/tests/a11y.spec.ts

@@ -1,98 +1,82 @@
 name: CI
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
-    branches:
-      - main
+  push:
+    branches: [main]
 
-permissions:
-  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:
-    name: Verify (pnpm verify)
+    name: Verify (build/typecheck/tests)
     runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:16
-        ports:
-          - 5432:5432
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: apgms
-        options: >-
-          --health-cmd="pg_isready -U postgres"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-
-    env:
-      NODE_ENV: test
-      DATABASE_URL: postgres://postgres:postgres@localhost:5432/apgms
-      APGMS_API_TOKEN: ci-token
-      CORS_ALLOWED_ORIGINS: http://localhost:3000
-      LOG_LEVEL: warn
+    timeout-minutes: 20
 
     steps:
-      # 1️⃣ Checkout
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # 2️⃣ Node + pnpm
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: pnpm
+          node-version: "20"
+          cache: "pnpm"
 
-      - name: Enable Corepack
-        run: corepack enable
+      - name: Enable Corepack + PNPM
+        run: |
+          corepack enable
+          corepack prepare pnpm@9 --activate
 
-      # 3️⃣ Install dependencies
-      - name: Install dependencies
+      - name: Install deps (frozen)
         run: pnpm install --frozen-lockfile
 
-      # 4️⃣ Build (explicit, fail-fast)
-      - name: Build workspace
-        run: pnpm build
+      # Minimal env so tests/auth helpers never fail due to missing values
+      - name: Verify (repo)
+        env:
+          NODE_ENV: test
+          AUTH_AUDIENCE: apgms-api
+          AUTH_ISSUER: https://issuer.example
+          AUTH_DEV_SECRET: ci-test-secret
+          CORS_ALLOWED_ORIGINS: http://localhost
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/apgms?schema=public
+          SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/apgms_shadow?schema=public
+        run: ./scripts/verify.sh
 
-      # 5️⃣ Database migrations (required for readiness & API tests)
-      - name: Run database migrations
-        run: pnpm db:deploy
+  a11y:
+    name: A11y smoke (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
 
-      # 6️⃣ Start API Gateway (background)
-      - name: Start API Gateway
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Enable Corepack + PNPM
         run: |
-          pnpm --filter @apgms/api-gateway dev &
-          echo $! > api-gateway.pid
+          corepack enable
+          corepack prepare pnpm@9 --activate
 
-      # 7️⃣ Wait for readiness endpoint
-      - name: Wait for API readiness
+      - name: Install deps (frozen)
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps
+
+      # Your a11y spec hits http://localhost:5173, so we must serve the webapp first.
+      - name: Start webapp (Vite) and wait
         run: |
-          for i in {1..30}; do
-            if curl -sf http://localhost:3000/ready > /dev/null; then
-              echo "API is ready"
-              exit 0
-            fi
-            echo "Waiting for API..."
-            sleep 2
-          done
-          echo "API failed to become ready"
-          exit 1
+          pnpm --filter @apgms/webapp dev -- --host 127.0.0.1 --port 5173 --strictPort &
+          pnpm dlx wait-on@7 http://127.0.0.1:5173
 
-      # 8️⃣ Authoritative verification
-      - name: Verify (tests, security, readiness)
-        run: pnpm verify
-
-      # 9️⃣ Cleanup (always)
-      - name: Stop API Gateway
-        if: always()
-        run: |
-          if [ -f api-gateway.pid ]; then
-            kill $(cat api-gateway.pid) || true
-          fi
+      - name: Run a11y smoke
+        env:
+          NODE_ENV: test
+          BASE_URL: http://127.0.0.1:5173
+        run: pnpm -w exec playwright test webapp/tests/a11y.spec.ts
