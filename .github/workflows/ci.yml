@@ -32,20 +32,19 @@ jobs:
       - name: Install deps (frozen)
         run: pnpm install --frozen-lockfile
 
-      # Minimal env so tests/auth helpers never fail due to missing values
       - name: Verify (repo)
         env:
           NODE_ENV: test
           AUTH_AUDIENCE: apgms-api
           AUTH_ISSUER: https://issuer.example
           AUTH_DEV_SECRET: ci-test-secret
-          CORS_ALLOWED_ORIGINS: http://localhost
+          CORS_ALLOWED_ORIGINS: http://localhost:5173
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/apgms?schema=public
           SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/apgms_shadow?schema=public
         run: ./scripts/verify.sh
 
   a11y:
-    name: A11y smoke (Playwright)
+    name: A11y smoke (Playwright + axe)
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -69,14 +68,26 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps
 
-      # Your a11y spec hits http://localhost:5173, so we must serve the webapp first.
-      - name: Start webapp (Vite) and wait
+      - name: Build webapp
+        run: pnpm -C webapp build
+
+      - name: Start webapp (preview) in background
         run: |
-          pnpm --filter @apgms/webapp dev -- --host 127.0.0.1 --port 5173 --strictPort &
-          pnpm dlx wait-on@7 http://127.0.0.1:5173
+          pnpm -C webapp preview -- --host 127.0.0.1 --port 5173 --strictPort &
+          echo $! > /tmp/webapp.pid
+
+      - name: Wait for webapp
+        run: pnpm dlx wait-on@7 http://127.0.0.1:5173
 
       - name: Run a11y smoke
         env:
           NODE_ENV: test
           BASE_URL: http://127.0.0.1:5173
         run: pnpm -w exec playwright test webapp/tests/a11y.spec.ts
+
+      - name: Stop webapp
+        if: always()
+        run: |
+          if [ -f /tmp/webapp.pid ]; then
+            kill "$(cat /tmp/webapp.pid)" || true
+          fi

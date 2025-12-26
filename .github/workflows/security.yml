@@ -1,17 +1,20 @@
-name: CI
+name: Security
 
 on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    - cron: "0 3 * * 1" # weekly Monday 03:00 UTC
+  workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: security-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  verify:
-    name: Verify (build/typecheck/tests)
+  sca_sbom_secrets:
+    name: SCA + SBOM + Secret scan
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -32,51 +35,48 @@ jobs:
       - name: Install deps (frozen)
         run: pnpm install --frozen-lockfile
 
-      # Minimal env so tests/auth helpers never fail due to missing values
-      - name: Verify (repo)
-        env:
-          NODE_ENV: test
-          AUTH_AUDIENCE: apgms-api
-          AUTH_ISSUER: https://issuer.example
-          AUTH_DEV_SECRET: ci-test-secret
-          CORS_ALLOWED_ORIGINS: http://localhost
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/apgms?schema=public
-          SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/apgms_shadow?schema=public
-        run: ./scripts/verify.sh
+      - name: Merge-conflict marker guard (fail if found)
+        run: |
+          if git grep -n '<<<<<<<\|=======\|>>>>>>>' -- ':!*.lock'; then
+            echo "❌ Merge-conflict markers found."
+            exit 1
+          fi
+          echo "✅ No merge-conflict markers found."
 
-  a11y:
-    name: A11y smoke (Playwright)
+      - name: Dependency audit (high+)
+        run: pnpm audit --audit-level=high
+
+      - name: Gitleaks (secret scanning)
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          args: detect --no-color --redact --exit-code 1
+
+      - name: Generate SBOM (CycloneDX)
+        run: |
+          pnpm dlx @cyclonedx/cyclonedx-npm \
+            --output-file sbom.json \
+            --ignore-npm-errors
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.json
+
+  trivy_fs:
+    name: Trivy filesystem scan
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Trivy FS scan
+        uses: aquasecurity/trivy-action@0.24.0
         with:
-          node-version: "20"
-          cache: "pnpm"
-
-      - name: Enable Corepack + PNPM
-        run: |
-          corepack enable
-          corepack prepare pnpm@9 --activate
-
-      - name: Install deps (frozen)
-        run: pnpm install --frozen-lockfile
-
-      - name: Install Playwright browsers
-        run: pnpm exec playwright install --with-deps
-
-      # Your a11y spec hits http://localhost:5173, so we must serve the webapp first.
-      - name: Start webapp (Vite) and wait
-        run: |
-          pnpm --filter @apgms/webapp dev -- --host 127.0.0.1 --port 5173 --strictPort &
-          pnpm dlx wait-on@7 http://127.0.0.1:5173
-
-      - name: Run a11y smoke
-        env:
-          NODE_ENV: test
-          BASE_URL: http://127.0.0.1:5173
-        run: pnpm -w exec playwright test webapp/tests/a11y.spec.ts
+          scan-type: "fs"
+          scan-ref: "."
+          format: "table"
+          exit-code: "1"
+          severity: "HIGH,CRITICAL"
+          ignore-unfixed: true

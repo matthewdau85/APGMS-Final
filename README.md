@@ -7,7 +7,7 @@ APGMS is an Australian-only platform providing hardened, DSP-grade management of
 
 - Automated PAYGW/GST calculation using versioned configuration tables (no hardcoded AU rates/thresholds)
 - Designated one-way account policy (PAYGW/GST cannot be misused as operating cash)
-- Audit primitives: deterministic outcomes, shortfall tracking, reconciliation patterns, idempotency keys on write paths
+- Audit primitives: deterministic outcomes, shortfall tracking, reconciliation patterns, idempotency keys on write paths (see Idempotency section)
 - Regulator-style views/APIs (prototype routes are **non-shippable in production**)
 - Sensitive identifier crypto scaffolding (encryption envelope approach; production key management hardening required)
 
@@ -29,6 +29,7 @@ APGMS-Final/
 ├── webapp/               # Main UI (React/Vite)
 ├── worker/               # Background jobs (parameter updates, projections)
 └── artifacts/            # Compliance evidence bundles + dev key material (gitignored except .gitkeep)
+
 
 ---
 
