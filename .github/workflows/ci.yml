@@ -38,15 +38,16 @@ jobs:
           AUTH_AUDIENCE: apgms-api
           AUTH_ISSUER: https://issuer.example
           AUTH_DEV_SECRET: ci-test-secret
-          CORS_ALLOWED_ORIGINS: http://localhost:5173
+          CORS_ALLOWED_ORIGINS: http://localhost
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/apgms?schema=public
           SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/apgms_shadow?schema=public
         run: ./scripts/verify.sh
 
   a11y:
-    name: A11y smoke (Playwright + axe)
+    name: A11y smoke (Playwright)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    needs: verify
 
     steps:
       - uses: actions/checkout@v4
@@ -65,29 +66,20 @@ jobs:
       - name: Install deps (frozen)
         run: pnpm install --frozen-lockfile
 
-      - name: Install Playwright browsers
-        run: pnpm exec playwright install --with-deps
-
-      - name: Build webapp
-        run: pnpm -C webapp build
-
-      - name: Start webapp (preview) in background
-        run: |
-          pnpm -C webapp preview -- --host 127.0.0.1 --port 5173 --strictPort &
-          echo $! > /tmp/webapp.pid
-
-      - name: Wait for webapp
-        run: pnpm dlx wait-on@7 http://127.0.0.1:5173
-
       - name: Run a11y smoke
         env:
           NODE_ENV: test
           BASE_URL: http://127.0.0.1:5173
-        run: pnpm -w exec playwright test webapp/tests/a11y.spec.ts
-
-      - name: Stop webapp
-        if: always()
         run: |
-          if [ -f /tmp/webapp.pid ]; then
-            kill "$(cat /tmp/webapp.pid)" || true
-          fi
+          set -euo pipefail
+
+          pnpm exec playwright install --with-deps
+
+          pnpm --dir webapp dev -- --host 127.0.0.1 --port 5173 --strictPort &
+          VITE_PID=$!
+
+          # Always cleanup, even on failures
+          trap 'kill $VITE_PID || true' EXIT
+
+          pnpm dlx wait-on $BASE_URL
+          pnpm -w exec playwright test webapp/tests/a11y.spec.ts

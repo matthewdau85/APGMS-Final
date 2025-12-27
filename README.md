@@ -1,15 +1,15 @@
 # APGMS – Automated PAYGW & GST Management System
 
-**Status:** Prototype • AU-only • Designed for ATO DSP Operational Security Framework (OSF) alignment  
+**Status:** Prototype • AU-only • Designed for alignment with ATO DSP Operational Security Framework (OSF) principles  
 **Scope:** PAYGW, GST, BAS automation • one-way designated accounts • regulator view • audit guarantees
 
-APGMS is an Australian-only platform providing hardened, DSP-grade management of PAYGW and GST liabilities, including:
+APGMS is an Australian-only platform aimed at hardened management of PAYGW and GST liabilities, including:
 
 - Automated PAYGW/GST calculation using versioned configuration tables (no hardcoded AU rates/thresholds)
 - Designated one-way account policy (PAYGW/GST cannot be misused as operating cash)
-- Audit primitives: deterministic outcomes, shortfall tracking, reconciliation patterns, idempotency keys on write paths (see Idempotency section)
+- Auditability primitives: deterministic outcomes, shortfall tracking/reconciliation patterns, and idempotency keys on write paths
 - Regulator-style views/APIs (prototype routes are **non-shippable in production**)
-- Sensitive identifier crypto scaffolding (encryption envelope approach; production key management hardening required)
+- Sensitive identifier crypto scaffolding (envelope-encryption approach; production key management hardening required)
 
 ---
 
@@ -28,7 +28,8 @@ APGMS-Final/
 │   └── phase1-demo/      # UI demo for Phase 1 flows
 ├── webapp/               # Main UI (React/Vite)
 ├── worker/               # Background jobs (parameter updates, projections)
-└── artifacts/            # Compliance evidence bundles + dev key material (gitignored except .gitkeep)
+└── artifacts/            # Evidence bundles + dev key material (gitignored except .gitkeep)
+
 
 
 ---

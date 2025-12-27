@@ -35,27 +35,25 @@ jobs:
       - name: Install deps (frozen)
         run: pnpm install --frozen-lockfile
 
-      - name: Merge-conflict marker guard (fail if found)
+      - name: Merge-conflict marker guard
         run: |
+          set -euo pipefail
           if git grep -n '<<<<<<<\|=======\|>>>>>>>' -- ':!*.lock'; then
-            echo "❌ Merge-conflict markers found."
+            echo "Merge conflict markers found."
             exit 1
           fi
-          echo "✅ No merge-conflict markers found."
 
       - name: Dependency audit (high+)
         run: pnpm audit --audit-level=high
 
-      - name: Gitleaks (secret scanning)
+      - name: Gitleaks
         uses: gitleaks/gitleaks-action@v2
         with:
           args: detect --no-color --redact --exit-code 1
 
       - name: Generate SBOM (CycloneDX)
         run: |
-          pnpm dlx @cyclonedx/cyclonedx-npm \
-            --output-file sbom.json \
-            --ignore-npm-errors
+          pnpm dlx @cyclonedx/cyclonedx-npm --output-file sbom.json --ignore-npm-errors
 
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@v4
@@ -64,7 +62,7 @@ jobs:
           path: sbom.json
 
   trivy_fs:
-    name: Trivy filesystem scan
+    name: Trivy filesystem scan (optional)
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
