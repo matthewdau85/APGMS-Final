@@ -312,7 +312,11 @@ importers:
         specifier: ^7.2.6
         version: 7.2.6(@types/node@24.7.1)(jiti@2.6.1)(tsx@4.20.6)
 
-  worker: {}
+  worker:
+    dependencies:
+      '@apgms/shared':
+        specifier: workspace:*
+        version: link:../shared
 
 packages:
 

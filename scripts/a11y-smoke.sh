@@ -2,32 +2,22 @@
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://127.0.0.1:5173}"
-HOST="127.0.0.1"
-PORT="5173"
-
-kill_port_listener() {
-  local port="$1"
-  if command -v lsof >/dev/null 2>&1; then
-    local pids
-    pids="$(lsof -ti "tcp:${port}" || true)"
-    if [[ -n "${pids}" ]]; then
-      echo "Killing processes on port ${port}: ${pids}"
-      # shellcheck disable=SC2086
-      kill ${pids} || true
-    fi
-  elif command -v fuser >/dev/null 2>&1; then
-    fuser -k "${port}/tcp" || true
-  fi
-}
 
 echo "▶ A11y smoke: Playwright + Vite (${BASE_URL})"
 
+# Ensure playwright browsers are available (installs OS deps on Linux runners)
 pnpm exec playwright install --with-deps
 
-# Ensure the port is free (prevents your local “Port 5173 already in use” failure)
-kill_port_listener "${PORT}"
+# Free the port if something is already running (common locally)
+PORT="$(echo "$BASE_URL" | sed -E 's|.*:([0-9]+).*|\1|')"
+PIDS="$(lsof -ti tcp:${PORT} || true)"
+if [[ -n "${PIDS}" ]]; then
+  echo "Killing processes on port ${PORT}: ${PIDS}"
+  kill ${PIDS} || true
+fi
 
-pnpm --dir webapp dev -- --host "${HOST}" --port "${PORT}" --strictPort &
+# Start Vite
+pnpm --dir webapp dev -- --host 127.0.0.1 --port "${PORT}" --strictPort &
 VITE_PID=$!
 
 cleanup() {
@@ -36,5 +26,7 @@ cleanup() {
 trap cleanup EXIT
 
 pnpm dlx wait-on "${BASE_URL}"
-pnpm -w exec playwright test webapp/tests/a11y.spec.ts
+
+BASE_URL="${BASE_URL}" pnpm -w exec playwright test webapp/tests/a11y.spec.ts
+
 echo "✅ A11y smoke passed"

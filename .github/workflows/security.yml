@@ -35,11 +35,6 @@ jobs:
       - name: Install deps (frozen)
         run: pnpm install --frozen-lockfile
 
-      - name: Prepare evidence folders
-        run: |
-          set -euo pipefail
-          mkdir -p evidence/scans
-
       - name: Merge-conflict marker guard
         run: |
           set -euo pipefail
@@ -48,59 +43,38 @@ jobs:
             exit 1
           fi
 
-      # Policy for Phase 7 momentum:
-      # - Fail on HIGH/CRITICAL (moderate allowed until Phase D)
       - name: Dependency audit (high+)
-        run: |
-          set -euo pipefail
-          pnpm audit --audit-level=high --json | tee evidence/scans/pnpm-audit.high.json
+        run: pnpm audit --audit-level=high
 
-      - name: Gitleaks (with report)
+      - name: Gitleaks
         uses: gitleaks/gitleaks-action@v2
         with:
-          args: >
-            detect --no-color --redact --exit-code 1
-            --report-format json --report-path evidence/scans/gitleaks.json
+          args: detect --no-color --redact --exit-code 1
 
       - name: Generate SBOM (CycloneDX)
         run: |
-          set -euo pipefail
-          pnpm dlx @cyclonedx/cyclonedx-npm --output-file evidence/scans/sbom.json --ignore-npm-errors
+          pnpm dlx @cyclonedx/cyclonedx-npm --output-file sbom.json --ignore-npm-errors
 
-      - name: Upload security scan artifacts
-        if: always()
+      - name: Upload SBOM artifact
         uses: actions/upload-artifact@v4
         with:
-          name: security-scans
-          path: evidence/scans
+          name: sbom
+          path: sbom.json
 
   trivy_fs:
-    name: Trivy filesystem scan (HIGH/CRITICAL)
+    name: Trivy filesystem scan (optional)
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare evidence folders
-        run: |
-          set -euo pipefail
-          mkdir -p evidence/scans
-
-      - name: Trivy FS scan (SARIF)
+      - name: Trivy FS scan
         uses: aquasecurity/trivy-action@0.24.0
         with:
           scan-type: "fs"
           scan-ref: "."
-          format: "sarif"
-          output: "evidence/scans/trivy-fs.sarif"
+          format: "table"
           exit-code: "1"
           severity: "HIGH,CRITICAL"
           ignore-unfixed: true
-
-      - name: Upload Trivy artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: trivy-fs
-          path: evidence/scans/trivy-fs.sarif
