@@ -1,33 +1,19 @@
 import Fastify from "fastify";
-import jwt from "jsonwebtoken";
 import { buildFastifyApp } from "../src/app.js";
 import { basSettlementRoutes } from "../src/routes/bas-settlement.js";
 
 jest.setTimeout(30000);
 
-function signToken() {
-  // Keep test self-contained and not dependent on developer machine env.
-  const AUDIENCE = process.env.AUTH_AUDIENCE ?? "apgms-api";
-  const ISSUER = process.env.AUTH_ISSUER ?? "https://issuer.example";
-  const SECRET = process.env.AUTH_DEV_SECRET ?? "local-dev-shared-secret-change-me";
+type Principal = { id: string; orgId: string; role: string };
 
-  return jwt.sign(
-    { sub: "user-test-1", orgId: "org-demo-1", role: "user" },
-    SECRET,
-    { algorithm: "HS256", audience: AUDIENCE, issuer: ISSUER, expiresIn: "1h" }
-  );
+function bearer(principal: Principal): string {
+  const token = Buffer.from(JSON.stringify(principal), "utf8").toString("base64url");
+  return `Bearer ${token}`;
 }
-
-// ---------------------------------------------------------------------------
-// Auth behaviour via full app (secure scope)
-// ---------------------------------------------------------------------------
 
 describe("/api/settlements/bas auth (via buildFastifyApp)", () => {
   it("returns 401 when Authorization header is missing", async () => {
-    const app = buildFastifyApp({
-      logger: false,
-      configOverrides: { environment: "test", inMemoryDb: true },
-    });
+    const app = buildFastifyApp({ logger: false });
     await app.ready();
 
     const res = await app.inject({
@@ -41,31 +27,18 @@ describe("/api/settlements/bas auth (via buildFastifyApp)", () => {
     });
 
     expect(res.statusCode).toBe(401);
-
     await app.close();
   });
 
   it("accepts a valid request when authorised (and Idempotency-Key is present)", async () => {
-    // Ensure auth defaults exist for jwt verification
-    process.env.AUTH_DEV_SECRET =
-      process.env.AUTH_DEV_SECRET ?? "local-dev-shared-secret-change-me";
-    process.env.AUTH_AUDIENCE = process.env.AUTH_AUDIENCE ?? "apgms-api";
-    process.env.AUTH_ISSUER = process.env.AUTH_ISSUER ?? "https://issuer.example";
-
-    const app = buildFastifyApp({
-      logger: false,
-      configOverrides: { environment: "test", inMemoryDb: true },
-    });
-
+    const app = buildFastifyApp({ logger: false });
     await app.ready();
-
-    const token = signToken();
 
     const res = await app.inject({
       method: "POST",
       url: "/api/settlements/bas/finalise",
       headers: {
-        authorization: `Bearer ${token}`,
+        authorization: bearer({ id: "user-test-1", orgId: "org-demo-1", role: "user" }),
         "x-org-id": "org-demo-1",
         "idempotency-key": "idem-auth-ok-1",
       },
@@ -73,7 +46,6 @@ describe("/api/settlements/bas auth (via buildFastifyApp)", () => {
     });
 
     expect(res.statusCode).toBe(201);
-
     const body = res.json();
     expect(body.period).toBe("2025-Q3");
     expect(body.instructionId).toBeDefined();
@@ -81,10 +53,6 @@ describe("/api/settlements/bas auth (via buildFastifyApp)", () => {
     await app.close();
   });
 });
-
-// ---------------------------------------------------------------------------
-// Schema/validation behaviour via direct route registration (no auth)
-// ---------------------------------------------------------------------------
 
 describe("BAS settlement route validation (direct routes)", () => {
   it("rejects an invalid period", async () => {
@@ -122,7 +90,6 @@ describe("BAS settlement route validation (direct routes)", () => {
     });
 
     expect(res.statusCode).toBe(201);
-
     const body = res.json();
     expect(body.instructionId).toBeDefined();
     expect(body.period).toBe("2025-Q3");

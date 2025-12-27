@@ -11,9 +11,24 @@ concurrency:
 
 jobs:
   verify:
-    name: Verify (build/typecheck/tests)
+    name: Verify (build/typecheck/tests + DB proof)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: apgms
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d apgms"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
 
     steps:
       - uses: actions/checkout@v4
@@ -32,13 +47,43 @@ jobs:
       - name: Install deps (frozen)
         run: pnpm install --frozen-lockfile
 
+      - name: Install Postgres client tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Wait for Postgres + create shadow DB
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          pg_isready -h localhost -p 5432 -U postgres -d apgms
+
+          # Create apgms_shadow if missing (idempotent)
+          if ! psql -h localhost -U postgres -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='apgms_shadow'" | grep -q 1; then
+            psql -h localhost -U postgres -d postgres -c "CREATE DATABASE apgms_shadow"
+          fi
+
+      - name: Prisma migrate deploy (truthful DB gate)
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/apgms?schema=public
+        run: |
+          pnpm --filter @apgms/shared exec prisma migrate deploy --schema prisma/schema.prisma
+
+      - name: DB smoke (connect + SELECT 1)
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/apgms?schema=public
+        run: |
+          pnpm exec tsx scripts/db-smoke.ts
+
       - name: Verify (repo)
         env:
           NODE_ENV: test
           AUTH_AUDIENCE: apgms-api
           AUTH_ISSUER: https://issuer.example
           AUTH_DEV_SECRET: ci-test-secret
-          CORS_ALLOWED_ORIGINS: http://localhost
+          # include both, because browsers send full origin (host+port)
+          CORS_ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/apgms?schema=public
           SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/apgms_shadow?schema=public
         run: ./scripts/verify.sh
@@ -66,20 +111,9 @@ jobs:
       - name: Install deps (frozen)
         run: pnpm install --frozen-lockfile
 
-      - name: Run a11y smoke
+      - name: Run a11y smoke (Vite + Playwright)
         env:
           NODE_ENV: test
           BASE_URL: http://127.0.0.1:5173
         run: |
-          set -euo pipefail
-
-          pnpm exec playwright install --with-deps
-
-          pnpm --dir webapp dev -- --host 127.0.0.1 --port 5173 --strictPort &
-          VITE_PID=$!
-
-          # Always cleanup, even on failures
-          trap 'kill $VITE_PID || true' EXIT
-
-          pnpm dlx wait-on $BASE_URL
-          pnpm -w exec playwright test webapp/tests/a11y.spec.ts
+          ./scripts/a11y-smoke.sh
