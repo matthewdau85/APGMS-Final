@@ -1,47 +1,80 @@
 name: Security
 
 on:
-  push:
-    branches: [main, "feature/**", "fix/**"]
   pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 3 * * 1" # weekly Monday 03:00 UTC
+  workflow_dispatch:
 
 concurrency:
   group: security-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  security:
+  sca_sbom_secrets:
+    name: SCA + SBOM + Secret scan
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "22.12.x"
+          node-version: "20"
+          cache: "pnpm"
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - name: Enable Corepack + PNPM
+        run: |
+          corepack enable
+          corepack prepare pnpm@9 --activate
+
+      - name: Install deps (frozen)
+        run: pnpm install --frozen-lockfile
+
+      - name: Merge-conflict marker guard
+        run: |
+          set -euo pipefail
+          if git grep -n '<<<<<<<\|=======\|>>>>>>>' -- ':!*.lock'; then
+            echo "Merge conflict markers found."
+            exit 1
+          fi
+
+      - name: Dependency audit (high+)
+        run: pnpm audit --audit-level=high
+
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
         with:
-          version: 10
+          args: detect --no-color --redact --exit-code 1
 
-      - name: Install dependencies
-        run: pnpm install
+      - name: Generate SBOM (CycloneDX)
+        run: |
+          pnpm dlx @cyclonedx/cyclonedx-npm --output-file sbom.json --ignore-npm-errors
 
-      # ✅ Prisma gate WITHOUT database
-      - name: Prisma schema validation
-        run: pnpm exec prisma validate --schema infra/prisma/schema.prisma
-
-      - name: Trivy filesystem scan
-        uses: aquasecurity/trivy-action@0.28.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
         with:
-          scan-type: fs
-          ignore-unfixed: true
-          format: table
+          name: sbom
+          path: sbom.json
+
+  trivy_fs:
+    name: Trivy filesystem scan (optional)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trivy FS scan
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          format: "table"
           exit-code: "1"
-          severity: HIGH,CRITICAL
-
+          severity: "HIGH,CRITICAL"
+          ignore-unfixed: true

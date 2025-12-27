@@ -101,3 +101,6 @@ Thumbs.db
 .vscode/
 .idea/
 
+
+# Local review pack outputs
+_review_pack_*/
