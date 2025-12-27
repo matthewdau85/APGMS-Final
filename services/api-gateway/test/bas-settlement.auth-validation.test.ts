@@ -1,419 +1,132 @@
-import type { FastifyInstance } from "fastify";
-import { requireWritesEnabled } from "../guards/service-mode.js";
-import crypto from "node:crypto";
+import Fastify from "fastify";
+import jwt from "jsonwebtoken";
+import { buildFastifyApp } from "../src/app.js";
+import { basSettlementRoutes } from "../src/routes/bas-settlement.js";
 
-// --------------------
-// Idempotency helpers
-// --------------------
-type IdempotentResponse = { statusCode: number; body: any };
+jest.setTimeout(30000);
 
-type IdempotencyEntry = {
-  requestHash: string;
-  result?: IdempotentResponse;
-  inFlight?: Promise<IdempotentResponse>;
-  createdAtMs: number;
-};
+function signToken() {
+  // Keep test self-contained and not dependent on developer machine env.
+  const AUDIENCE = process.env.AUTH_AUDIENCE ?? "apgms-api";
+  const ISSUER = process.env.AUTH_ISSUER ?? "https://issuer.example";
+  const SECRET = process.env.AUTH_DEV_SECRET ?? "local-dev-shared-secret-change-me";
 
-const IDEMPOTENCY_TTL_MS = 1000 * 60 * 60 * 24; // 24h
-
-function stableStringify(value: any): string {
-  if (value === null || value === undefined) return "null";
-  if (typeof value === "bigint") return value.toString();
-  if (typeof value !== "object") return JSON.stringify(value);
-
-  if (Array.isArray(value)) {
-    return `[${value.map(stableStringify).join(",")}]`;
-  }
-
-  const keys = Object.keys(value).sort();
-  const entries = keys.map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`);
-  return `{${entries.join(",")}}`;
+  return jwt.sign(
+    { sub: "user-test-1", orgId: "org-demo-1", role: "user" },
+    SECRET,
+    { algorithm: "HS256", audience: AUDIENCE, issuer: ISSUER, expiresIn: "1h" }
+  );
 }
 
-function sha256Hex(s: string): string {
-  return crypto.createHash("sha256").update(s, "utf8").digest("hex");
-}
+// ---------------------------------------------------------------------------
+// Auth behaviour via full app (secure scope)
+// ---------------------------------------------------------------------------
 
-function hashFinaliseRequest(orgScope: string, body: unknown): string {
-  return sha256Hex(stableStringify({ orgScope, body }));
-}
+describe("/api/settlements/bas auth (via buildFastifyApp)", () => {
+  it("returns 401 when Authorization header is missing", async () => {
+    const app = buildFastifyApp({
+      logger: false,
+      configOverrides: { environment: "test", inMemoryDb: true },
+    });
 
-function getHeader(req: any, name: string): string {
-  const key = name.toLowerCase();
-  const v = req?.headers?.[key];
-  return typeof v === "string" ? v : Array.isArray(v) ? String(v[0] ?? "") : String(v ?? "");
-}
+    await app.ready();
 
-function getFinaliseIdempotencyStore(app: FastifyInstance): Map<string, IdempotencyEntry> {
-  const anyApp = app as any;
-  if (!anyApp.__basFinaliseIdempotency) {
-    anyApp.__basFinaliseIdempotency = new Map<string, IdempotencyEntry>();
-  }
-  return anyApp.__basFinaliseIdempotency as Map<string, IdempotencyEntry>;
-}
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/settlements/bas/finalise",
+      headers: {
+        "x-org-id": "org-demo-1",
+        "idempotency-key": "idem-missing-auth-1",
+      },
+      payload: { period: "2025-Q3" },
+    });
 
-function pruneIdempotency(store: Map<string, IdempotencyEntry>, now = Date.now()) {
-  for (const [k, v] of store.entries()) {
-    if (now - v.createdAtMs > IDEMPOTENCY_TTL_MS) store.delete(k);
-  }
-}
+    expect(res.statusCode).toBe(401);
 
-async function runIdempotent(
-  store: Map<string, IdempotencyEntry>,
-  key: string,
-  requestHash: string,
-  fn: () => Promise<IdempotentResponse>
-): Promise<IdempotentResponse | { conflict: true }> {
-  pruneIdempotency(store);
-
-  const existing = store.get(key);
-
-  // Completed
-  if (existing?.result) {
-    if (existing.requestHash !== requestHash) return { conflict: true };
-    return existing.result;
-  }
-
-  // In-flight
-  if (existing?.inFlight) {
-    if (existing.requestHash !== requestHash) return { conflict: true };
-    return await existing.inFlight;
-  }
-
-  // Start new in-flight
-  const inFlight = (async () => await fn())();
-
-  store.set(key, {
-    requestHash,
-    inFlight,
-    createdAtMs: Date.now(),
+    await app.close();
   });
 
-  try {
-    const res = await inFlight;
-    store.set(key, {
-      requestHash,
-      result: res,
-      createdAtMs: Date.now(),
+  it("accepts a valid request when authorised (and Idempotency-Key is present)", async () => {
+    // Ensure auth defaults exist for jwt verification
+    process.env.AUTH_DEV_SECRET = process.env.AUTH_DEV_SECRET ?? "local-dev-shared-secret-change-me";
+    process.env.AUTH_AUDIENCE = process.env.AUTH_AUDIENCE ?? "apgms-api";
+    process.env.AUTH_ISSUER = process.env.AUTH_ISSUER ?? "https://issuer.example";
+
+    const app = buildFastifyApp({
+      logger: false,
+      configOverrides: { environment: "test", inMemoryDb: true },
     });
-    return res;
-  } catch (e) {
-    store.delete(key);
-    throw e;
-  }
-}
 
-// --------------------
-// BAS settlement routes
-// --------------------
-type SettlementStatus = "PREPARED" | "SENT" | "ACK" | "FAILED";
+    await app.ready();
 
-export interface BasSettlement {
-  instructionId: string;
-  period: string;
-  status: SettlementStatus;
-  payload?: unknown;
-}
+    const token = signToken();
 
-interface BasPrepareBody {
-  period: string;
-  payload?: unknown;
-}
-
-interface BasFinaliseBody {
-  period: string;
-  payload?: unknown;
-}
-
-interface BasFailedBody {
-  reason?: string;
-}
-
-const periodPattern = /^(19|20)\d{2}-Q[1-4]$/;
-
-function isValidPeriod(p: unknown): p is string {
-  return typeof p === "string" && periodPattern.test(p);
-}
-
-function getBasState(app: FastifyInstance): {
-  store: Map<string, BasSettlement>;
-  counter: { value: number };
-} {
-  const anyApp = app as any;
-
-  if (!anyApp.__basSettlementStore) {
-    anyApp.__basSettlementStore = new Map<string, BasSettlement>();
-  }
-  if (!anyApp.__basSettlementCounter) {
-    anyApp.__basSettlementCounter = { value: 0 };
-  }
-
-  return {
-    store: anyApp.__basSettlementStore as Map<string, BasSettlement>,
-    counter: anyApp.__basSettlementCounter as { value: number },
-  };
-}
-
-function nextInstructionId(app: FastifyInstance): string {
-  const state = getBasState(app);
-  state.counter.value += 1;
-  return `settlement-${state.counter.value}`;
-}
-
-function attachOrReplaceSettlement(app: FastifyInstance, settlement: BasSettlement): void {
-  const state = getBasState(app);
-  state.store.set(settlement.instructionId, settlement);
-}
-
-function getSettlement(app: FastifyInstance, instructionId: string): BasSettlement | null {
-  const state = getBasState(app);
-  return state.store.get(instructionId) ?? null;
-}
-
-export async function basSettlementRoutes(app: FastifyInstance): Promise<void> {
-  const writeGuard = requireWritesEnabled();
-
-  app.post<{ Body: BasFinaliseBody }>(
-    "/settlements/bas/finalise",
-    {
-      preHandler: writeGuard,
-      schema: {
-        headers: {
-          type: "object",
-          required: ["idempotency-key"],
-          properties: {
-            "idempotency-key": { type: "string", minLength: 1 },
-          },
-          additionalProperties: true,
-        },
-        body: {
-          type: "object",
-          required: ["period"],
-          additionalProperties: true,
-          properties: {
-            period: { type: "string", pattern: periodPattern.source },
-          },
-        },
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/settlements/bas/finalise",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "x-org-id": "org-demo-1",
+        "idempotency-key": "idem-auth-ok-1",
       },
-    },
-    async (request, reply) => {
-      const idemKey = String(getHeader(request, "idempotency-key") ?? "").trim();
-      if (!idemKey) {
-        return reply.code(400).send({ error: "missing_idempotency_key" });
-      }
+      payload: { period: "2025-Q3", payload: { note: "test" } },
+    });
 
-      const orgScope =
-        String(getHeader(request, "x-org-id") ?? "").trim() ||
-        String((request as any).user?.orgId ?? "").trim() ||
-        "unknown";
+    expect(res.statusCode).toBe(201);
 
-      const scopedKey = `${orgScope}:${idemKey}`;
-      const requestHash = hashFinaliseRequest(orgScope, request.body);
+    const body = res.json();
+    expect(body.period).toBe("2025-Q3");
+    expect(body.instructionId).toBeDefined();
 
-      const { period, payload } = request.body;
+    await app.close();
+  });
+});
 
-      if (!isValidPeriod(period)) {
-        return reply.code(400).send({ error: "INVALID_PERIOD" });
-      }
+// ---------------------------------------------------------------------------
+// Schema/validation behaviour via direct route registration (no auth)
+// ---------------------------------------------------------------------------
 
-      const store = getFinaliseIdempotencyStore(app);
+describe("BAS settlement route validation (direct routes)", () => {
+  it("rejects an invalid period", async () => {
+    const app = Fastify({ logger: false });
+    await basSettlementRoutes(app as any);
+    await app.ready();
 
-      const out = await runIdempotent(store, scopedKey, requestHash, async () => {
-        // ---- EXISTING SIDE EFFECTS MUST LIVE INSIDE THIS FN ----
-        const instructionId = nextInstructionId(app);
-
-        const settlement: BasSettlement = {
-          instructionId,
-          period,
-          status: "PREPARED",
-          payload,
-        };
-
-        attachOrReplaceSettlement(app, settlement);
-
-        return {
-          statusCode: 201,
-          body: { instructionId, period, payload },
-        };
-      });
-
-      if ("conflict" in out) {
-        return reply.code(409).send({ error: "idempotency_conflict" });
-      }
-
-      return reply.code(out.statusCode).send(out.body);
-    }
-  );
-}
-
-/**
- * Lifecycle endpoints (prepare -> sent/ack/failed).
- * These use an in-memory store keyed per Fastify instance.
- */
-async function basSettlementLifecycleRoutes(app: FastifyInstance): Promise<void> {
-  const writeGuard = requireWritesEnabled();
-
-  app.post<{ Body: BasPrepareBody }>(
-    "/settlements/bas/prepare",
-    {
-      preHandler: writeGuard,
-      schema: {
-        body: {
-          type: "object",
-          required: ["period"],
-          additionalProperties: true,
-          properties: {
-            period: { type: "string", pattern: periodPattern.source },
-          },
-        },
+    const res = await app.inject({
+      method: "POST",
+      url: "/settlements/bas/finalise",
+      headers: {
+        "idempotency-key": "idem-invalid-period-1",
+        "x-org-id": "org-demo-1",
       },
-    },
-    async (request, reply) => {
-      const { period, payload } = request.body;
+      payload: { period: "not-a-period" },
+    });
 
-      if (!isValidPeriod(period)) {
-        return reply.code(400).send({ error: "INVALID_PERIOD" });
-      }
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
 
-      const instructionId = nextInstructionId(app);
+  it("accepts a valid period", async () => {
+    const app = Fastify({ logger: false });
+    await basSettlementRoutes(app as any);
+    await app.ready();
 
-      const settlement: BasSettlement = {
-        instructionId,
-        period,
-        status: "PREPARED",
-        payload,
-      };
+    const res = await app.inject({
+      method: "POST",
+      url: "/settlements/bas/finalise",
+      headers: {
+        "idempotency-key": "idem-valid-period-1",
+        "x-org-id": "org-demo-1",
+      },
+      payload: { period: "2025-Q3" },
+    });
 
-      attachOrReplaceSettlement(app, settlement);
+    expect(res.statusCode).toBe(201);
 
-      return reply.code(201).send({ instructionId, period, payload });
-    }
-  );
+    const body = res.json();
+    expect(body.instructionId).toBeDefined();
+    expect(body.period).toBe("2025-Q3");
 
-  app.post<{ Params: { instructionId: string } }>(
-    "/settlements/bas/:instructionId/sent",
-    { preHandler: writeGuard },
-    async (request, reply) => {
-      const s = getSettlement(app, request.params.instructionId);
-      if (!s) return reply.code(404).send({ error: "NOT_FOUND" });
-
-      s.status = "SENT";
-      attachOrReplaceSettlement(app, s);
-
-      return reply.code(200).send({ instructionId: s.instructionId, status: s.status });
-    }
-  );
-
-  app.post<{ Params: { instructionId: string } }>(
-    "/settlements/bas/:instructionId/ack",
-    { preHandler: writeGuard },
-    async (request, reply) => {
-      const s = getSettlement(app, request.params.instructionId);
-      if (!s) return reply.code(404).send({ error: "NOT_FOUND" });
-
-      s.status = "ACK";
-      attachOrReplaceSettlement(app, s);
-
-      return reply.code(200).send({ instructionId: s.instructionId, status: s.status });
-    }
-  );
-
-  app.post<{ Params: { instructionId: string }; Body: BasFailedBody }>(
-    "/settlements/bas/:instructionId/failed",
-    { preHandler: writeGuard },
-    async (request, reply) => {
-      const s = getSettlement(app, request.params.instructionId);
-      if (!s) return reply.code(404).send({ error: "NOT_FOUND" });
-
-      s.status = "FAILED";
-      attachOrReplaceSettlement(app, s);
-
-      return reply.code(200).send({ instructionId: s.instructionId, status: s.status });
-    }
-  );
-}
-
-/**
- * Legacy endpoints preserved for backward compatibility.
- * These are intentionally looser (no schema) but still enforce period format checks.
- */
-async function legacyBasSettlementRoutes(app: FastifyInstance): Promise<void> {
-  const writeGuard = requireWritesEnabled();
-
-  app.post<{ Body: BasPrepareBody }>(
-    "/bas-settlement/prepare",
-    { preHandler: writeGuard },
-    async (request, reply) => {
-      const { period, payload } = request.body;
-
-      if (!isValidPeriod(period)) {
-        return reply.code(400).send({ error: "INVALID_PERIOD" });
-      }
-
-      const instructionId = nextInstructionId(app);
-
-      const settlement: BasSettlement = {
-        instructionId,
-        period,
-        status: "PREPARED",
-        payload,
-      };
-
-      attachOrReplaceSettlement(app, settlement);
-
-      return reply.code(201).send({ instructionId, period, payload });
-    }
-  );
-
-  app.post<{ Params: { instructionId: string } }>(
-    "/bas-settlement/:instructionId/sent",
-    { preHandler: writeGuard },
-    async (request, reply) => {
-      const s = getSettlement(app, request.params.instructionId);
-      if (!s) return reply.code(404).send({ error: "NOT_FOUND" });
-
-      s.status = "SENT";
-      attachOrReplaceSettlement(app, s);
-
-      return reply.code(200).send({ instructionId: s.instructionId, status: s.status });
-    }
-  );
-
-  app.post<{ Params: { instructionId: string } }>(
-    "/bas-settlement/:instructionId/ack",
-    { preHandler: writeGuard },
-    async (request, reply) => {
-      const s = getSettlement(app, request.params.instructionId);
-      if (!s) return reply.code(404).send({ error: "NOT_FOUND" });
-
-      s.status = "ACK";
-      attachOrReplaceSettlement(app, s);
-
-      return reply.code(200).send({ instructionId: s.instructionId, status: s.status });
-    }
-  );
-
-  app.post<{ Params: { instructionId: string }; Body: BasFailedBody }>(
-    "/bas-settlement/:instructionId/failed",
-    { preHandler: writeGuard },
-    async (request, reply) => {
-      const s = getSettlement(app, request.params.instructionId);
-      if (!s) return reply.code(404).send({ error: "NOT_FOUND" });
-
-      s.status = "FAILED";
-      attachOrReplaceSettlement(app, s);
-
-      return reply.code(200).send({ instructionId: s.instructionId, status: s.status });
-    }
-  );
-}
-
-/**
- * Plugin used by the real app (registered inside the secure scope).
- * When mounted under /api, endpoints become /api/settlements/bas/*.
- */
-export async function basSettlementPlugin(app: FastifyInstance): Promise<void> {
-  await basSettlementRoutes(app);
-  await basSettlementLifecycleRoutes(app);
-  await legacyBasSettlementRoutes(app);
-}
+    await app.close();
+  });
+});

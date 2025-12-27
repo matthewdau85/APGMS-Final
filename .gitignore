@@ -101,3 +101,6 @@ Thumbs.db
 .vscode/
 .idea/
 
+
+# Generated review packs
+_review_pack_*/

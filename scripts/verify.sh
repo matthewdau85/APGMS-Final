@@ -37,7 +37,7 @@ step "3) Determinism / outcome engine smoke"
 pnpm --filter @apgms/domain-policy test || fail "domain-policy tests failed"
 
 step "4) API gateway route registration sanity"
-pnpm --filter @apgms/api-gateway test || true
+pnpm --filter @apgms/api-gateway test || fail "api-gateway tests failed"
 pnpm --filter @apgms/api-gateway typecheck || fail "api-gateway typecheck failed"
 
 echo
