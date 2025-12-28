@@ -9,8 +9,11 @@ import { regulatorComplianceEvidencePackPlugin } from "./routes/regulator-compli
 import adminUsersPlugin from "./routes/admin-users.js";
 import { prototypeAdminGuard } from "./guards/prototype-admin.js";
 import registerMetricsRoutes from "./routes/metrics.js"
+import { getMetrics } from "../observability/metrics.js";
 
 type Environment = "development" | "test" | "production";
+
+const metrics = getMetrics();
 
 export interface AppConfig {
   environment: Environment;
@@ -101,6 +104,11 @@ export function buildFastifyApp(options: BuildFastifyAppOptions = {}): FastifyIn
       }
     });
   }
+
+  app.get("/metrics", async (_req, res) => {
+  res.set("Content-Type", getMetricsRegistry().contentType);
+  res.end(await getMetricsRegistry().metrics());
+});
 
   // Basic health endpoints (tests expect these)
   app.get("/health", async () => ({ ok: true }));

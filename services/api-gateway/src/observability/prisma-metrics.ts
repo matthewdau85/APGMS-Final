@@ -1,34 +1,61 @@
-﻿// services/api-gateway/src/observability/prisma-metrics.ts
-import { metrics } from "./metrics.js";
+﻿import { Registry, collectDefaultMetrics, Counter, Gauge, Histogram } from "prom-client";
 
-/**
- * Return a Prisma-like client extended with query-level timing (Prisma v6+).
- * This is defensive: if $extends is missing, we just return the original client.
- */
-export function instrumentPrisma<T>(client: T): T {
-  const anyClient = client as any;
+let registry: Registry | null = null;
+let metrics: ReturnType<typeof createMetrics> | null = null;
 
-  if (typeof anyClient.$extends !== "function") {
-    return client;
+export function getMetricsRegistry() {
+  if (!registry) {
+    registry = new Registry();
+    collectDefaultMetrics({ register: registry });
   }
-
-  const extended = anyClient.$extends({
-    query: {
-      $allModels: {
-        async $allOperations(ctx: any) {
-          const model = ctx.model ?? "UnknownModel";
-          const operation = ctx.operation ?? "unknown";
-          const end = metrics.dbQueryDuration.startTimer({ model, operation });
-          try {
-            return await ctx.query(ctx.args as any);
-          } finally {
-            end();
-          }
-        },
-      },
-    },
-  });
-
-  return extended as T;
+  return registry;
 }
 
+function createMetrics() {
+  const register = getMetricsRegistry();
+
+  return {
+    // HTTP
+    httpRequestTotal: new Counter({
+      name: "apgms_http_requests_total",
+      help: "Total HTTP requests",
+      labelNames: ["method", "route", "status_code"],
+      registers: [register],
+    }),
+
+    httpRequestDuration: new Histogram({
+      name: "apgms_http_request_duration_seconds",
+      help: "HTTP request duration in seconds",
+      labelNames: ["method", "route", "status_code"],
+      registers: [register],
+    }),
+
+    // DB
+    dbQueryDurationSeconds: new Histogram({
+      name: "apgms_db_query_duration_seconds",
+      help: "Database query duration in seconds",
+      labelNames: ["model", "operation"],
+      registers: [register],
+    }),
+
+    // Business
+    settlementsFinalisedTotal: new Counter({
+      name: "apgms_settlements_finalised_total",
+      help: "Total BAS settlements finalised",
+      registers: [register],
+    }),
+
+    obligationsOutstandingCents: new Gauge({
+      name: "apgms_obligations_outstanding_cents",
+      help: "Outstanding obligations in cents",
+      registers: [register],
+    }),
+  };
+}
+
+export function getMetrics() {
+  if (!metrics) {
+    metrics = createMetrics();
+  }
+  return metrics;
+}

@@ -1,14 +1,23 @@
-﻿// services/api-gateway/src/db.ts
-import pkg from "@prisma/client";
-import { instrumentPrisma } from "./observability/prisma-metrics.js";
+﻿import { PrismaClient } from "@prisma/client";
+import { dbQueryDurationSeconds } from "./observability/metrics.js";
 
-// Prisma v6 ships its client on the default export. TypeScript's view of the
-// default export doesn't declare PrismaClient as a value, so we cast.
-const { PrismaClient } = pkg as unknown as {
-  PrismaClient: new (...args: any[]) => any;
-};
+export const prisma = new PrismaClient().$extends({
+  query: {
+    $allModels: {
+      async $allOperations({ model, operation, args, query }) {
+        const start = process.hrtime.bigint();
 
-const prismaClient = new PrismaClient();
+        try {
+          return await query(args);
+        } finally {
+          const durationSeconds =
+            Number(process.hrtime.bigint() - start) / 1e9;
 
-export const prisma = instrumentPrisma(prismaClient);
-
+          dbQueryDurationSeconds
+            .labels(model ?? "raw", operation)
+            .observe(durationSeconds);
+        }
+      },
+    },
+  },
+});

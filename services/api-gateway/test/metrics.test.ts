@@ -9,21 +9,18 @@ describe("/metrics", () => {
 
     await app.ready();
 
-    // Ensure at least one request
     await app.inject({ method: "GET", url: "/health" });
 
     const res = await app.inject({ method: "GET", url: "/metrics" });
 
     expect(res.statusCode).toBe(200);
-    expect(String(res.headers["content-type"])).toContain("text/plain");
+    expect(res.headers["content-type"]).toContain("text/plain");
 
     const body = res.body;
 
-    // Stable default metric
     expect(body).toContain("process_cpu_user_seconds_total");
-
-    // Custom metric
     expect(body).toContain("apgms_http_requests_total");
+    expect(body).toContain("apgms_db_query_duration_seconds");
 
     await app.close();
   });
