@@ -1,10 +1,17 @@
 ﻿// services/api-gateway/src/routes/compliance-proxy.ts
-import { type FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
+import { createHash } from "node:crypto";
 
 import { authGuard } from "../auth.js";
 import { prisma } from "../db.js";
-import { createHash } from "node:crypto";
+import type { PrismaClient } from "@prisma/client";
+
+/**
+ * IMPORTANT:
+ * Explicitly type prisma so model delegates exist at compile time.
+ */
+const db = prisma as PrismaClient;
 
 const formatPeriod = (start: Date, end: Date): string =>
   `${start.toISOString().slice(0, 10)}-${end.toISOString().slice(0, 10)}`;

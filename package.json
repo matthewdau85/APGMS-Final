@@ -20,6 +20,7 @@
     "db:migrate": "pnpm exec prisma migrate dev --schema infra/prisma/schema.prisma",
     "db:deploy": "pnpm exec prisma migrate deploy --schema infra/prisma/schema.prisma",
     "db:gen": "node ./scripts/ensure-linux.mjs && pnpm exec prisma generate --schema infra/prisma/schema.prisma",
+    "db:smoke": "node ./scripts/db-smoke.mjs",
     "migrate:status": "pnpm exec prisma migrate status --schema infra/prisma/schema.prisma",
     "build": "pnpm -r build",
     "build:api-gateway": "pnpm --filter @apgms/shared build && pnpm --filter @apgms/domain-policy build && pnpm --filter @apgms/api-gateway build",
