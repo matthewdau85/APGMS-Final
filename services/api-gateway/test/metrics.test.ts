@@ -9,7 +9,7 @@ describe("/metrics", () => {
 
     await app.ready();
 
-    // Make at least one request so the HTTP counter has a sample line
+    // Ensure at least one request
     await app.inject({ method: "GET", url: "/health" });
 
     const res = await app.inject({ method: "GET", url: "/metrics" });
@@ -19,10 +19,10 @@ describe("/metrics", () => {
 
     const body = res.body;
 
-    // Default metric from prom-client (stable)
+    // Stable default metric
     expect(body).toContain("process_cpu_user_seconds_total");
 
-    // Our custom metric
+    // Custom metric
     expect(body).toContain("apgms_http_requests_total");
 
     await app.close();
