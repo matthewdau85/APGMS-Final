@@ -1,0 +1,68 @@
+name: Gate (canonical)
+
+on:
+  workflow_call:
+
+jobs:
+  gate:
+    name: Gate (install + prisma + migrate + smoke + verify + prod-guard)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16.2
+        env:
+          POSTGRES_USER: apgms
+          POSTGRES_PASSWORD: apgms
+          POSTGRES_DB: apgms
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U apgms -d apgms"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      CI: true
+      DATABASE_URL: postgresql://apgms:apgms@localhost:5432/apgms?schema=public
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Enable Corepack + PNPM
+        run: |
+          corepack enable
+          corepack prepare pnpm@9 --activate
+
+      - name: Install deps (frozen)
+        run: pnpm install --frozen-lockfile
+
+      - name: Lockfile unchanged after install
+        run: git diff --exit-code pnpm-lock.yaml
+
+      - name: Prisma generate
+        run: pnpm prisma:generate
+
+      - name: Prisma migrate deploy
+        run: pnpm -w exec prisma migrate deploy --schema infra/prisma/schema.prisma
+
+      - name: Prisma migrate status
+        run: pnpm -w exec prisma migrate status --schema infra/prisma/schema.prisma
+
+      - name: DB smoke (connect + query + write/read + cleanup)
+        run: pnpm db:smoke
+
+      - name: Verify (repo)
+        run: ./scripts/verify.sh
+
+      - name: Production-mode guard (no prototype in prod)
+        env:
+          NODE_ENV: production
+        run: pnpm --filter @apgms/api-gateway test
