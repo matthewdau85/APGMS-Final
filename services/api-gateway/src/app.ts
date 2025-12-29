@@ -231,8 +231,7 @@ export function buildFastifyApp(options: BuildFastifyAppOptions = {}): FastifyIn
   /* -------- Secure /api -------- */
 
   app.register(async (secureScope) => {
-    const authMod: any = await import("./auth.js");
-    const authGuard = authMod.authGuard ?? authMod.default;
+    const { authGuard } = await import("./auth.js");
     if (typeof authGuard !== "function") throw new Error("authGuard missing");
 
     secureScope.addHook("preHandler", authGuard);

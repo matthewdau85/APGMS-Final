@@ -1,5 +1,6 @@
-﻿import { Decimal, JsonValue } from "@prisma/client/runtime/library.js";
-import { FastifyInstance, FastifyRequest } from "fastify";
+﻿import { Decimal } from "@prisma/client/runtime/library.js";
+import type { JsonValue } from "@prisma/client/runtime/library.js";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 
 import { authGuard } from "../auth.js";

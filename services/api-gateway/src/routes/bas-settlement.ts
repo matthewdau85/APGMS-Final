@@ -10,10 +10,10 @@ function isValidPeriod(period: string): boolean {
 
 function enforceServiceMode() {
   const mode = getServiceMode();
-  if (mode?.state === "suspended") {
+  if (mode?.mode === "suspended") {
     return { code: 503, error: "service_suspended" };
   }
-  if (mode?.state === "read-only") {
+  if (mode?.mode === "read-only") {
     return { code: 409, error: "service_read_only" };
   }
   return null;
@@ -116,4 +116,3 @@ export default basSettlementPlugin;
 /* ---------------- Compatibility exports ---------------- */
 
 export const basSettlementRoutes = basSettlementPlugin;
-export { basSettlementPlugin };

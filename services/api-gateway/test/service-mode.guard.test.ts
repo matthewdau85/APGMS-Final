@@ -9,7 +9,7 @@ describe("service mode guard", () => {
 
   it("allows writes in normal mode", async () => {
     const app = Fastify({ logger: false });
-    await basSettlementPlugin(app as any);
+    await basSettlementPlugin(app as any, {});
     await app.ready();
 
     const res = await app.inject({

@@ -2,7 +2,7 @@
 
 export function requireMfa(req: FastifyRequest) {
   const user = req.user;
-  if (!user || !user.mfaVerified) {
-    throw new Error("MFA_REQUIRED");
-  }
+  if (!user || !user.mfaCompleted) {
+  throw new Error("MFA required");
+}
 }

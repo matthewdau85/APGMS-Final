@@ -1,6 +1,20 @@
+/** @type {import('jest').Config} */
 module.exports = {
-  projects: [
-    "<rootDir>/shared/jest.config.cjs",
-    "<rootDir>/services/api-gateway/jest.config.cjs",
-  ],
+  preset: "ts-jest/presets/default-esm",
+  testEnvironment: "node",
+
+  extensionsToTreatAsEsm: [".ts"],
+
+  globals: {
+    "ts-jest": {
+      useESM: true,
+      tsconfig: "./tsconfig.json",
+    },
+  },
+
+  moduleNameMapper: {
+    "^(\\.{1,2}/.*)\\.js$": "$1",
+  },
+
+  testMatch: ["**/test/**/*.test.ts"],
 };

@@ -6,7 +6,7 @@ describe("BAS settlement lifecycle routes (in-memory)", () => {
 
   beforeAll(async () => {
     app = Fastify({ logger: false });
-    await basSettlementPlugin(app as any);
+    await basSettlementPlugin(app as any, {});
     await app.ready();
   });
 
