@@ -141,7 +141,7 @@ async function handleIntegrationEvent(
       tax_type: taxType,
       status: "failed",
     });
-    stopTimer({ status: "failed" });
+    stopTimer();
     throw error;
   }
 }
