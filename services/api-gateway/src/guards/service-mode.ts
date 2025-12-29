@@ -1,64 +1,30 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { getServiceMode } from "../service-mode.js";
 
-function sendSuspended(reply: FastifyReply) {
-  const s = getServiceMode();
-  return reply
-    .code(503)
-    .header("x-service-mode", s.mode)
-    .send({
+export async function enforceNotSuspended(
+  _req: FastifyRequest,
+  reply: FastifyReply
+): Promise<void> {
+  const mode = getServiceMode();
+  if (mode.mode === "suspended") {
+    reply.code(503).send({
       error: "SERVICE_SUSPENDED",
-      message: "Service is currently suspended.",
-      serviceMode: s,
+      message: "Service is temporarily suspended.",
+      mode,
     });
+  }
 }
 
-function sendReadOnlyBlocked(reply: FastifyReply) {
-  const s = getServiceMode();
-  return reply
-    .code(409)
-    .header("x-service-mode", s.mode)
-    .send({
-      error: "READ_ONLY_MODE",
-      message: "Service is currently in read-only mode. Writes are blocked.",
-      serviceMode: s,
+export async function enforceNotReadOnly(
+  _req: FastifyRequest,
+  reply: FastifyReply
+): Promise<void> {
+  const mode = getServiceMode();
+  if (mode.mode === "read-only") {
+    reply.code(503).send({
+      error: "SERVICE_READ_ONLY",
+      message: "Service is in read-only mode.",
+      mode,
     });
-}
-
-// Route-level guard: attach to mutating endpoints.
-export function requireWritesEnabled(): (req: FastifyRequest, reply: FastifyReply) => Promise<void> {
-  return async (_req, reply) => {
-    const { mode } = getServiceMode();
-
-    if (mode === "normal") return;
-
-    if (mode === "suspended") {
-      sendSuspended(reply);
-      return;
-    }
-
-    // read-only
-    sendReadOnlyBlocked(reply);
-  };
-}
-
-// Plugin-level guard: attach once; allows GET/HEAD/OPTIONS in read-only.
-// In suspended mode, blocks everything in that plugin.
-export function serviceModeHttpGuard(): (req: FastifyRequest, reply: FastifyReply) => Promise<void> {
-  return async (req, reply) => {
-    const { mode } = getServiceMode();
-
-    if (mode === "normal") return;
-
-    if (mode === "suspended") {
-      sendSuspended(reply);
-      return;
-    }
-
-    // read-only: allow read methods, block writes
-    const m = (req.method || "GET").toUpperCase();
-    if (m === "GET" || m === "HEAD" || m === "OPTIONS") return;
-
-    sendReadOnlyBlocked(reply);
-  };
+  }
 }

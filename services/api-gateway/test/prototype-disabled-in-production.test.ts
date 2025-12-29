@@ -1,4 +1,4 @@
-import { buildFastifyApp } from "../src/app.js";
+import { buildFastifyApp } from "../src/app.ts";
 
 describe("prototype endpoints disabled in production", () => {
   it("returns 404 for regulator compliance summary in production (even if headers are guessed)", async () => {

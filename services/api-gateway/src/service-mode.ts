@@ -1,20 +1,19 @@
 export type ServiceMode = "normal" | "read-only" | "suspended";
 
-export interface ServiceModeState {
+export type ServiceModeState = {
   mode: ServiceMode;
   updatedAt: string;
   updatedBy?: string;
   reason?: string;
-}
+};
 
 let state: ServiceModeState = {
   mode: "normal",
   updatedAt: new Date().toISOString(),
-  updatedBy: "boot",
 };
 
 export function getServiceMode(): ServiceModeState {
-  return { ...state };
+  return state;
 }
 
 export function setServiceMode(
@@ -27,14 +26,9 @@ export function setServiceMode(
     updatedBy: meta?.by,
     reason: meta?.reason,
   };
-  return getServiceMode();
+  return state;
 }
 
-// Test helper (do not use in production code paths)
 export function _resetServiceModeForTests(): void {
-  state = {
-    mode: "normal",
-    updatedAt: new Date().toISOString(),
-    updatedBy: "test-reset",
-  };
+  state = { mode: "normal", updatedAt: new Date().toISOString() };
 }

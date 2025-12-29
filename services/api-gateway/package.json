@@ -8,7 +8,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "jest",
+    "test": "jest --config ./jest.config.mjs",
     "test:node": "if ls test/*.node.* >/dev/null 2>&1; then node --test ./test/*.node.*; else echo \"[test:node] no .node.* files, skipping\"; fi",
     "check:coverage": "node ./scripts/check-coverage.mjs",
     "db:generate": "node ../../scripts/ensure-linux.mjs && prisma generate --schema=../../infra/prisma/schema.prisma",

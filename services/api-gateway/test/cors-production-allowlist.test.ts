@@ -1,4 +1,4 @@
-import { buildFastifyApp } from "../src/app.js";
+import { buildFastifyApp } from "../src/app.ts";
 
 describe("CORS allowlist in production", () => {
   const prev = process.env.CORS_ALLOWED_ORIGINS;
