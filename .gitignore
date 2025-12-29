@@ -108,3 +108,6 @@ _review_pack_*/
 _review_pack_*/
 scripts/New Text Document.txt
 
+
+# accidental local artifacts
+node/
