@@ -221,6 +221,12 @@ importers:
         specifier: ^5.9.0
         version: 5.9.0
     devDependencies:
+      '@swc/core':
+        specifier: ^1.15.7
+        version: 1.15.7
+      '@swc/jest':
+        specifier: ^0.2.39
+        version: 0.2.39(@swc/core@1.15.7)
       '@types/bcryptjs':
         specifier: ^3.0.0
         version: 3.0.0
