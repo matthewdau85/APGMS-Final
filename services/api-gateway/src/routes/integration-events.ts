@@ -133,7 +133,7 @@ async function handleIntegrationEvent(
       tax_type: taxType,
       status: "success",
     });
-    stopTimer({ status: "success" });
+    stopTimer();
 
     reply.code(201).send({ eventId: event.id });
   } catch (error) {
