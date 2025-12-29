@@ -1,11 +1,9 @@
-import { getLedgerBalanceForPeriod } from "@apgms/domain-policy/ledger/tax-ledger.js";
+// services/api-gateway/src/routes/regulator-compliance-summary.service.ts
 
-type RiskBand = "LOW" | "MEDIUM" | "HIGH";
+import { getLedgerBalanceForPeriod } from "@apgms/domain-policy/ledger/tax-ledger";
+import type { FastifyInstance } from "fastify";
 
-type BreakdownEntry = {
-  source: "PAYROLL" | "POS";
-  amountCents: number;
-};
+type BreakdownEntry = { source: "PAYROLL" | "POS"; amountCents: number };
 
 type PeriodObligations = {
   paygwCents: number;
@@ -13,23 +11,25 @@ type PeriodObligations = {
   breakdown: BreakdownEntry[];
 };
 
-type RegulatorComplianceSummary = {
+type LedgerTotals = {
+  PAYGW: number;
+  GST: number;
+};
+
+export type RegulatorComplianceSummary = {
   orgId: string;
   period: string;
   obligations: PeriodObligations;
+  ledger: LedgerTotals;
   basCoverageRatio: number;
   risk: {
-    riskBand: RiskBand;
+    riskBand: "LOW" | "MEDIUM" | "HIGH";
     reasons: string[];
   };
 };
 
-export type ComputeSummaryArgs = {
-  // Use a loose DB type because this must work for both:
-  // - Prisma client
-  // - your createInMemoryDb() proxy
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  db: any;
+export type ComputeRegulatorComplianceSummaryArgs = {
+  db: FastifyInstance["db"];
   orgId: string;
   period: string;
 };
@@ -41,86 +41,64 @@ function clamp01(n: number): number {
   return n;
 }
 
-function computeRiskBand(coverageRatio: number, obligationsTotalCents: number): { band: RiskBand; reasons: string[] } {
+function computeRisk(basCoverageRatio: number, obligationsTotal: number) {
   const reasons: string[] = [];
-
-  if (obligationsTotalCents <= 0) {
-    return { band: "LOW", reasons: ["No obligations due for the period."] };
+  if (obligationsTotal <= 0) {
+    return { riskBand: "LOW" as const, reasons: ["No obligations for period."] };
   }
 
-  if (coverageRatio >= 0.9) {
-    reasons.push("Coverage ratio >= 90%.");
-    return { band: "LOW", reasons };
+  if (basCoverageRatio >= 0.9) {
+    reasons.push("Coverage ratio at or above 0.90.");
+    return { riskBand: "LOW" as const, reasons };
   }
 
-  if (coverageRatio >= 0.5) {
-    reasons.push("Coverage ratio between 50% and 90%.");
-    return { band: "MEDIUM", reasons };
+  if (basCoverageRatio >= 0.7) {
+    reasons.push("Coverage ratio between 0.70 and 0.90.");
+    reasons.push("Monitor cashflow and ensure captures reconcile to obligations.");
+    return { riskBand: "MEDIUM" as const, reasons };
   }
 
-  reasons.push("Coverage ratio below 50%.");
-  return { band: "HIGH", reasons };
+  reasons.push("Coverage ratio below 0.70.");
+  reasons.push("Likely shortfall risk if remittance is due before next capture cycle.");
+  return { riskBand: "HIGH" as const, reasons };
 }
 
-/**
- * Compute regulator summary using the SAME db instance the app uses (app.db).
- * This is the critical alignment needed for your e2e test.
- */
 export async function computeRegulatorComplianceSummary(
-  args: ComputeSummaryArgs,
+  args: ComputeRegulatorComplianceSummaryArgs,
 ): Promise<RegulatorComplianceSummary> {
   const { db, orgId, period } = args;
 
-  // Fetch obligations from the provided db (NOT from shared prisma).
   const [payrollItems, gstTransactions] = await Promise.all([
-    db.payrollItem.findMany({
+    (db as any).payrollItem.findMany({
       where: { orgId, period },
+      select: { paygwCents: true },
     }),
-    db.gstTransaction.findMany({
+    (db as any).gstTransaction.findMany({
       where: { orgId, period },
+      select: { gstCents: true },
     }),
   ]);
 
-  const paygwCents = (payrollItems ?? []).reduce(
-    (sum: number, p: any) => sum + Number(p?.paygwCents ?? 0),
-    0,
-  );
-
-  const gstCents = (gstTransactions ?? []).reduce(
-    (sum: number, g: any) => sum + Number(g?.gstCents ?? 0),
-    0,
-  );
+  const paygwCents = (payrollItems || []).reduce((s: number, r: any) => s + Number(r.paygwCents ?? 0), 0);
+  const gstCents = (gstTransactions || []).reduce((s: number, r: any) => s + Number(r.gstCents ?? 0), 0);
 
   const breakdown: BreakdownEntry[] = [];
-  if (paygwCents !== 0) breakdown.push({ source: "PAYROLL", amountCents: paygwCents });
-  if (gstCents !== 0) breakdown.push({ source: "POS", amountCents: gstCents });
+  if (paygwCents > 0) breakdown.push({ source: "PAYROLL", amountCents: paygwCents });
+  if (gstCents > 0) breakdown.push({ source: "POS", amountCents: gstCents });
 
-  const obligations: PeriodObligations = {
-    paygwCents,
-    gstCents,
-    breakdown,
+  const obligations: PeriodObligations = { paygwCents, gstCents, breakdown };
+
+  const ledgerBalances = (await getLedgerBalanceForPeriod(orgId, period)) as any;
+  const ledger: LedgerTotals = {
+    PAYGW: Number(ledgerBalances?.PAYGW ?? 0),
+    GST: Number(ledgerBalances?.GST ?? 0),
   };
 
-  // Ledger totals (mocked in your test)
-  const ledgerTotals = await getLedgerBalanceForPeriod(orgId, period);
+  const obligationsTotal = obligations.paygwCents + obligations.gstCents;
+  const ledgerTotal = ledger.PAYGW + ledger.GST;
 
-  const paidCents =
-    Number((ledgerTotals as any)?.PAYGW ?? 0) + Number((ledgerTotals as any)?.GST ?? 0);
+  const basCoverageRatio = obligationsTotal <= 0 ? 1 : clamp01(ledgerTotal / obligationsTotal);
+  const risk = computeRisk(basCoverageRatio, obligationsTotal);
 
-  const dueCents = paygwCents + gstCents;
-
-  const basCoverageRatio = dueCents > 0 ? clamp01(paidCents / dueCents) : 1;
-
-  const { band, reasons } = computeRiskBand(basCoverageRatio, dueCents);
-
-  return {
-    orgId,
-    period,
-    obligations,
-    basCoverageRatio,
-    risk: {
-      riskBand: band,
-      reasons,
-    },
-  };
+  return { orgId, period, obligations, ledger, basCoverageRatio, risk };
 }

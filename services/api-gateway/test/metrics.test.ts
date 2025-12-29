@@ -1,4 +1,4 @@
-import { buildFastifyApp } from "../src/app.ts";
+import { buildFastifyApp } from "../src/app.js";
 
 describe("/metrics", () => {
   it("exposes Prometheus metrics", async () => {

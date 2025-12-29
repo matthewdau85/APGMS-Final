@@ -1,4 +1,4 @@
-import { buildApp } from "../src/app.ts";
+import { buildApp } from "../src/app.js";
 
 describe("admin audit", () => {
   test("admin data export endpoint is wired and does not 5xx", async () => {

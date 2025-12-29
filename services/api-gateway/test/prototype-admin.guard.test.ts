@@ -1,5 +1,5 @@
 import Fastify from "fastify";
-import { buildFastifyApp } from "../src/app.ts";
+import { buildFastifyApp } from "../src/app.js";
 
 describe("prototype admin-only guard", () => {
   it("rejects access when not admin", async () => {

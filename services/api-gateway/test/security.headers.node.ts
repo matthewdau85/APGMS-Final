@@ -3,7 +3,7 @@ import { after, before, describe, it } from "node:test";
 
 import type { FastifyInstance } from "fastify";
 
-import { buildServer } from "../src/app";
+import { buildServer } from "../src/app.js";
 
 let app: FastifyInstance;
 

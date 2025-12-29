@@ -1,13 +1,35 @@
 {
-  "extends": "./tsconfig.base.json",
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "src",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "verbatimModuleSyntax": false,
+    "rootDir": ".",
     "outDir": "dist",
-    "composite": true,
-    "tsBuildInfoFile": "dist/.tsbuildinfo"
+    "declaration": true,
+    "declarationMap": true,
+    "types": ["node", "jest"],
+    "baseUrl": ".",
+    "paths": {
+      "@apgms/shared": [
+        "./node_modules/@apgms/shared/src/index.ts",
+        "./node_modules/@apgms/shared/src/index.js"
+      ],
+      "@apgms/shared/*": [
+        "./node_modules/@apgms/shared/src/*",
+        "./node_modules/@apgms/shared/src/*.ts",
+        "./node_modules/@apgms/shared/src/*.js"
+      ],
+      "@apgms/domain-policy": [
+        "./node_modules/@apgms/domain-policy/src/index.ts",
+        "./node_modules/@apgms/domain-policy/src/index.js"
+      ],
+      "@apgms/domain-policy/*": [
+        "./node_modules/@apgms/domain-policy/src/*",
+        "./node_modules/@apgms/domain-policy/src/*.ts",
+        "./node_modules/@apgms/domain-policy/src/*.js"
+      ]
+    }
   },
-  "include": ["src"],
-  "references": [
-    { "path": "../domain-policy" }
-  ]
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/types/**/*.d.ts"]
 }

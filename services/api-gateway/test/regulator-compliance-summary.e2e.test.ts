@@ -1,4 +1,4 @@
-import { buildFastifyApp } from "../src/app";
+import { buildFastifyApp } from "../src/app.js";
 
 const ORG_ID = "org_1";
 const PERIOD = "2025-Q3";

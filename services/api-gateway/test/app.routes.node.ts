@@ -5,7 +5,7 @@ import type { FastifyInstance } from "fastify";
 import jwt from "jsonwebtoken";
 import { Prisma } from "@prisma/client";
 
-import { buildServer } from "../src/app";
+import { buildServer } from "../src/app.js";
 import { createBankLinesPlugin } from "../src/routes/bank-lines";
 
 process.env.AUTH_DEV_SECRET ??= "local-dev-secret";

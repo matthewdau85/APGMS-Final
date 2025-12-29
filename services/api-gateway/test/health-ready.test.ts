@@ -1,4 +1,4 @@
-import { buildFastifyApp } from "../src/app";
+import { buildFastifyApp } from "../src/app.js";
 
 describe("health and readiness routes", () => {
   it("/health returns ok", async () => {
