@@ -1,279 +1,119 @@
-import type { FastifyInstance } from "fastify";
-import { requireWritesEnabled } from "../guards/service-mode.js";
+import { type FastifyPluginAsync } from "fastify";
+import { stableId } from "../lib/safe-math.js";
+import { getServiceMode } from "../service-mode.js";
 
-type SettlementStatus = "PREPARED" | "SENT" | "ACK" | "FAILED";
+/* ---------------- Utilities ---------------- */
 
-export interface BasSettlement {
+function isValidPeriod(period: string): boolean {
+  return /^\d{4}-Q[1-4]$/.test(period);
+}
+
+function enforceServiceMode() {
+  const mode = getServiceMode();
+  if (mode?.state === "suspended") {
+    return { code: 503, error: "service_suspended" };
+  }
+  if (mode?.state === "read-only") {
+    return { code: 409, error: "service_read_only" };
+  }
+  return null;
+}
+
+/* ---------------- In-memory store ---------------- */
+
+type Settlement = {
   instructionId: string;
   period: string;
-  status: SettlementStatus;
-  payload?: unknown;
-}
+  payload?: any;
+  status: "PREPARED" | "SENT" | "ACK" | "FAILED";
+};
 
-interface BasPrepareBody {
-  period: string;
-  payload?: unknown;
-}
+const settlements = new Map<string, Settlement>();
 
-interface BasFinaliseBody {
-  period: string;
-  payload?: unknown;
-}
+/* ---------------- Plugin ---------------- */
 
-interface BasFailedBody {
-  reason?: string;
-}
+export const basSettlementPlugin: FastifyPluginAsync = async (app) => {
+  /* -------- prepare -------- */
+  app.post("/settlements/bas/prepare", async (req, reply) => {
+    const guard = enforceServiceMode();
+    if (guard) return reply.code(guard.code).send({ error: guard.error });
 
-const periodPattern = /^(19|20)\d{2}-Q[1-4]$/;
+    const body: any = req.body ?? {};
+    const period = String(body.period ?? "");
 
-function isValidPeriod(p: unknown): p is string {
-  return typeof p === "string" && periodPattern.test(p);
-}
-
-function getBasState(app: FastifyInstance): {
-  store: Map<string, BasSettlement>;
-  counter: { value: number };
-} {
-  const anyApp = app as any;
-
-  if (!anyApp.__basSettlementStore) {
-    anyApp.__basSettlementStore = new Map<string, BasSettlement>();
-  }
-  if (!anyApp.__basSettlementCounter) {
-    anyApp.__basSettlementCounter = { value: 0 };
-  }
-
-  return {
-    store: anyApp.__basSettlementStore as Map<string, BasSettlement>,
-    counter: anyApp.__basSettlementCounter as { value: number },
-  };
-}
-
-function nextInstructionId(app: FastifyInstance): string {
-  const state = getBasState(app);
-  state.counter.value += 1;
-  return `settlement-${state.counter.value}`;
-}
-
-function attachOrReplaceSettlement(app: FastifyInstance, settlement: BasSettlement): void {
-  const state = getBasState(app);
-  state.store.set(settlement.instructionId, settlement);
-}
-
-function getSettlement(app: FastifyInstance, instructionId: string): BasSettlement | null {
-  const state = getBasState(app);
-  return state.store.get(instructionId) ?? null;
-}
-
-export async function basSettlementRoutes(app: FastifyInstance): Promise<void> {
-  const writeGuard = requireWritesEnabled();
-
-  app.post<{ Body: BasFinaliseBody }>(
-    "/settlements/bas/finalise",
-    {
-      preHandler: writeGuard,
-      schema: {
-        body: {
-          type: "object",
-          required: ["period"],
-          additionalProperties: true,
-          properties: {
-            period: { type: "string", pattern: periodPattern.source },
-          },
-        },
-      },
-    },
-    async (request, reply) => {
-      const { period, payload } = request.body;
-
-      if (!isValidPeriod(period)) {
-        return reply.code(400).send({ error: "INVALID_PERIOD" });
-      }
-
-      const instructionId = nextInstructionId(app);
-
-      const settlement: BasSettlement = {
-        instructionId,
-        period,
-        status: "PREPARED",
-        payload,
-      };
-
-      attachOrReplaceSettlement(app, settlement);
-
-      return reply.code(201).send({ instructionId, period, payload });
+    if (!isValidPeriod(period)) {
+      return reply.code(400).send({ error: "invalid_period" });
     }
-  );
-}
 
-/**
- * Lifecycle endpoints (prepare -> sent/ack/failed).
- * These use an in-memory store keyed per Fastify instance.
- */
-async function basSettlementLifecycleRoutes(app: FastifyInstance): Promise<void> {
-  const writeGuard = requireWritesEnabled();
+    const instructionId = stableId("bas");
+    const settlement: Settlement = {
+      instructionId,
+      period,
+      payload: body.payload,
+      status: "PREPARED",
+    };
 
-  app.post<{ Body: BasPrepareBody }>(
-    "/settlements/bas/prepare",
-    {
-      preHandler: writeGuard,
-      schema: {
-        body: {
-          type: "object",
-          required: ["period"],
-          additionalProperties: true,
-          properties: {
-            period: { type: "string", pattern: periodPattern.source },
-          },
-        },
-      },
-    },
-    async (request, reply) => {
-      const { period, payload } = request.body;
+    settlements.set(instructionId, settlement);
 
-      if (!isValidPeriod(period)) {
-        return reply.code(400).send({ error: "INVALID_PERIOD" });
-      }
+    return reply.code(201).send({
+      instructionId,
+      period,
+      payload: body.payload,
+    });
+  });
 
-      const instructionId = nextInstructionId(app);
+  /* -------- sent -------- */
+  app.post("/settlements/bas/:id/sent", async (req, reply) => {
+    const s = settlements.get((req.params as any).id);
+    if (!s) return reply.code(404).send({ error: "not_found" });
 
-      const settlement: BasSettlement = {
-        instructionId,
-        period,
-        status: "PREPARED",
-        payload,
-      };
+    s.status = "SENT";
+    return reply.send({ instructionId: s.instructionId, status: "SENT" });
+  });
 
-      attachOrReplaceSettlement(app, settlement);
+  /* -------- ack -------- */
+  app.post("/settlements/bas/:id/ack", async (req, reply) => {
+    const s = settlements.get((req.params as any).id);
+    if (!s) return reply.code(404).send({ error: "not_found" });
 
-      return reply.code(201).send({ instructionId, period, payload });
+    s.status = "ACK";
+    return reply.send({ instructionId: s.instructionId, status: "ACK" });
+  });
+
+  /* -------- failed -------- */
+  app.post("/settlements/bas/:id/failed", async (req, reply) => {
+    const s = settlements.get((req.params as any).id);
+    if (!s) return reply.code(404).send({ error: "not_found" });
+
+    s.status = "FAILED";
+    return reply.send({ instructionId: s.instructionId, status: "FAILED" });
+  });
+
+  /* -------- finalise (auth & non-auth mounts) -------- */
+  app.post("/settlements/bas/finalise", async (req, reply) => {
+    const guard = enforceServiceMode();
+    if (guard) return reply.code(guard.code).send({ error: guard.error });
+
+    const body: any = req.body ?? {};
+    const period = String(body.period ?? "");
+
+    if (!isValidPeriod(period)) {
+      return reply.code(400).send({ error: "invalid_period" });
     }
-  );
 
-  app.post<{ Params: { instructionId: string } }>(
-    "/settlements/bas/:instructionId/sent",
-    { preHandler: writeGuard },
-    async (request, reply) => {
-      const s = getSettlement(app, request.params.instructionId);
-      if (!s) return reply.code(404).send({ error: "NOT_FOUND" });
+    const instructionId = stableId("bas");
 
-      s.status = "SENT";
-      attachOrReplaceSettlement(app, s);
+    return reply.code(201).send({
+      instructionId,
+      period,
+      payload: body.payload,
+    });
+  });
+};
 
-      return reply.code(200).send({ instructionId: s.instructionId, status: s.status });
-    }
-  );
+export default basSettlementPlugin;
 
-  app.post<{ Params: { instructionId: string } }>(
-    "/settlements/bas/:instructionId/ack",
-    { preHandler: writeGuard },
-    async (request, reply) => {
-      const s = getSettlement(app, request.params.instructionId);
-      if (!s) return reply.code(404).send({ error: "NOT_FOUND" });
+/* ---------------- Compatibility exports ---------------- */
 
-      s.status = "ACK";
-      attachOrReplaceSettlement(app, s);
-
-      return reply.code(200).send({ instructionId: s.instructionId, status: s.status });
-    }
-  );
-
-  app.post<{ Params: { instructionId: string }; Body: BasFailedBody }>(
-    "/settlements/bas/:instructionId/failed",
-    { preHandler: writeGuard },
-    async (request, reply) => {
-      const s = getSettlement(app, request.params.instructionId);
-      if (!s) return reply.code(404).send({ error: "NOT_FOUND" });
-
-      s.status = "FAILED";
-      attachOrReplaceSettlement(app, s);
-
-      return reply.code(200).send({ instructionId: s.instructionId, status: s.status });
-    }
-  );
-}
-
-/**
- * Legacy endpoints preserved for backward compatibility.
- * These are intentionally looser (no schema) but still enforce period format checks.
- */
-async function legacyBasSettlementRoutes(app: FastifyInstance): Promise<void> {
-  const writeGuard = requireWritesEnabled();
-
-  app.post<{ Body: BasPrepareBody }>(
-    "/bas-settlement/prepare",
-    { preHandler: writeGuard },
-    async (request, reply) => {
-      const { period, payload } = request.body;
-
-      if (!isValidPeriod(period)) {
-        return reply.code(400).send({ error: "INVALID_PERIOD" });
-      }
-
-      const instructionId = nextInstructionId(app);
-
-      const settlement: BasSettlement = {
-        instructionId,
-        period,
-        status: "PREPARED",
-        payload,
-      };
-
-      attachOrReplaceSettlement(app, settlement);
-
-      return reply.code(201).send({ instructionId, period, payload });
-    }
-  );
-
-  app.post<{ Params: { instructionId: string } }>(
-    "/bas-settlement/:instructionId/sent",
-    { preHandler: writeGuard },
-    async (request, reply) => {
-      const s = getSettlement(app, request.params.instructionId);
-      if (!s) return reply.code(404).send({ error: "NOT_FOUND" });
-
-      s.status = "SENT";
-      attachOrReplaceSettlement(app, s);
-
-      return reply.code(200).send({ instructionId: s.instructionId, status: s.status });
-    }
-  );
-
-  app.post<{ Params: { instructionId: string } }>(
-    "/bas-settlement/:instructionId/ack",
-    { preHandler: writeGuard },
-    async (request, reply) => {
-      const s = getSettlement(app, request.params.instructionId);
-      if (!s) return reply.code(404).send({ error: "NOT_FOUND" });
-
-      s.status = "ACK";
-      attachOrReplaceSettlement(app, s);
-
-      return reply.code(200).send({ instructionId: s.instructionId, status: s.status });
-    }
-  );
-
-  app.post<{ Params: { instructionId: string }; Body: BasFailedBody }>(
-    "/bas-settlement/:instructionId/failed",
-    { preHandler: writeGuard },
-    async (request, reply) => {
-      const s = getSettlement(app, request.params.instructionId);
-      if (!s) return reply.code(404).send({ error: "NOT_FOUND" });
-
-      s.status = "FAILED";
-      attachOrReplaceSettlement(app, s);
-
-      return reply.code(200).send({ instructionId: s.instructionId, status: s.status });
-    }
-  );
-}
-
-/**
- * Plugin used by the real app (registered inside the secure scope).
- * When mounted under /api, endpoints become /api/settlements/bas/*.
- */
-export async function basSettlementPlugin(app: FastifyInstance): Promise<void> {
-  await basSettlementRoutes(app);
-  await basSettlementLifecycleRoutes(app);
-  await legacyBasSettlementRoutes(app);
-}
+export const basSettlementRoutes = basSettlementPlugin;
+export { basSettlementPlugin };

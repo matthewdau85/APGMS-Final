@@ -1,78 +1,33 @@
-import type { FastifyInstance } from "fastify";
-import { prototypeAdminGuard } from "../guards/prototype-admin.js";
-import { obligationsOutstandingCents } from "../metrics/business.js";
+import { type FastifyPluginAsync } from "fastify";
+import { computeRegulatorComplianceSummary } from "../services/regulator-compliance-summary.service.js";
 
-import { computeOrgObligationsForPeriod } from
-  "@apgms/domain-policy/obligations/computeOrgObligationsForPeriod.js";
-import { getLedgerBalanceForPeriod } from
-  "@apgms/domain-policy/ledger/tax-ledger.js";
+/**
+ * GET /regulator/compliance/summary
+ * GET /api/regulator/compliance/summary (secured via scope)
+ */
+export const regulatorComplianceSummaryRoute: FastifyPluginAsync = async (app) => {
+  app.get("/regulator/compliance/summary", async (req, reply) => {
+    const period = String((req.query as any)?.period ?? "2025-Q3");
 
-type RiskBand = "LOW" | "MEDIUM" | "HIGH";
+    const result = await computeRegulatorComplianceSummary({
+      db: app.db,
+      period,
+    });
 
-function riskBandFromCoverage(ratio: number, total: number): RiskBand {
-  if (total <= 0) return "LOW";
-  if (ratio >= 0.9) return "LOW";
-  if (ratio >= 0.6) return "MEDIUM";
-  return "HIGH";
-}
-
-export async function registerRegulatorComplianceSummaryRoute(app: FastifyInstance) {
-  app.get(
-    "/regulator/compliance/summary",
-    {
-      preHandler: prototypeAdminGuard(),
-      schema: {
-        querystring: {
-          type: "object",
-          required: ["period"],
-          properties: {
-            period: { type: "string" },
-          },
-        },
-      },
-    },
-    async (request: any) => {
-      const orgId = request.headers["x-org-id"];
-      const period = request.query.period;
-
-      if (!orgId) throw Object.assign(new Error("Missing orgId"), { statusCode: 400 });
-
-      const obligations = await computeOrgObligationsForPeriod(orgId, period);
-      const ledger = await getLedgerBalanceForPeriod(orgId, period);
-
-      const paygwOblig = Number(obligations?.paygwCents ?? 0);
-      const gstOblig = Number(obligations?.gstCents ?? 0);
-      const paygwCovered = Number(ledger?.PAYGW ?? 0);
-      const gstCovered = Number(ledger?.GST ?? 0);
-
-      const totalOblig = paygwOblig + gstOblig;
-      const totalCovered = paygwCovered + gstCovered;
-
-      const paygwShortfallCents = Math.max(0, paygwOblig - paygwCovered);
-      const gstShortfallCents = Math.max(0, gstOblig - gstCovered);
-
-      const outstanding = paygwShortfallCents + gstShortfallCents;
-      obligationsOutstandingCents.set(outstanding);
-
-      const coverageRatio = totalOblig === 0 ? 1 : totalCovered / totalOblig;
-
-      return {
-        orgId,
-        period,
-        obligations,
-        basCoverageRatio: coverageRatio,
-        paygwShortfallCents,
-        gstShortfallCents,
-        risk: {
-          riskBand: riskBandFromCoverage(coverageRatio, totalOblig),
-        },
-      };
-    }
-  );
-}
-
-export const regulatorComplianceSummaryPlugin = async (app: FastifyInstance) => {
-  await registerRegulatorComplianceSummaryRoute(app);
+    return reply.send(result);
+  });
 };
 
-export default regulatorComplianceSummaryPlugin;
+export default regulatorComplianceSummaryRoute;
+
+/**
+ * Compatibility export for older tests
+ */
+export const registerRegulatorComplianceSummaryRoute = (
+  app: any,
+  opts?: { basePath?: string },
+) => {
+  const prefix = opts?.basePath ?? "";
+  app.register(regulatorComplianceSummaryRoute, { prefix });
+};
+

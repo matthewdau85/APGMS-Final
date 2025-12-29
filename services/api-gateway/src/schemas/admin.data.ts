@@ -1,11 +1,18 @@
 ﻿import { z } from "zod";
 
+// Requests
+export const subjectDataExportRequestSchema = z.object({
+  orgId: z.string().min(1, "orgId is required"),
+  email: z.string().email("email must be valid"),
+});
+
 export const adminDataDeleteRequestSchema = z.object({
   orgId: z.string().min(1, "orgId is required"),
   email: z.string().email("email must be valid"),
   confirm: z.literal("DELETE"),
 });
 
+// Responses
 export const adminDataDeleteResponseSchema = z.object({
   action: z.union([z.literal("anonymized"), z.literal("deleted")]),
   userId: z.string().min(1),
@@ -16,21 +23,12 @@ export const adminDataDeleteResponseSchema = z.object({
     }),
 });
 
-export type AdminDataDeleteRequest = z.infer<typeof adminDataDeleteRequestSchema>;
-export type AdminDataDeleteResponse = z.infer<typeof adminDataDeleteResponseSchema>;
-
-export const subjectDataExportRequestSchema = z.object({
-  orgId: z.string().min(1),
-  email: z.string().email(),
-});
-
 const orgSchema = z.object({
-  id: z.string(),
-  name: z.string(),
+  id: z.string().min(1),
 });
 
 const userSchema = z.object({
-  id: z.string(),
+  id: z.string().min(1),
   email: z.string().email(),
   createdAt: z.string(),
 });
@@ -48,4 +46,5 @@ export const subjectDataExportResponseSchema = z.object({
 
 export type SubjectDataExportRequest = z.infer<typeof subjectDataExportRequestSchema>;
 export type SubjectDataExportResponse = z.infer<typeof subjectDataExportResponseSchema>;
-
+export type AdminDataDeleteRequest = z.infer<typeof adminDataDeleteRequestSchema>;
+export type AdminDataDeleteResponse = z.infer<typeof adminDataDeleteResponseSchema>;
