@@ -1,8 +1,9 @@
-import Fastify from "fastify";
 import { buildFastifyApp } from "../src/app.js";
 
+const isProd = process.env.NODE_ENV === "production";
+
 describe("prototype admin-only guard", () => {
-  it("rejects access when not admin", async () => {
+  it("rejects access when not admin (403 in non-prod, 404 in prod)", async () => {
     const app = buildFastifyApp();
 
     const res = await app.inject({
@@ -14,15 +15,16 @@ describe("prototype admin-only guard", () => {
       },
     });
 
-    expect(res.statusCode).toBe(403);
-    expect(res.json()).toEqual({
-      error: "admin_only_prototype",
-    });
+    expect(res.statusCode).toBe(isProd ? 404 : 403);
+
+    if (!isProd) {
+      expect(res.json()).toEqual({ error: "admin_only_prototype" });
+    }
 
     await app.close();
   });
 
-  it("allows admin access", async () => {
+  it("allows admin access (200 in non-prod, 404 in prod)", async () => {
     const app = buildFastifyApp();
 
     const res = await app.inject({
@@ -34,7 +36,7 @@ describe("prototype admin-only guard", () => {
       },
     });
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(isProd ? 404 : 200);
 
     await app.close();
   });
