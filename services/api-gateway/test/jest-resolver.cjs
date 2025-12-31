@@ -1,61 +1,34 @@
-const fs = require("fs");
 const path = require("path");
+const fs = require("fs");
 
-function getDefaultResolver(options) {
-  if (typeof options.defaultResolver === "function") return options.defaultResolver;
-
-  // eslint-disable-next-line global-require
-  const jr = require("jest-resolve");
-  if (typeof jr.defaultResolver === "function") return jr.defaultResolver;
-
-  throw new Error("Could not access Jest defaultResolver.");
+function firstExisting(paths) {
+  for (const p of paths) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
 }
 
-function isRepoCodeBasedir(basedir) {
-  if (!basedir) return false;
-  if (basedir.includes(`${path.sep}node_modules${path.sep}`)) return false;
+module.exports = (request, options) => {
+  const basedir = options.basedir || process.cwd();
+  const defaultResolver = options.defaultResolver;
 
-  return (
-    basedir.includes(`${path.sep}services${path.sep}api-gateway${path.sep}`) ||
-    basedir.includes(`${path.sep}shared${path.sep}src${path.sep}`) ||
-    basedir.includes(`${path.sep}shared${path.sep}au${path.sep}`) ||
-    basedir.includes(`${path.sep}packages${path.sep}`)
-  );
-}
-
-function tryResolve(defaultResolver, request, options) {
-  try {
-    return defaultResolver(request, options);
-  } catch {
-    return null;
-  }
-}
-
-module.exports = function apgmsJestResolver(request, options) {
-  const defaultResolver = getDefaultResolver(options);
-
-  // Only rewrite for your repo code (never node_modules)
-  if (!isRepoCodeBasedir(options.basedir)) {
-    return defaultResolver(request, options);
+  if (typeof defaultResolver !== "function") {
+    throw new Error("Jest did not provide options.defaultResolver");
   }
 
-  // Only rewrite explicit ".js" specifiers
-  if (typeof request !== "string" || !request.endsWith(".js")) {
-    return defaultResolver(request, options);
+  // Rewrite ONLY relative .js specifiers to their .ts source when present.
+  if (request.startsWith(".") && request.endsWith(".js")) {
+    const abs = path.resolve(basedir, request);
+
+    const candidate = firstExisting([
+      abs.replace(/\.js$/, ".ts"),                 // ./x.js -> ./x.ts
+      abs.replace(/\.js$/, ".tsx"),                // ./x.js -> ./x.tsx (just in case)
+      abs.replace(/\/index\.js$/, "/index.ts"),    // ./dir/index.js -> ./dir/index.ts
+      abs.replace(/\.js$/, "/index.ts"),           // ./dir.js -> ./dir/index.ts (rare but safe)
+    ]);
+
+    if (candidate) return candidate;
   }
 
-  // 1) Prefer same-path ".ts"
-  const asTs = request.replace(/\.js$/, ".ts");
-  const r1 = tryResolve(defaultResolver, asTs, options);
-  if (r1) return r1;
-
-  // 2) If it was "/index.js", try "/index.ts"
-  if (request.endsWith("/index.js")) {
-    const asIndexTs = request.replace(/\/index\.js$/, "/index.ts");
-    const r2 = tryResolve(defaultResolver, asIndexTs, options);
-    if (r2) return r2;
-  }
-
-  // 3) Fall back
   return defaultResolver(request, options);
 };
