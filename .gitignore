@@ -55,3 +55,6 @@ progress-report.json
 progress-report.md
 sbom.xml
 *.patch
+
+# --- Local status/incidents logs (generated) ---
+status/incidents/
