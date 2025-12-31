@@ -22,9 +22,13 @@ process.env.HOST = process.env.HOST || "127.0.0.1";
 process.env.CORS_ALLOWLIST = process.env.CORS_ALLOWLIST || "https://allowed.example";
 process.env.LOG_LEVEL = process.env.LOG_LEVEL || "silent";
 
-// Optional: keep mocks here (NOT in jest.config.mjs)
-jest.mock("@apgms/shared/security-log.js", () => ({
-  logSecurityEvent: () => {},
-  buildSecurityContextFromRequest: () => ({}),
-  buildSecurityLogEntry: () => ({}),
-}));
+// Keep REAL buildSecurityLogEntry, only stub the side-effect logger.
+jest.mock("@apgms/shared/security-log.js", () => {
+  const actual = jest.requireActual("@apgms/shared/security-log.js");
+  return {
+    ...actual,
+    logSecurityEvent: () => {},
+    // If other tests rely on this being inert, keep it.
+    buildSecurityContextFromRequest: () => ({}),
+  };
+});

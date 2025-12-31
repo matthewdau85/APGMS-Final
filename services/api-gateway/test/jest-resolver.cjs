@@ -21,10 +21,10 @@ module.exports = (request, options) => {
     const abs = path.resolve(basedir, request);
 
     const candidate = firstExisting([
-      abs.replace(/\.js$/, ".ts"),                 // ./x.js -> ./x.ts
-      abs.replace(/\.js$/, ".tsx"),                // ./x.js -> ./x.tsx (just in case)
-      abs.replace(/\/index\.js$/, "/index.ts"),    // ./dir/index.js -> ./dir/index.ts
-      abs.replace(/\.js$/, "/index.ts"),           // ./dir.js -> ./dir/index.ts (rare but safe)
+      abs.replace(/\.js$/, ".ts"),
+      abs.replace(/\.js$/, ".tsx"),
+      abs.replace(/\/index\.js$/, "/index.ts"),
+      abs.replace(/\.js$/, "/index.ts"),
     ]);
 
     if (candidate) return candidate;
