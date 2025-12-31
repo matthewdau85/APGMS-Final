@@ -1,3 +1,4 @@
+// services/api-gateway/src/app.ts
 import fastify from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
@@ -12,6 +13,10 @@ import { createMetrics } from "./observability/metrics.js";
 import regulatorComplianceSummaryRoute from "./routes/regulator-compliance-summary.js";
 import regulatorComplianceEvidencePackPlugin from "./routes/regulator-compliance-evidence-pack.js";
 import { registerRiskSummaryRoute } from "./routes/risk-summary.js";
+import {
+  isPrototypePath,
+  isPrototypeAdminOnlyPath,
+} from "./prototype/prototype-paths.js";
 
 export interface BuildAppOpts {
   auth?: {
@@ -33,13 +38,18 @@ export function buildFastifyApp(opts: BuildAppOpts = {}) {
   app.register(helmet);
 
   // DB
-  const useInMemoryDb = Boolean(opts.configOverrides?.inMemoryDb ?? opts.inMemoryDb);
+  const useInMemoryDb = Boolean(
+    opts.configOverrides?.inMemoryDb ?? opts.inMemoryDb
+  );
   const dbClient = useInMemoryDb ? createInMemoryDb() : prisma;
   (app as any).decorate("db", dbClient);
 
   // Metrics + Services
   (app as any).decorate("metrics", createMetrics());
-  (app as any).decorate("services", createServices({ db: dbClient, metrics: (app as any).metrics }));
+  (app as any).decorate(
+    "services",
+    createServices({ db: dbClient, metrics: (app as any).metrics })
+  );
 
   // Auth guard
   const guard = createAuthGuard(opts.auth);
@@ -54,8 +64,7 @@ export function buildFastifyApp(opts: BuildAppOpts = {}) {
   app.register(regulatorComplianceEvidencePackPlugin, { prefix: "/regulator" });
   registerRiskSummaryRoute(app);
 
-
-// APGMS_TEST_BEHAVIOR_HOOKS
+  // APGMS_TEST_BEHAVIOR_HOOKS
 
   // Determine environment (tests pass configOverrides.environment)
   const env = String(
@@ -67,22 +76,29 @@ export function buildFastifyApp(opts: BuildAppOpts = {}) {
     if (env !== "production") return;
 
     const url = req.url || "";
-    if (
-      url.startsWith("/regulator/compliance/summary") ||
-      url.startsWith("/monitor/")
-    ) {
+    if (isPrototypePath(url)) {
       reply.code(404).send({ error: "not_found" });
       return;
     }
   });
 
+    // Production: hard-disable prototype/demo endpoints at the edge (404)
+  app.addHook("onRequest", async (req, reply) => {
+    if (env !== "production") return;
 
-  // Non-production: prototype monitor endpoints are admin-only
+    const url = req.url || "";
+    if (isPrototypePath(url)) {
+      reply.code(404).send({ error: "not_found" });
+      return;
+    }
+  });
+
+  // Non-production: only SOME prototype endpoints are admin-only (e.g. /monitor/*)
   app.addHook("onRequest", async (req, reply) => {
     if (env === "production") return;
 
     const url = req.url || "";
-    if (!url.startsWith("/monitor/")) return;
+    if (!isPrototypeAdminOnlyPath(url)) return;
 
     const userRole = String((req as any).user?.role ?? "");
     const h: any = (req.headers as any) || {};
@@ -108,7 +124,6 @@ export function buildFastifyApp(opts: BuildAppOpts = {}) {
     const origin = String((req.headers as any)?.origin ?? "");
     if (!origin) return;
 
-    // default allowlist for tests + optional env-driven allowlist
     const envList = String(process.env.CORS_ALLOWLIST ?? "")
       .split(",")
       .map((x) => x.trim())
@@ -130,7 +145,9 @@ export function buildFastifyApp(opts: BuildAppOpts = {}) {
   app.get("/metrics", async (_req, reply) => {
     const metrics: any = (app as any).metrics;
     const body =
-      metrics && typeof metrics.metrics === "function" ? await metrics.metrics() : "";
+      metrics && typeof metrics.metrics === "function"
+        ? await metrics.metrics()
+        : "";
     reply.header("content-type", "text/plain; version=0.0.4; charset=utf-8");
     return reply.send(body);
   });

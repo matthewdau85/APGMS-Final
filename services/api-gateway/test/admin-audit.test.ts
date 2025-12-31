@@ -2,7 +2,7 @@ import { buildApp } from "../src/app.js";
 
 describe("admin audit", () => {
   test("admin data export endpoint is wired and does not 5xx", async () => {
-    const app = buildApp();
+    const app = buildApp({ inMemoryDb: true });
     await app.ready();
 
     const res = await app.inject({

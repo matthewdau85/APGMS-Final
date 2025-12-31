@@ -4,7 +4,7 @@ const isProd = process.env.NODE_ENV === "production";
 
 describe("prototype admin-only guard", () => {
   it("rejects access when not admin (403 in non-prod, 404 in prod)", async () => {
-    const app = buildFastifyApp();
+    const app = buildFastifyApp({ inMemoryDb: true });
 
     const res = await app.inject({
       method: "GET",
@@ -25,7 +25,7 @@ describe("prototype admin-only guard", () => {
   });
 
   it("allows admin access (200 in non-prod, 404 in prod)", async () => {
-    const app = buildFastifyApp();
+    const app = buildFastifyApp({ inMemoryDb: true });
 
     const res = await app.inject({
       method: "GET",

@@ -4,7 +4,7 @@ type Environment = "development" | "test" | "production";
 
 export type GuardOptions = {
   /**
-   * Pass buildFastifyApp() config so the guard doesn't rely on NODE_ENV.
+   * Pass buildFastifyApp({ inMemoryDb: true }) config so the guard doesn't rely on NODE_ENV.
    * (Jest typically forces NODE_ENV="test", which is not the same as config.environment.)
    */
   config?: { environment?: Environment };

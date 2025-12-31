@@ -1,45 +1,46 @@
-// services/api-gateway/jest.config.mjs
-/** @type {import("jest").Config} */
 export default {
   testEnvironment: "node",
   testMatch: ["<rootDir>/test/**/*.test.ts"],
+  moduleFileExtensions: ["ts", "js", "mjs", "cjs", "json", "node"],
+
+  // env + jest.mocks live here (NOT in this config)
+  setupFiles: ["<rootDir>/test/jest.setup.ts"],
+
+  // Rewrite in-repo "*.js" specifiers to "*.ts" (repo code only)
+  resolver: "<rootDir>/test/jest-resolver.cjs",
+
+  moduleNameMapper: {
+    // ---- shared-au lives under repoRoot/shared/au ----
+    "^@apgms/shared-au/(.*)\\.js$": "<rootDir>/../../shared/au/$1.ts",
+    "^@apgms/shared-au/(.*)$": "<rootDir>/../../shared/au/$1.ts",
+
+    // ---- shared (repoRoot/shared/src) ----
+    "^@apgms/shared/(.*)\\.js$": "<rootDir>/../../shared/src/$1.ts",
+    "^@apgms/shared/(.*)$": "<rootDir>/../../shared/src/$1",
+    "^@apgms/shared$": "<rootDir>/../../shared/src/index.ts",
+
+    // ---- workspace packages (repoRoot/packages/*/src) ----
+    "^@apgms/([^/]+)/(.+)\\.js$": "<rootDir>/../../packages/$1/src/$2.ts",
+    "^@apgms/([^/]+)/(.+)$": "<rootDir>/../../packages/$1/src/$2",
+    "^@apgms/([^/]+)$": "<rootDir>/../../packages/$1/src/index.ts",
+  },
+
+  transformIgnorePatterns: ["/node_modules/"],
 
   transform: {
     "^.+\\.ts$": [
       "@swc/jest",
       {
         jsc: { parser: { syntax: "typescript" }, target: "es2022" },
-        module: { type: "es6" },
+        module: { type: "commonjs" },
       },
     ],
-    "^.+\\.js$": [
+    "^.+\\.(mjs|cjs|js)$": [
       "@swc/jest",
       {
         jsc: { parser: { syntax: "ecmascript" }, target: "es2022" },
-        module: { type: "es6" },
+        module: { type: "commonjs" },
       },
     ],
-  },
-
-  extensionsToTreatAsEsm: [".ts"],
-  setupFiles: ["<rootDir>/jest.setup.cjs"],
-
-  moduleNameMapper: {
-    // Let TS NodeNext-style imports (./x.js) resolve to TS sources in Jest
-    "^(\\.{1,2}/.*)\\.js$": "$1",
-
-    // shared-au is stubbed for tests (resolver must be able to locate it)
-    "^@apgms/shared-au/(.*)\\.js$": "<rootDir>/test/__mocks__/shared-au/$1.ts",
-    "^@apgms/shared-au/(.*)$": "<rootDir>/test/__mocks__/shared-au/$1.ts",
-
-    // shared package (if present)
-    "^@apgms/shared$": "<rootDir>/../../shared/src/index.ts",
-    "^@apgms/shared/(.*)\\.js$": "<rootDir>/../../shared/src/$1.ts",
-    "^@apgms/shared/(.*)$": "<rootDir>/../../shared/src/$1",
-
-    // Workspace packages under /packages
-    "^@apgms/([^/]+)$": "<rootDir>/../../packages/$1/src/index.ts",
-    "^@apgms/([^/]+)/(.*)\\.js$": "<rootDir>/../../packages/$1/src/$2.ts",
-    "^@apgms/([^/]+)/(.*)$": "<rootDir>/../../packages/$1/src/$2",
   },
 };

@@ -5,7 +5,7 @@ import { buildFastifyApp } from "../../src/app.js";
 let app: FastifyInstance;
 
 beforeAll(async () => {
-  app = await buildFastifyApp();
+  app = await buildFastifyApp({ inMemoryDb: true });
   await app.ready();
 });
 
