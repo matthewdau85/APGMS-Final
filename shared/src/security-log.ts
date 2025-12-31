@@ -53,8 +53,8 @@ export function buildSecurityLogEntry(input: {
   orgId?: string;
   principal?: string;
   metadata?: Record<string, unknown>;
-}): string {
-  const entry: SecurityLogEntry = {
+}): SecurityLogEntry {
+  return {
     time: Date.now(),
     event: input.event,
     orgId: input.orgId,
@@ -63,6 +63,13 @@ export function buildSecurityLogEntry(input: {
       ? (redactValue(input.metadata) as Record<string, unknown>)
       : undefined,
   };
+}
 
-  return JSON.stringify(entry);
+export function buildSecurityLogLine(input: {
+  event: string;
+  orgId?: string;
+  principal?: string;
+  metadata?: Record<string, unknown>;
+}): string {
+  return JSON.stringify(buildSecurityLogEntry(input));
 }
