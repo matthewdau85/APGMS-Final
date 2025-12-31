@@ -21,3 +21,37 @@ Thumbs.db
 # Local review packs / artifacts
 _review_pack_*/
 scripts/New Text Document.txt
+
+# --- Review pack zips ---
+_review_pack_*.zip
+
+# --- Local artifacts/logs/reports ---
+artifacts/
+assessment/reports/
+reports/
+logs/
+test-results/
+scripts/scan-output/
+services/api-gateway/test.zip
+
+# --- Generated maps ---
+**/*.js.map
+**/*.d.ts.map
+
+# --- Generated JS currently being emitted into source trees (should not be committed) ---
+apps/**/src/**/*.js
+packages/**/src/**/*.js
+services/**/src/**/*.js
+shared/**/src/**/*.js
+shared/au/**/*.js
+providers/**/*.js
+scripts/**/*.js
+webapp/**/src/**/*.js
+worker/**/src/**/*.js
+
+# --- One-off local outputs ---
+combined-code-export.txt
+progress-report.json
+progress-report.md
+sbom.xml
+*.patch
