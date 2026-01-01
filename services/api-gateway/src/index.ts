@@ -1,18 +1,37 @@
 import { buildServer } from "./server.js";
 
+const HOST = process.env.HOST ?? "0.0.0.0";
+const PORT = Number(process.env.PORT ?? 3000);
+
+let app: ReturnType<typeof buildServer> | null = null;
+
 async function start() {
-  const app = buildServer();
+  app = buildServer();
 
-  const port = Number(process.env.PORT ?? 3000);
-  const host = "0.0.0.0";
-
-  try {
-    await app.listen({ port, host });
-    app.log.info(`API Gateway listening on ${host}:${port}`);
-  } catch (err) {
-    app.log.error(err);
-    process.exit(1);
-  }
+  await app.listen({ host: HOST, port: PORT });
+  app.log.info(`API Gateway listening on ${HOST}:${PORT}`);
 }
 
-start();
+async function shutdown(signal: string) {
+  if (!app) process.exit(0);
+
+  try {
+    app.log.info({ signal }, "Shutting down...");
+    await app.close();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    process.exit(1);
+  }
+
+  process.exit(0);
+}
+
+process.on("SIGINT", () => void shutdown("SIGINT"));
+process.on("SIGTERM", () => void shutdown("SIGTERM"));
+
+start().catch((err) => {
+  // eslint-disable-next-line no-console
+  console.error(err);
+  process.exit(1);
+});

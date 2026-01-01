@@ -64,7 +64,8 @@
     "readiness:all": "node ./scripts/readiness/all.cjs",
     "assess:fast": "node assessment/assessor-10of10/scripts/apgms-assess.cjs --fast --req assessment/assessor-10of10/docs/assessor/requirements.v2.json --outdir assessment/reports",
     "assess:all": "node assessment/assessor-10of10/scripts/apgms-assess.cjs --all --req assessment/assessor-10of10/docs/assessor/requirements.v2.json --outdir assessment/reports",
-    "assess:production": "node assessment/assessor-10of10/scripts/apgms-assess.cjs --all --production --req assessment/assessor-10of10/docs/assessor/requirements.v2.json --outdir assessment/reports"
+    "assess:production": "node assessment/assessor-10of10/scripts/apgms-assess.cjs --all --production --req assessment/assessor-10of10/docs/assessor/requirements.v2.json --outdir assessment/reports",
+    "prisma:migrate": "node ./scripts/ensure-linux.mjs && pnpm exec prisma migrate deploy --schema infra/prisma/schema.prisma"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.9.2",
