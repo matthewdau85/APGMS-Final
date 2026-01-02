@@ -1,77 +1,92 @@
 import React from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
-import "../ui/ui.css";
+import "./prototype.css";
+import { Button } from "./components/ui";
+import { usePrototype } from "./store";
+import type { Period } from "./mockData";
 
-export default function PrototypeShell() {
-  const nav = useNavigate();
-  const { user, logout } = useAuth();
+export type NavId =
+  | "dashboard"
+  | "obligations"
+  | "ledger"
+  | "reconciliation"
+  | "evidence"
+  | "controls"
+  | "incidents"
+  | "settings"
+  | "regulator";
 
-  const [orgId, setOrgId] = React.useState("org_1");
-  const [period, setPeriod] = React.useState("2025-Q1");
+export type NavItem = { id: NavId; label: string };
 
-  async function onLogout() {
-    await logout();
-    nav("/login");
-  }
+export default function PrototypeShell(props: {
+  nav: NavItem[];
+  current: NavId;
+  onNavigate: (id: NavId) => void;
+  onExit: () => void;
+  children: React.ReactNode;
+}) {
+  const { state, actions } = usePrototype();
+  const periods: Period[] = ["2025-Q1", "2025-Q2", "2025-Q3", "2025-Q4"];
 
   return (
-    <div className="container">
-      <aside className="sidebar">
-        <div className="brand">APGMS Prototype</div>
-        <div className="pill" title="Admin-only surface">
-          <span>Role:</span> <strong>{user?.role ?? "unknown"}</strong>
-        </div>
-
-        <nav className="nav" style={{ marginTop: 14 }}>
-          <NavLink to="/prototype" end>
-            Overview
-          </NavLink>
-          <NavLink to="/prototype/obligations">Obligations</NavLink>
-          <NavLink to="/prototype/feeds">Feeds</NavLink>
-          <NavLink to="/prototype/lodgments">Lodgments</NavLink>
-          <NavLink to="/prototype/evidence-pack">Evidence Pack</NavLink>
-        </nav>
-
-        <div style={{ marginTop: 18, display: "grid", gap: 8 }}>
-          <button className="button danger" onClick={onLogout}>
-            Logout
-          </button>
-        </div>
-      </aside>
-
-      <main className="main">
-        <div className="topbar">
-          <div className="left">
-            <div className="pill">
-              <span className="muted">Org</span>
-              <select className="select" value={orgId} onChange={(e) => setOrgId(e.target.value)}>
-                <option value="org_1">org_1</option>
-                <option value="org_2">org_2</option>
-              </select>
-            </div>
-
-            <div className="pill">
-              <span className="muted">Period</span>
-              <select className="select" value={period} onChange={(e) => setPeriod(e.target.value)}>
-                <option value="2025-Q1">2025-Q1</option>
-                <option value="2025-Q2">2025-Q2</option>
-                <option value="2025-Q3">2025-Q3</option>
-                <option value="2025-Q4">2025-Q4</option>
-              </select>
+    <div className="apgms-root">
+      <div className="apgms-shell">
+        <aside className="apgms-side">
+          <div className="apgms-brand">
+            <div className="apgms-logo">A</div>
+            <div>
+              <div className="apgms-brand-title">APGMS</div>
+              <div className="apgms-brand-sub">Admin prototype (mock)</div>
             </div>
           </div>
 
-          <div className="right">
-            <div className="pill">
-              <span className="muted">User</span>
-              <strong>{user?.email ?? "—"}</strong>
-            </div>
+          <div className="apgms-nav">
+            {props.nav.map((item) => (
+              <button
+                key={item.id}
+                className={"apgms-nav-btn " + (item.id === props.current ? "active" : "")}
+                onClick={() => props.onNavigate(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
-        </div>
 
-        <Outlet context={{ orgId, period }} />
-      </main>
+          <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.10)" }}>
+            <div className="apgms-muted" style={{ fontSize: 12, marginBottom: 8 }}>
+              Org: {state.settings.orgName}
+            </div>
+            <Button variant="ghost" onClick={props.onExit} style={{ width: "100%" }}>
+              Exit Admin
+            </Button>
+          </div>
+        </aside>
+
+        <main className="apgms-main">
+          <header className="apgms-top">
+            <div className="apgms-top-left">
+              <div>
+                <div className="apgms-top-title">APGMS Prototype</div>
+                <div className="apgms-top-sub">Production-look UX with mocked data, feeds, lodgments</div>
+              </div>
+            </div>
+
+            <div className="apgms-top-right">
+              <div className="apgms-row">
+                <span className="apgms-muted" style={{ fontSize: 12 }}>Period</span>
+                <select className="apgms-input" style={{ width: 140 }} value={state.currentPeriod} onChange={(e) => actions.setPeriod(e.target.value as Period)}>
+                  {periods.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+              <Button variant="ghost" onClick={actions.ingestFeeds}>Mock Ingest Feeds</Button>
+              <Button onClick={actions.generateEvidencePack}>Generate Evidence Pack</Button>
+            </div>
+          </header>
+
+          <div className="apgms-content">{props.children}</div>
+        </main>
+      </div>
     </div>
   );
 }

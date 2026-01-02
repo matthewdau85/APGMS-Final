@@ -1,61 +1,106 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
-import "../ui/ui.css";
+import React, { useMemo, useState } from "react";
+import { useAuth, type UserRole } from "../auth/auth";
 
 export default function LoginPage() {
-  const nav = useNavigate();
   const { login } = useAuth();
-  const [email, setEmail] = useState("admin@apgms.local");
-  const [password, setPassword] = useState("admin");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [name, setName] = useState("Matthew");
+  const [role, setRole] = useState<UserRole>("admin");
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setBusy(true);
-    try {
-      await login(email, password);
-      nav("/");
-    } catch (err: any) {
-      setError(err?.message ?? "Login failed");
-    } finally {
-      setBusy(false);
-    }
-  }
+  const canSubmit = useMemo(() => name.trim().length >= 2, [name]);
 
   return (
-    <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 18 }}>
-      <div className="card" style={{ width: 440, maxWidth: "100%" }}>
-        <h1 className="h1">APGMS Admin Login</h1>
-        <p className="muted" style={{ marginTop: 8 }}>
-          This is a dev-grade admin gate to access the Prototype UX.
-        </p>
+    <div style={styles.page}>
+      <div style={styles.card}>
+        <div style={styles.brandRow}>
+          <div style={styles.logo}>APGMS</div>
+          <div>
+            <div style={styles.title}>Sign in</div>
+            <div style={styles.subTitle}>Prototype environment (local demo auth)</div>
+          </div>
+        </div>
 
-        <form onSubmit={onSubmit} style={{ marginTop: 14, display: "grid", gap: 10 }}>
-          <label className="muted">Email</label>
-          <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <label style={styles.label}>Name</label>
+        <input
+          style={styles.input}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Your name"
+          autoFocus
+        />
 
-          <label className="muted">Password</label>
-          <input
-            className="input"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
+        <label style={styles.label}>Role</label>
+        <select style={styles.input} value={role} onChange={(e) => setRole(e.target.value as UserRole)}>
+          <option value="admin">Admin</option>
+          <option value="user">User</option>
+        </select>
 
-          {error ? (
-            <div className="chip red" role="alert" style={{ justifyContent: "center" }}>
-              {error}
-            </div>
-          ) : null}
+        <button
+          style={{ ...styles.button, opacity: canSubmit ? 1 : 0.6, cursor: canSubmit ? "pointer" : "not-allowed" }}
+          disabled={!canSubmit}
+          onClick={() => login({ name: name.trim(), role })}
+        >
+          Continue
+        </button>
 
-          <button className="button primary" type="submit" disabled={busy}>
-            {busy ? "Signing in..." : "Sign in"}
-          </button>
-        </form>
+        <div style={styles.hint}>
+          Admins get an <b>Admin</b> button in the top bar. Prototype is only accessible through that button.
+        </div>
       </div>
     </div>
   );
 }
+
+const styles: Record<string, React.CSSProperties> = {
+  page: {
+    minHeight: "100vh",
+    display: "grid",
+    placeItems: "center",
+    padding: 24,
+    background: "#0b1020",
+    color: "#e8ecff",
+    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
+  },
+  card: {
+    width: "min(520px, 96vw)",
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.06)",
+    border: "1px solid rgba(255,255,255,0.10)",
+    padding: 20,
+    boxShadow: "0 20px 60px rgba(0,0,0,0.35)",
+  },
+  brandRow: { display: "flex", gap: 14, alignItems: "center", marginBottom: 14 },
+  logo: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    display: "grid",
+    placeItems: "center",
+    background: "rgba(120,140,255,0.18)",
+    border: "1px solid rgba(120,140,255,0.30)",
+    fontWeight: 800,
+    letterSpacing: 0.5,
+  },
+  title: { fontSize: 18, fontWeight: 800 },
+  subTitle: { fontSize: 13, opacity: 0.8, marginTop: 2 },
+  label: { display: "block", marginTop: 12, marginBottom: 6, fontSize: 13, opacity: 0.9 },
+  input: {
+    width: "100%",
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(0,0,0,0.25)",
+    color: "#e8ecff",
+    outline: "none",
+  },
+  button: {
+    width: "100%",
+    marginTop: 14,
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid rgba(120,140,255,0.35)",
+    background: "rgba(120,140,255,0.22)",
+    color: "#e8ecff",
+    fontWeight: 800,
+  },
+  hint: { marginTop: 12, fontSize: 12, opacity: 0.8, lineHeight: 1.4 },
+};
