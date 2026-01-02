@@ -3,6 +3,10 @@ import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 
 import regulatorComplianceSummaryDemo from "./routes/regulator-compliance-summary.demo.js";
+import authRoutes from "./routes/auth.js";
+import prototypeRoutes from "./routes/prototype.js";
+import { registerAuth } from "./plugins/auth.js";
+
 import { registerRiskSummaryRoute } from "./routes/risk-summary.js";
 
 export function buildServer() {
@@ -23,17 +27,15 @@ export function buildServer() {
 
   app.register(cors, {
     origin: (origin, cb) => {
-      // server-to-server / curl (no Origin header)
+      // Allow non-browser callers (curl, server-to-server)
       if (!origin) return cb(null, true);
 
-      if (allowedOrigins.length === 0) {
-        // If you forget to set CORS_ALLOWED_ORIGINS, default to permissive in dev.
-        // Tighten this for prod.
-        return cb(null, true);
-      }
+      // If list is empty, allow (dev-friendly)
+      if (allowedOrigins.length === 0) return cb(null, true);
 
       if (allowedOrigins.includes(origin)) return cb(null, true);
-      return cb(new Error(`CORS blocked origin: ${origin}`), false);
+
+      cb(new Error(`CORS blocked origin: ${origin}`), false);
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -43,7 +45,6 @@ export function buildServer() {
       "X-Request-Id",
       "X-Regulator-Code",
       "X-Org-Id",
-      "x-org-id",
     ],
     exposedHeaders: ["X-Request-Id"],
   });
@@ -62,23 +63,30 @@ export function buildServer() {
    * =========================================================
    * HEALTH / READINESS
    * =========================================================
-   * Define these HERE (and nowhere else) to avoid duplicated routes.
    */
-  app.get("/health/live", async () => ({ ok: true }));
   app.get("/health/ready", async () => ({ ok: true }));
+  app.get("/health/live", async () => ({ ok: true }));
 
   /**
    * =========================================================
-   * ROUTES
+   * AUTH
+   * =========================================================
+   */
+  registerAuth(app);
+  app.register(authRoutes);
+
+  /**
+   * =========================================================
+   * ROUTES (production + prototype)
    * =========================================================
    */
   registerRiskSummaryRoute(app);
 
-  // Demo endpoints:
-  // - /compliance/summary
-  // - /regulator/compliance/summary
-  app.register(regulatorComplianceSummaryDemo);
+  // Demo regulator summary (mount under /regulator)
   app.register(regulatorComplianceSummaryDemo, { prefix: "/regulator" });
+
+  // Prototype surface (mount under /prototype)
+  app.register(prototypeRoutes, { prefix: "/prototype" });
 
   return app;
 }

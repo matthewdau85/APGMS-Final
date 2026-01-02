@@ -1,15 +1,10 @@
 import type { FastifyPluginAsync } from "fastify";
 
 const routes: FastifyPluginAsync = async (app) => {
-  app.get("/compliance/summary", async (req, reply) => {
-    const q = (req.query ?? {}) as Record<string, unknown>;
-    const period = (q.period ?? "").toString();
-
+  app.get("/compliance/summary", async (req: any) => {
+    const period = (req.query?.period ?? "").toString();
     if (!period) {
-      return reply.code(400).send({
-        ok: false,
-        error: "Missing required query param: period",
-      });
+      return { ok: false, error: "missing_period" };
     }
 
     const orgId = (req.headers["x-org-id"] ?? "").toString() || null;
