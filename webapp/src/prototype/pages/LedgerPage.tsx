@@ -1,62 +1,66 @@
 import React, { useMemo, useState } from "react";
-import { useDemoStore } from "../store";
-import { formatMoney } from "../mockData";
-import { StatusPill } from "../components/StatusPill";
+import { usePrototype, describeTs } from "../store";
+import { formatAUD } from "../mockData";
 
 export default function LedgerPage() {
-  const { ledger, obligations, period } = useDemoStore();
+  const { state } = usePrototype();
   const [filterOb, setFilterOb] = useState<string>("");
 
+  const obs = useMemo(() => state.obligations.filter((o) => o.period === state.period), [state.obligations, state.period]);
+
   const rows = useMemo(() => {
-    const base = ledger.filter((l) => l.period === period);
-    if (!filterOb) return base;
-    return base.filter((l) => l.obligationId === filterOb);
-  }, [ledger, period, filterOb]);
+    let x = state.ledger.filter((l) => l.period === state.period);
+    if (filterOb) x = x.filter((l) => l.obligationId === filterOb);
+    return x.slice(0, 60);
+  }, [state.ledger, state.period, filterOb]);
 
   return (
-    <div className="apgms-proto__section">
-      <div className="apgms-proto__h1">Ledger</div>
-      <div className="apgms-proto__muted" style={{ marginTop: 6 }}>
-        {"Audit spine. Derived figures trace back to ledger entries and events."}
+    <div className="apgms-proto__grid">
+      <div className="apgms-proto__card">
+        <h3 style={{ marginTop: 0 }}>Ledger</h3>
+        <div className="apgms-proto__muted">
+          Audit spine. Every derived figure traces to ledger entries and events.
+        </div>
+
+        <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <div className="apgms-proto__muted">Filter obligation:</div>
+          <select className="apgms-proto__select" value={filterOb} onChange={(e) => setFilterOb(e.target.value)}>
+            <option value="">All</option>
+            {obs.map((o) => (
+              <option key={o.id} value={o.id}>{o.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
-      <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <select className="apgms-proto__input" value={filterOb} onChange={(e) => setFilterOb(e.target.value)}>
-          <option value="">All obligations</option>
-          {obligations.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.taxType + " - " + o.period}
-            </option>
-          ))}
-        </select>
-
-        <StatusPill text={"Rows: " + String(rows.length)} />
-      </div>
-
-      <table className="apgms-proto__table">
-        <thead>
-          <tr>
-            <th style={{ width: 190 }}>Time</th>
-            <th style={{ width: 120 }}>Account</th>
-            <th style={{ width: 120 }}>Direction</th>
-            <th style={{ width: 140 }}>Amount</th>
-            <th style={{ width: 160 }}>Source</th>
-            <th>Memo</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.slice(0, 80).map((l) => (
-            <tr key={l.id}>
-              <td style={{ opacity: 0.8 }}>{new Date(l.ts).toLocaleString()}</td>
-              <td><StatusPill text={l.account} /></td>
-              <td><StatusPill text={l.direction} /></td>
-              <td style={{ opacity: 0.9 }}>{formatMoney(l.amountCents)}</td>
-              <td style={{ opacity: 0.85 }}>{l.source}</td>
-              <td style={{ opacity: 0.9 }}>{l.memo}</td>
+      <div className="apgms-proto__card">
+        <table className="apgms-proto__table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Account</th>
+              <th>Dir</th>
+              <th>Amount</th>
+              <th>Obligation</th>
+              <th>Source</th>
+              <th>Memo</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((l) => (
+              <tr key={l.id}>
+                <td className="apgms-proto__muted">{describeTs(l.ts)}</td>
+                <td>{l.account}</td>
+                <td className="apgms-proto__muted">{l.direction}</td>
+                <td>{formatAUD(l.amountAUD)}</td>
+                <td className="apgms-proto__muted">{l.obligationId}</td>
+                <td className="apgms-proto__muted">{l.source}</td>
+                <td className="apgms-proto__muted">{l.memo}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

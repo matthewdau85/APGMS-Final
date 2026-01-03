@@ -1,265 +1,304 @@
-import React, { useState } from "react";
-import { useDemoStore } from "../store";
-
-function Section(props: { title: string; subtitle: string; children: React.ReactNode }) {
-  return (
-    <div style={{ border: "1px solid rgba(255,255,255,0.12)", borderRadius: 16, padding: 12 }}>
-      <div style={{ fontWeight: 900 }}>{props.title}</div>
-      <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6, lineHeight: 1.35 }}>{props.subtitle}</div>
-      <div style={{ marginTop: 10 }}>{props.children}</div>
-    </div>
-  );
-}
-
-function Field(props: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ marginTop: 10 }}>
-      <div style={{ fontSize: 12, opacity: 0.75 }}>{props.label}</div>
-      <div style={{ marginTop: 6 }}>{props.children}</div>
-    </div>
-  );
-}
+import React, { useMemo, useState } from "react";
+import { usePrototype } from "../store";
+import { getAnalyticsEvents, resetAnalytics } from "../analytics";
 
 export default function SettingsPage() {
-  const { settings, updateSettings, resetDemoState } = useDemoStore();
+  const { state, updateSettings, toggleSimulation, setSimulationIntervalMs, resetDemo } = usePrototype();
+  const s = state.settings;
 
-  const [seed, setSeed] = useState(settings.simulation.seed);
-  const [interval, setInterval] = useState(String(settings.simulation.feedIntervalSeconds));
+  const [orgName, setOrgName] = useState(s.orgName);
+  const [abn, setAbn] = useState(s.abn);
+  const [tz, setTz] = useState(s.timeZone);
 
-  const saveSimulation = () => {
-    const seconds = Math.max(10, Math.min(600, parseInt(interval, 10) || settings.simulation.feedIntervalSeconds));
-    updateSettings({ simulation: { ...settings.simulation, seed: seed.trim() || settings.simulation.seed, feedIntervalSeconds: seconds } });
-  };
+  const [webhookUrl, setWebhookUrl] = useState(s.notifications.webhookUrl);
+
+  const analyticsEvents = useMemo(() => getAnalyticsEvents().slice(0, 20), []);
+
+  function saveOrg() {
+    updateSettings({ orgName: orgName.trim(), abn: abn.trim(), timeZone: tz.trim() });
+  }
+
+  function saveWebhook() {
+    updateSettings({ notifications: { ...s.notifications, webhookUrl: webhookUrl.trim() } });
+  }
 
   return (
-    <div className="apgms-proto__section">
-      <div className="apgms-proto__h1">Settings</div>
-      <div className="apgms-proto__muted" style={{ marginTop: 6 }}>
-        {"Deployable configuration surface. Values are demo-only but structured to match a production-grade settings model."}
+    <div className="apgms-proto__grid">
+      <div className="apgms-proto__card">
+        <h3 style={{ marginTop: 0 }}>Settings</h3>
+        <div className="apgms-proto__muted">
+          Production intent: deployable per organization while staying compliant and auditable.
+        </div>
       </div>
 
-      <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(2, minmax(260px, 1fr))", gap: 12 }}>
-        <Section title="Organization" subtitle="Name, ABN, time zone, and reporting calendar.">
-          <Field label="Organization name">
-            <input
-              className="apgms-proto__input"
-              value={settings.organization.name}
-              onChange={(e) => updateSettings({ organization: { ...settings.organization, name: e.target.value } } as any)}
-              style={{ width: "100%" }}
-            />
-          </Field>
-          <Field label="ABN (demo)">
-            <input
-              className="apgms-proto__input"
-              value={settings.organization.abn}
-              onChange={(e) => updateSettings({ organization: { ...settings.organization, abn: e.target.value } } as any)}
-              style={{ width: "100%" }}
-            />
-          </Field>
-          <Field label="Time zone">
-            <input
-              className="apgms-proto__input"
-              value={settings.organization.timeZone}
-              onChange={(e) => updateSettings({ organization: { ...settings.organization, timeZone: e.target.value } } as any)}
-              style={{ width: "100%" }}
-            />
-          </Field>
-        </Section>
+      <div className="apgms-proto__card">
+        <h3 style={{ marginTop: 0 }}>Organization</h3>
 
-        <Section title="Period & obligations" subtitle="Cadence, due date rules, and reminders.">
-          <Field label="Cadence">
-            <select
-              className="apgms-proto__input"
-              value={settings.periods.cadence}
-              onChange={(e) => updateSettings({ periods: { ...settings.periods, cadence: e.target.value as any } } as any)}
-              style={{ width: "100%" }}
-            >
-              <option value="monthly">Monthly</option>
-              <option value="quarterly">Quarterly</option>
-            </select>
-          </Field>
-          <Field label="Reminder days before due">
-            <input
-              className="apgms-proto__input"
-              value={String(settings.periods.reminderDaysBeforeDue)}
-              onChange={(e) => updateSettings({ periods: { ...settings.periods, reminderDaysBeforeDue: parseInt(e.target.value, 10) || 14 } } as any)}
-              style={{ width: "100%" }}
-            />
-          </Field>
-        </Section>
+        <div className="apgms-proto__field">
+          <label>Name</label>
+          <input className="apgms-proto__input" value={orgName} onChange={(e) => setOrgName(e.target.value)} />
+        </div>
 
-        <Section title="Accounts" subtitle="Operating, tax buffer, and segregated account mapping.">
-          <Field label="Operating account label">
-            <input
-              className="apgms-proto__input"
-              value={settings.accounts.operatingAccountLabel}
-              onChange={(e) => updateSettings({ accounts: { ...settings.accounts, operatingAccountLabel: e.target.value } } as any)}
-              style={{ width: "100%" }}
-            />
-          </Field>
-          <Field label="Tax buffer account label">
-            <input
-              className="apgms-proto__input"
-              value={settings.accounts.taxBufferAccountLabel}
-              onChange={(e) => updateSettings({ accounts: { ...settings.accounts, taxBufferAccountLabel: e.target.value } } as any)}
-              style={{ width: "100%" }}
-            />
-          </Field>
-          <Field label="Segregated account enabled">
-            <select
-              className="apgms-proto__input"
-              value={settings.accounts.segregatedAccountEnabled ? "yes" : "no"}
-              onChange={(e) => updateSettings({ accounts: { ...settings.accounts, segregatedAccountEnabled: e.target.value === "yes" } } as any)}
-              style={{ width: "100%" }}
-            >
-              <option value="yes">Yes (recommended)</option>
-              <option value="no">No</option>
-            </select>
-          </Field>
-        </Section>
+        <div className="apgms-proto__field">
+          <label>ABN (demo)</label>
+          <input className="apgms-proto__input" value={abn} onChange={(e) => setAbn(e.target.value)} />
+        </div>
 
-        <Section title="Integrations" subtitle="Bank feed, accounting, payroll (demo states).">
-          <Field label="Bank feed">
-            <select
-              className="apgms-proto__input"
-              value={settings.integrations.bankFeed}
-              onChange={(e) => updateSettings({ integrations: { ...settings.integrations, bankFeed: e.target.value as any } } as any)}
-              style={{ width: "100%" }}
-            >
-              <option value="connected_demo">Connected (demo)</option>
-              <option value="not_connected">Not connected</option>
-            </select>
-          </Field>
-          <Field label="Accounting">
-            <select
-              className="apgms-proto__input"
-              value={settings.integrations.accounting}
-              onChange={(e) => updateSettings({ integrations: { ...settings.integrations, accounting: e.target.value as any } } as any)}
-              style={{ width: "100%" }}
-            >
-              <option value="not_connected">Not connected</option>
-              <option value="connected_demo">Connected (demo)</option>
-            </select>
-          </Field>
-          <Field label="Payroll">
-            <select
-              className="apgms-proto__input"
-              value={settings.integrations.payroll}
-              onChange={(e) => updateSettings({ integrations: { ...settings.integrations, payroll: e.target.value as any } } as any)}
-              style={{ width: "100%" }}
-            >
-              <option value="not_connected">Not connected</option>
-              <option value="connected_demo">Connected (demo)</option>
-            </select>
-          </Field>
-        </Section>
+        <div className="apgms-proto__field">
+          <label>Time zone</label>
+          <input className="apgms-proto__input" value={tz} onChange={(e) => setTz(e.target.value)} />
+        </div>
 
-        <Section title="Notifications" subtitle="Email/webhook toggles (demo).">
-          <Field label="Email notifications">
-            <select
-              className="apgms-proto__input"
-              value={settings.notifications.emailEnabled ? "on" : "off"}
-              onChange={(e) => updateSettings({ notifications: { ...settings.notifications, emailEnabled: e.target.value === "on" } } as any)}
-              style={{ width: "100%" }}
-            >
-              <option value="on">Enabled</option>
-              <option value="off">Disabled</option>
-            </select>
-          </Field>
-          <Field label="Webhook notifications">
-            <select
-              className="apgms-proto__input"
-              value={settings.notifications.webhookEnabled ? "on" : "off"}
-              onChange={(e) => updateSettings({ notifications: { ...settings.notifications, webhookEnabled: e.target.value === "on" } } as any)}
-              style={{ width: "100%" }}
-            >
-              <option value="off">Disabled</option>
-              <option value="on">Enabled</option>
-            </select>
-          </Field>
-        </Section>
-
-        <Section title="Security" subtitle="MFA policy, session timeout, and admin roles (demo).">
-          <Field label="MFA required for admin">
-            <select
-              className="apgms-proto__input"
-              value={settings.security.mfaRequiredForAdmin ? "yes" : "no"}
-              onChange={(e) => updateSettings({ security: { ...settings.security, mfaRequiredForAdmin: e.target.value === "yes" } } as any)}
-              style={{ width: "100%" }}
-            >
-              <option value="yes">Yes</option>
-              <option value="no">No</option>
-            </select>
-          </Field>
-          <Field label="Session timeout (minutes)">
-            <input
-              className="apgms-proto__input"
-              value={String(settings.security.sessionTimeoutMinutes)}
-              onChange={(e) => updateSettings({ security: { ...settings.security, sessionTimeoutMinutes: parseInt(e.target.value, 10) || 30 } } as any)}
-              style={{ width: "100%" }}
-            />
-          </Field>
-        </Section>
-
-        <Section title="Data retention" subtitle="Event/log retention windows (demo).">
-          <Field label="Event retention (days)">
-            <input
-              className="apgms-proto__input"
-              value={String(settings.retention.eventRetentionDays)}
-              onChange={(e) => updateSettings({ retention: { ...settings.retention, eventRetentionDays: parseInt(e.target.value, 10) || 365 } } as any)}
-              style={{ width: "100%" }}
-            />
-          </Field>
-          <Field label="Evidence pack retention (days)">
-            <input
-              className="apgms-proto__input"
-              value={String(settings.retention.evidencePackRetentionDays)}
-              onChange={(e) => updateSettings({ retention: { ...settings.retention, evidencePackRetentionDays: parseInt(e.target.value, 10) || 3650 } } as any)}
-              style={{ width: "100%" }}
-            />
-          </Field>
-        </Section>
-
-        <Section title="Export" subtitle="Evidence pack defaults and regulator portal settings (demo).">
-          <Field label="Default evidence pack scope">
-            <select
-              className="apgms-proto__input"
-              value={settings.export.defaultEvidencePackScope}
-              onChange={(e) => updateSettings({ export: { ...settings.export, defaultEvidencePackScope: e.target.value as any } } as any)}
-              style={{ width: "100%" }}
-            >
-              <option value="obligation">Obligation</option>
-              <option value="period">Period</option>
-            </select>
-          </Field>
-          <Field label="Regulator portal enabled">
-            <select
-              className="apgms-proto__input"
-              value={settings.export.regulatorPortalEnabled ? "on" : "off"}
-              onChange={(e) => updateSettings({ export: { ...settings.export, regulatorPortalEnabled: e.target.value === "on" } } as any)}
-              style={{ width: "100%" }}
-            >
-              <option value="on">Enabled</option>
-              <option value="off">Disabled</option>
-            </select>
-          </Field>
-        </Section>
-
-        <Section title="Simulation" subtitle="Deterministic incoming feed events (default interval is less frequent).">
-          <Field label="Seed (deterministic)">
-            <input className="apgms-proto__input" value={seed} onChange={(e) => setSeed(e.target.value)} style={{ width: "100%" }} />
-          </Field>
-          <Field label="Feed interval (seconds)">
-            <input className="apgms-proto__input" value={interval} onChange={(e) => setInterval(e.target.value)} style={{ width: "100%" }} />
-          </Field>
-          <button className="apgms-proto__btn apgms-proto__btn--primary" onClick={saveSimulation}>Save simulation settings</button>
-        </Section>
+        <div style={{ marginTop: 12 }}>
+          <button className="apgms-proto__btn" onClick={saveOrg}>Save</button>
+        </div>
       </div>
 
-      <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <button className="apgms-proto__btn" onClick={resetDemoState}>Reset demo state</button>
-        <div className="apgms-proto__muted" style={{ alignSelf: "center" }}>
-          {"Reset clears local demo state so the runbook steps behave the same each time."}
+      <div className="apgms-proto__card">
+        <h3 style={{ marginTop: 0 }}>Period & obligations</h3>
+        <div className="apgms-proto__muted">Cadence and period defaults are configured via Setup Wizard (demo).</div>
+        <div style={{ marginTop: 10 }} className="apgms-proto__muted">
+          <strong>Cadence:</strong> {s.reportingCadence} <br />
+          <strong>Default period:</strong> {s.defaultPeriod}
+        </div>
+      </div>
+
+      <div className="apgms-proto__card">
+        <h3 style={{ marginTop: 0 }}>Accounts</h3>
+        <div className="apgms-proto__muted">Mapping surfaces for operating, tax buffer, and segregated account labels.</div>
+        <div style={{ marginTop: 10 }} className="apgms-proto__muted">
+          <strong>Operating:</strong> {s.accounts.operatingLabel}<br />
+          <strong>Tax buffer:</strong> {s.accounts.taxBufferLabel}<br />
+          <strong>Segregated:</strong> {s.accounts.trustLabel}
+        </div>
+      </div>
+
+      <div className="apgms-proto__card">
+        <h3 style={{ marginTop: 0 }}>Integrations</h3>
+        <table className="apgms-proto__table" style={{ marginTop: 10 }}>
+          <thead>
+            <tr>
+              <th>Channel</th>
+              <th>Status</th>
+              <th>Provider</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Bank feed</td>
+              <td className="apgms-proto__muted">{s.integrations.bankFeed.status}</td>
+              <td className="apgms-proto__muted">{s.integrations.bankFeed.provider}</td>
+            </tr>
+            <tr>
+              <td>Accounting</td>
+              <td className="apgms-proto__muted">{s.integrations.accounting.status}</td>
+              <td className="apgms-proto__muted">{s.integrations.accounting.provider}</td>
+            </tr>
+            <tr>
+              <td>Payroll</td>
+              <td className="apgms-proto__muted">{s.integrations.payroll.status}</td>
+              <td className="apgms-proto__muted">{s.integrations.payroll.provider}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div className="apgms-proto__muted" style={{ marginTop: 10 }}>
+          Use Setup Wizard to reconfigure mocked connections.
+        </div>
+      </div>
+
+      <div className="apgms-proto__card">
+        <h3 style={{ marginTop: 0 }}>Notifications</h3>
+
+        <label className="apgms-proto__muted" style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10 }}>
+          <input
+            type="checkbox"
+            checked={s.notifications.emailEnabled}
+            onChange={(e) => updateSettings({ notifications: { ...s.notifications, emailEnabled: e.target.checked } })}
+          />
+          Email notifications (demo)
+        </label>
+
+        <label className="apgms-proto__muted" style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10 }}>
+          <input
+            type="checkbox"
+            checked={s.notifications.webhookEnabled}
+            onChange={(e) => updateSettings({ notifications: { ...s.notifications, webhookEnabled: e.target.checked } })}
+          />
+          Webhook notifications (demo)
+        </label>
+
+        {s.notifications.webhookEnabled ? (
+          <div className="apgms-proto__field">
+            <label>Webhook URL</label>
+            <input className="apgms-proto__input" value={webhookUrl} onChange={(e) => setWebhookUrl(e.target.value)} placeholder="https://example.com/webhook" />
+            <div style={{ marginTop: 10 }}>
+              <button className="apgms-proto__btn" onClick={saveWebhook}>Save</button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="apgms-proto__card">
+        <h3 style={{ marginTop: 0 }}>Security</h3>
+        <label className="apgms-proto__muted" style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10 }}>
+          <input
+            type="checkbox"
+            checked={s.security.requireMfaForAdmin}
+            onChange={(e) => updateSettings({ security: { ...s.security, requireMfaForAdmin: e.target.checked } })}
+          />
+          Require MFA for admin actions (demo policy)
+        </label>
+
+        <div className="apgms-proto__field">
+          <label>Session timeout (minutes)</label>
+          <input
+            className="apgms-proto__input"
+            type="number"
+            value={s.security.sessionTimeoutMinutes}
+            onChange={(e) => updateSettings({ security: { ...s.security, sessionTimeoutMinutes: Number(e.target.value || 0) } })}
+          />
+        </div>
+
+        <label className="apgms-proto__muted" style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10 }}>
+          <input
+            type="checkbox"
+            checked={s.security.allowRegulatorPortal}
+            onChange={(e) => updateSettings({ security: { ...s.security, allowRegulatorPortal: e.target.checked } })}
+          />
+          Enable Regulator Portal read-only views (demo)
+        </label>
+      </div>
+
+      <div className="apgms-proto__card">
+        <h3 style={{ marginTop: 0 }}>Data retention</h3>
+        <div className="apgms-proto__field">
+          <label>Event/log retention (days)</label>
+          <input
+            className="apgms-proto__input"
+            type="number"
+            value={s.retention.eventRetentionDays}
+            onChange={(e) => updateSettings({ retention: { ...s.retention, eventRetentionDays: Number(e.target.value || 0) } })}
+          />
+        </div>
+        <div className="apgms-proto__field">
+          <label>Evidence pack retention (days)</label>
+          <input
+            className="apgms-proto__input"
+            type="number"
+            value={s.retention.evidenceRetentionDays}
+            onChange={(e) => updateSettings({ retention: { ...s.retention, evidenceRetentionDays: Number(e.target.value || 0) } })}
+          />
+        </div>
+      </div>
+
+      <div className="apgms-proto__card">
+        <h3 style={{ marginTop: 0 }}>Export defaults</h3>
+        <label className="apgms-proto__muted" style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10 }}>
+          <input
+            type="checkbox"
+            checked={s.exportDefaults.includeTimeline}
+            onChange={(e) => updateSettings({ exportDefaults: { ...s.exportDefaults, includeTimeline: e.target.checked } })}
+          />
+          Include timeline in evidence packs
+        </label>
+        <label className="apgms-proto__muted" style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10 }}>
+          <input
+            type="checkbox"
+            checked={s.exportDefaults.includePayloadSnapshots}
+            onChange={(e) => updateSettings({ exportDefaults: { ...s.exportDefaults, includePayloadSnapshots: e.target.checked } })}
+          />
+          Include payload snapshots (demo)
+        </label>
+        <label className="apgms-proto__muted" style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10 }}>
+          <input
+            type="checkbox"
+            checked={s.exportDefaults.includeControlAttestation}
+            onChange={(e) => updateSettings({ exportDefaults: { ...s.exportDefaults, includeControlAttestation: e.target.checked } })}
+          />
+          Include controls attestation (demo)
+        </label>
+      </div>
+
+      <div className="apgms-proto__card">
+        <h3 style={{ marginTop: 0 }}>Analytics</h3>
+        <label className="apgms-proto__muted" style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10 }}>
+          <input
+            type="checkbox"
+            checked={s.analytics.enabled}
+            onChange={(e) => updateSettings({ analytics: { ...s.analytics, enabled: e.target.checked } })}
+          />
+          Enable analytics (demo)
+        </label>
+
+        <div className="apgms-proto__field">
+          <label>Provider</label>
+          <select
+            className="apgms-proto__select"
+            value={s.analytics.provider}
+            onChange={(e) => updateSettings({ analytics: { ...s.analytics, provider: e.target.value as any } })}
+          >
+            <option value="Demo (local)">Demo (local)</option>
+            <option value="PostHog (planned)">PostHog (planned)</option>
+            <option value="GA4 (planned)">GA4 (planned)</option>
+          </select>
+        </div>
+
+        <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button className="apgms-proto__btn secondary" onClick={() => { resetAnalytics(); window.location.reload(); }}>
+            Clear analytics (demo)
+          </button>
+        </div>
+
+        <div className="apgms-proto__muted" style={{ marginTop: 10 }}>
+          Recent events (demo):
+          <ul style={{ marginTop: 6 }}>
+            {analyticsEvents.map((e) => (
+              <li key={e.id}>{new Date(e.ts).toLocaleString("en-AU")} - {e.name}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      <div className="apgms-proto__card">
+        <h3 style={{ marginTop: 0 }}>Simulation</h3>
+        <div className="apgms-proto__muted">Incoming feeds are intentionally less frequent by default.</div>
+
+        <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+          <button className="apgms-proto__btn" onClick={() => toggleSimulation(!s.simulation.enabled)}>
+            Simulation: {s.simulation.enabled ? "ON" : "OFF"}
+          </button>
+
+          <div className="apgms-proto__muted">Cadence:</div>
+          <select
+            className="apgms-proto__select"
+            value={s.simulation.intervalMs}
+            onChange={(e) => setSimulationIntervalMs(Number(e.target.value))}
+          >
+            <option value={30000}>30s</option>
+            <option value={60000}>60s</option>
+            <option value={120000}>120s</option>
+            <option value={300000}>300s</option>
+          </select>
+        </div>
+
+        <div className="apgms-proto__muted" style={{ marginTop: 10 }}>
+          Seed: {String(s.simulation.seed)} (demo deterministic baseline)
+        </div>
+      </div>
+
+      <div className="apgms-proto__card">
+        <h3 style={{ marginTop: 0 }}>Admin</h3>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+          <button className="apgms-proto__btn secondary" onClick={() => updateSettings({ wizardCompleted: false })}>
+            Re-run Setup Wizard
+          </button>
+          <button className="apgms-proto__btn danger" onClick={resetDemo}>
+            Reset demo state
+          </button>
+        </div>
+        <div className="apgms-proto__muted" style={{ marginTop: 10 }}>
+          Reset clears prototype store and returns the console to initial demo state.
         </div>
       </div>
     </div>

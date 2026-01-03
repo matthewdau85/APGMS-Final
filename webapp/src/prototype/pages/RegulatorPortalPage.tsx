@@ -1,53 +1,101 @@
-import React from "react";
-import { useDemoStore } from "../store";
-import { StatusPill } from "../components/StatusPill";
+import React, { useMemo } from "react";
+import { usePrototype } from "../store";
 
 export default function RegulatorPortalPage() {
-  const { period, obligations, evidencePacks, incidents, settings } = useDemoStore();
+  const { state } = usePrototype();
+
+  const packs = useMemo(() => state.evidencePacks.filter((p) => p.period === state.period).slice(0, 10), [state.evidencePacks, state.period]);
+  const incidents = useMemo(() => state.incidents.slice(0, 10), [state.incidents]);
+  const obs = useMemo(() => state.obligations.filter((o) => o.period === state.period), [state.obligations, state.period]);
+
+  if (!state.settings.security.allowRegulatorPortal) {
+    return (
+      <div className="apgms-proto__card">
+        <h3 style={{ marginTop: 0 }}>Regulator Portal</h3>
+        <div className="apgms-proto__muted">Disabled in Settings (demo).</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="apgms-proto__section">
-      <div className="apgms-proto__h1">Regulator Portal (read-only)</div>
-      <div className="apgms-proto__muted" style={{ marginTop: 6 }}>
-        {"Assessor view: minimum necessary access, reproducible artifacts, and no write actions."}
-      </div>
-
-      <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <StatusPill text={"Period: " + period} />
-        <StatusPill text={"Portal: " + (settings.export.regulatorPortalEnabled ? "ENABLED" : "DISABLED")} />
-        <StatusPill text={"Obligations: " + String(obligations.length)} />
-        <StatusPill text={"Packs: " + String(evidencePacks.filter((p) => p.period === period).length)} />
-        <StatusPill text={"Incidents: " + String(incidents.filter((i) => i.period === period).length)} />
-      </div>
-
-      <div style={{ marginTop: 12, border: "1px solid rgba(255,255,255,0.12)", borderRadius: 16, padding: 12 }}>
-        <div style={{ fontWeight: 900 }}>Compliance summary (demo)</div>
-        <div className="apgms-proto__muted" style={{ marginTop: 6 }}>
-          {"This mirrors the endpoint-backed view. In production this would be read-only and backed by signed evidence pack artifacts."}
+    <div className="apgms-proto__grid">
+      <div className="apgms-proto__card">
+        <h3 style={{ marginTop: 0 }}>Regulator Portal (read-only)</h3>
+        <div className="apgms-proto__muted">
+          Minimum necessary access. Reproducible artifacts, compliance summaries, and incident log (demo).
         </div>
+      </div>
 
-        <table className="apgms-proto__table">
+      <div className="apgms-proto__card">
+        <h3 style={{ marginTop: 0 }}>Compliance summary (demo)</h3>
+        <table className="apgms-proto__table" style={{ marginTop: 10 }}>
           <thead>
             <tr>
-              <th style={{ width: 120 }}>Tax type</th>
               <th>Obligation</th>
-              <th style={{ width: 160 }}>Status</th>
+              <th>Stage</th>
+              <th>Funded</th>
+              <th>Recon open</th>
+              <th>Status</th>
             </tr>
           </thead>
           <tbody>
-            {obligations.map((o) => (
+            {obs.map((o) => (
               <tr key={o.id}>
-                <td><StatusPill text={o.taxType} /></td>
-                <td style={{ opacity: 0.9 }}>{o.label}</td>
-                <td><StatusPill text={o.status} /></td>
+                <td>{o.label}</td>
+                <td className="apgms-proto__muted">{o.stage}</td>
+                <td>{o.fundedPct}%</td>
+                <td>{o.reconcileOpen}</td>
+                <td className="apgms-proto__muted">{o.status}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      <div style={{ marginTop: 12 }} className="apgms-proto__muted">
-        {"No controls are available here. This is intentionally read-only."}
+      <div className="apgms-proto__card">
+        <h3 style={{ marginTop: 0 }}>Evidence packs</h3>
+        <table className="apgms-proto__table" style={{ marginTop: 10 }}>
+          <thead>
+            <tr>
+              <th>Pack id</th>
+              <th>Obligation</th>
+              <th>Manifest</th>
+            </tr>
+          </thead>
+          <tbody>
+            {packs.map((p) => (
+              <tr key={p.id}>
+                <td>{p.id}</td>
+                <td className="apgms-proto__muted">{p.obligationId}</td>
+                <td className="apgms-proto__muted">{p.manifestHash}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="apgms-proto__card">
+        <h3 style={{ marginTop: 0 }}>Incidents</h3>
+        <table className="apgms-proto__table" style={{ marginTop: 10 }}>
+          <thead>
+            <tr>
+              <th>Severity</th>
+              <th>Status</th>
+              <th>Title</th>
+              <th>Linked</th>
+            </tr>
+          </thead>
+          <tbody>
+            {incidents.map((i) => (
+              <tr key={i.id}>
+                <td>{i.severity}</td>
+                <td className="apgms-proto__muted">{i.status}</td>
+                <td>{i.title}</td>
+                <td className="apgms-proto__muted">{i.linkedObligationIds.length ? i.linkedObligationIds.join(", ") : "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

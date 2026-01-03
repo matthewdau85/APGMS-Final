@@ -1,70 +1,72 @@
 import React, { useMemo, useState } from "react";
-import { useDemoStore } from "../store";
-import { StatusPill } from "../components/StatusPill";
+import { usePrototype, describeTs } from "../store";
 
 export default function EvidencePackPage() {
-  const { evidencePacks, obligations, period } = useDemoStore();
-  const [selectedId, setSelectedId] = useState<string>("");
+  const { state } = usePrototype();
+  const packs = useMemo(() => state.evidencePacks.filter((p) => p.period === state.period), [state.evidencePacks, state.period]);
+  const [selected, setSelected] = useState<string | null>(packs[0]?.id ?? null);
 
-  const packs = useMemo(() => evidencePacks.filter((p) => p.period === period), [evidencePacks, period]);
-  const selected = packs.find((p) => p.id === selectedId) ?? packs[0] ?? null;
-
-  const obligationLabel = (id: string) => obligations.find((o) => o.id === id)?.label ?? id;
+  const active = packs.find((p) => p.id === selected) ?? null;
 
   return (
-    <div className="apgms-proto__section">
-      <div className="apgms-proto__h1">Evidence Pack</div>
-      <div className="apgms-proto__muted" style={{ marginTop: 6 }}>
-        {"Regulator-grade artifact. Reproducible: same inputs, same outputs, same hashes (demo)."}
+    <div className="apgms-proto__grid">
+      <div className="apgms-proto__card">
+        <h3 style={{ marginTop: 0 }}>Evidence Pack</h3>
+        <div className="apgms-proto__muted">
+          Reproducible artifacts: same inputs, same outputs, same hashes (demo).
+        </div>
       </div>
 
-      <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <select className="apgms-proto__input" value={selected?.id ?? ""} onChange={(e) => setSelectedId(e.target.value)}>
-          {packs.length === 0 ? <option value="">No packs yet</option> : null}
-          {packs.map((p) => (
-            <option key={p.id} value={p.id}>
-              {new Date(p.ts).toLocaleString()} - {obligationLabel(p.obligationId)}
-            </option>
-          ))}
-        </select>
-
-        <StatusPill text={"Packs: " + String(packs.length)} />
+      <div className="apgms-proto__card">
+        <table className="apgms-proto__table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Pack id</th>
+              <th>Obligation</th>
+              <th>Manifest hash</th>
+            </tr>
+          </thead>
+          <tbody>
+            {packs.map((p) => (
+              <tr key={p.id} onClick={() => setSelected(p.id)} style={{ cursor: "pointer" }}>
+                <td className="apgms-proto__muted">{describeTs(p.ts)}</td>
+                <td>{p.id}</td>
+                <td className="apgms-proto__muted">{p.obligationId}</td>
+                <td className="apgms-proto__muted">{p.manifestHash}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
-      {selected ? (
-        <div style={{ marginTop: 12 }}>
-          <div style={{ fontWeight: 900 }}>{selected.title}</div>
-          <div className="apgms-proto__muted" style={{ marginTop: 6 }}>
-            Manifest hash (demo): <span style={{ fontWeight: 800 }}>{selected.manifestHash}</span>
-          </div>
+      {active ? (
+        <div className="apgms-proto__card">
+          <h3 style={{ marginTop: 0 }}>Pack contents</h3>
+          <div className="apgms-proto__muted">What changed since last pack is demo-mocked here.</div>
 
-          <table className="apgms-proto__table">
+          <table className="apgms-proto__table" style={{ marginTop: 10 }}>
             <thead>
               <tr>
-                <th style={{ width: 180 }}>File</th>
+                <th>Item</th>
                 <th>Note</th>
               </tr>
             </thead>
             <tbody>
-              {selected.items.map((it) => (
+              {active.items.map((it) => (
                 <tr key={it.name}>
-                  <td><StatusPill text={it.name} /></td>
-                  <td style={{ opacity: 0.9 }}>{it.note}</td>
+                  <td>{it.name}</td>
+                  <td className="apgms-proto__muted">{it.note}</td>
                 </tr>
               ))}
             </tbody>
           </table>
 
-          <div style={{ marginTop: 12, border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, padding: 12 }}>
-            <div style={{ fontWeight: 900 }}>What changed since last pack</div>
-            <div className="apgms-proto__muted" style={{ marginTop: 6 }}>{selected.diffNote}</div>
+          <div className="apgms-proto__muted" style={{ marginTop: 12 }}>
+            <strong>Demo delta note:</strong> last run introduced new feed events and updated reconciliation status.
           </div>
         </div>
-      ) : (
-        <div style={{ marginTop: 12 }} className="apgms-proto__muted">
-          Generate a pack from an obligation to populate this view.
-        </div>
-      )}
+      ) : null}
     </div>
   );
 }

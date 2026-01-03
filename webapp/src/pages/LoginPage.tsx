@@ -1,84 +1,77 @@
 import React, { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth, type UserRole } from "../auth/AuthContext";
 
 export default function LoginPage() {
-  const { login } = useAuth();
-  const [name, setName] = useState("Matthew");
+  const nav = useNavigate();
+  const { user, login, logout } = useAuth();
+  const [name, setName] = useState<string>(user?.name ?? "Demo User");
+  const [role, setRole] = useState<UserRole>(user?.role ?? "user");
+
   const canLogin = useMemo(() => name.trim().length >= 2, [name]);
 
-  const doLogin = (role: UserRole) => {
-    if (!canLogin) return;
-    login({ name: name.trim(), role });
-  };
-
   return (
-    <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
-      <div style={{ width: "min(720px, 100%)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 16, padding: 20 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-          <div>
-            <div style={{ fontSize: 14, opacity: 0.8 }}>APGMS</div>
-            <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6 }}>Sign in</div>
-          </div>
-          <div style={{ fontSize: 12, opacity: 0.7, textAlign: "right" }}>
-            Demo auth (local only)
-            <div style={{ marginTop: 2 }}>Admin-gated console at /proto/*</div>
-          </div>
-        </div>
+    <div style={{ maxWidth: 820, margin: "0 auto", padding: 24 }}>
+      <h1 style={{ margin: 0 }}>APGMS</h1>
+      <p style={{ opacity: 0.8, marginTop: 8 }}>
+        Demo authentication (local only). Use Admin to access the Prototype Console.
+      </p>
 
-        <div style={{ marginTop: 16 }}>
-          <label style={{ fontSize: 12, opacity: 0.8 }}>Display name</label>
+      <div style={{ marginTop: 18, display: "grid", gap: 12, padding: 16, border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14 }}>
+        <label style={{ display: "grid", gap: 6 }}>
+          <div style={{ fontSize: 12, opacity: 0.8 }}>Display name</div>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Your name"
-            style={{
-              width: "100%",
-              marginTop: 6,
-              padding: "10px 12px",
-              borderRadius: 12,
-              border: "1px solid rgba(255,255,255,0.12)",
-              background: "rgba(0,0,0,0.2)",
-              color: "inherit",
-            }}
+            style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.18)", background: "transparent" }}
           />
+        </label>
+
+        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ fontSize: 12, opacity: 0.8, minWidth: 90 }}>Role</div>
+          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input type="radio" checked={role === "user"} onChange={() => setRole("user")} />
+            User
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input type="radio" checked={role === "admin"} onChange={() => setRole("admin")} />
+            Admin
+          </label>
         </div>
 
-        <div style={{ display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <button
-            onClick={() => doLogin("user")}
             disabled={!canLogin}
-            style={{
-              padding: "10px 14px",
-              borderRadius: 12,
-              border: "1px solid rgba(255,255,255,0.12)",
-              background: "rgba(255,255,255,0.06)",
-              color: "inherit",
-              cursor: canLogin ? "pointer" : "not-allowed",
+            onClick={() => {
+              login({ name: name.trim(), role });
+              nav(role === "admin" ? "/admin" : "/");
             }}
+            style={{ padding: "10px 14px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.08)", cursor: "pointer" }}
           >
-            Sign in as User
+            Sign in
           </button>
 
-          <button
-            onClick={() => doLogin("admin")}
-            disabled={!canLogin}
-            style={{
-              padding: "10px 14px",
-              borderRadius: 12,
-              border: "1px solid rgba(255,255,255,0.12)",
-              background: "rgba(255,255,255,0.10)",
-              color: "inherit",
-              cursor: canLogin ? "pointer" : "not-allowed",
-              fontWeight: 700,
-            }}
-          >
-            Sign in as Admin
-          </button>
+          {user && (
+            <button
+              onClick={() => {
+                logout();
+                nav("/");
+              }}
+              style={{ padding: "10px 14px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.18)", background: "transparent", cursor: "pointer" }}
+            >
+              Sign out
+            </button>
+          )}
         </div>
 
-        <div style={{ marginTop: 14, fontSize: 12, opacity: 0.7, lineHeight: 1.4 }}>
-          Admin can open the production-like console (mocked data, deterministic simulation, evidence packs).
-          Users cannot see the console entry button and cannot access /proto/*.
+        <div style={{ fontSize: 12, opacity: 0.75 }}>
+          Admin-only behavior:
+          <ul style={{ marginTop: 6 }}>
+            <li>User login: no Prototype entry button.</li>
+            <li>Admin login: see “Open APGMS Console (Demo Mode)”.</li>
+            <li>Direct URL protection: non-admin hitting /proto redirects away.</li>
+          </ul>
         </div>
       </div>
     </div>
