@@ -1,60 +1,62 @@
 import React, { useMemo, useState } from "react";
-import { Card, Tag } from "../components/ui";
-import { formatAud } from "../mockData";
-import { usePrototype } from "../store";
+import { useDemoStore } from "../store";
+import { formatMoney } from "../mockData";
+import { StatusPill } from "../components/StatusPill";
 
 export default function LedgerPage() {
-  const { state } = usePrototype();
-  const [account, setAccount] = useState<string>("all");
+  const { ledger, obligations, period } = useDemoStore();
+  const [filterOb, setFilterOb] = useState<string>("");
 
   const rows = useMemo(() => {
-    const all = state.ledger.slice().sort((a, b) => (a.ts < b.ts ? 1 : -1));
-    if (account === "all") return all;
-    return all.filter((e) => e.account === account);
-  }, [state.ledger, account]);
-
-  const accounts = ["all", "Operating", "Tax Buffer", "GST Holding", "PAYGW Holding", "Super Holding"];
+    const base = ledger.filter((l) => l.period === period);
+    if (!filterOb) return base;
+    return base.filter((l) => l.obligationId === filterOb);
+  }, [ledger, period, filterOb]);
 
   return (
-    <div className="apgms-grid">
-      <div className="apgms-col-12">
-        <Card
-          title="Ledger"
-          right={
-            <div className="apgms-row">
-              <span className="apgms-muted" style={{ fontSize: 12 }}>Account</span>
-              <select className="apgms-input" style={{ width: 180 }} value={account} onChange={(e) => setAccount(e.target.value)}>
-                {accounts.map((a) => <option key={a} value={a}>{a}</option>)}
-              </select>
-            </div>
-          }
-        >
-          <table className="apgms-table">
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>Account</th>
-                <th>Dir</th>
-                <th>Amount</th>
-                <th>Reference</th>
-                <th>Counterparty</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((e) => (
-                <tr key={e.id}>
-                  <td className="apgms-muted">{new Date(e.ts).toLocaleString()}</td>
-                  <td style={{ fontWeight: 800 }}>{e.account}</td>
-                  <td><Tag tone={e.direction === "in" ? "good" : "warn"}>{e.direction}</Tag></td>
-                  <td>{formatAud(e.amountCents)}</td>
-                  <td className="apgms-muted">{e.reference}</td>
-                  <td className="apgms-muted">{e.counterparty}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
+    <div className="apgms-proto__section">
+      <div className="apgms-proto__h1">Ledger</div>
+      <div className="apgms-proto__muted" style={{ marginTop: 6 }}>
+        {"Audit spine. Derived figures trace back to ledger entries and events."}
       </div>
+
+      <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <select className="apgms-proto__input" value={filterOb} onChange={(e) => setFilterOb(e.target.value)}>
+          <option value="">All obligations</option>
+          {obligations.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.taxType + " - " + o.period}
+            </option>
+          ))}
+        </select>
+
+        <StatusPill text={"Rows: " + String(rows.length)} />
+      </div>
+
+      <table className="apgms-proto__table">
+        <thead>
+          <tr>
+            <th style={{ width: 190 }}>Time</th>
+            <th style={{ width: 120 }}>Account</th>
+            <th style={{ width: 120 }}>Direction</th>
+            <th style={{ width: 140 }}>Amount</th>
+            <th style={{ width: 160 }}>Source</th>
+            <th>Memo</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.slice(0, 80).map((l) => (
+            <tr key={l.id}>
+              <td style={{ opacity: 0.8 }}>{new Date(l.ts).toLocaleString()}</td>
+              <td><StatusPill text={l.account} /></td>
+              <td><StatusPill text={l.direction} /></td>
+              <td style={{ opacity: 0.9 }}>{formatMoney(l.amountCents)}</td>
+              <td style={{ opacity: 0.85 }}>{l.source}</td>
+              <td style={{ opacity: 0.9 }}>{l.memo}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

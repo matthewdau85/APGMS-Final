@@ -1,92 +1,79 @@
 import React from "react";
+import { NavLink, Outlet } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
+import { useDemoStore } from "./store";
 import "./prototype.css";
-import { Button } from "./components/ui";
-import { usePrototype } from "./store";
-import type { Period } from "./mockData";
 
-export type NavId =
-  | "dashboard"
-  | "obligations"
-  | "ledger"
-  | "reconciliation"
-  | "evidence"
-  | "controls"
-  | "incidents"
-  | "settings"
-  | "regulator";
+const PERIODS = ["2025-Q1", "2025-Q2", "2025-Q3", "2025-Q4"] as const;
 
-export type NavItem = { id: NavId; label: string };
-
-export default function PrototypeShell(props: {
-  nav: NavItem[];
-  current: NavId;
-  onNavigate: (id: NavId) => void;
-  onExit: () => void;
-  children: React.ReactNode;
-}) {
-  const { state, actions } = usePrototype();
-  const periods: Period[] = ["2025-Q1", "2025-Q2", "2025-Q3", "2025-Q4"];
+export default function PrototypeShell() {
+  const { user, logout } = useAuth();
+  const { period, setPeriod, settings, toggleSimulation, resetDemoState } = useDemoStore();
 
   return (
-    <div className="apgms-root">
-      <div className="apgms-shell">
-        <aside className="apgms-side">
-          <div className="apgms-brand">
-            <div className="apgms-logo">A</div>
-            <div>
-              <div className="apgms-brand-title">APGMS</div>
-              <div className="apgms-brand-sub">Admin prototype (mock)</div>
-            </div>
+    <div className="apgms-proto">
+      <aside className="apgms-proto__sidebar">
+        <div className="apgms-proto__brand">
+          <div>
+            <div className="apgms-proto__title">APGMS</div>
+            <div className="apgms-proto__subtitle">Console (Demo Mode)</div>
+          </div>
+          <span className="apgms-proto__badge">admin-only</span>
+        </div>
+
+        <nav className="apgms-proto__nav">
+          <NavLink to="/proto/dashboard">Dashboard</NavLink>
+          <NavLink to="/proto/obligations">Obligations</NavLink>
+          <NavLink to="/proto/ledger">Ledger</NavLink>
+          <NavLink to="/proto/reconciliation">Reconciliation</NavLink>
+          <NavLink to="/proto/evidence">Evidence Pack</NavLink>
+          <NavLink to="/proto/controls">Controls & Policies</NavLink>
+          <NavLink to="/proto/incidents">Incidents</NavLink>
+          <NavLink to="/proto/settings">Settings</NavLink>
+          <NavLink to="/proto/regulator">Regulator Portal (read-only)</NavLink>
+          <NavLink to="/proto/demo">Demo Guide</NavLink>
+        </nav>
+
+        <div style={{ marginTop: 16, borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 12 }}>
+          <div style={{ fontSize: 12, opacity: 0.75 }}>Signed in</div>
+          <div style={{ fontSize: 13, fontWeight: 800, marginTop: 6 }}>{user?.name} (admin)</div>
+          <button className="apgms-proto__btn" onClick={logout} style={{ marginTop: 10 }}>
+            Sign out
+          </button>
+        </div>
+      </aside>
+
+      <main className="apgms-proto__main">
+        <div className="apgms-proto__topbar">
+          <div className="apgms-proto__topbar-left">
+            <select className="apgms-proto__input" value={period} onChange={(e) => setPeriod(e.target.value as any)}>
+              {PERIODS.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+
+            <input className="apgms-proto__input" placeholder="Search (demo)" style={{ width: 260 }} />
           </div>
 
-          <div className="apgms-nav">
-            {props.nav.map((item) => (
-              <button
-                key={item.id}
-                className={"apgms-nav-btn " + (item.id === props.current ? "active" : "")}
-                onClick={() => props.onNavigate(item.id)}
-              >
-                {item.label}
-              </button>
-            ))}
+          <div className="apgms-proto__topbar-right">
+            <button
+              className={"apgms-proto__btn " + (settings.simulation.enabled ? "apgms-proto__btn--primary" : "")}
+              onClick={() => toggleSimulation(!settings.simulation.enabled)}
+              title={"Incoming feed simulation (default interval " + settings.simulation.feedIntervalSeconds + "s)"}
+            >
+              {"Simulation " + (settings.simulation.enabled ? "ON" : "OFF")}
+            </button>
+
+            <button className="apgms-proto__btn" onClick={resetDemoState}>
+              Reset demo state
+            </button>
           </div>
+        </div>
 
-          <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.10)" }}>
-            <div className="apgms-muted" style={{ fontSize: 12, marginBottom: 8 }}>
-              Org: {state.settings.orgName}
-            </div>
-            <Button variant="ghost" onClick={props.onExit} style={{ width: "100%" }}>
-              Exit Admin
-            </Button>
-          </div>
-        </aside>
-
-        <main className="apgms-main">
-          <header className="apgms-top">
-            <div className="apgms-top-left">
-              <div>
-                <div className="apgms-top-title">APGMS Prototype</div>
-                <div className="apgms-top-sub">Production-look UX with mocked data, feeds, lodgments</div>
-              </div>
-            </div>
-
-            <div className="apgms-top-right">
-              <div className="apgms-row">
-                <span className="apgms-muted" style={{ fontSize: 12 }}>Period</span>
-                <select className="apgms-input" style={{ width: 140 }} value={state.currentPeriod} onChange={(e) => actions.setPeriod(e.target.value as Period)}>
-                  {periods.map((p) => (
-                    <option key={p} value={p}>{p}</option>
-                  ))}
-                </select>
-              </div>
-              <Button variant="ghost" onClick={actions.ingestFeeds}>Mock Ingest Feeds</Button>
-              <Button onClick={actions.generateEvidencePack}>Generate Evidence Pack</Button>
-            </div>
-          </header>
-
-          <div className="apgms-content">{props.children}</div>
-        </main>
-      </div>
+        <Outlet />
+      </main>
     </div>
   );
 }

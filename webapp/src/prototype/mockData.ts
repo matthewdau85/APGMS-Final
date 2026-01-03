@@ -1,177 +1,185 @@
-export type Period = "2025-Q1" | "2025-Q2" | "2025-Q3" | "2025-Q4";
+export type PeriodKey = "2025-Q1" | "2025-Q2" | "2025-Q3" | "2025-Q4";
 
-export type ObligationType = "BAS" | "PAYGW" | "PAYGI" | "SUPER" | "FBT" | "IAS";
+export type TaxType = "PAYGW" | "GST" | "PAYGI" | "SUPER";
 
-export type ObligationStatus = "draft" | "funding" | "ready" | "lodged" | "paid" | "overdue" | "blocked";
+export type ObligationStatus =
+  | "funded"
+  | "reconcile_pending"
+  | "ready_to_lodge"
+  | "lodged"
+  | "paid"
+  | "evidence_ready"
+  | "overdue_risk";
+
+export type DemoEventType =
+  | "FEED_RECEIVED"
+  | "LEDGER_POSTED"
+  | "RECONCILE_SUGGESTION"
+  | "RECONCILE_CLEARED"
+  | "LODGMENT_PREPARED"
+  | "LODGMENT_SUBMITTED"
+  | "PAYMENT_SCHEDULED"
+  | "EVIDENCE_PACK_GENERATED"
+  | "POLICY_UPDATED"
+  | "INCIDENT_CREATED"
+  | "INCIDENT_UPDATED"
+  | "SETTINGS_UPDATED"
+  | "DEMO_RESET";
+
+export type DemoEvent = {
+  id: string;
+  ts: number;
+  type: DemoEventType;
+  period: PeriodKey;
+  message: string;
+  meta?: Record<string, string>;
+};
 
 export type Obligation = {
   id: string;
-  period: Period;
-  type: ObligationType;
-  dueDate: string; // YYYY-MM-DD
-  amountDueCents: number;
-  fundedCents: number;
+  period: PeriodKey;
+  taxType: TaxType;
+  label: string;
+  dueDate: string; // ISO date
+  amountCents: number;
   status: ObligationStatus;
-  lastUpdated: string; // ISO
+  blockers: string[];
+};
+
+export type BankLine = {
+  id: string;
+  ts: number;
+  period: PeriodKey;
+  amountCents: number;
+  description: string;
+  status: "matched" | "unmatched" | "suggested";
+  suggestedObligationId?: string;
+  resolvedAs?: "business" | "tax" | "excluded";
 };
 
 export type LedgerEntry = {
   id: string;
-  ts: string; // ISO
-  account: "Operating" | "Tax Buffer" | "GST Holding" | "PAYGW Holding" | "Super Holding";
-  direction: "in" | "out";
+  ts: number;
+  period: PeriodKey;
+  obligationId?: string;
+  account: "operating" | "tax_buffer" | "clearing";
+  direction: "debit" | "credit";
   amountCents: number;
-  reference: string;
-  counterparty: string;
+  source: "bank_feed" | "reconciliation" | "lodgment" | "payment" | "adjustment";
+  memo: string;
 };
 
 export type EvidencePack = {
   id: string;
-  period: Period;
-  createdAt: string;
-  manifestLines: string[];
-};
-
-export type Control = {
-  id: string;
-  area: "Security" | "Privacy" | "Financial Controls" | "Change Control" | "Reconciliation" | "Incident Mgmt";
-  name: string;
-  status: "pass" | "warn" | "fail";
-  notes: string;
+  ts: number;
+  period: PeriodKey;
+  obligationId: string;
+  title: string;
+  manifestHash: string; // demo hash
+  items: {
+    name: string;
+    note: string;
+  }[];
+  diffNote: string;
 };
 
 export type Incident = {
   id: string;
-  openedAt: string;
-  severity: "SEV-1" | "SEV-2" | "SEV-3";
+  ts: number;
+  severity: "low" | "medium" | "high";
+  status: "open" | "mitigating" | "closed";
   title: string;
-  status: "open" | "mitigated" | "closed";
-  owner: string;
-  notes: string;
+  description: string;
+  period: PeriodKey;
+  obligationIds: string[];
 };
 
-export type MockState = {
-  currentPeriod: Period;
-  obligations: Obligation[];
-  ledger: LedgerEntry[];
-  controls: Control[];
-  incidents: Incident[];
-  evidencePacks: EvidencePack[];
-  settings: {
-    orgName: string;
-    environment: "local" | "staging" | "prod-sim";
-    regulatorMode: boolean;
+export type SettingsModel = {
+  organization: {
+    name: string;
+    abn: string;
+    timeZone: string;
+    reportingCalendar: "standard" | "custom";
   };
-  reconciliation: {
-    lastRunAt: string | null;
-    unmatchedCount: number;
-    matchedCount: number;
-    notes: string;
+  periods: {
+    cadence: "monthly" | "quarterly";
+    reminderDaysBeforeDue: number;
+    dueDateRule: "standard" | "custom";
   };
-  feeds: {
-    lastIngestAt: string | null;
-    items: { id: string; ts: string; source: string; kind: string; status: "ok" | "warn" | "fail" }[];
+  accounts: {
+    operatingAccountLabel: string;
+    taxBufferAccountLabel: string;
+    segregatedAccountEnabled: boolean;
+  };
+  integrations: {
+    bankFeed: "not_connected" | "connected_demo";
+    accounting: "not_connected" | "connected_demo";
+    payroll: "not_connected" | "connected_demo";
+  };
+  notifications: {
+    emailEnabled: boolean;
+    webhookEnabled: boolean;
+  };
+  security: {
+    mfaRequiredForAdmin: boolean;
+    sessionTimeoutMinutes: number;
+    adminRoleNames: string[];
+  };
+  retention: {
+    eventRetentionDays: number;
+    evidencePackRetentionDays: number;
+  };
+  export: {
+    defaultEvidencePackScope: "period" | "obligation";
+    regulatorPortalEnabled: boolean;
+  };
+  simulation: {
+    enabled: boolean;
+    feedIntervalSeconds: number; // less often by default
+    seed: string;
   };
 };
 
-function nowIso() {
-  return new Date().toISOString();
+export function formatMoney(cents: number): string {
+  const abs = Math.abs(cents);
+  const dollars = (abs / 100).toFixed(2);
+  const sign = cents < 0 ? "-" : "";
+  return sign + "$" + dollars;
 }
 
-function cents(n: number) {
-  return Math.round(n * 100);
+export function nowIso(ts: number): string {
+  return new Date(ts).toISOString();
 }
 
-function id(prefix: string, n: number) {
-  return `${prefix}_${n.toString().padStart(4, "0")}`;
+export function id(prefix: string, ts: number, n: number): string {
+  return prefix + "_" + ts.toString(36) + "_" + n.toString(36);
 }
 
-export function createInitialMockState(): MockState {
-  const currentPeriod: Period = "2025-Q1";
-
-  const obligations: Obligation[] = [
-    { id: id("obl", 1), period: "2025-Q1", type: "BAS", dueDate: "2025-04-28", amountDueCents: cents(12850.22), fundedCents: cents(9900.00), status: "funding", lastUpdated: nowIso() },
-    { id: id("obl", 2), period: "2025-Q1", type: "PAYGW", dueDate: "2025-04-21", amountDueCents: cents(8420.10), fundedCents: cents(8420.10), status: "ready", lastUpdated: nowIso() },
-    { id: id("obl", 3), period: "2025-Q1", type: "SUPER", dueDate: "2025-04-28", amountDueCents: cents(6240.00), fundedCents: cents(6240.00), status: "paid", lastUpdated: nowIso() },
-    { id: id("obl", 4), period: "2025-Q2", type: "BAS", dueDate: "2025-07-28", amountDueCents: cents(15440.00), fundedCents: cents(2500.00), status: "draft", lastUpdated: nowIso() },
-    { id: id("obl", 5), period: "2025-Q2", type: "PAYGW", dueDate: "2025-07-21", amountDueCents: cents(9100.00), fundedCents: cents(0), status: "draft", lastUpdated: nowIso() },
-  ];
-
-  const ledger: LedgerEntry[] = [
-    { id: id("led", 1), ts: "2025-03-01T10:12:00.000Z", account: "Operating", direction: "in", amountCents: cents(32000), reference: "INVOICE_1042", counterparty: "Customer A" },
-    { id: id("led", 2), ts: "2025-03-02T02:14:00.000Z", account: "PAYGW Holding", direction: "in", amountCents: cents(2100), reference: "SWEEP_PAYRUN_18", counterparty: "APGMS Auto-sweep" },
-    { id: id("led", 3), ts: "2025-03-03T04:31:00.000Z", account: "GST Holding", direction: "in", amountCents: cents(1800), reference: "SWEEP_WEEKLY_09", counterparty: "APGMS Auto-sweep" },
-    { id: id("led", 4), ts: "2025-03-05T06:55:00.000Z", account: "Operating", direction: "out", amountCents: cents(9600), reference: "PAYROLL_MAR", counterparty: "Payroll" },
-    { id: id("led", 5), ts: "2025-03-10T01:05:00.000Z", account: "Tax Buffer", direction: "in", amountCents: cents(1200), reference: "TOPUP_BUFFER", counterparty: "APGMS Policy" },
-  ];
-
-  const controls: Control[] = [
-    { id: id("ctl", 1), area: "Security", name: "PII redaction in logs", status: "pass", notes: "Patterns: TFN/ABN/BSB+ACC redacted (demo)." },
-    { id: id("ctl", 2), area: "Change Control", name: "Schema migrations gated", status: "warn", notes: "Prisma config deprecation warning present; migrate to prisma.config.ts before prod." },
-    { id: id("ctl", 3), area: "Reconciliation", name: "Ledger-to-obligation reconciliation", status: "warn", notes: "Mock engine. Wire to real ledger + obligation policy layer." },
-    { id: id("ctl", 4), area: "Incident Mgmt", name: "Incident lifecycle", status: "pass", notes: "Create/mitigate/close supported in prototype." },
-  ];
-
-  const incidents: Incident[] = [
-    { id: id("inc", 1), openedAt: "2025-03-06T09:00:00.000Z", severity: "SEV-2", title: "Bank feed delay (mock)", status: "mitigated", owner: "Ops", notes: "Holding balances remain consistent; monitoring." },
-    { id: id("inc", 2), openedAt: "2025-03-11T03:20:00.000Z", severity: "SEV-3", title: "One-way account sweep retry (mock)", status: "open", owner: "Worker", notes: "Retry scheduled; no customer impact." },
-  ];
-
-  const evidencePacks: EvidencePack[] = [
-    {
-      id: id("epk", 1),
-      period: "2025-Q1",
-      createdAt: "2025-04-01T01:10:00.000Z",
-      manifestLines: [
-        "manifest_version: 1",
-        "period: 2025-Q1",
-        "item: obligations_snapshot.json checksum: 7d2a-demo",
-        "item: ledger_snapshot.json checksum: 91af-demo",
-        "item: controls_snapshot.json checksum: 22c0-demo",
-      ],
-    },
-  ];
-
-  return {
-    currentPeriod,
-    obligations,
-    ledger,
-    controls,
-    incidents,
-    evidencePacks,
-    settings: {
-      orgName: "Org 1 (Demo)",
-      environment: "prod-sim",
-      regulatorMode: false,
-    },
-    reconciliation: {
-      lastRunAt: null,
-      unmatchedCount: 3,
-      matchedCount: 18,
-      notes: "Mock reconciliation not yet run in this session.",
-    },
-    feeds: {
-      lastIngestAt: null,
-      items: [
-        { id: id("fd", 1), ts: "2025-03-01T00:05:00.000Z", source: "Bank", kind: "Transactions", status: "ok" },
-        { id: id("fd", 2), ts: "2025-03-02T00:05:00.000Z", source: "Payroll", kind: "Payrun", status: "ok" },
-        { id: id("fd", 3), ts: "2025-03-03T00:05:00.000Z", source: "POS", kind: "Sales", status: "warn" },
-      ],
-    },
-  };
-}
-
-export function formatAud(centsValue: number) {
-  const v = centsValue / 100;
-  return v.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
-}
-
-export function simpleChecksum(input: string) {
+// Deterministic PRNG (mulberry32) seeded from a string
+function seedToUint32(seed: string): number {
   let h = 2166136261;
-  for (let i = 0; i < input.length; i++) {
-    h ^= input.charCodeAt(i);
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
     h = Math.imul(h, 16777619);
   }
-  const u = h >>> 0;
-  return u.toString(16).padStart(8, "0");
+  return (h >>> 0) || 1;
+}
+
+export function makeRng(seed: string) {
+  let a = seedToUint32(seed);
+  return function rand(): number {
+    a |= 0;
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export function pick<T>(rand: () => number, items: T[]): T {
+  return items[Math.floor(rand() * items.length)];
+}
+
+export function clampInt(n: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, Math.floor(n)));
 }

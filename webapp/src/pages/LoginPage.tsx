@@ -1,106 +1,86 @@
 import React, { useMemo, useState } from "react";
-import { useAuth, type UserRole } from "../auth/auth";
+import { useAuth, type UserRole } from "../auth/AuthContext";
 
 export default function LoginPage() {
   const { login } = useAuth();
   const [name, setName] = useState("Matthew");
-  const [role, setRole] = useState<UserRole>("admin");
+  const canLogin = useMemo(() => name.trim().length >= 2, [name]);
 
-  const canSubmit = useMemo(() => name.trim().length >= 2, [name]);
+  const doLogin = (role: UserRole) => {
+    if (!canLogin) return;
+    login({ name: name.trim(), role });
+  };
 
   return (
-    <div style={styles.page}>
-      <div style={styles.card}>
-        <div style={styles.brandRow}>
-          <div style={styles.logo}>APGMS</div>
+    <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }}>
+      <div style={{ width: "min(720px, 100%)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 16, padding: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <div>
-            <div style={styles.title}>Sign in</div>
-            <div style={styles.subTitle}>Prototype environment (local demo auth)</div>
+            <div style={{ fontSize: 14, opacity: 0.8 }}>APGMS</div>
+            <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6 }}>Sign in</div>
+          </div>
+          <div style={{ fontSize: 12, opacity: 0.7, textAlign: "right" }}>
+            Demo auth (local only)
+            <div style={{ marginTop: 2 }}>Admin-gated console at /proto/*</div>
           </div>
         </div>
 
-        <label style={styles.label}>Name</label>
-        <input
-          style={styles.input}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Your name"
-          autoFocus
-        />
+        <div style={{ marginTop: 16 }}>
+          <label style={{ fontSize: 12, opacity: 0.8 }}>Display name</label>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Your name"
+            style={{
+              width: "100%",
+              marginTop: 6,
+              padding: "10px 12px",
+              borderRadius: 12,
+              border: "1px solid rgba(255,255,255,0.12)",
+              background: "rgba(0,0,0,0.2)",
+              color: "inherit",
+            }}
+          />
+        </div>
 
-        <label style={styles.label}>Role</label>
-        <select style={styles.input} value={role} onChange={(e) => setRole(e.target.value as UserRole)}>
-          <option value="admin">Admin</option>
-          <option value="user">User</option>
-        </select>
+        <div style={{ display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
+          <button
+            onClick={() => doLogin("user")}
+            disabled={!canLogin}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 12,
+              border: "1px solid rgba(255,255,255,0.12)",
+              background: "rgba(255,255,255,0.06)",
+              color: "inherit",
+              cursor: canLogin ? "pointer" : "not-allowed",
+            }}
+          >
+            Sign in as User
+          </button>
 
-        <button
-          style={{ ...styles.button, opacity: canSubmit ? 1 : 0.6, cursor: canSubmit ? "pointer" : "not-allowed" }}
-          disabled={!canSubmit}
-          onClick={() => login({ name: name.trim(), role })}
-        >
-          Continue
-        </button>
+          <button
+            onClick={() => doLogin("admin")}
+            disabled={!canLogin}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 12,
+              border: "1px solid rgba(255,255,255,0.12)",
+              background: "rgba(255,255,255,0.10)",
+              color: "inherit",
+              cursor: canLogin ? "pointer" : "not-allowed",
+              fontWeight: 700,
+            }}
+          >
+            Sign in as Admin
+          </button>
+        </div>
 
-        <div style={styles.hint}>
-          Admins get an <b>Admin</b> button in the top bar. Prototype is only accessible through that button.
+        <div style={{ marginTop: 14, fontSize: 12, opacity: 0.7, lineHeight: 1.4 }}>
+          Admin can open the production-like console (mocked data, deterministic simulation, evidence packs).
+          Users cannot see the console entry button and cannot access /proto/*.
         </div>
       </div>
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    minHeight: "100vh",
-    display: "grid",
-    placeItems: "center",
-    padding: 24,
-    background: "#0b1020",
-    color: "#e8ecff",
-    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
-  },
-  card: {
-    width: "min(520px, 96vw)",
-    borderRadius: 16,
-    background: "rgba(255,255,255,0.06)",
-    border: "1px solid rgba(255,255,255,0.10)",
-    padding: 20,
-    boxShadow: "0 20px 60px rgba(0,0,0,0.35)",
-  },
-  brandRow: { display: "flex", gap: 14, alignItems: "center", marginBottom: 14 },
-  logo: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    display: "grid",
-    placeItems: "center",
-    background: "rgba(120,140,255,0.18)",
-    border: "1px solid rgba(120,140,255,0.30)",
-    fontWeight: 800,
-    letterSpacing: 0.5,
-  },
-  title: { fontSize: 18, fontWeight: 800 },
-  subTitle: { fontSize: 13, opacity: 0.8, marginTop: 2 },
-  label: { display: "block", marginTop: 12, marginBottom: 6, fontSize: 13, opacity: 0.9 },
-  input: {
-    width: "100%",
-    padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "rgba(0,0,0,0.25)",
-    color: "#e8ecff",
-    outline: "none",
-  },
-  button: {
-    width: "100%",
-    marginTop: 14,
-    padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid rgba(120,140,255,0.35)",
-    background: "rgba(120,140,255,0.22)",
-    color: "#e8ecff",
-    fontWeight: 800,
-  },
-  hint: { marginTop: 12, fontSize: 12, opacity: 0.8, lineHeight: 1.4 },
-};

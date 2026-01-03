@@ -1,9 +1,12 @@
-import React, { useMemo, useState } from "react";
-import PrototypeShell, { type NavId } from "./PrototypeShell";
-import { PrototypeProvider } from "./store";
+import React from "react";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
+import { DemoStoreProvider } from "./store";
+import PrototypeShell from "./PrototypeShell";
 
 import DashboardPage from "./pages/DashboardPage";
 import ObligationsPage from "./pages/ObligationsPage";
+import ObligationDetailPage from "./pages/ObligationDetailPage";
 import LedgerPage from "./pages/LedgerPage";
 import ReconciliationPage from "./pages/ReconciliationPage";
 import EvidencePackPage from "./pages/EvidencePackPage";
@@ -11,38 +14,42 @@ import ControlsPoliciesPage from "./pages/ControlsPoliciesPage";
 import IncidentsPage from "./pages/IncidentsPage";
 import SettingsPage from "./pages/SettingsPage";
 import RegulatorPortalPage from "./pages/RegulatorPortalPage";
+import DemoGuidePage from "./pages/DemoGuidePage";
 
-export function PrototypeApp(props: { onExit: () => void }) {
-  const nav = useMemo(
-    () => [
-      { id: "dashboard" as const, label: "Dashboard" },
-      { id: "obligations" as const, label: "Obligations" },
-      { id: "ledger" as const, label: "Ledger" },
-      { id: "reconciliation" as const, label: "Reconciliation" },
-      { id: "evidence" as const, label: "Evidence Pack" },
-      { id: "controls" as const, label: "Controls & Policies" },
-      { id: "incidents" as const, label: "Incidents" },
-      { id: "settings" as const, label: "Settings" },
-      { id: "regulator" as const, label: "Regulator Portal (RO)" },
-    ],
-    []
-  );
+function RequireAdmin(props: { children: React.ReactNode }) {
+  const { user, isAdmin } = useAuth();
+  const loc = useLocation();
 
-  const [current, setCurrent] = useState<NavId>("dashboard");
+  if (!user) return <Navigate to="/" replace />;
+  if (!isAdmin) {
+    // Direct URL protection: non-admin redirected away
+    return <Navigate to="/" replace state={{ from: loc.pathname }} />;
+  }
+  return <>{props.children}</>;
+}
 
+export function PrototypeApp() {
   return (
-    <PrototypeProvider>
-      <PrototypeShell nav={nav} current={current} onNavigate={setCurrent} onExit={props.onExit}>
-        {current === "dashboard" && <DashboardPage />}
-        {current === "obligations" && <ObligationsPage />}
-        {current === "ledger" && <LedgerPage />}
-        {current === "reconciliation" && <ReconciliationPage />}
-        {current === "evidence" && <EvidencePackPage />}
-        {current === "controls" && <ControlsPoliciesPage />}
-        {current === "incidents" && <IncidentsPage />}
-        {current === "settings" && <SettingsPage />}
-        {current === "regulator" && <RegulatorPortalPage />}
-      </PrototypeShell>
-    </PrototypeProvider>
+    <RequireAdmin>
+      <DemoStoreProvider>
+        <Routes>
+          <Route element={<PrototypeShell />}>
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/obligations" element={<ObligationsPage />} />
+            <Route path="/obligations/:obligationId" element={<ObligationDetailPage />} />
+            <Route path="/ledger" element={<LedgerPage />} />
+            <Route path="/reconciliation" element={<ReconciliationPage />} />
+            <Route path="/evidence" element={<EvidencePackPage />} />
+            <Route path="/controls" element={<ControlsPoliciesPage />} />
+            <Route path="/incidents" element={<IncidentsPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/regulator" element={<RegulatorPortalPage />} />
+            <Route path="/demo" element={<DemoGuidePage />} />
+            <Route path="/" element={<Navigate to="/proto/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/proto/dashboard" replace />} />
+          </Route>
+        </Routes>
+      </DemoStoreProvider>
+    </RequireAdmin>
   );
 }

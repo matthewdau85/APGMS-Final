@@ -1,65 +1,70 @@
 import React, { useMemo, useState } from "react";
-import { Button, Card, Tag } from "../components/ui";
-import { usePrototype } from "../store";
+import { useDemoStore } from "../store";
+import { StatusPill } from "../components/StatusPill";
 
 export default function EvidencePackPage() {
-  const { state, actions } = usePrototype();
-  const [openId, setOpenId] = useState<string | null>(null);
+  const { evidencePacks, obligations, period } = useDemoStore();
+  const [selectedId, setSelectedId] = useState<string>("");
 
-  const packs = useMemo(() => state.evidencePacks.filter((p) => p.period === state.currentPeriod), [state.evidencePacks, state.currentPeriod]);
+  const packs = useMemo(() => evidencePacks.filter((p) => p.period === period), [evidencePacks, period]);
+  const selected = packs.find((p) => p.id === selectedId) ?? packs[0] ?? null;
 
-  const selected = useMemo(() => state.evidencePacks.find((p) => p.id === openId) ?? null, [state.evidencePacks, openId]);
+  const obligationLabel = (id: string) => obligations.find((o) => o.id === id)?.label ?? id;
 
   return (
-    <div className="apgms-grid">
-      <div className="apgms-col-6">
-        <Card title="Evidence Packs" right={<Button onClick={actions.generateEvidencePack}>Generate</Button>}>
-          <div className="apgms-muted" style={{ marginBottom: 10 }}>
-            Packs are mocked, but structured like production: manifest + checksums + snapshots of obligations/ledger/controls/incidents.
+    <div className="apgms-proto__section">
+      <div className="apgms-proto__h1">Evidence Pack</div>
+      <div className="apgms-proto__muted" style={{ marginTop: 6 }}>
+        {"Regulator-grade artifact. Reproducible: same inputs, same outputs, same hashes (demo)."}
+      </div>
+
+      <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <select className="apgms-proto__input" value={selected?.id ?? ""} onChange={(e) => setSelectedId(e.target.value)}>
+          {packs.length === 0 ? <option value="">No packs yet</option> : null}
+          {packs.map((p) => (
+            <option key={p.id} value={p.id}>
+              {new Date(p.ts).toLocaleString()} - {obligationLabel(p.obligationId)}
+            </option>
+          ))}
+        </select>
+
+        <StatusPill text={"Packs: " + String(packs.length)} />
+      </div>
+
+      {selected ? (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontWeight: 900 }}>{selected.title}</div>
+          <div className="apgms-proto__muted" style={{ marginTop: 6 }}>
+            Manifest hash (demo): <span style={{ fontWeight: 800 }}>{selected.manifestHash}</span>
           </div>
 
-          <table className="apgms-table">
+          <table className="apgms-proto__table">
             <thead>
               <tr>
-                <th>Created</th>
-                <th>ID</th>
-                <th></th>
+                <th style={{ width: 180 }}>File</th>
+                <th>Note</th>
               </tr>
             </thead>
             <tbody>
-              {packs.map((p) => (
-                <tr key={p.id}>
-                  <td className="apgms-muted">{new Date(p.createdAt).toLocaleString()}</td>
-                  <td style={{ fontWeight: 800 }}>{p.id}</td>
-                  <td>
-                    <Button variant="ghost" onClick={() => setOpenId(p.id)}>Open</Button>
-                  </td>
+              {selected.items.map((it) => (
+                <tr key={it.name}>
+                  <td><StatusPill text={it.name} /></td>
+                  <td style={{ opacity: 0.9 }}>{it.note}</td>
                 </tr>
               ))}
-              {packs.length === 0 && (
-                <tr><td colSpan={3} className="apgms-muted">No packs for this period.</td></tr>
-              )}
             </tbody>
           </table>
-        </Card>
-      </div>
 
-      <div className="apgms-col-6">
-        <Card title="Manifest (read-only)">
-          {!selected && <div className="apgms-muted">Select an evidence pack to view its manifest.</div>}
-          {selected && (
-            <>
-              <div className="apgms-row" style={{ marginBottom: 10 }}>
-                <Tag tone="muted">Period: {selected.period}</Tag>
-                <Tag tone="muted">Created: {new Date(selected.createdAt).toLocaleString()}</Tag>
-              </div>
-              <pre style={{ whiteSpace: "pre-wrap", margin: 0, fontSize: 12, lineHeight: 1.5 }}>
-                {selected.manifestLines.join("\n")}
-              </pre>
-            </>
-          )}
-        </Card>
-      </div>
+          <div style={{ marginTop: 12, border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, padding: 12 }}>
+            <div style={{ fontWeight: 900 }}>What changed since last pack</div>
+            <div className="apgms-proto__muted" style={{ marginTop: 6 }}>{selected.diffNote}</div>
+          </div>
+        </div>
+      ) : (
+        <div style={{ marginTop: 12 }} className="apgms-proto__muted">
+          Generate a pack from an obligation to populate this view.
+        </div>
+      )}
     </div>
   );
 }

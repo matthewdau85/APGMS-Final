@@ -1,61 +1,53 @@
 import React from "react";
-import { Button, Card, Tag } from "../components/ui";
-import { usePrototype } from "../store";
+import { useDemoStore } from "../store";
+import { formatMoney } from "../mockData";
+import { StatusPill } from "../components/StatusPill";
 
 export default function ReconciliationPage() {
-  const { state, actions } = usePrototype();
-  const r = state.reconciliation;
-
-  const tone = r.unmatchedCount === 0 ? "good" : r.unmatchedCount <= 2 ? "warn" : "bad";
+  const { bankLines, resolveBankLine } = useDemoStore();
 
   return (
-    <div className="apgms-grid">
-      <div className="apgms-col-12">
-        <Card
-          title="Reconciliation"
-          right={<Button onClick={actions.runReconciliation}>Run reconciliation</Button>}
-        >
-          <div className="apgms-row" style={{ marginBottom: 10 }}>
-            <Tag tone={tone}>
-              {r.lastRunAt ? "Last run: " + new Date(r.lastRunAt).toLocaleString() : "Not run this session"}
-            </Tag>
-            <Tag tone={r.unmatchedCount === 0 ? "good" : "warn"}>Matched: {r.matchedCount}</Tag>
-            <Tag tone={r.unmatchedCount === 0 ? "good" : "bad"}>Unmatched: {r.unmatchedCount}</Tag>
-          </div>
-
-          <div className="apgms-muted" style={{ lineHeight: 1.5 }}>
-            {r.notes}
-            <br />
-            In production, this page becomes your workflow: ingest feeds → normalize ledger → map to obligations → identify shortfalls/excess → generate attestable evidence.
-          </div>
-
-          <div style={{ marginTop: 12 }}>
-            <Card title="Mock review queue">
-              <table className="apgms-table">
-                <thead>
-                  <tr>
-                    <th>Item</th>
-                    <th>Reason</th>
-                    <th>Suggested action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>GST Holding sweep</td>
-                    <td className="apgms-muted">Timing mismatch vs weekly rule</td>
-                    <td className="apgms-muted">Re-run sweep window (mock)</td>
-                  </tr>
-                  <tr>
-                    <td>PAYGW Holding allocation</td>
-                    <td className="apgms-muted">Policy threshold not met</td>
-                    <td className="apgms-muted">Top-up from Tax Buffer (mock)</td>
-                  </tr>
-                </tbody>
-              </table>
-            </Card>
-          </div>
-        </Card>
+    <div className="apgms-proto__section">
+      <div className="apgms-proto__h1">Reconciliation</div>
+      <div className="apgms-proto__muted" style={{ marginTop: 6 }}>
+        {"Control gate. Lodgment should not proceed on unverified inputs. Resolve exceptions and re-run reconciliation in the obligation view."}
       </div>
+
+      <table className="apgms-proto__table">
+        <thead>
+          <tr>
+            <th style={{ width: 190 }}>Time</th>
+            <th>Description</th>
+            <th style={{ width: 140 }}>Amount</th>
+            <th style={{ width: 140 }}>Status</th>
+            <th style={{ width: 240 }}>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {bankLines.slice(0, 60).map((b) => (
+            <tr key={b.id}>
+              <td style={{ opacity: 0.8 }}>{new Date(b.ts).toLocaleString()}</td>
+              <td style={{ opacity: 0.9 }}>
+                {b.description}
+                <div className="apgms-proto__muted" style={{ marginTop: 4 }}>Line ID: {b.id}</div>
+              </td>
+              <td style={{ opacity: 0.9 }}>{formatMoney(b.amountCents)}</td>
+              <td><StatusPill text={b.status} /></td>
+              <td>
+                {b.status === "unmatched" ? (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button className="apgms-proto__btn" onClick={() => resolveBankLine(b.id, "business")}>Mark business</button>
+                    <button className="apgms-proto__btn" onClick={() => resolveBankLine(b.id, "tax")}>Mark tax</button>
+                    <button className="apgms-proto__btn" onClick={() => resolveBankLine(b.id, "excluded")}>Exclude</button>
+                  </div>
+                ) : (
+                  <span className="apgms-proto__muted">No action required</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

@@ -1,125 +1,65 @@
-import React, { useMemo } from "react";
-import { Card, Tag } from "../components/ui";
-import { formatAud } from "../mockData";
-import { usePrototype } from "../store";
+import React from "react";
+import { useDemoStore } from "../store";
+import { StatTile } from "../components/StatTile";
+import { StatusPill } from "../components/StatusPill";
 
 export default function DashboardPage() {
-  const { state } = usePrototype();
+  const { period, obligations, events, settings } = useDemoStore();
 
-  const periodObligations = useMemo(
-    () => state.obligations.filter((o) => o.period === state.currentPeriod),
-    [state.currentPeriod, state.obligations]
-  );
-
-  const totals = useMemo(() => {
-    const due = periodObligations.reduce((a, o) => a + o.amountDueCents, 0);
-    const funded = periodObligations.reduce((a, o) => a + o.fundedCents, 0);
-    const ready = periodObligations.filter((o) => o.status === "ready").length;
-    const blocked = periodObligations.filter((o) => o.status === "blocked").length;
-    return { due, funded, ready, blocked };
-  }, [periodObligations]);
-
-  const healthTone =
-    totals.blocked > 0 ? "bad" : totals.ready > 0 ? "good" : "warn";
+  const funded = obligations.filter((o) => o.status === "funded").length;
+  const reconcilePending = obligations.filter((o) => o.status === "reconcile_pending").length;
+  const readyToLodge = obligations.filter((o) => o.status === "ready_to_lodge").length;
+  const overdueRisk = obligations.filter((o) => o.status === "overdue_risk").length;
 
   return (
-    <div className="apgms-grid">
-      <div className="apgms-col-12">
-        <Card
-          title="Environment health"
-          right={<Tag tone={healthTone}>{healthTone === "good" ? "Green" : healthTone === "warn" ? "Amber" : "Red"}</Tag>}
-        >
-          <div className="apgms-muted" style={{ lineHeight: 1.5 }}>
-            This is a production-look dashboard with mocked obligations, ledger, reconciliation, evidence packs,
-            controls, incidents, and a read-only regulator view. Use the top bar buttons to simulate feeds + evidence pack generation.
+    <div className="apgms-proto__section">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <div className="apgms-proto__h1">Dashboard</div>
+          <div className="apgms-proto__muted" style={{ marginTop: 6 }}>
+            {"Operational truth by period. All actions produce events that can be packaged into evidence."}
           </div>
-        </Card>
+        </div>
+        <div>
+          <StatusPill text={"Period: " + period} />
+          <span style={{ marginLeft: 8 }} />
+          <StatusPill text={"Simulation: " + (settings.simulation.enabled ? "ON" : "OFF")} />
+          <span style={{ marginLeft: 8 }} />
+          <StatusPill text={"Feed interval: " + settings.simulation.feedIntervalSeconds + "s"} />
+        </div>
       </div>
 
-      <div className="apgms-col-4">
-        <Card title="Period due (AUD)">
-          <div style={{ fontSize: 22, fontWeight: 900 }}>{formatAud(totals.due)}</div>
-          <div className="apgms-muted" style={{ marginTop: 6 }}>Total liability across obligations for {state.currentPeriod}.</div>
-        </Card>
+      <div className="apgms-proto__grid">
+        <StatTile title="Funded" value={String(funded)} note="Funding controls satisfied." />
+        <StatTile title="Reconcile pending" value={String(reconcilePending)} note="Inputs not yet cleared." />
+        <StatTile title="Ready to lodge" value={String(readyToLodge)} note="Controls satisfied, payload can be prepared." />
+        <StatTile title="Overdue risk" value={String(overdueRisk)} note="Approaching due date or exception state." />
       </div>
 
-      <div className="apgms-col-4">
-        <Card title="Funded (AUD)">
-          <div style={{ fontSize: 22, fontWeight: 900 }}>{formatAud(totals.funded)}</div>
-          <div className="apgms-muted" style={{ marginTop: 6 }}>Funds reserved in holding accounts (mock).</div>
-        </Card>
-      </div>
+      <div style={{ marginTop: 14 }}>
+        <div style={{ fontSize: 14, fontWeight: 800 }}>Recent activity</div>
+        <div className="apgms-proto__muted" style={{ marginTop: 6 }}>
+          {"This is event-backed. Evidence packs include the event timeline + hashes (demo)."}
+        </div>
 
-      <div className="apgms-col-4">
-        <Card title="Readiness">
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <Tag tone={totals.ready > 0 ? "good" : "warn"}>{totals.ready} ready</Tag>
-            <Tag tone={totals.blocked > 0 ? "bad" : "muted"}>{totals.blocked} blocked</Tag>
-          </div>
-          <div className="apgms-muted" style={{ marginTop: 6 }}>Readiness is mocked based on obligation statuses.</div>
-        </Card>
-      </div>
-
-      <div className="apgms-col-8">
-        <Card title="Upcoming obligations (current period)">
-          <table className="apgms-table">
-            <thead>
-              <tr>
-                <th>Type</th>
-                <th>Due</th>
-                <th>Status</th>
-                <th>Due</th>
-                <th>Funded</th>
+        <table className="apgms-proto__table">
+          <thead>
+            <tr>
+              <th style={{ width: 190 }}>Time</th>
+              <th style={{ width: 180 }}>Type</th>
+              <th>Message</th>
+            </tr>
+          </thead>
+          <tbody>
+            {events.slice(0, 12).map((e) => (
+              <tr key={e.id}>
+                <td style={{ opacity: 0.8 }}>{new Date(e.ts).toLocaleString()}</td>
+                <td><StatusPill text={e.type} /></td>
+                <td style={{ opacity: 0.9 }}>{e.message}</td>
               </tr>
-            </thead>
-            <tbody>
-              {periodObligations.map((o) => (
-                <tr key={o.id}>
-                  <td style={{ fontWeight: 800 }}>{o.type}</td>
-                  <td>{o.dueDate}</td>
-                  <td>
-                    <Tag tone={o.status === "paid" || o.status === "lodged" ? "good" : o.status === "blocked" || o.status === "overdue" ? "bad" : "warn"}>
-                      {o.status}
-                    </Tag>
-                  </td>
-                  <td>{formatAud(o.amountDueCents)}</td>
-                  <td>{formatAud(o.fundedCents)}</td>
-                </tr>
-              ))}
-              {periodObligations.length === 0 && (
-                <tr><td colSpan={5} className="apgms-muted">No obligations in this period.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </Card>
-      </div>
-
-      <div className="apgms-col-4">
-        <Card title="Feeds (mock)">
-          <div className="apgms-muted" style={{ marginBottom: 8 }}>
-            Last ingest: {state.feeds.lastIngestAt ?? "not yet"}
-          </div>
-          <table className="apgms-table">
-            <thead>
-              <tr>
-                <th>Source</th>
-                <th>Kind</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {state.feeds.items.slice(0, 6).map((f) => (
-                <tr key={f.id}>
-                  <td>{f.source}</td>
-                  <td>{f.kind}</td>
-                  <td>
-                    <Tag tone={f.status === "ok" ? "good" : f.status === "warn" ? "warn" : "bad"}>{f.status}</Tag>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

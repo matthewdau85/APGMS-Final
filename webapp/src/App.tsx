@@ -1,33 +1,14 @@
-import React, { useMemo, useState } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { AuthProvider, useAuth } from "./auth/auth";
-import LoginPage from "./pages/LoginPage";
+import React from "react";
+import { Routes, Route, Navigate } from "react-router-dom";
 import AppMain from "./AppMain";
-import { AdminArea } from "./admin/AdminArea";
-
-function AppRouter() {
-  const { user, isAdmin } = useAuth();
-  const [mode, setMode] = useState<"main" | "admin">("main");
-
-  if (!user) return <LoginPage />;
-
-  if (mode === "admin") {
-    // behind a button AND admin login
-    if (!isAdmin) return <AppMain onEnterAdmin={() => { /* no-op */ }} />;
-    return <AdminArea onExit={() => setMode("main")} />;
-  }
-
-  return <AppMain onEnterAdmin={() => setMode("admin")} />;
-}
+import { PrototypeApp } from "./prototype/PrototypeApp";
 
 export default function App() {
-  const queryClient = useMemo(() => new QueryClient(), []);
-
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <AppRouter />
-      </AuthProvider>
-    </QueryClientProvider>
+    <Routes>
+      <Route path="/proto/*" element={<PrototypeApp />} />
+      <Route path="/*" element={<AppMain />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
