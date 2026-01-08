@@ -58,3 +58,9 @@ sbom.xml
 
 # --- Local status/incidents logs (generated) ---
 status/incidents/
+
+# Local artifacts
+.backup/
+*.zip
+*Zone.Identifier*
+chess_api_snapshot_*.tsv

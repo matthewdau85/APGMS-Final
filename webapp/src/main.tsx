@@ -1,19 +1,13 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
-import { AuthProvider } from "./auth/AuthContext";
-import App from "./App";
-import "./ui/ui.css";
 
-const root = document.getElementById("root");
-if (!root) throw new Error("Root element #root not found");
+import App from "./app/App";
 
-ReactDOM.createRoot(root).render(
+// Figma-exported CSS entry (Tailwind + theme tokens)
+import "./styles/index.css";
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </BrowserRouter>
+    <App />
   </React.StrictMode>
 );
