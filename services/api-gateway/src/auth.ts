@@ -1,48 +1,103 @@
-// services/api-gateway/src/auth.ts
 import type { FastifyReply, FastifyRequest } from "fastify";
+import type { SessionRole, SessionUser } from "./plugins/auth.js";
+export { Role } from "./plugins/auth.js";
+export type { SessionRole, SessionUser } from "./plugins/auth.js";
 
-export type Role = "admin" | "user";
+export type AuthConfig = {
+  audience?: string;
+  issuer?: string;
+};
 
-export interface AuthenticatedUser {
-  sub: string;
-  orgId: string;
-  role: Role;
-  mfaCompleted?: boolean;
+function hasValue(x: unknown): x is string {
+  return typeof x === "string" && x.trim().length > 0;
 }
 
-export function authGuard(request: FastifyRequest, reply: FastifyReply, done: () => void) {
-  if (!(request as any).user) {
-    reply.code(401).send({ error: "Unauthorized" });
+/**
+ * Centralized JWT verify that supports optional issuer/audience.
+ * fastify-jwt’s types don’t expose `audience` on the options in some versions,
+ * so we cast to any as discussed.
+ */
+async function jwtVerifyWithCfg(req: FastifyRequest, cfg?: AuthConfig) {
+  const audience = cfg?.audience;
+  const issuer = cfg?.issuer;
+
+  // If neither is configured, verify without options.
+  if (!hasValue(audience) && !hasValue(issuer)) {
+    await req.jwtVerify();
     return;
   }
-  done();
+
+  // If one is missing, only pass what exists (still cast to any).
+  const opts: Record<string, string> = {};
+  if (hasValue(audience)) opts.audience = audience;
+  if (hasValue(issuer)) opts.issuer = issuer;
+
+  await req.jwtVerify(opts as any);
 }
 
-export function authenticateRequest(request: FastifyRequest): AuthenticatedUser {
-  const u: any = (request as any).user;
-  if (!u || !u.sub || !u.orgId || !u.role) {
-    throw new Error("Unauthenticated");
-  }
-  return {
-    sub: String(u.sub),
-    orgId: String(u.orgId),
-    role: u.role === "admin" ? "admin" : "user",
-    mfaCompleted: Boolean(u.mfaCompleted),
-  };
+function sendUnauthorized(reply: FastifyReply) {
+  reply.code(401).send({ ok: false, error: "unauthorized" });
 }
 
-export function createAuthGuard(_opts?: { audience?: string; issuer?: string }) {
-  return function guard(request: FastifyRequest, _reply: FastifyReply, done: () => void) {
-    if (!(request as any).user) {
-      const h: any = request.headers || {};
-      const orgId = String(h["x-org-id"] || "test-org");
-      (request as any).user = {
-        sub: String(h["x-user-sub"] || "test-user"),
-        orgId,
-        role: (h["x-user-role"] === "admin" ? "admin" : "user") as Role,
-        mfaCompleted: Boolean(h["x-mfa"] === "1" || h["x-mfa"] === "true"),
-      } satisfies AuthenticatedUser;
+function sendForbidden(reply: FastifyReply) {
+  reply.code(403).send({ ok: false, error: "forbidden" });
+}
+
+/**
+ * Factory used by buildFastifyApp(opts.auth)
+ */
+export function createAuthGuard(cfg?: AuthConfig) {
+  return async function authGuard(
+    req: FastifyRequest,
+    reply: FastifyReply
+  ): Promise<void> {
+    try {
+      await jwtVerifyWithCfg(req, cfg);
+    } catch {
+      sendUnauthorized(reply);
+      return;
     }
-    done();
   };
+}
+
+/**
+ * Exported guard for modules that import `authGuard` directly.
+ * Uses env defaults.
+ */
+export const authGuard = createAuthGuard({
+  audience: process.env.AUTH_AUDIENCE,
+  issuer: process.env.AUTH_ISSUER,
+});
+
+/**
+ * Helper used by routes that want role checks.
+ * Signature matches the “(req, reply, roles?)” pattern.
+ */
+export async function authenticateRequest(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  roles: SessionRole[] = []
+): Promise<SessionUser | null> {
+  try {
+    await jwtVerifyWithCfg(req, {
+      audience: process.env.AUTH_AUDIENCE,
+      issuer: process.env.AUTH_ISSUER,
+    });
+  } catch {
+    sendUnauthorized(reply);
+    return null;
+  }
+
+  const user = req.user as SessionUser | undefined;
+  if (!user) {
+    sendUnauthorized(reply);
+    return null;
+  }
+
+  if (roles.length > 0 && !roles.includes(user.role)) {
+    sendForbidden(reply);
+    return null;
+  }
+
+  return user;
 }

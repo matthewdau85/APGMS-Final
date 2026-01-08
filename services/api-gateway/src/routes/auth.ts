@@ -1,44 +1,79 @@
-﻿import type { FastifyPluginAsync } from "fastify";
+﻿import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { SessionRole, SessionUser } from "../auth.js";
 
-const routes: FastifyPluginAsync = async (app) => {
-  const adminEmail = process.env.ADMIN_EMAIL ?? "admin@apgms.local";
-  const adminPassword = process.env.ADMIN_PASSWORD ?? "admin";
-
-  app.post("/auth/login", async (req, reply) => {
-    const body = (req.body ?? {}) as { email?: string; password?: string };
-    const email = (body.email ?? "").toString().trim().toLowerCase();
-    const password = (body.password ?? "").toString();
-
-    if (email !== adminEmail.toLowerCase() || password !== adminPassword) {
-      reply.code(401).send({ ok: false, error: "invalid_credentials" });
-      return;
-    }
-
-    const token = app.jwt.sign({ email, role: "admin" });
-
-    reply.setCookie("apgms_session", token, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: false,
-      path: "/",
-    });
-
-    return { ok: true, user: { email, role: "admin" as const } };
-  });
-
-  app.get("/auth/me", async (req, reply) => {
-    try {
-      await req.jwtVerify();
-      return { ok: true, user: req.user };
-    } catch {
-      reply.code(401).send({ ok: false, user: null });
-    }
-  });
-
-  app.post("/auth/logout", async (_req, reply) => {
-    reply.clearCookie("apgms_session", { path: "/" });
-    return { ok: true };
-  });
+type LoginBody = {
+  email: string;
+  role?: SessionRole;
+  sub?: string;
+  mfaCompleted?: boolean;
 };
 
-export default routes;
+function cookieOpts() {
+  const isProd = process.env.NODE_ENV === "production";
+  return {
+    path: "/",
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: isProd,
+  };
+}
+
+export default async function authRoutes(app: FastifyInstance) {
+  // Current session
+  app.get(
+    "/auth/me",
+    async (req: FastifyRequest, reply: FastifyReply) => {
+      try {
+        await req.jwtVerify();
+        return reply.send({ ok: true, user: req.user });
+      } catch {
+        return reply.code(401).send({ ok: false, error: "unauthorized" });
+      }
+    }
+  );
+
+  // Dev/demo login (cookie-backed JWT)
+  app.post(
+    "/auth/login",
+    async (req: FastifyRequest<{ Body: LoginBody }>, reply: FastifyReply) => {
+      const body = req.body;
+
+      if (!body?.email || typeof body.email !== "string") {
+        return reply
+          .code(400)
+          .send({ ok: false, error: "email_required" });
+      }
+
+      const email = body.email.trim().toLowerCase();
+      if (!email) {
+        return reply
+          .code(400)
+          .send({ ok: false, error: "email_required" });
+      }
+
+      const role: SessionRole = body.role ?? "admin";
+      const sub = (body.sub && body.sub.trim()) || email;
+
+      // Dev/demo default: MFA satisfied unless explicitly set false
+      const mfaCompleted =
+        typeof body.mfaCompleted === "boolean" ? body.mfaCompleted : true;
+
+      const user: SessionUser = { sub, email, role, mfaCompleted };
+
+      const token = await reply.jwtSign(user);
+        reply.setCookie("apgms_session", token, cookieOpts());
+
+      reply.setCookie("apgms_session", token, cookieOpts());
+      return reply.send({ ok: true, user });
+    }
+  );
+
+  // Logout (clear cookie)
+  app.post(
+    "/auth/logout",
+    async (_req: FastifyRequest, reply: FastifyReply) => {
+      reply.clearCookie("apgms_session", { path: "/" });
+      return reply.send({ ok: true });
+    }
+  );
+}

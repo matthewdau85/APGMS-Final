@@ -2,11 +2,37 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import cookie from "@fastify/cookie";
 import jwt from "@fastify/jwt";
 
+/**
+ * Roles are runtime-safe via Role const.
+ * Use SessionRole as the type union.
+ */
+export const Role = {
+  admin: "admin",
+  ops: "ops",
+  user: "user",
+  auditor: "auditor",
+  regulator: "regulator",
+} as const;
+
+export type SessionRole = (typeof Role)[keyof typeof Role];
+
+/**
+ * Keep this aligned with what the API gateway actually uses.
+ * Optional fields are safe even if some routes don’t need them.
+ */
 export type SessionUser = {
   email: string;
-  role: "admin";
+  role: SessionRole;
+  sub?: string;
+  orgId?: string;
+  mfaCompleted?: boolean;
 };
 
+/**
+ * IMPORTANT:
+ * Only declare this module augmentation in ONE place in the repo
+ * (this file), otherwise you get TS2717 duplicate declaration errors.
+ */
 declare module "@fastify/jwt" {
   // eslint-disable-next-line @typescript-eslint/consistent-type-definitions
   interface FastifyJWT {
@@ -41,7 +67,8 @@ export async function requireAdmin(
     return;
   }
 
-  if (!req.user || req.user.role !== "admin") {
+  if (!req.user || req.user.role !== Role.admin) {
     reply.code(403).send({ ok: false, error: "forbidden" });
+    return;
   }
 }
