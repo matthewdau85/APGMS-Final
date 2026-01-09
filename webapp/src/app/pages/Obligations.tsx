@@ -1,262 +1,136 @@
-import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Plus, Filter, Download, Search } from 'lucide-react';
-import { useApp } from '../context/AppContext';
-import { Button } from '../components/ui/button';
-import { Card } from '../components/ui/card';
-import { Input } from '../components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { StatusChip } from '../components/StatusChip';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
-import { EmptyState } from '../components/EmptyState';
-import { FileText } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from "react";
+import { Calendar, AlertTriangle } from "lucide-react";
 
-const obligations = [
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Badge } from "../components/ui/badge";
+
+import { protoApi, ProtoObligation } from "../../prototype/protoApi";
+import { getSetup } from "../../prototype/protoState";
+import { useProtoLive } from "../../prototype/useProtoLive";
+
+function ModeBadge({ mode }: { mode: "live" | "simulated" }) {
+  return (
+    <Badge variant={mode === "live" ? "default" : "secondary"}>
+      {mode === "live" ? "Live (Dev)" : "Simulated"}
+    </Badge>
+  );
+}
+
+const fallbackObligations: ProtoObligation[] = [
   {
-    id: 'OBL-001',
-    title: 'PAYGW Monthly Remittance - December 2025',
-    type: 'PAYGW',
-    dueDate: '2026-01-07',
-    status: 'overdue' as const,
-    amount: 45230.50,
-    period: 'December 2025',
-    assignee: 'Operator',
+    id: "obl-1",
+    type: "BAS",
+    period: "2024-Q4",
+    dueDate: new Date(Date.now() + 9 * 86400000).toISOString(),
+    amount: 8930,
+    status: "upcoming",
   },
   {
-    id: 'OBL-002',
-    title: 'GST Return - Q4 2025',
-    type: 'GST',
-    dueDate: '2026-01-15',
-    status: 'pending' as const,
-    amount: 123456.78,
-    period: 'Q4 2025',
-    assignee: 'Admin',
+    id: "obl-2",
+    type: "PAYGW",
+    period: "2024-12",
+    dueDate: new Date(Date.now() + 4 * 86400000).toISOString(),
+    amount: 4120,
+    status: "in_progress",
   },
   {
-    id: 'OBL-003',
-    title: 'BAS Statement Reconciliation',
-    type: 'BAS',
-    dueDate: '2026-01-20',
-    status: 'active' as const,
-    amount: 87654.32,
-    period: 'Q4 2025',
-    assignee: 'Operator',
-  },
-  {
-    id: 'OBL-004',
-    title: 'Superannuation Guarantee Contribution',
-    type: 'SG',
-    dueDate: '2026-01-28',
-    status: 'pending' as const,
-    amount: 34567.89,
-    period: 'Q4 2025',
-    assignee: 'Operator',
-  },
-  {
-    id: 'OBL-005',
-    title: 'PAYGW Withholding Verification',
-    type: 'PAYGW',
-    dueDate: '2026-01-25',
-    status: 'active' as const,
-    amount: 56789.12,
-    period: 'December 2025',
-    assignee: 'Operator',
-  },
-  {
-    id: 'OBL-006',
-    title: 'GST Payment - November 2025',
-    type: 'GST',
-    dueDate: '2025-12-21',
-    status: 'completed' as const,
-    amount: 98765.43,
-    period: 'November 2025',
-    assignee: 'Admin',
+    id: "obl-3",
+    type: "SUPER",
+    period: "2024-Q4",
+    dueDate: new Date(Date.now() - 2 * 86400000).toISOString(),
+    amount: 2750,
+    status: "overdue",
   },
 ];
 
-export const Obligations: React.FC = () => {
-  const { setCurrentHelpContent } = useApp();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [typeFilter, setTypeFilter] = useState('all');
+export function Obligations() {
+  const setup = useMemo(() => getSetup(), []);
+  useProtoLive();
+
+  const [mode, setMode] = useState<"live" | "simulated">("simulated");
+  const [obligations, setObligations] = useState<ProtoObligation[]>(fallbackObligations);
 
   useEffect(() => {
-    setCurrentHelpContent({
-      title: 'Obligations Management',
-      purpose: 'View, filter, and manage all tax obligations across PAYGW, GST, BAS, and other Australian tax requirements. Track status, due dates, and amounts for compliance reporting.',
-      requiredInputs: [
-        'Obligation type (PAYGW, GST, BAS, SG)',
-        'Due date',
-        'Amount (if applicable)',
-        'Reporting period',
-      ],
-      definitions: {
-        'PAYGW': 'Pay As You Go Withholding - tax withheld from payments to employees',
-        'GST': 'Goods and Services Tax - 10% tax on most goods and services',
-        'BAS': 'Business Activity Statement - periodic tax reporting to ATO',
-        'SG': 'Superannuation Guarantee - mandatory employer retirement contributions',
-      },
-      commonMistakes: [
-        'Missing statutory due dates - always submit 1-2 days early',
-        'Incorrect reporting period assignment',
-        'Not reconciling amounts with ledger before submission',
-        'Failing to maintain evidence trail for completed obligations',
-      ],
-      outputs: [
-        'Filtered list of obligations by status, type, or period',
-        'Due date alerts and reminders',
-        'Compliance status overview',
-        'Export capability for auditing',
-      ],
-      nextStep: 'Click on any obligation to view details, or use "Create Obligation" to add a new tax obligation manually.',
-    });
-  }, [setCurrentHelpContent]);
+    let cancelled = false;
 
-  const filteredObligations = obligations.filter((obl) => {
-    const matchesSearch = obl.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      obl.id.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || obl.status === statusFilter;
-    const matchesType = typeFilter === 'all' || obl.type === typeFilter;
-    return matchesSearch && matchesStatus && matchesType;
-  });
+    (async () => {
+      try {
+        const period = setup.defaultPeriod || "2024-Q4";
+        const data = await protoApi.getObligations(period);
+        if (!cancelled) {
+          setObligations(data);
+          setMode("live");
+        }
+      } catch {
+        if (!cancelled) {
+          setObligations(fallbackObligations);
+          setMode("simulated");
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [setup.defaultPeriod]);
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Obligations</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Manage and track all tax obligations
-          </p>
+          <h2 className="text-3xl font-bold tracking-tight">Obligations</h2>
+          <p className="text-muted-foreground">Due dates, statuses, and amounts by obligation type.</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm">
-            <Download className="mr-2 h-4 w-4" />
-            Export
-          </Button>
-          <Link to="/obligations/new">
-            <Button size="sm">
-              <Plus className="mr-2 h-4 w-4" />
-              Create Obligation
-            </Button>
-          </Link>
-        </div>
+        <ModeBadge mode={mode} />
       </div>
 
-      {/* Filters */}
-      <Card className="p-4">
-        <div className="flex items-center gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by ID or title..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-          
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-40">
-              <Filter className="mr-2 h-4 w-4" />
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="overdue">Overdue</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="Type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="PAYGW">PAYGW</SelectItem>
-              <SelectItem value="GST">GST</SelectItem>
-              <SelectItem value="BAS">BAS</SelectItem>
-              <SelectItem value="SG">SG</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </Card>
-
-      {/* Table */}
       <Card>
-        {filteredObligations.length === 0 ? (
-          <EmptyState
-            icon={FileText}
-            title="No obligations found"
-            description="No obligations match your current filters. Try adjusting your search criteria or create a new obligation."
-            action={{
-              label: 'Create Obligation',
-              onClick: () => {},
-            }}
-          />
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>ID</TableHead>
-                <TableHead>Obligation</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Period</TableHead>
-                <TableHead>Due Date</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Assignee</TableHead>
-                <TableHead className="w-20"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredObligations.map((obligation) => (
-                <TableRow key={obligation.id}>
-                  <TableCell>
-                    <span className="font-mono text-sm text-muted-foreground">
-                      {obligation.id}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <p className="font-medium text-foreground">{obligation.title}</p>
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-sm text-foreground">{obligation.type}</span>
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-sm text-foreground">{obligation.period}</span>
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-sm text-foreground">{obligation.dueDate}</span>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <span className="font-mono text-sm text-foreground">
-                      ${obligation.amount.toLocaleString('en-AU', { minimumFractionDigits: 2 })}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <StatusChip status={obligation.status} />
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-sm text-foreground">{obligation.assignee}</span>
-                  </TableCell>
-                  <TableCell>
-                    <Link to={`/obligations/${obligation.id}`}>
-                      <Button variant="ghost" size="sm">
-                        View
-                      </Button>
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="w-5 h-5" />
+            Obligation List
+          </CardTitle>
+          <Badge variant="outline">{obligations.length} items</Badge>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {obligations.map((o) => {
+            const isOverdue = o.status === "overdue";
+            return (
+              <div
+                key={o.id}
+                className="flex items-center justify-between gap-4 p-3 rounded-lg border"
+              >
+                <div className="min-w-0">
+                  <div className="font-medium flex items-center gap-2">
+                    {o.type}
+                    {isOverdue ? <AlertTriangle className="w-4 h-4" /> : null}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Period: {o.period} {"\u2022"} Due:{" "}
+                    {new Date(o.dueDate).toLocaleDateString("en-AU")}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <div className="font-semibold">
+                      {o.amount.toLocaleString("en-AU", {
+                        style: "currency",
+                        currency: "AUD",
+                        maximumFractionDigits: 0,
+                      })}
+                    </div>
+                    <div className="text-xs text-muted-foreground">{o.status}</div>
+                  </div>
+                  <Badge variant={isOverdue ? "destructive" : "secondary"}>{o.status}</Badge>
+                </div>
+              </div>
+            );
+          })}
+        </CardContent>
       </Card>
     </div>
   );
-};
+}
+
+export default Obligations;

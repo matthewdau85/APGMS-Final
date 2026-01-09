@@ -1,191 +1,98 @@
-import React, { useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Plus, Download, Archive } from 'lucide-react';
-import { useApp } from '../context/AppContext';
-import { Button } from '../components/ui/button';
-import { Card } from '../components/ui/card';
-import { StatusChip } from '../components/StatusChip';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
+import React, { useMemo, useState } from "react";
+import { FileText, PackagePlus } from "lucide-react";
 
-const evidencePacks = [
-  {
-    id: 'EP-2025-12-001',
-    title: 'PAYGW Dec 2025 Evidence Pack',
-    obligationId: 'OBL-001',
-    createdDate: '2025-12-28',
-    status: 'draft' as const,
-    documentsCount: 12,
-    createdBy: 'Operator',
-  },
-  {
-    id: 'EP-2025-11-015',
-    title: 'GST Q4 2025 Audit Trail',
-    obligationId: 'OBL-002',
-    createdDate: '2025-11-30',
-    status: 'submitted' as const,
-    documentsCount: 24,
-    createdBy: 'Admin',
-  },
-  {
-    id: 'EP-2025-11-008',
-    title: 'BAS Nov 2025 Evidence',
-    obligationId: 'OBL-006',
-    createdDate: '2025-11-22',
-    status: 'approved' as const,
-    documentsCount: 18,
-    createdBy: 'Operator',
-  },
-];
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Button } from "../components/ui/button";
+import { Badge } from "../components/ui/badge";
 
-export const EvidencePacks: React.FC = () => {
-  const { setCurrentHelpContent } = useApp();
+import { protoApi } from "../../prototype/protoApi";
+import {
+  addRecentEvidencePackId,
+  getRecentEvidencePackIds,
+  getSetup,
+} from "../../prototype/protoState";
 
-  useEffect(() => {
-    setCurrentHelpContent({
-      title: 'Evidence Pack Management',
-      purpose: 'Evidence Packs are comprehensive documentation packages that provide an audit trail for completed tax obligations. They include all supporting documents, calculations, reconciliations, and approvals required for regulatory compliance and internal audits.',
-      requiredInputs: [
-        'Related obligation reference',
-        'All source documents (invoices, receipts, statements)',
-        'Reconciliation reports',
-        'Payment confirmations',
-        'Approval signatures',
-      ],
-      definitions: {
-        'Evidence Pack': 'A sealed collection of all documentation proving compliance with a tax obligation',
-        'Draft': 'Pack is being compiled, not yet submitted for review',
-        'Submitted': 'Pack submitted to auditor or regulator for review',
-        'Approved': 'Pack has been reviewed and approved, ready for archival',
-      },
-      commonMistakes: [
-        'Submitting incomplete documentation - always verify all required documents are included',
-        'Missing reconciliation reports',
-        'Not including payment proof',
-        'Forgetting to seal the pack after final approval',
-      ],
-      outputs: [
-        'Complete evidence package',
-        'Audit-ready documentation',
-        'Downloadable PDF bundle',
-        'Secure archival record',
-      ],
-      nextStep: 'Create a new evidence pack for a completed obligation, or review existing packs awaiting approval.',
-    });
-  }, [setCurrentHelpContent]);
+function ModeBadge({ mode }: { mode: "live" | "simulated" }) {
+  return (
+    <Badge variant={mode === "live" ? "default" : "secondary"}>
+      {mode === "live" ? "Live (Dev)" : "Simulated"}
+    </Badge>
+  );
+}
+
+export function EvidencePacks() {
+  const setup = useMemo(() => getSetup(), []);
+  const [mode, setMode] = useState<"live" | "simulated">("simulated");
+  const [recent, setRecent] = useState<string[]>(() => getRecentEvidencePackIds());
+  const [busy, setBusy] = useState(false);
+
+  const handleGenerate = async () => {
+    setBusy(true);
+    try {
+      const obligationIds = ["obl-1", "obl-2"];
+      const period = setup.defaultPeriod || "2024-Q4";
+
+      const res = await protoApi.generateEvidencePack({ obligationIds, period });
+      addRecentEvidencePackId(res.packId);
+      setRecent(getRecentEvidencePackIds());
+      setMode("live");
+    } catch {
+      const packId = `SIM-${Date.now()}`;
+      addRecentEvidencePackId(packId);
+      setRecent(getRecentEvidencePackIds());
+      setMode("simulated");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Evidence Packs</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Manage audit documentation and evidence trails
+          <h2 className="text-3xl font-bold tracking-tight">Evidence Packs</h2>
+          <p className="text-muted-foreground">
+            Generate and view compliance evidence packs (manifest + artifacts).
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm">
-            <Download className="mr-2 h-4 w-4" />
-            Export All
-          </Button>
-          <Link to="/evidence-packs/new">
-            <Button size="sm">
-              <Plus className="mr-2 h-4 w-4" />
-              Create Evidence Pack
-            </Button>
-          </Link>
-        </div>
+        <ModeBadge mode={mode} />
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Draft Packs</p>
-              <p className="text-2xl font-semibold text-foreground mt-2">1</p>
-            </div>
-            <Archive className="h-8 w-8 text-muted-foreground" />
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Awaiting Review</p>
-              <p className="text-2xl font-semibold text-foreground mt-2">1</p>
-            </div>
-            <Archive className="h-8 w-8 text-[var(--info)]" />
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Approved</p>
-              <p className="text-2xl font-semibold text-foreground mt-2">1</p>
-            </div>
-            <Archive className="h-8 w-8 text-[var(--success)]" />
-          </div>
-        </Card>
-      </div>
-
-      {/* Table */}
       <Card>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Pack ID</TableHead>
-              <TableHead>Title</TableHead>
-              <TableHead>Obligation</TableHead>
-              <TableHead>Created Date</TableHead>
-              <TableHead>Documents</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Created By</TableHead>
-              <TableHead className="w-20"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {evidencePacks.map((pack) => (
-              <TableRow key={pack.id}>
-                <TableCell>
-                  <span className="font-mono text-sm text-muted-foreground">
-                    {pack.id}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  <p className="font-medium text-foreground">{pack.title}</p>
-                </TableCell>
-                <TableCell>
-                  <Link 
-                    to={`/obligations/${pack.obligationId}`}
-                    className="text-sm text-primary hover:underline"
-                  >
-                    {pack.obligationId}
-                  </Link>
-                </TableCell>
-                <TableCell>
-                  <span className="text-sm text-foreground">{pack.createdDate}</span>
-                </TableCell>
-                <TableCell>
-                  <span className="text-sm text-foreground">{pack.documentsCount} files</span>
-                </TableCell>
-                <TableCell>
-                  <StatusChip status={pack.status} />
-                </TableCell>
-                <TableCell>
-                  <span className="text-sm text-foreground">{pack.createdBy}</span>
-                </TableCell>
-                <TableCell>
-                  <Link to={`/evidence-packs/${pack.id}`}>
-                    <Button variant="ghost" size="sm">
-                      View
-                    </Button>
-                  </Link>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <CardHeader className="flex items-center justify-between flex-row">
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="w-5 h-5" />
+            Generate Evidence Pack
+          </CardTitle>
+          <Button onClick={handleGenerate} disabled={busy} className="gap-2">
+            <PackagePlus className="w-4 h-4" />
+            {busy ? "Generating..." : "Generate"}
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="text-sm text-muted-foreground">
+            Prototype behavior: always labels output as Live (Dev) or Simulated.
+          </div>
+
+          <div className="space-y-2">
+            <div className="font-medium">Recent Pack IDs</div>
+            {recent.length === 0 ? (
+              <div className="text-sm text-muted-foreground">None yet.</div>
+            ) : (
+              <div className="space-y-2">
+                {recent.map((id) => (
+                  <div key={id} className="flex items-center justify-between p-3 rounded-lg border">
+                    <div className="font-mono text-sm">{id}</div>
+                    <Badge variant="outline">generated</Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </CardContent>
       </Card>
     </div>
   );
-};
+}
+
+export default EvidencePacks;

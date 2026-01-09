@@ -1,43 +1,41 @@
 // webapp/src/lib/api-client.ts
+export type ApiRequestOptions = {
+  method?: "GET" | "POST" | "PUT" | "DELETE";
+  body?: unknown;
+  headers?: Record<string, string>;
+  orgId?: string;
+};
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000";
+const DEFAULT_BASE_URL =
+  (import.meta as any).env?.VITE_API_BASE_URL?.toString?.() ?? "http://localhost:3001";
 
-/**
- * Simple JSON fetch wrapper.
- * - Attaches X-Org-Id if provided.
- * - Throws on non-2xx responses.
- */
-export async function apiRequest<T>(
-  path: string,
-  options: {
-    method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-    body?: unknown;
-    orgId?: string;
-    signal?: AbortSignal;
-  } = {},
-): Promise<T> {
-  const url = `${API_BASE_URL}${path}`;
+export async function apiRequest<T>(path: string, opts: ApiRequestOptions = {}): Promise<T> {
+  const url = `${DEFAULT_BASE_URL}${path}`;
+
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    "content-type": "application/json",
+    ...(opts.headers ?? {}),
   };
 
-  if (options.orgId) {
-    headers["x-org-id"] = options.orgId;
+  if (opts.orgId) {
+    headers["x-org-id"] = opts.orgId;
   }
 
   const res = await fetch(url, {
-    method: options.method ?? "GET",
+    method: opts.method ?? "GET",
     headers,
-    body: options.body ? JSON.stringify(options.body) : undefined,
-    signal: options.signal,
+    credentials: "include", // IMPORTANT: send apgms_session cookie
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(
-      `API error ${res.status} ${res.statusText} for ${url}: ${text}`,
-    );
+    let details = "";
+    try {
+      details = await res.text();
+    } catch {
+      // ignore
+    }
+    throw new Error(`API ${res.status} ${res.statusText}${details ? `: ${details}` : ""}`);
   }
 
   return (await res.json()) as T;

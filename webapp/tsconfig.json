@@ -11,7 +11,10 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "isolatedModules": true
+    "isolatedModules": true,
+    "baseUrl": ".",
+    "paths": {
+    "@/*": ["src/*"]
   },
   "include": ["src"],
   "exclude": [

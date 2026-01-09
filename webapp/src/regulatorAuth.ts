@@ -1,41 +1,46 @@
-const REGULATOR_SESSION_KEY = "apgms_regulator_session";
-
 export type RegulatorSession = {
   token: string;
   orgId: string;
-  session: {
-    id: string;
-    issuedAt: string;
-    expiresAt: string;
-    sessionToken: string;
-  };
+  createdAt: number;
 };
 
-function readSession(): RegulatorSession | null {
-  const raw = localStorage.getItem(REGULATOR_SESSION_KEY);
-  if (!raw) {
-    return null;
-  }
-  try {
-    return JSON.parse(raw) as RegulatorSession;
-  } catch {
-    localStorage.removeItem(REGULATOR_SESSION_KEY);
-    return null;
-  }
-}
+const KEY = "apgms:regulatorSession";
 
-export function saveRegulatorSession(session: RegulatorSession) {
-  localStorage.setItem(REGULATOR_SESSION_KEY, JSON.stringify(session));
+export function saveRegulatorSession(token: string, orgId: string) {
+  const session: RegulatorSession = {
+    token,
+    orgId,
+    createdAt: Date.now(),
+  };
+  localStorage.setItem(KEY, JSON.stringify(session));
+  return session;
 }
 
 export function getRegulatorSession(): RegulatorSession | null {
-  return readSession();
-}
+  const raw = localStorage.getItem(KEY);
+  if (!raw) return null;
 
-export function getRegulatorToken(): string | null {
-  return readSession()?.token ?? null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<RegulatorSession>;
+    if (!parsed || typeof parsed.token !== "string" || typeof parsed.orgId !== "string") return null;
+    return {
+      token: parsed.token,
+      orgId: parsed.orgId,
+      createdAt: typeof parsed.createdAt === "number" ? parsed.createdAt : Date.now(),
+    };
+  } catch {
+    return null;
+  }
 }
 
 export function clearRegulatorSession() {
-  localStorage.removeItem(REGULATOR_SESSION_KEY);
+  localStorage.removeItem(KEY);
+}
+
+export function getRegulatorToken(): string | null {
+  return getRegulatorSession()?.token ?? null;
+}
+
+export function isRegulatorAuthed(): boolean {
+  return Boolean(getRegulatorToken());
 }

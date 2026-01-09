@@ -1,16 +1,17 @@
 import React from "react";
+import { Outlet } from "react-router-dom";
 
-/**
- * Legacy admin-only console entrypoint.
- * Stubbed to keep existing imports/routes compiling.
- */
+import { AppProvider } from "../app/context/AppContext";
+import Layout from "../app/components/Layout";
+
 export function ProtoConsole() {
   return (
-    <div className="p-6 space-y-2">
-      <h1 className="text-lg font-semibold">Prototype Console</h1>
-      <p className="text-sm text-muted-foreground">
-        This console has been stubbed. Use the main application pages under src/app/.
-      </p>
-    </div>
+    <AppProvider>
+      <Layout basePath="/proto">
+        <Outlet />
+      </Layout>
+    </AppProvider>
   );
 }
+
+export default ProtoConsole;

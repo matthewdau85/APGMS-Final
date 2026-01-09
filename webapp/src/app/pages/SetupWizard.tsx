@@ -1,80 +1,110 @@
-import React from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useMemo, useState } from "react";
+import { Wand2 } from "lucide-react";
+
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/card";
+import { Input } from "../components/ui/input";
+import { Badge } from "../components/ui/badge";
 
-const SETUP_KEY = "apgms_demo_setup_v1";
+import { getOrgId, setOrgId, getSetup, setSetup, ProtoSetup } from "../../prototype/protoState";
 
-export default function SetupWizard() {
-  const navigate = useNavigate();
+const OBLIGATIONS = ["BAS", "PAYGW", "GST", "PAYGI", "SUPER"];
 
-  function startDemo() {
-    // Mark setup complete (simple + deterministic)
-    localStorage.setItem(SETUP_KEY, new Date().toISOString());
+export function SetupWizard() {
+  const existingOrgId = useMemo(() => getOrgId(), []);
+  const existingSetup = useMemo(() => getSetup(), []);
 
-    // Optional: set initial role/org/period defaults if you want
-    // localStorage.setItem("apgms_role_v1", "operator");
-    // localStorage.setItem("apgms_org_v1", "acme-corp");
-    // localStorage.setItem("apgms_period_v1", "q4-2025");
+  const [orgId, setOrgIdState] = useState(existingOrgId);
+  const [jurisdiction, setJurisdiction] = useState(existingSetup.jurisdiction || "AU");
+  const [defaultPeriod, setDefaultPeriod] = useState(existingSetup.defaultPeriod || "2024-Q4");
+  const [enabled, setEnabled] = useState<string[]>(
+    existingSetup.enabledObligations || ["BAS", "PAYGW", "SUPER"]
+  );
+  const [saved, setSaved] = useState(false);
 
-    navigate("/", { replace: true });
-  }
+  const toggle = (key: string) => {
+    setEnabled((prev) => (prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]));
+    setSaved(false);
+  };
 
-  function resetDemo() {
-    localStorage.removeItem(SETUP_KEY);
-    navigate("/setup", { replace: true });
-  }
+  const save = () => {
+    setOrgId(orgId);
+    const setup: ProtoSetup = {
+      jurisdiction,
+      enabledObligations: enabled,
+      defaultPeriod,
+    };
+    setSetup(setup);
+    setSaved(true);
+  };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-6">
-      <div className="w-full max-w-2xl">
-        <Card>
-          <CardHeader>
-            <CardTitle>APGMS Demo Setup</CardTitle>
-            <CardDescription>
-              This wizard is a prototype entry gate. It exists so the demo behaves like
-              production onboarding, even when all data is stubbed.
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent className="space-y-4">
-            <div className="rounded-md border p-4 bg-card">
-              <div className="text-sm font-medium">What this enables</div>
-              <ul className="mt-2 text-sm text-muted-foreground list-disc pl-5 space-y-1">
-                <li>Route map parity (no dead links)</li>
-                <li>Consistent demo state (org and period selection)</li>
-                <li>RBAC boundary (operator vs regulator) later</li>
-                <li>Evidence pack generation workflow later</li>
-              </ul>
-            </div>
-
-            <div className="rounded-md border p-4 bg-card">
-              <div className="text-sm font-medium">Demo note</div>
-              <div className="mt-2 text-sm text-muted-foreground">
-                This does not create real data yet. It only sets a local flag so the UI
-                can enforce a first-run experience consistently.
-              </div>
-            </div>
-          </CardContent>
-
-          <CardFooter className="flex items-center justify-between gap-3">
-            <Button variant="outline" onClick={resetDemo}>
-              Reset
-            </Button>
-
-            <Button onClick={startDemo}>
-              Start demo
-            </Button>
-          </CardFooter>
-        </Card>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Setup Wizard</h2>
+          <p className="text-muted-foreground">Prototype configuration (stored locally).</p>
+        </div>
+        <Badge variant={saved ? "default" : "secondary"}>{saved ? "Saved" : "Not saved"}</Badge>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Wand2 className="w-5 h-5" />
+            Organization and Scope
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid gap-3">
+            <label className="text-sm font-medium">Org ID (x-org-id)</label>
+            <Input value={orgId} onChange={(e) => setOrgIdState(e.target.value)} placeholder="org_demo" />
+            <div className="text-xs text-muted-foreground">
+              Used for prototype tenancy via x-org-id header.
+            </div>
+          </div>
+
+          <div className="grid gap-3">
+            <label className="text-sm font-medium">Jurisdiction</label>
+            <Input
+              value={jurisdiction}
+              onChange={(e) => setJurisdiction(e.target.value)}
+              placeholder="AU"
+            />
+          </div>
+
+          <div className="grid gap-3">
+            <label className="text-sm font-medium">Default Period</label>
+            <Input
+              value={defaultPeriod}
+              onChange={(e) => setDefaultPeriod(e.target.value)}
+              placeholder="2024-Q4"
+            />
+          </div>
+
+          <div className="grid gap-3">
+            <label className="text-sm font-medium">Enabled Obligations</label>
+            <div className="flex flex-wrap gap-2">
+              {OBLIGATIONS.map((o) => (
+                <Button
+                  key={o}
+                  type="button"
+                  variant={enabled.includes(o) ? "default" : "outline"}
+                  onClick={() => toggle(o)}
+                >
+                  {o}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2">
+            <Button onClick={save}>Save</Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
+
+export default SetupWizard;

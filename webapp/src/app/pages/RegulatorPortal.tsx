@@ -1,178 +1,134 @@
-import React from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { Scale, FileText } from "lucide-react";
+
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
-import { Button } from "../components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/card";
 
-type EvidencePackStub = {
-  id: string;
-  org: string;
-  period: string;
-  createdAt: string; // ISO
-  schemaVersion: string;
-  sha256: string;
-  status: "ready" | "pending" | "failed";
-};
+import { protoApi } from "../../prototype/protoApi";
 
-const packs: EvidencePackStub[] = [
-  {
-    id: "pack_2025Q4_0003",
-    org: "Acme Corporation",
-    period: "Q4 2025",
-    createdAt: "2026-01-06T03:12:00.000Z",
-    schemaVersion: "1.0.0",
-    sha256: "9f2f9a6c2c5c3b4a1b8f8b3a0d4d1b7a0a5d6c2e8a1b2c3d4e5f6a7b8c9d0e1f",
-    status: "ready",
-  },
-  {
-    id: "pack_2025Q4_0002",
-    org: "Acme Corporation",
-    period: "Q4 2025",
-    createdAt: "2026-01-05T09:41:00.000Z",
-    schemaVersion: "1.0.0",
-    sha256: "2a1b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809",
-    status: "ready",
-  },
-  {
-    id: "pack_2025Q4_0001",
-    org: "Demo Company",
-    period: "Q4 2025",
-    createdAt: "2026-01-04T01:08:00.000Z",
-    schemaVersion: "1.0.0",
-    sha256: "a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2",
-    status: "pending",
-  },
-];
-
-function statusBadgeVariant(s: EvidencePackStub["status"]) {
-  if (s === "ready") return "default";
-  if (s === "pending") return "secondary";
-  return "destructive";
+function ModeBadge({ mode }: { mode: "live" | "simulated" }) {
+  return (
+    <Badge variant={mode === "live" ? "default" : "secondary"}>
+      {mode === "live" ? "Live (Dev)" : "Simulated"}
+    </Badge>
+  );
 }
 
-export default function RegulatorPortal() {
-  // Stubbed summary (replace with service-layer calls later)
-  const summary = {
-    obligationsDue: 2,
-    blockedItems: 1,
-    openIncidents: 1,
-    latestPack: packs[0]?.id ?? "none",
-  };
+type Summary = {
+  totalOrganizations: number;
+  compliantOrganizations: number;
+  overdueObligations: number;
+  criticalIncidents: number;
+};
+
+const fallback: Summary = {
+  totalOrganizations: 150,
+  compliantOrganizations: 142,
+  overdueObligations: 8,
+  criticalIncidents: 2,
+};
+
+export function RegulatorPortal() {
+  const [mode, setMode] = useState<"live" | "simulated">("simulated");
+  const [summary, setSummary] = useState<Summary>(fallback);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const data = await protoApi.getRegulatorSummary();
+        if (!cancelled) {
+          setSummary({
+            totalOrganizations: data.totalOrganizations ?? fallback.totalOrganizations,
+            compliantOrganizations: data.compliantOrganizations ?? fallback.compliantOrganizations,
+            overdueObligations: data.overdueObligations ?? fallback.overdueObligations,
+            criticalIncidents: data.criticalIncidents ?? fallback.criticalIncidents,
+          });
+          setMode("live");
+        }
+      } catch {
+        if (!cancelled) {
+          setSummary(fallback);
+          setMode("simulated");
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Read-only banner */}
-      <Card>
-        <CardHeader className="space-y-2">
-          <div className="flex items-center justify-between gap-3">
-            <CardTitle>Regulator Portal</CardTitle>
-            <Badge variant="secondary">Read-only</Badge>
-          </div>
-          <CardDescription>
-            This view mimics the production regulator experience. All data shown here is stubbed,
-            but the information architecture and permissions boundary should match production.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex items-center justify-between gap-3">
-          <div className="text-sm text-muted-foreground">
-            Tip: In production, this page must not expose any mutation endpoints. Treat read-only
-            as a service boundary, not a UI toggle.
-          </div>
-          <Button asChild variant="outline">
-            <Link to="/">Back to dashboard</Link>
-          </Button>
-        </CardContent>
-      </Card>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Regulator Portal</h2>
+          <p className="text-muted-foreground">
+            Read-only prototype view of compliance posture across organizations.
+          </p>
+        </div>
+        <ModeBadge mode={mode} />
+      </div>
 
-      {/* Compliance summary tiles */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Obligations due</CardTitle>
-            <CardDescription>Next 14 days</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Total Orgs</CardTitle>
+            <Scale className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-semibold">{summary.obligationsDue}</div>
+            <div className="text-2xl font-bold">{summary.totalOrganizations}</div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Blocked items</CardTitle>
-            <CardDescription>Funding or data gaps</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Compliant Orgs</CardTitle>
+            <Badge variant="outline">ok</Badge>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-semibold">{summary.blockedItems}</div>
+            <div className="text-2xl font-bold">{summary.compliantOrganizations}</div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Open incidents</CardTitle>
-            <CardDescription>Active remediation</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Overdue Obligations</CardTitle>
+            <FileText className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-semibold">{summary.openIncidents}</div>
+            <div className="text-2xl font-bold">{summary.overdueObligations}</div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Latest pack</CardTitle>
-            <CardDescription>Most recent build</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Critical Incidents</CardTitle>
+            <Badge variant="destructive">risk</Badge>
           </CardHeader>
           <CardContent>
-            <div className="text-sm font-medium break-all">{summary.latestPack}</div>
+            <div className="text-2xl font-bold">{summary.criticalIncidents}</div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Evidence pack list */}
       <Card>
         <CardHeader>
-          <CardTitle>Evidence Packs</CardTitle>
-          <CardDescription>
-            Stub list. In production, each pack links to a signed manifest, checksum list, and artifacts.
-          </CardDescription>
+          <CardTitle>Notes</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {packs.map((p) => (
-            <div
-              key={p.id}
-              className="rounded-md border p-4 bg-card flex flex-col md:flex-row md:items-center md:justify-between gap-3"
-            >
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <div className="font-medium">{p.id}</div>
-                  <Badge variant={statusBadgeVariant(p.status)}>{p.status}</Badge>
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  {p.org} | {p.period} | {new Date(p.createdAt).toLocaleString()}
-                </div>
-                <div className="text-xs text-muted-foreground break-all">
-                  schema {p.schemaVersion} | sha256 {p.sha256}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {/* Placeholders: wire these to your evidence-pack download flow later */}
-                <Button variant="outline" disabled>
-                  View manifest
-                </Button>
-                <Button variant="outline" disabled>
-                  Download
-                </Button>
-              </div>
-            </div>
-          ))}
+        <CardContent className="text-sm text-muted-foreground space-y-2">
+          <div>
+            This page is investor-safe: it labels Live (Dev) vs Simulated and does not imply real regulator connectivity.
+          </div>
+          <div>
+            Replace with real aggregation + evidence-pack listing once the backend endpoints are de-stubbed.
+          </div>
         </CardContent>
       </Card>
     </div>
   );
 }
+
+export default RegulatorPortal;

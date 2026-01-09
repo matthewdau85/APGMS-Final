@@ -1,12 +1,11 @@
 import React from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 
-import LoginPage from "./pages/LoginPage";
 import HomePage from "./pages/HomePage";
-import { AdminArea } from "./admin/AdminArea";
+import LoginPage from "./pages/LoginPage";
 
 import { RequireAdmin } from "./auth/RequireAdmin";
-import { PrototypeApp } from "./prototype/PrototypeApp";
+import { ProtoConsole } from "./prototype/ProtoConsole";
 
 export default function AppMain() {
   return (
@@ -14,14 +13,11 @@ export default function AppMain() {
       <Route path="/" element={<HomePage />} />
       <Route path="/login" element={<LoginPage />} />
 
-      <Route path="/admin" element={<AdminArea />} />
-
-      {/* Admin-only prototype console */}
       <Route
         path="/proto/*"
         element={
           <RequireAdmin>
-            <PrototypeApp />
+            <ProtoConsole />
           </RequireAdmin>
         }
       />
