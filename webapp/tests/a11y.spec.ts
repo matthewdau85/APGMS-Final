@@ -1,5 +1,6 @@
 ﻿import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import type { AxeResults, Result } from "axe-core";
 
 //
 // Update this if your preview server runs somewhere else in CI.
@@ -14,15 +15,16 @@ const ROUTES = ["/", "/bank-lines"] as const;
 
 test.describe("Accessibility regression checks (WCAG 2.1 A/AA)", () => {
   for (const route of ROUTES) {
-    test(`route ${route} has no WCAG 2.1 A/AA violations of serious/critical impact`, async ({
-      page,
-    }, testInfo) => {
+    test(`route ${route} has no WCAG 2.1 A/AA violations of serious/critical impact`, async (
+      { page },
+      testInfo
+    ) => {
       // Navigate to full URL so we're not depending on playwright.config.ts baseURL
       await page.goto(`${BASE_URL}${route}`);
       await page.waitForLoadState("networkidle");
 
       // Run axe against this page
-      const results = await new AxeBuilder({ page })
+      const results: AxeResults = await new AxeBuilder({ page })
         // Enforce WCAG 2.0/2.1 A + AA rulesets. This matches common compliance targets.
         .withTags(["wcag2a", "wcag2aa"])
         .analyze();
@@ -41,7 +43,7 @@ test.describe("Accessibility regression checks (WCAG 2.1 A/AA)", () => {
       // "serious" or "critical". This preserves the intent of your original
       // single-page test.
       //
-      const seriousOrWorse = results.violations.filter((v) =>
+      const seriousOrWorse = results.violations.filter((v: Result) =>
         ["serious", "critical"].includes(v.impact ?? "")
       );
 

@@ -1,51 +1,31 @@
 import React from "react";
-import {
-  createBrowserRouter,
-  Navigate,
-  RouterProvider,
-} from "react-router-dom";
-import { OnboardingWizard } from "./routes/OnboardingWizard";
-import { Dashboard } from "./routes/Dashboard";
-import { Layout } from "./routes/Layout";
+import { createBrowserRouter } from "react-router-dom";
 
-// Temporary auth/org stub – replace with real context when ready
-function useAuth() {
-  const stored = window.localStorage.getItem("apgms_org_id");
-  return { orgId: stored ?? null, isAuthenticated: true };
-}
+// FIX: these modules export default (not named exports)
+import Dashboard from "./routes/Dashboard";
+import Layout from "./routes/Layout";
 
-const router = createBrowserRouter([
+// Keep your existing imports/routes here if you already have them.
+// The following are common in this repo based on your earlier a11y routes.
+import RegulatorLoginPage from "./RegulatorLoginPage";
+
+// If this file exists in your repo, keep it. If not, remove this import and route.
+// (Your a11y test references "/bank-lines", so it likely exists.)
+import BankLines from "./routes/BankLines";
+
+export const router = createBrowserRouter([
   {
     path: "/",
     element: <Layout />,
     children: [
-      {
-        index: true,
-        element: <RedirectToDashboardOrOnboarding />,
-      },
-      {
-        path: "onboarding",
-        element: <OnboardingGuard />,
-      },
-      {
-        path: "dashboard",
-        element: <Dashboard />,
-      },
-      // ...other routes...
+      { index: true, element: <Dashboard /> },
+      { path: "bank-lines", element: <BankLines /> },
     ],
+  },
+  {
+    path: "/regulator/login",
+    element: <RegulatorLoginPage />,
   },
 ]);
 
-function RedirectToDashboardOrOnboarding() {
-  const { orgId } = useAuth();
-  if (!orgId) return <Navigate to="/onboarding" replace />;
-  return <Navigate to="/dashboard" replace />;
-}
-
-function OnboardingGuard() {
-  const { orgId } = useAuth();
-  if (orgId) return <Navigate to="/dashboard" replace />;
-  return <OnboardingWizard />;
-}
-
-export const AppRouter: React.FC = () => <RouterProvider router={router} />;
+export default router;

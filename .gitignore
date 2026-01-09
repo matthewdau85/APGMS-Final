@@ -64,3 +64,5 @@ status/incidents/
 *.zip
 *Zone.Identifier*
 chess_api_snapshot_*.tsv
+_design_extract/
+webapp/pnpm-lock.yaml
