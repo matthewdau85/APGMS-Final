@@ -1,0 +1,604 @@
+commit edd08284db64d523908c7cbf2f7fe3a40ef290de
+Author: matthewdau85 <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 21 23:29:26 2025 +1000
+
+    Add gitleaks report and ledger jest config
+
+commit c5a52d5005417977de42742a86bbe7a716b73041
+Author: matthewdau85 <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 21 22:10:46 2025 +1000
+
+    ci/docs: update workflows, evidence docs, and test guard scripts
+
+commit 51ef919323b56789fa518cc2db30aea6c8c34acf
+Author: matthewdau85 <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 21 17:51:00 2025 +1000
+
+    ci: remove prisma migrate status gates and align scripts with schema-only validation
+
+commit f3e326f8de5fd4772bb4be18491f13103a2cf9c8
+Author: matthewdau85 <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 21 11:09:47 2025 +1000
+
+    ci: remove prisma migrate status and validate schema only
+
+commit cd064c57804ed2f120b8b52b183ad0eaa3d04647
+Author: matthewdau85 <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 21 09:59:14 2025 +1000
+
+    ci(prisma): fix schema path and replace migrate status with validate
+
+commit 99218e53015cffe68c3796daf423810da67e8b73
+Author: matthewdau85 <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 21 09:35:35 2025 +1000
+
+    ci(security): start postgres and fix prisma migrate status schema path
+
+commit 62d3166a0f2cdc3c903d3dacccb8fe4b763ad06a
+Author: matthewdau85 <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 21 09:27:01 2025 +1000
+
+    ci(prisma): fix schema path resolution for drift checks
+
+commit e580c304e1b8c2532358ea4df8bcaee2df806044
+Author: matthewdau85 <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 21 08:43:52 2025 +1000
+
+    fix: stabilize CI pnpm/prisma and a11y checks
+
+commit c19da39293ef67395e3dc22ceae2754fe024c579
+Author: matthewdau85 <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 21 08:27:46 2025 +1000
+
+    fix: stabilize CI pnpm/prisma and a11y checks
+
+commit 78d2b368634c70c94d47f50cacf6bd3d0307b836
+Author: matthewdau85 <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 21 08:25:32 2025 +1000
+
+    fix: stabilize CI pnpm/prisma and a11y checks
+
+commit 1c388a113ac77f48cba0e18b964f7064b1a7fc66
+Author: matthewdau85 <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 21 08:14:46 2025 +1000
+
+    fix: stabilize CI pnpm/prisma and a11y checks
+
+commit ee9bbd83848ebdfc20c9a1371404444138adb28f
+Author: matthewdau85 <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 21 08:05:56 2025 +1000
+
+    ci: rely on packageManager pnpm version in CI Core
+
+commit 770de26f9c763647696facfc27385c0a7f9201ba
+Author: matthewdau85 <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 21 07:57:46 2025 +1000
+
+    ci: rely on packageManager pnpm version in core/security workflows
+
+commit c537c583e5986e105caf5d0e7d85f01cfc416323
+Author: matthewdau85 <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 21 07:51:01 2025 +1000
+
+    ci: rely on packageManager for pnpm version in supply-chain workflow
+
+commit 86d3cef7d192e620a1333d0abcee00248427afa0
+Author: matthewdau85 <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 21 06:11:12 2025 +1000
+
+    chore(prisma): set workspace schema path for migrate status
+
+commit b9216ab5233d943de1453495d1bd2ee0d5d58f9e
+Author: matthewdau85 <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 21 04:36:36 2025 +1000
+
+    chore(repo): ignore domain-policy dist outputs
+
+commit 11d4037a75d34289df0561e485546c05b239740a
+Author: matthewdau85 <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 21 04:32:58 2025 +1000
+
+    ci: harden workflows and nightly coverage
+
+commit 4937a10d2c7be962e8ea2e1e4083355a014d062f
+Author: matthewdau85 <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 21 04:32:06 2025 +1000
+
+    chore(prisma): enforce linux-only client generation
+
+commit 382e91f75ca22496d6f55f59182132d2f128c8c6
+Author: matthewdau85 <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 21 04:29:18 2025 +1000
+
+    test(domain-policy): gate db-backed tests behind RUN_DB_TESTS
+
+commit f40edc45155e6d93e05ff9bde8c8ffac0281f780
+Author: matthewdau85 <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 21 04:28:47 2025 +1000
+
+    docs(dsp-osf): wire ADR and evidence links
+
+commit 7bce058d71d6e261a5bac88c4a945a3c7b4d6d6b
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 21 00:42:27 2025 +1000
+
+    test: gate db tests behind RUN_DB_TESTS
+
+commit 802418e761f9fc1cd0bb1c3f46b22bd23ba79dd7
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 21 00:34:52 2025 +1000
+
+    fix(domain-policy): align tax config repositories to prisma resolver
+
+commit 9533deb890d365c68896e20558b4d5d5254968a1
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sat Dec 20 23:01:42 2025 +1000
+
+    chore(stabilize): restore green gates (build, domain-policy, api-gateway)
+
+commit a090c5c9f7b7c64f32263ba7df1f34da65b15383
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Fri Dec 19 19:15:17 2025 +1000
+
+    chore(prisma): followups and repo hygiene
+
+commit c69916006bd692f66fe09634862a4053ffb39a13
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Fri Dec 19 02:38:33 2025 +1000
+
+    chore(db): move prisma schema+migrations to infra/prisma
+
+commit 5ce05c905ec588d809312d9571492c3c64b73810
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Fri Dec 19 02:37:14 2025 +1000
+
+    chore(repo): standardise local outputs under .artifacts and ignore
+
+commit d84a99d12d72b1e0fab45fc4e55a069f1dace843
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Fri Dec 19 02:04:37 2025 +1000
+
+    Gate DB-backed tests, wire CI flag, and document ledger integrity controls
+
+commit 0383f5bcf29f0accb042a9dce34efdcb7b3d1951
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Fri Dec 19 01:59:30 2025 +1000
+
+    Evidence: document ledger integrity test coverage
+
+commit 2e712d7e3ad7d728a0a563be6ff883c0cfb40040
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Fri Dec 19 01:59:12 2025 +1000
+
+    ADR: document gating of DB-backed tests via RUN_DB_TESTS
+
+commit 132f6037d3c064aa8722af8678e71406958ebddb
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Fri Dec 19 01:56:08 2025 +1000
+
+    Introduce AU tax configuration provider and repository abstractions
+
+commit 97aa452789344754f33dd74a05e733020b8b15b5
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Fri Dec 19 01:53:32 2025 +1000
+
+    Refactor PAYGW engine and gate DB-backed ledger integrity tests
+
+commit 6992bbfca6cb3dbf358aecafd09e0a4b2ae81bba
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Wed Dec 17 03:21:38 2025 +1000
+
+    feat(domain-policy): add AU tax config resolver + guard test
+
+commit 610b8b65580231f9453aec5ceb9a039301bb47ab
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Wed Dec 17 02:50:53 2025 +1000
+
+    feat(au-tax): add versioned AU tax config tables + seed scaffolding
+
+commit 99e56d37b42a3142e6720641b133fcace29928a9
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Tue Dec 16 06:06:33 2025 +1000
+
+    feat(db): add AU tax config tables + seed wiring
+
+commit a2e2d3949c43d594c577ba316f103efa4650684f
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Tue Dec 16 03:56:22 2025 +1000
+
+    feat(api-gateway): prototype admin scope + compliance/risk routes
+
+commit 79cac1abaa64b452ef18e392ff1fd7fcfb34d05e
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Tue Dec 16 03:29:41 2025 +1000
+
+    feat(api-gateway): lock prototype routes behind admin guard and align tests
+
+commit 363b8e34d1869d75c23aef04c8f00d81284e139e
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Tue Dec 16 03:28:57 2025 +1000
+
+    feat(domain-policy): add deterministic ledger/obligations/risk modules
+
+commit 360ef994e7286074c6505639150f3a0936813ea9
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Tue Dec 16 03:11:48 2025 +1000
+
+    test(api-gateway): satisfy prototype admin guard in compliance summary unit tests
+
+commit 7da33e6577175bbafd7e511f52768ca596383ecb
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Mon Dec 15 06:40:37 2025 +1000
+
+    chore: tidy readiness behavior and config hygiene
+
+commit e8a33ac1b3598ed49705a2ea51a5537f0bb73d66
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Mon Dec 15 06:40:15 2025 +1000
+
+    fix(domain-policy): correct ESM exports and regulator summary wiring
+
+commit 3f22a0e9d90b770c25f980375cfaad38c4114b8e
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Mon Dec 15 06:39:51 2025 +1000
+
+    fix(risk): align risk summary route with metrics and tests
+
+commit b2309d24cc7ac77ecf6b589a8e4ba77dc207d42f
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Mon Dec 15 06:39:33 2025 +1000
+
+    fix(risk): stabilise user deletion contract and e2e semantics
+
+commit 42cce0930410be86ac06f0b24f2ba00183e2cdf8
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Mon Dec 15 03:06:04 2025 +1000
+
+    fix(security): align redaction marker with test contract
+
+commit bd0d8b4d839d879edcbc9acae3346a5b3a5f44aa
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Mon Dec 15 02:20:34 2025 +1000
+
+    fix(compliance): support PAYGW/GST keys in paid ledger reader
+
+commit a1d3eb0d7e4c315ae7f96450f24481e80840fabb
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Mon Dec 15 00:36:58 2025 +1000
+
+    fix(api-gateway): align ESM import specifiers with Jest mocks
+
+commit 8f81a73e57eef54a01da65a8e898dd5979934664
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Mon Dec 15 00:20:49 2025 +1000
+
+    chore: ignore temp and backup artifacts
+
+commit 0b641a91165574cfaac6d6ba9601394f4992fd9c
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Mon Dec 15 00:06:53 2025 +1000
+
+    fix(typecheck): add ESM .js extension for metrics import
+
+commit d741cdcfd85d6ab52ceedd816202255642dae3d4
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 14 04:39:30 2025 +1000
+
+    fix(api-gateway): align compliance summary obligations/coverage response
+
+commit 09ccbebe99e9fe731bb554791e9e736d7b4e8061
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 14 03:40:04 2025 +1000
+
+    fix(api-gateway): strict helmet config incl CSP connect-src origins
+
+commit 70cc0a31c00e98de37e981e7eecbbd450f8e8df9
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sat Dec 13 18:53:02 2025 +1000
+
+    docs(partners): update bank packet
+
+commit 5d197d6161b4f8becdcda7ebf25f76aef0351cab
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sat Dec 13 18:52:52 2025 +1000
+
+    feat(api-gateway): add admin-users route and risk e2e test
+
+commit 050ad144f4b5b47b81c355d35c514f81ce398cfb
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sat Dec 13 18:52:25 2025 +1000
+
+    feat(api-gateway): implement regulator compliance summary from domain-policy
+
+commit d3c1aa4d857bb9f71ec15f146350791b524babe5
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sat Dec 13 18:52:03 2025 +1000
+
+    refactor(api-gateway): normalise ESM imports and restore buildServer export
+
+commit 78a274803d427d4b5eccb230199e4bedc9a6d516
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sat Dec 13 18:51:36 2025 +1000
+
+    test(api-gateway): stabilise jest for NodeNext and workspace packages
+
+commit c82d7fce03efd0238860db0d65bddd7de0d1f315
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sat Dec 13 18:51:27 2025 +1000
+
+    feat(shared): add safe-delete + ABN/TFN validation and tests
+
+commit f93bcf6dcccc31f3f9644489f6888f74cb2af685
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sat Dec 13 18:51:18 2025 +1000
+
+    feat(shared): add ABR integration client (http + stub + types)
+
+commit a4c665b4eea86fc9087b51b36842aa0ebc076c90
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sat Dec 13 18:51:07 2025 +1000
+
+    feat(assessor): add assessor framework, requirements, and docs
+
+commit 01bcdebca9489eb96b20018014e2a3260b2695a2
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sat Dec 13 18:50:52 2025 +1000
+
+    chore(scripts): add assessor commands (fast/all/production)
+
+commit 71ebb78916a8361e01b3fc23098bbf73d77691b4
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sat Dec 13 18:50:21 2025 +1000
+
+    chore(repo): ignore generated assessor outputs and local artifacts
+
+commit 3416abce5ec89002a1f3d865642f50ca38de4fe8
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Fri Dec 12 22:26:56 2025 +1000
+
+    docs: complete OSF evidence index, SLOs, bank packet, and IP guardrails
+
+commit fb062f828440754c3689ae95bf51147159a1fe88
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Fri Dec 12 22:14:50 2025 +1000
+
+    api-gateway: add service-mode switch (normal/read-only/suspended) and guard mutating routes
+
+commit 55320a30a17596093c5caf0576fc881d22badee7
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Fri Dec 12 21:47:38 2025 +1000
+
+    api-gateway: fix app boot (prisma db), optional route imports, green BAS/health tests
+
+commit 4996b33959005f2405a4a43f7c1c3a9804cf41a7
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Fri Dec 12 01:13:46 2025 +1000
+
+    chore: remove stray prisma schema artefact
+
+commit 14f4c9623a2bb29460468fe28e971ff9310ed830
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Fri Dec 12 01:09:19 2025 +1000
+
+    refactor: stabilise api-gateway health/ready and simplify webapp dashboard
+
+commit afdfd95e0bd599da09d173fa6fcedfc8f46e2e2b
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Thu Dec 11 21:07:10 2025 +1000
+
+    chore: remove obsolete api-gateway route d.ts files and tidy webapp config
+
+commit a86bb6d674d4320fc7ae0a058726559c7c371f9d
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Thu Dec 11 10:08:59 2025 +1000
+
+    Fix api-gateway tsconfig types for Jest/Node
+
+commit 18c6cdea4ba80363b65cff180a6291c7c4127e6f
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Thu Dec 11 03:18:44 2025 +1000
+
+    Add readiness:all incident snapshot 20251210T073639Z
+
+commit 52f880e3cb3601050dfc54eb42bfe1a667ad2cc0
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Wed Dec 10 22:52:26 2025 +1000
+
+    docs: add POS integration guide for partners
+
+commit 8dc268aee27f9c86ba31f6872ecfdf1479e26962
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Wed Dec 10 17:45:26 2025 +1000
+
+    Add readiness scripts and availability/performance pillar
+
+commit 87a3ab1468a95d958d20433251f9b0c1122ab444
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Wed Dec 10 11:09:27 2025 +1000
+
+    refactor(api-gateway): new bootstrap, BAS settlement and regulator stubs
+
+commit 01c5aeb8c2450fd670293bfb14d21c00dc15bd30
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Mon Dec 8 23:33:40 2025 +1000
+
+    Wire domain obligations into BAS evidence and add ESM shims
+
+commit 854068c3323cbc11529fc6b887db8fcd088188d1
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Mon Dec 8 22:17:05 2025 +1000
+
+    Model period on payroll/GST and add export/ingest/BAS auth tests
+
+commit ac2889aa47b089f20298fa8551655ec3d944967c
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Mon Dec 8 16:14:21 2025 +1000
+
+    docs: add BAS settlement lifecycle and runbooks
+
+commit 4e2fd75ca6917a9e07fc0fbfe07323c246be1ae7
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Mon Dec 8 11:28:06 2025 +1000
+
+    feat: add BAS settlement lifecycle and obligations adapter tests
+
+commit 82f2c142a11adba6c2ea7fff3beb40dd7b96de8a
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Mon Dec 8 10:06:02 2025 +1000
+
+    feat: add tax ledger hash-chain and ledger-integrity risk signal
+
+commit 3a31d09095261007cde5c7a26bbeca55a533f036
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Mon Dec 8 10:00:34 2025 +1000
+
+    feat: add tax ledger hash-chain and org risk ledgerIntegrity
+
+commit 2aac2470ff892e33b4eef55ec05506fe54cd0b20
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Mon Dec 8 08:36:27 2025 +1000
+
+    ledger: implement hash-chain and verification for tax ledger
+
+commit 35b00bfab15a71c48c9700885e3f427705a1d208
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Mon Dec 8 03:05:39 2025 +1000
+
+    test: add risk summary and BAS/export/CSV validation coverage
+
+commit 5bba3e31a2358309b03eb8795ba16ddb0e098fae
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Mon Dec 8 01:38:51 2025 +1000
+
+    feat: wire regulator compliance summary route and tests
+
+commit 7a64e5f70f248e70039e26145d0ccbfa7eea995d
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 7 23:51:47 2025 +1000
+
+    chore: refine jest config mapping
+
+commit c1054e9a79621a1c466206a5bebcbd1fe793beaf
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 7 22:37:15 2025 +1000
+
+    feat: add obligations engine and regulator compliance summary wiring
+
+commit 3f050b56957ad7f9e0bfd46776aa4f864b95c131
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 7 21:11:47 2025 +1000
+
+    Add tax obligations engine and regulator compliance summary route tests
+
+commit a597621f7dd66ac84487bdd6341ab7a97ee73d0a
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 7 12:15:47 2025 +1000
+
+    feat(db+api): add tax ledger, trust accounts, PayTo and BAS settlement routes & schema
+
+commit 9a4257a3fa0576f53e5619d8726b40c22f39c0d3
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 7 10:47:19 2025 +1000
+
+    feat(ui): add dashboard components for risk and ATO readiness summary
+
+commit 849958b09c2b19567722f25ef8ade7db8aca7559
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 7 10:46:56 2025 +1000
+
+    chore(security): add gitleaks config to enforce secret scanning policy
+
+commit 1ad18af93e27e3d20c64c5af66e69875a9d8047b
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 7 10:46:34 2025 +1000
+
+    test(compliance): add ledger-backed regulator summary test
+
+commit f373843158ef58bafb145a61e7b6718002b8e2d6
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 7 10:46:09 2025 +1000
+
+    feat(domain): scaffolding for ledger math, export packs, risk, and settlement
+
+commit aeb5e3a2d77b60e55bb5986f4486d1eceb084550
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 7 10:45:47 2025 +1000
+
+    feat(risk): add computeOrgRisk adapter + gauge metric apgms_org_risk_score
+
+commit 886feef35f62f6d9d174bb4881fa86dfc1c27352
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 7 10:45:11 2025 +1000
+
+    feat(compliance): integrate tax ledger + obligations into regulator summary
+
+commit 3ab8bbd53285f603f6729dc466d07e77573ac442
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 7 10:44:47 2025 +1000
+
+    feat(routes): add BAS settlement, export pack, CSV ingest, and bank connector stubs
+
+commit 53db6f0a64566cc34717005e92a1da3b2796340b
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 7 10:44:24 2025 +1000
+
+    feat(api): register new BAS, export, risk, and CSV ingest routes
+
+commit a2b56d525ca5a4c48abcbe5c2f11f27fa340558b
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 7 10:43:26 2025 +1000
+
+    feat(db): add tax ledger, trust account, PayTo agreements, and settlement instruction models
+    
+    Adds schema for:
+    - tamper-evident TaxLedgerEntry (hash chained)
+    - TrustAccount + PayToAgreement for designated rails
+    - SettlementInstruction for immutable BAS settlement payloads
+
+commit 536a05ca7b8058e297b6e74bd1a8c2cbcc637f68
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 7 08:00:06 2025 +1000
+
+    ci: harden coverage, a11y, SCA and SBOM gates
+
+commit 7cb621f801e9c289bfbb98b39d6ad80049b18317
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 7 06:26:49 2025 +1000
+
+    chore(ci): drop committed scan outputs and ignore gates artefacts
+
+commit 98b17dd5476eeab984e3f63369aface0f980e6f9
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 7 04:19:15 2025 +1000
+
+    ci: upload gitleaks SARIF to code scanning
+
+commit e800812f47a98dfd2b2332d5e53eaa4aa0a63688
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 7 04:19:08 2025 +1000
+
+    test(a11y): run Playwright against existing dev server
+
+commit dcc1dd01d783d2ca074a711f51f5004a5afb7033
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Sun Dec 7 04:18:54 2025 +1000
+
+    chore(security): externalise local secrets and harden SBOM/audits
+
+commit 7997245d7502f87c6a1988c3dcd4f2a695eb4baa
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Fri Dec 5 20:33:18 2025 +1000
+
+    feat(api-gateway): add health/ready endpoints and security logging tests
+
+commit 27f740b926da3ebdf072a9a2164f0e23c74882da
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Fri Dec 5 02:23:28 2025 +1000
+
+    test: re-enable domain-policy and api-gateway jest suites
+
+commit e5c9e96dc2c22cbf59ab3f9f7c0a28c772880718
+Author: Matthew Donovan <matthew.donovan@alumni.griffithuni.edu.au>
+Date:   Thu Dec 4 23:06:21 2025 +1000
+
+    ci: tighten conflict-guard and pipeline checks
