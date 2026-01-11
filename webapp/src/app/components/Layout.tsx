@@ -40,7 +40,7 @@ function normalizePath(p: string): string {
 
 export function Layout({
   children,
-  basePath = "/proto",
+  basePath = "",
 }: {
   children: React.ReactNode;
   basePath?: string;

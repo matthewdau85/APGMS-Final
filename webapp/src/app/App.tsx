@@ -11,6 +11,9 @@ import * as EvidencePacksMod from "./pages/EvidencePacks";
 import * as ControlsMod from "./pages/Controls";
 import * as IncidentsMod from "./pages/Incidents";
 import * as SettingsMod from "./pages/Settings";
+import * as PaymentsMod from "./pages/Payments";
+
+import * as PrototypeAppMod from "../prototype/PrototypeApp";
 
 import RegulatorPortal from "./pages/RegulatorPortal";
 import SetupWizard from "./pages/SetupWizard";
@@ -40,6 +43,9 @@ const EvidencePacks = pickPage(EvidencePacksMod, "EvidencePacks");
 const Controls = pickPage(ControlsMod, "Controls");
 const Incidents = pickPage(IncidentsMod, "Incidents");
 const Settings = pickPage(SettingsMod, "Settings");
+const Payments = pickPage(PaymentsMod, "Payments");
+
+const PrototypeApp = pickPage(PrototypeAppMod, "PrototypeApp");
 
 export default function App() {
   // NOTE: No BrowserRouter here. Router must live in main.tsx only.
@@ -49,6 +55,7 @@ export default function App() {
         <Route path="/" element={<Dashboard />} />
 
         <Route path="/obligations" element={<Obligations />} />
+        <Route path="/payments" element={<Payments />} />
         <Route path="/ledger" element={<Ledger />} />
         <Route path="/reconciliation" element={<Reconciliation />} />
         <Route path="/evidence-packs" element={<EvidencePacks />} />
@@ -66,6 +73,9 @@ export default function App() {
 
         {/* Setup */}
         <Route path="/setup" element={<SetupWizard />} />
+
+        {/* Prototype console/app (keep isolated under /proto) */}
+        <Route path="/proto/*" element={<PrototypeApp />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

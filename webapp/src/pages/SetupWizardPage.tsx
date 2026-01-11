@@ -2,5 +2,5 @@ import React from "react";
 import { Navigate } from "react-router-dom";
 
 export default function SetupWizardPage() {
-  return <Navigate to="/proto/setup" replace />;
+  return <Navigate to="/setup" replace />;
 }
