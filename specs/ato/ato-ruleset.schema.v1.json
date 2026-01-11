@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ATO Ruleset Manifest v1",
+  "type": "object",
+  "required": ["spec_version", "paygw", "gst", "bas", "effective_dates"],
+  "properties": {
+    "spec_version": { "type": "string" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "paygw": {
+      "type": "object",
+      "required": ["period_bases", "scenarios", "flags", "required_tables", "rounding_policy"],
+      "properties": {
+        "period_bases": { "type": "array", "items": { "type": "string" } },
+        "scenarios": { "type": "array", "items": { "type": "string" } },
+        "flags": { "type": "array", "items": { "type": "string" } },
+        "required_tables": { "type": "array", "items": { "type": "string" } },
+        "rounding_policy": {
+          "type": "object",
+          "required": ["precision", "method"],
+          "properties": {
+            "precision": { "type": "integer", "minimum": 0 },
+            "method": { "type": "string" },
+            "note": { "type": "string" }
+          }
+        }
+      }
+    },
+    "gst": {
+      "type": "object",
+      "required": ["classifications", "category_map", "adjustments_policy"],
+      "properties": {
+        "classifications": { "type": "array", "items": { "type": "string" } },
+        "category_map": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "adjustments_policy": {
+          "type": "object",
+          "required": ["netting", "negative_net"],
+          "properties": {
+            "netting": { "type": "string" },
+            "negative_net": { "type": "string" },
+            "notes": { "type": "string" }
+          }
+        }
+      }
+    },
+    "bas": {
+      "type": "object",
+      "required": ["lodgment_frequencies", "entity_types", "due_date_rules", "weekend_holiday_shift"],
+      "properties": {
+        "lodgment_frequencies": { "type": "array", "items": { "type": "string" } },
+        "entity_types": { "type": "array", "items": { "type": "string" } },
+        "due_date_rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["applies_to", "due_day", "due_month_offset"],
+            "properties": {
+              "applies_to": {
+                "type": "object",
+                "required": ["entity_type", "frequency"],
+                "properties": {
+                  "entity_type": { "type": "string" },
+                  "frequency": { "type": "string" }
+                }
+              },
+              "due_day": { "type": "integer", "minimum": 1, "maximum": 31 },
+              "due_month_offset": { "type": "integer" },
+              "notes": { "type": "string" }
+            }
+          }
+        },
+        "weekend_holiday_shift": {
+          "type": "object",
+          "required": ["mode", "region"],
+          "properties": {
+            "mode": { "type": "string" },
+            "region": { "type": "string" },
+            "notes": { "type": "string" }
+          }
+        }
+      }
+    },
+    "effective_dates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["tax_year", "start", "end", "required_tables"],
+        "properties": {
+          "tax_year": { "type": "string" },
+          "start": { "type": "string", "format": "date" },
+          "end": { "type": "string", "format": "date" },
+          "required_tables": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}
