@@ -1,0 +1,20 @@
+[
+  {
+    "applies_to": { "entity_type": "small_business", "frequency": "quarterly" },
+    "due_day": 28,
+    "due_month_offset": 1,
+    "notes": "Quarterly BAS due the 28th"
+  },
+  {
+    "applies_to": { "entity_type": "small_business", "frequency": "monthly" },
+    "due_day": 21,
+    "due_month_offset": 1,
+    "notes": "Monthly BAS due the 21st"
+  },
+  {
+    "applies_to": { "entity_type": "medium_withholder", "frequency": "quarterly" },
+    "due_day": 28,
+    "due_month_offset": 1,
+    "notes": "Medium withholders follow quarterly cycle"
+  }
+]

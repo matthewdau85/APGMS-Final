@@ -16,3 +16,13 @@ pnpm validate:ato
 ```
 
 Bump to `ato-ruleset.v2.json` when the schema evolves and document the migration in this guide.
+
+## Config scaffolding (data/ato/v1)
+
+Placeholders live under `data/ato/v1/` so the validator can run before real tables exist:
+
+- `paygw/`: one JSON per table key containing `table_key`, `effective_from`, `effective_to`, and an empty `rows` array.
+- `gst/category-map.json`: maps every manifest category to a classification per the spec (`taxable`, `gst_free`, `input_taxed`).
+- `bas/due-dates.json`: repeats the due-date rules referenced in the manifest.
+
+Replace these placeholders with actual ATO data imports later, keeping the filenames and keys aligned with `specs/ato/ato-ruleset.v1.json`.
