@@ -1,67 +1,91 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { regulatorLogin } from "./regulatorAuth";
+import { useLocation, useNavigate } from "react-router-dom";
+import { regulatorLogin, setRegulatorSession } from "./regulatorAuth";
 
 export default function RegulatorLoginPage() {
   const nav = useNavigate();
-  const [accessCode, setAccessCode] = useState("");
-  const [orgId, setOrgId] = useState("org_demo");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const loc = useLocation();
 
-  async function handleSubmit(e: React.FormEvent) {
+  const [orgId, setOrgId] = useState<string>("");
+  const [accessCode, setAccessCode] = useState<string>("");
+
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // If user was redirected here by RequireAdmin, it may include a `from`.
+  const from = (loc.state as any)?.from as string | undefined;
+
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    setBusy(true);
 
+    const trimmedOrg = orgId.trim();
+    const trimmedCode = accessCode.trim();
+
+    if (!trimmedOrg || !trimmedCode) {
+      setError("Org ID and Access Code are required.");
+      return;
+    }
+
+    setLoading(true);
     try {
-      await regulatorLogin({ accessCode, orgId });
-      nav("/regulator/overview", { replace: true });
-    } catch (err: any) {
-      setError(err?.message || "Login failed.");
+      const res = await regulatorLogin({ orgId: trimmedOrg, accessCode: trimmedCode });
+      setRegulatorSession({ orgId: trimmedOrg, token: res.token, expiresAt: res.expiresAt });
+
+      // Deterministic landing. If redirected with a `from`, honor it.
+      // Otherwise go to the canonical regulator portal route.
+      nav(from || "/regulator-portal", { replace: true });
+    } catch (e2: unknown) {
+      setError(toErrorMessage(e2));
     } finally {
-      setBusy(false);
+      setLoading(false);
     }
   }
 
   return (
-    <div style={{ maxWidth: 420, margin: "40px auto", padding: 16 }}>
-      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 12 }}>
-        Regulator Login
-      </h1>
+    <div style={{ padding: 16, maxWidth: 480 }}>
+      <h2>Regulator Login</h2>
 
-      <form onSubmit={handleSubmit} style={{ display: "grid", gap: 12 }}>
-        <label style={{ display: "grid", gap: 6 }}>
-          <span>Org ID</span>
-          <input
-            value={orgId}
-            onChange={(e) => setOrgId(e.target.value)}
-            placeholder="org_demo"
-          />
-        </label>
+      <form onSubmit={onSubmit}>
+        <div style={{ marginBottom: 12 }}>
+          <label>
+            Org ID
+            <input
+              value={orgId}
+              onChange={(e) => setOrgId(e.target.value)}
+              style={{ display: "block", width: "100%", padding: 8 }}
+              autoComplete="off"
+            />
+          </label>
+        </div>
 
-        <label style={{ display: "grid", gap: 6 }}>
-          <span>Access code</span>
-          <input
-            value={accessCode}
-            onChange={(e) => setAccessCode(e.target.value)}
-            placeholder="demo"
-          />
-        </label>
+        <div style={{ marginBottom: 12 }}>
+          <label>
+            Access Code
+            <input
+              value={accessCode}
+              onChange={(e) => setAccessCode(e.target.value)}
+              style={{ display: "block", width: "100%", padding: 8 }}
+              autoComplete="off"
+            />
+          </label>
+        </div>
 
-        {error ? (
-          <div style={{ color: "crimson", fontSize: 13 }}>{error}</div>
-        ) : null}
+        {error ? <div style={{ marginBottom: 12, color: "crimson" }}>{error}</div> : null}
 
-        <button type="submit" disabled={busy}>
-          {busy ? "Signing in..." : "Sign in"}
+        <button type="submit" disabled={loading} style={{ padding: "8px 12px" }}>
+          {loading ? "Signing in..." : "Sign in"}
         </button>
       </form>
-
-      <p style={{ marginTop: 14, fontSize: 12, opacity: 0.8 }}>
-        Prototype-only: this uses a demo fallback if the backend login endpoint is
-        not implemented.
-      </p>
     </div>
   );
+}
+
+function toErrorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  try {
+    return JSON.stringify(e);
+  } catch {
+    return String(e);
+  }
 }

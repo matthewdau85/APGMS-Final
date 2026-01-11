@@ -11,13 +11,25 @@ import * as EvidencePacksMod from "./pages/EvidencePacks";
 import * as ControlsMod from "./pages/Controls";
 import * as IncidentsMod from "./pages/Incidents";
 import * as SettingsMod from "./pages/Settings";
+
 import RegulatorPortal from "./pages/RegulatorPortal";
 import SetupWizard from "./pages/SetupWizard";
+import RegulatorLoginPage from "../RegulatorLoginPage";
 
 type AnyComponent = React.ComponentType<any>;
 
 function pickPage(mod: any, named: string): AnyComponent {
-  return (mod?.[named] ?? mod?.default) as AnyComponent;
+  const candidate = mod?.[named] ?? mod?.default;
+  if (typeof candidate === "function") return candidate as AnyComponent;
+
+  // Safe fallback so a missing export doesn't crash the router at runtime.
+  return function MissingPage() {
+    return (
+      <div style={{ padding: 16 }}>
+        Missing page export: <code>{named}</code>
+      </div>
+    );
+  };
 }
 
 const Dashboard = pickPage(DashboardMod, "Dashboard");
@@ -35,6 +47,7 @@ export default function App() {
     <Layout>
       <Routes>
         <Route path="/" element={<Dashboard />} />
+
         <Route path="/obligations" element={<Obligations />} />
         <Route path="/ledger" element={<Ledger />} />
         <Route path="/reconciliation" element={<Reconciliation />} />
@@ -42,8 +55,18 @@ export default function App() {
         <Route path="/controls" element={<Controls />} />
         <Route path="/incidents" element={<Incidents />} />
         <Route path="/settings" element={<Settings />} />
+
+        {/* Compatibility: if anything still links to /login */}
+        <Route path="/login" element={<Navigate to="/regulator/login" replace />} />
+
+        {/* Regulator flow */}
+        <Route path="/regulator/login" element={<RegulatorLoginPage />} />
+        <Route path="/regulator" element={<Navigate to="/regulator-portal" replace />} />
         <Route path="/regulator-portal" element={<RegulatorPortal />} />
+
+        {/* Setup */}
         <Route path="/setup" element={<SetupWizard />} />
+
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>
