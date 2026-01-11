@@ -1,4 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
+import { authGuard } from "../auth.js";
+import { Role } from "../plugins/auth.js";
 import { computeRegulatorComplianceSummary } from "./regulator-compliance-summary.service.js";
 
 function headerToString(v: unknown): string | undefined {
@@ -23,29 +25,38 @@ async function pickDefaultOrgId(app: any): Promise<string> {
 }
 
 const plugin: FastifyPluginAsync = async (app) => {
-  app.get("/regulator/compliance/summary", async (req, reply) => {
-    const env = process.env.NODE_ENV ?? "development";
+  app.get(
+    "/regulator/compliance/summary",
+    { preHandler: authGuard as any },
+    async (req, reply) => {
+      const user = (req as any).user as { orgId?: string; role?: string } | undefined;
+      if (!user) {
+        return reply.code(401).send({ error: "unauthorized" });
+      }
 
-    const headerOrgId = headerToString(req.headers["x-org-id"]);
-    const userOrgId = (req as any).user?.orgId as string | undefined;
+      if (user.role !== Role.regulator) {
+        return reply.code(403).send({ error: "forbidden" });
+      }
 
-    let orgId = headerOrgId || userOrgId;
+      const headerOrgId = headerToString(req.headers["x-org-id"]);
+      const userOrgId = typeof user.orgId === "string" ? user.orgId : undefined;
 
-    // In non-production (tests/dev), fall back to deterministic org to avoid brittle e2e.
-    if (!orgId && env !== "production") {
-      orgId = await pickDefaultOrgId(app as any);
+      if (headerOrgId && userOrgId && headerOrgId !== userOrgId) {
+        return reply.code(403).send({ error: "forbidden_org" });
+      }
+
+      let orgId = headerOrgId || userOrgId;
+      if (!orgId) {
+        return reply.code(400).send({ error: "missing_org" });
+      }
+
+      const q = (req.query ?? {}) as any;
+      const period = String(q.period ?? "2025-Q3");
+
+      const result = await computeRegulatorComplianceSummary(app, { orgId, period });
+      return reply.code(200).send(result);
     }
-
-    if (!orgId) {
-      return reply.code(400).send({ error: "missing_org" });
-    }
-
-    const q = (req.query ?? {}) as any;
-    const period = String(q.period ?? "2025-Q3");
-
-    const result = await computeRegulatorComplianceSummary(app, { orgId, period });
-    return reply.code(200).send(result);
-  });
+  );
 };
 
 export default plugin;

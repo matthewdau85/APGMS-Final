@@ -1,25 +1,12 @@
 import type { FastifyInstance, FastifyPluginAsync } from "fastify";
+import { createHash } from "node:crypto";
+import { z } from "zod";
+import { authGuard } from "../auth.js";
+import { withIdempotency } from "../lib/idempotency.js";
 
 type Deps = {
   prisma?: any;
 };
-
-function hasAuthHeader(req: any): boolean {
-  const h = req?.headers?.authorization ?? req?.headers?.Authorization ?? "";
-  return typeof h === "string" && h.trim() !== "";
-}
-
-function principalFromReq(req: any): any {
-  return (
-    (req as any).user ??
-    (req as any).auth?.user ??
-    (req as any).auth ??
-    (req as any).claims ??
-    (req as any).jwt?.payload ??
-    (req as any).session?.user ??
-    null
-  );
-}
 
 function tokenSetFromPrincipal(p: any): Set<string> {
   const out = new Set<string>();
@@ -66,49 +53,139 @@ function parseAmountCents(v: any): number | null {
   return null;
 }
 
-export function registerBankLinesRoutes(app: FastifyInstance): void {
-  const idempotencyStore = new Map<string, any>();
+const BankLineBodySchema = z.object({
+  idempotencyKey: z.string().min(1),
+  amountCents: z.number().int(),
+  orgId: z.string().min(1).optional(),
+});
 
-  app.post("/bank-lines", async (req: any, reply: any) => {
-    const principal = principalFromReq(req);
+function resolveIdempotencyKey(req: any, body: any): string | undefined {
+  const headerKey = String(req?.headers?.["idempotency-key"] ?? "").trim();
+  if (headerKey) return headerKey;
+  const bodyKey =
+    typeof body?.idempotencyKey === "string"
+      ? body.idempotencyKey.trim()
+      : typeof body?.idempotency_key === "string"
+      ? body.idempotency_key.trim()
+      : typeof body?.key === "string"
+      ? body.key.trim()
+      : "";
+  return bodyKey || undefined;
+}
 
-    // Treat auth header as "authenticated" for tests/harness even if no principal object.
-    if (!hasAuthHeader(req) && principal == null) {
-      return reply.code(401).send({ error: "unauthenticated" });
+function hashPayload(payload: unknown): string {
+  const raw = typeof payload === "string" ? payload : JSON.stringify(payload ?? null);
+  return createHash("sha256").update(raw).digest("hex");
+}
+
+export function registerBankLinesRoutes(app: FastifyInstance, deps: Deps = {}): void {
+  const prisma = deps.prisma ?? (app as any).db;
+
+  app.post(
+    "/bank-lines",
+    { preHandler: authGuard as any },
+    async (req: any, reply: any) => {
+      const principal = (req as any).user ?? null;
+      if (!principal) {
+        return reply.code(401).send({ error: "unauthenticated" });
+      }
+
+      if (isForbidden(principal)) {
+        return reply.code(403).send({ error: "forbidden" });
+      }
+
+      const tokenOrgId = String(principal.orgId ?? principal.org ?? "").trim();
+      if (!tokenOrgId) {
+        return reply.code(403).send({ error: "forbidden_org" });
+      }
+
+      const body: any = req.body ?? {};
+      const idempotencyKey = resolveIdempotencyKey(req, body);
+      const amountRaw = body.amountCents ?? body.amount_cents ?? body.amount;
+
+      const headerOrgId = String(req.headers?.["x-org-id"] ?? "").trim() || undefined;
+      const bodyOrgId =
+        typeof body.orgId === "string" && body.orgId.trim().length > 0
+          ? body.orgId.trim()
+          : typeof body.org_id === "string" && body.org_id.trim().length > 0
+          ? body.org_id.trim()
+          : undefined;
+
+      if (headerOrgId && bodyOrgId && headerOrgId !== bodyOrgId) {
+        return reply.code(400).send({ error: "invalid_body", field: "orgId" });
+      }
+
+      const requestOrgId = headerOrgId ?? bodyOrgId;
+      if (requestOrgId && requestOrgId !== tokenOrgId) {
+        return reply.code(403).send({ error: "forbidden_org" });
+      }
+
+      const amountCents = parseAmountCents(amountRaw);
+      const parsed = BankLineBodySchema.safeParse({
+        idempotencyKey,
+        amountCents,
+        orgId: requestOrgId,
+      });
+
+      if (!parsed.success) {
+        return reply.code(400).send({
+          error: "invalid_body",
+          details: parsed.error.flatten(),
+        });
+      }
+
+      if (!prisma?.idempotencyEntry) {
+        return reply.code(500).send({ error: "idempotency_unavailable" });
+      }
+
+      const requestPayload = {
+        idempotencyKey,
+        amountCents,
+        orgId: requestOrgId ?? tokenOrgId,
+      };
+      const requestHash = hashPayload(requestPayload);
+
+      const existing = await prisma.idempotencyEntry.findUnique({
+        where: { orgId_key: { orgId: tokenOrgId, key: idempotencyKey } },
+      });
+
+      if (existing) {
+        if (existing.requestHash !== requestHash) {
+          return reply.code(409).send({ error: "idempotency_conflict" });
+        }
+
+        if (existing.responsePayload != null && typeof existing.statusCode === "number") {
+          reply.header("idempotent-replay", "true");
+          return reply.code(existing.statusCode).send(existing.responsePayload);
+        }
+
+        return reply.code(409).send({ error: "idempotency_conflict" });
+      }
+
+      const result = await withIdempotency(
+        { headers: { "idempotency-key": idempotencyKey } },
+        reply,
+        {
+          prisma,
+          orgId: tokenOrgId,
+          actorId: String(principal.sub ?? principal.id ?? principal.email ?? "system"),
+          requestPayload,
+          resource: "bank-lines",
+        },
+        async () => {
+          const payload = { status: "created", idempotencyKey, amountCents };
+          return { statusCode: 201, body: payload, resource: "bank-lines" };
+        }
+      );
+
+      reply.header("idempotent-replay", "false");
+      return reply.code(result.statusCode).send(result.body);
     }
-
-    if (isForbidden(principal)) {
-      return reply.code(403).send({ error: "forbidden" });
-    }
-
-    const body: any = req.body ?? {};
-    const idempotencyKey = body.idempotencyKey ?? body.idempotency_key ?? body.key;
-    const amountRaw = body.amountCents ?? body.amount_cents ?? body.amount;
-
-    if (!isNonEmptyString(idempotencyKey)) {
-      return reply.code(400).send({ error: "invalid_body", field: "idempotencyKey" });
-    }
-
-    const amountCents = parseAmountCents(amountRaw);
-    if (amountCents == null) {
-      return reply.code(400).send({ error: "invalid_body", field: "amount" });
-    }
-
-    if (idempotencyStore.has(idempotencyKey)) {
-      reply.header("idempotent-replay", "true");
-      return reply.code(201).send(idempotencyStore.get(idempotencyKey));
-    }
-
-    const result = { status: "created", idempotencyKey, amountCents };
-    idempotencyStore.set(idempotencyKey, result);
-
-    reply.header("idempotent-replay", "false");
-    return reply.code(201).send(result);
-  });
+  );
 }
 
 export function createBankLinesPlugin(_deps: Deps = {}): FastifyPluginAsync {
   return async (app) => {
-    registerBankLinesRoutes(app);
+    registerBankLinesRoutes(app, _deps);
   };
 }

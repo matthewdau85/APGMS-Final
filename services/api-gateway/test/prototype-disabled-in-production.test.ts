@@ -2,6 +2,8 @@ import { buildFastifyApp } from "../src/app.js";
 
 describe("prototype endpoints disabled in production", () => {
   it("returns 404 for regulator compliance summary in production (even if headers are guessed)", async () => {
+    process.env.ENABLE_PROTOTYPE = "true";
+
     const app = buildFastifyApp({
       logger: false,
       configOverrides: { environment: "production", inMemoryDb: true },
@@ -15,7 +17,6 @@ describe("prototype endpoints disabled in production", () => {
       headers: {
         // even if an attacker guesses these, the route must not exist in prod
         "x-org-id": "org-demo-1",
-        "x-prototype-admin": "true",
         authorization: "Bearer admin",
       },
     });

@@ -1,11 +1,12 @@
-﻿import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import type { SessionRole, SessionUser } from "../auth.js";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { Role, type SessionRole, type SessionUser } from "../auth.js";
 
 type LoginBody = {
   email: string;
   role?: SessionRole;
   sub?: string;
   mfaCompleted?: boolean;
+  orgId?: string;
 };
 
 function cookieOpts() {
@@ -16,6 +17,14 @@ function cookieOpts() {
     sameSite: "lax" as const,
     secure: isProd,
   };
+}
+
+function isDevAuthEnabled() {
+  return String(process.env.ENABLE_DEV_AUTH ?? "").toLowerCase() === "true";
+}
+
+function isAllowedRole(role: string): role is SessionRole {
+  return Object.values(Role).includes(role as SessionRole);
 }
 
 export default async function authRoutes(app: FastifyInstance) {
@@ -36,6 +45,14 @@ export default async function authRoutes(app: FastifyInstance) {
   app.post(
     "/auth/login",
     async (req: FastifyRequest<{ Body: LoginBody }>, reply: FastifyReply) => {
+      if (process.env.NODE_ENV === "production") {
+        return reply.code(404).send({ ok: false, error: "not_found" });
+      }
+
+      if (!isDevAuthEnabled()) {
+        return reply.code(404).send({ ok: false, error: "not_found" });
+      }
+
       const body = req.body;
 
       if (!body?.email || typeof body.email !== "string") {
@@ -51,17 +68,21 @@ export default async function authRoutes(app: FastifyInstance) {
           .send({ ok: false, error: "email_required" });
       }
 
-      const role: SessionRole = body.role ?? "admin";
+      const requestedRole = typeof body.role === "string" ? body.role : "";
+      const role: SessionRole = isAllowedRole(requestedRole) ? requestedRole : "user";
       const sub = (body.sub && body.sub.trim()) || email;
+      const orgId =
+        typeof body.orgId === "string" && body.orgId.trim().length > 0
+          ? body.orgId.trim()
+          : undefined;
 
       // Dev/demo default: MFA satisfied unless explicitly set false
       const mfaCompleted =
         typeof body.mfaCompleted === "boolean" ? body.mfaCompleted : true;
 
-      const user: SessionUser = { sub, email, role, mfaCompleted };
+      const user: SessionUser = { sub, email, role, mfaCompleted, orgId };
 
       const token = await reply.jwtSign(user);
-        reply.setCookie("apgms_session", token, cookieOpts());
 
       reply.setCookie("apgms_session", token, cookieOpts());
       return reply.send({ ok: true, user });

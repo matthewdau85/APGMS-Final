@@ -1,18 +1,30 @@
+import jwt from "jsonwebtoken";
 import { buildFastifyApp } from "../src/app.js";
+import { registerAuth } from "../src/plugins/auth.js";
 
 const isProd = process.env.NODE_ENV === "production";
+const AUTH_SECRET = "test-secret";
+
+function signToken(orgId: string) {
+  return jwt.sign(
+    { orgId, role: "regulator", sub: "reg-1" },
+    AUTH_SECRET,
+    { algorithm: "HS256", expiresIn: "5m" },
+  );
+}
 
 (isProd ? describe.skip : describe)("/regulator/compliance/summary e2e", () => {
   it("falls back to deterministic org in non-production when x-org-id is missing", async () => {
+    process.env.AUTH_DEV_SECRET = AUTH_SECRET;
     const app = buildFastifyApp({ inMemoryDb: true });
+    await registerAuth(app);
     await app.ready();
 
     const res = await app.inject({
       method: "GET",
       url: "/regulator/compliance/summary?period=2025-Q1",
       headers: {
-        authorization: "Bearer test-token",
-        "x-role": "admin",
+        authorization: `Bearer ${signToken("org-1")}`,
         // intentionally no x-org-id
       },
     });
@@ -28,7 +40,9 @@ const isProd = process.env.NODE_ENV === "production";
   });
 
   it("returns HIGH risk when ledger is empty but obligations exist", async () => {
+    process.env.AUTH_DEV_SECRET = AUTH_SECRET;
     const app = buildFastifyApp({ inMemoryDb: true });
+    await registerAuth(app);
     await app.ready();
 
     // Seed obligations so ledger=0 implies HIGH risk.
@@ -45,8 +59,7 @@ const isProd = process.env.NODE_ENV === "production";
       url: "/regulator/compliance/summary?period=2025-Q1",
       headers: {
         "x-org-id": "org-1",
-        authorization: "Bearer test-token",
-        "x-role": "admin",
+        authorization: `Bearer ${signToken("org-1")}`,
       },
     });
 

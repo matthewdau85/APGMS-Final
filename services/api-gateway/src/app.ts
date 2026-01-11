@@ -17,6 +17,7 @@ import {
   isPrototypePath,
   isPrototypeAdminOnlyPath,
 } from "./prototype/prototype-paths.js";
+import { helmetConfigFor } from "./security-headers.js";
 
 export interface BuildAppOpts {
   auth?: {
@@ -35,7 +36,19 @@ export function buildFastifyApp(opts: BuildAppOpts = {}) {
   const app = fastify({ logger: Boolean(opts.logger ?? false) });
 
   app.register(cors, { origin: true });
-  app.register(helmet);
+
+  const envName = String(
+    opts.configOverrides?.environment ?? process.env.NODE_ENV ?? "development"
+  ).toLowerCase();
+  const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
+
+  if (envName === "production" && allowedOrigins.length === 0) {
+    throw new Error("CORS_ALLOWED_ORIGINS must be set in production");
+  }
+  app.register(helmet, helmetConfigFor({ cors: { allowedOrigins } }));
 
   // DB
   const useInMemoryDb = Boolean(
@@ -56,8 +69,27 @@ export function buildFastifyApp(opts: BuildAppOpts = {}) {
   (app as any).decorate("authGuard", guard);
 
   // Health endpoints
+  app.get("/health/live", async () => ({ ok: true }));
+
+  app.get("/health/ready", async (_req, reply) => {
+    const db = (app as any).db;
+    const ready = await checkDbReady(db);
+    if (!ready) {
+      return reply.code(503).send({ ok: false, checks: { db: false } });
+    }
+    return reply.send({ ok: true, checks: { db: true } });
+  });
+
+  // Back-compat
   app.get("/health", async () => ({ ok: true }));
-  app.get("/ready", async () => ({ ok: true }));
+  app.get("/ready", async (_req, reply) => {
+    const db = (app as any).db;
+    const ready = await checkDbReady(db);
+    if (!ready) {
+      return reply.code(503).send({ ok: false, checks: { db: false } });
+    }
+    return reply.send({ ok: true, checks: { db: true } });
+  });
 
   // Routes
   app.register(regulatorComplianceSummaryRoute);
@@ -153,6 +185,24 @@ export function buildFastifyApp(opts: BuildAppOpts = {}) {
   });
 
   return app;
+}
+
+async function checkDbReady(db: any): Promise<boolean> {
+  if (!db) return false;
+  const raw =
+    db.$executeRawUnsafe ??
+    db.$queryRawUnsafe ??
+    db.$executeRaw ??
+    db.$queryRaw;
+  if (typeof raw !== "function") {
+    return true;
+  }
+  try {
+    await raw.call(db, "SELECT 1");
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

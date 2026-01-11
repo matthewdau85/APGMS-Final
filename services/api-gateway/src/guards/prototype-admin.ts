@@ -59,6 +59,11 @@ export function prototypeAdminGuard(options: GuardOptions = {}) {
       return reply.code(404).send({ error: "Not Found" });
     }
 
+    const enabled = String(process.env.ENABLE_PROTOTYPE ?? "").toLowerCase() === "true";
+    if (!enabled) {
+      return reply.code(404).send({ error: "Not Found" });
+    }
+
     if (requiredHeader) {
       const present = (req.headers as any)?.[requiredHeader];
       if (!present) {
@@ -80,20 +85,6 @@ function defaultIsAdmin(req: FastifyRequest): boolean {
     if (Array.isArray(roles) && roles.includes("admin")) return true;
     if (typeof roles === "string" && roles === "admin") return true;
   }
-
-  const h: any = req.headers ?? {};
-
-  const protoAdmin = String(h["x-prototype-admin"] ?? "").toLowerCase();
-  if (protoAdmin === "1" || protoAdmin === "true") return true;
-
-  const xAdmin = String(h["x-admin"] ?? "").toLowerCase();
-  if (xAdmin === "1" || xAdmin === "true") return true;
-
-  const xRole = String(h["x-role"] ?? "").toLowerCase();
-  if (xRole === "admin") return true;
-
-  const auth = String(h["authorization"] ?? "").toLowerCase();
-  if (auth.includes("admin")) return true;
 
   return false;
 }

@@ -38,6 +38,10 @@ export function setSetup(setup: OrgSetup): void {
   localStorage.setItem(KEY_SETUP, JSON.stringify(setup ?? {}));
 }
 
+export function hasSetup(): boolean {
+  return Boolean(localStorage.getItem(KEY_SETUP));
+}
+
 export function getRecentEvidencePackIds(): string[] {
   const ids = safeParse<string[]>(localStorage.getItem(KEY_RECENT_PACKS), []);
   return Array.isArray(ids) ? ids : [];

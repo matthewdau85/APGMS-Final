@@ -1,8 +1,8 @@
 # Ops Runbook
 
 ## Key Endpoints
-- `/health` - liveness. Returns 200 when the process is up.
-- `/ready` - readiness. Returns 200 only when Postgres plus any configured Redis/NATS dependencies respond; returns 503 (with component detail) while draining or if a dependency is down.
+- `/health/live` - liveness. Returns 200 when the process is up.
+- `/health/ready` - readiness. Returns 200 only when the database responds; returns 503 with component detail when not ready.
 - `/metrics` - Prometheus scrape point. Exposes `apgms_http_requests_total`, `apgms_http_request_duration_seconds`, `apgms_db_query_duration_seconds`, `apgms_db_queries_total`, and `apgms_job_duration_seconds` (`services/api-gateway/src/observability/metrics.ts`).
 - `/bank-lines` - authenticated PAYGW/GST ingestion. Requires JWT + allowed role; GET lists caller-org lines, POST accepts ciphertext payloads.
 - `/admin/data` - authenticated stub for admin datasets. In-memory only; used for smoke validation of auth plumbing, not for real exports.
@@ -19,7 +19,7 @@
 
 ## Start/Stop Procedures
 - **Start**: `pnpm --filter @apgms/api-gateway dev`.
-- Ensure Postgres is listening on `localhost:5432` (or that `DATABASE_URL`/`SHADOW_DATABASE_URL` point to the actual host) before running the start command. Bringing up the default `db`/`redis` containers via `docker compose up -d db redis` and confirming `docker ps` shows `apgms-db` healthy is the recommended flow.
+- Ensure Postgres is listening on `localhost:5432` (or that `DATABASE_URL`/`SHADOW_DATABASE_URL` point to the actual host) before running the start command. Bringing up the default `db` container via `docker compose up -d db` and confirming `docker ps` shows `apgms-db` healthy is the recommended flow.
 - **Graceful shutdown**: send SIGTERM/SIGINT; the handler drains and calls `fastify.close()` (`services/api-gateway/src/index.ts`). Verify shutdown by checking the logs for an `api-gateway shut down cleanly` line.
 
 ## Auth & Routing Notes
@@ -36,8 +36,8 @@
 - `/admin/data` is intentionally ephemeral - do not rely on it for long-lived admin artifacts.
 
 ## Rolling Deploy / Graceful Shutdown
-- `SIGTERM` sets `draining=true`, causing `/ready` to flip to 503 so the load balancer can drain the instance.
-- Fastify waits for inflight requests before closing; keep the pod alive until `/ready` reports `{ ok: false, draining: true }` for at least one scrape interval.
+- `SIGTERM` shuts down the API, causing `/health/ready` to return 503 so the load balancer can drain the instance.
+- Fastify waits for inflight requests before closing; keep the pod alive until `/health/ready` reports `{ ok: false, checks: { db: false } }` for at least one scrape interval.
 
 ## Regulator Access
 - Only the regulator auth/session bootstrap is wired today. Evidence catalogue, monitoring snapshots, and bank summary routes remain TODO; direct auditors to the compliance backlog for progress before promising those controls.

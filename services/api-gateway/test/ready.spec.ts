@@ -11,7 +11,7 @@ if (!runReadySuite) {
 
   let app: Awaited<ReturnType<typeof createApp>>;
 
-  describe("/ready", () => {
+  describe("/health/ready", () => {
     before(async () => {
       app = await createApp();
       await app.ready();
@@ -23,9 +23,9 @@ if (!runReadySuite) {
     });
 
     it("returns 200 when DB is reachable", async () => {
-      const res = await app.inject({ method: "GET", url: "/ready" });
+      const res = await app.inject({ method: "GET", url: "/health/ready" });
       assert.equal(res.statusCode, 200);
-      assert.deepEqual(res.json(), { ready: true });
+      assert.deepEqual(res.json(), { ok: true, checks: { db: true } });
     });
   });
 }
