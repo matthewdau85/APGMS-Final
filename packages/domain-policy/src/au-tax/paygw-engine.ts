@@ -2,6 +2,7 @@
 
 import type { TaxConfigRepository, PayPeriod } from "./types.js";
 import { TaxType } from "./types.js";
+import { computeWithholding } from "./paygw-rounding.js";
 
 export class PaygwEngine {
   constructor(
@@ -44,7 +45,7 @@ export class PaygwEngine {
 
     return {
       withholding: {
-        cents: deannualise(annualTax, payPeriod),
+        cents: computeWithholding({ annualAmountCents: annualTax, payPeriod }),
         currency: "AUD",
       },
     };
@@ -59,19 +60,6 @@ function annualise(cents: number, period: PayPeriod): number {
       return cents * 26;
     case "MONTHLY":
       return cents * 12;
-    case "ANNUAL":
-      return cents;
-  }
-}
-
-function deannualise(cents: number, period: PayPeriod): number {
-  switch (period) {
-    case "WEEKLY":
-      return Math.floor(cents / 52);
-    case "FORTNIGHTLY":
-      return Math.floor(cents / 26);
-    case "MONTHLY":
-      return Math.floor(cents / 12);
     case "ANNUAL":
       return cents;
   }
