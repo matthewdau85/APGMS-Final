@@ -1,4 +1,1 @@
-import RegulatorPortal from "../app/pages/RegulatorPortal";
-
-export { RegulatorPortal };
-export default RegulatorPortal;
+export { default } from "../app/pages/RegulatorPortal";

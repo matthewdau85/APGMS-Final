@@ -1,10 +1,16 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import AppMain from "./AppMain";
+import { BrowserRouter } from "react-router-dom";
+import { AuthProvider } from "./auth/auth";
+import { AppMain } from "./AppMain";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <AppMain />
+    <BrowserRouter>
+      <AuthProvider>
+        <AppMain />
+      </AuthProvider>
+    </BrowserRouter>
   </React.StrictMode>
 );

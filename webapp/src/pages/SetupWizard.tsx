@@ -1,4 +1,1 @@
-import SetupWizard from "../app/pages/SetupWizard";
-
-export { SetupWizard };
-export default SetupWizard;
+export { default } from "../app/pages/SetupWizard";

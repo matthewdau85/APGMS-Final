@@ -1,18 +1,16 @@
 import React from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import { useAuth } from "./AuthContext";
 
-export function RequireAdmin(props: { children: React.ReactNode }) {
-  const { user, isAdmin } = useAuth();
-  const loc = useLocation();
+export const RequireAdmin: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const { user } = useAuth();
 
-  if (!user) {
-    return <Navigate to="/login" replace state={{ from: loc.pathname }} />;
-  }
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== "ADMIN") return <Navigate to="/" replace />;
 
-  if (!isAdmin) {
-    return <Navigate to="/" replace />;
-  }
+  return <>{children}</>;
+};
 
-  return <>{props.children}</>;
-}
+export default RequireAdmin;

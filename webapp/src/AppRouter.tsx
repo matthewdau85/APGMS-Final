@@ -1,6 +1,8 @@
 import React from "react";
-import AppMain from "./AppMain";
+import { AppMain } from "./AppMain";
 
-export default function AppRouter() {
+export function AppRouter() {
   return <AppMain />;
 }
+
+export default AppRouter;
