@@ -11,7 +11,7 @@ export default function Layout() {
             <div>
               <div className="text-sm font-semibold leading-none">APGMS</div>
               <div className="text-xs text-muted-foreground leading-none">
-                Prototype Webapp
+                Compliance Webapp
               </div>
             </div>
           </div>

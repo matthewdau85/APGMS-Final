@@ -54,7 +54,7 @@ export function AdminArea() {
 
       <div style={{ marginTop: 18, display: "grid", gap: 12 }}>
         <div style={{ padding: 16, border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14 }}>
-          <h3 style={{ marginTop: 0 }}>Prototype Console</h3>
+          <h3 style={{ marginTop: 0 }}>Compliance Console</h3>
           <p style={{ opacity: 0.85 }}>
             Admin-only. The console is production-like UX with mocked data, feeds, lodgments, evidence packs, and a demo guide.
           </p>
@@ -81,7 +81,7 @@ export function AdminArea() {
         <div style={{ padding: 16, border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14 }}>
           <h3 style={{ marginTop: 0 }}>Demo notes</h3>
           <ul style={{ opacity: 0.85, marginBottom: 0 }}>
-            <li>User login should not see prototype entry.</li>
+            <li>User login should not see console entry.</li>
             <li>Direct URL access to /proto is protected by routing guard.</li>
             <li>Inside the console you can toggle Simulation and Reset demo state.</li>
           </ul>

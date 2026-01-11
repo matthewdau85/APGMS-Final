@@ -14,7 +14,7 @@ export default function LoginPage() {
     <div style={{ maxWidth: 820, margin: "0 auto", padding: 24 }}>
       <h1 style={{ margin: 0 }}>APGMS</h1>
       <p style={{ opacity: 0.8, marginTop: 8 }}>
-        Demo authentication (local only). Use Admin to access the Prototype Console.
+        Demo authentication (local only). Use Admin to access the Console.
       </p>
 
       <div style={{ marginTop: 18, display: "grid", gap: 12, padding: 16, border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14 }}>
@@ -68,7 +68,7 @@ export default function LoginPage() {
         <div style={{ fontSize: 12, opacity: 0.75 }}>
           Admin-only behavior:
           <ul style={{ marginTop: 6 }}>
-            <li>User login: no Prototype entry button.</li>
+            <li>User login: no Console entry button.</li>
             <li>Admin login: see “Open APGMS Console (Demo Mode)”.</li>
             <li>Direct URL protection: non-admin hitting /proto redirects away.</li>
           </ul>

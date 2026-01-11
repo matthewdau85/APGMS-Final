@@ -1,8 +1,8 @@
 import React from "react";
 import { Outlet } from "react-router-dom";
 
-import { AppProvider } from "../app/context/AppContext";
-import Layout from "../app/components/Layout";
+import { AppProvider } from "../ux/shared/hooks/AppContext";
+import Layout from "../ux/shared/components/Layout";
 
 export function ProtoConsole() {
   return (

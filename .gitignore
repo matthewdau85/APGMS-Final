@@ -64,3 +64,10 @@ status/incidents/
 chess_api_snapshot_*.tsv
 _design_extract/
 webapp/pnpm-lock.yaml
+
+# Never commit compiled TS outputs in source folders
+webapp/src/**/*.js
+webapp/src/**/*.js.map
+webapp/src/**/*.d.ts
+webapp/src/**/*.d.ts.map
+

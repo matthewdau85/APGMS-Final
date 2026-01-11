@@ -59,7 +59,7 @@ export default function HomePage() {
         <div style={{ padding: 16, border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14 }}>
           <h3 style={{ marginTop: 0 }}>Next</h3>
           <p style={{ opacity: 0.85, marginBottom: 0 }}>
-            Sign in as Admin to access the Prototype Console and run the full end-to-end demo with mocked feeds, lodgments, and evidence packs.
+            Sign in as Admin to access the Compliance Console and run the end-to-end demo with feeds, lodgments, and evidence packs.
           </p>
         </div>
       </div>

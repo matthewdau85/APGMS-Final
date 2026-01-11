@@ -8,7 +8,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <div className="rounded-xl border border-border bg-card p-4">
           <div className="text-sm text-muted-foreground">Status</div>
-          <div className="mt-1 text-base font-semibold">Prototype running</div>
+          <div className="mt-1 text-base font-semibold">Service running</div>
         </div>
 
         <div className="rounded-xl border border-border bg-card p-4">

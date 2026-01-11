@@ -1,4 +1,8 @@
 import { apiRequest } from "../lib/api-client";
+import { type EvidenceRef } from "../tax/evidence";
+import { computeTax, type TaxObligation } from "../tax/registry";
+import type { GstInput } from "../tax/plugins/auGst";
+import type { PaygwInput } from "../tax/plugins/auPaygw";
 import { getOrgId } from "./protoState";
 
 export type ProtoOverview = {
@@ -61,6 +65,13 @@ export type PaymentPlanResponse = {
   approved?: boolean;
 };
 
+export type ProtoEvidenceRef = EvidenceRef;
+
+export type ProtoTaxObligation = TaxObligation & {
+  dueDate?: string;
+  evidenceRef?: ProtoEvidenceRef;
+};
+
 function orgId() {
   return getOrgId();
 }
@@ -113,6 +124,16 @@ export const protoApi = {
       orgId: orgId(),
       body,
     });
+  },
+
+  async computePaygw(input: PaygwInput): Promise<ProtoTaxObligation[]> {
+    const asAt = input.asAt ?? new Date().toISOString().slice(0, 10);
+    return (await computeTax("AU_PAYGW", { asAt, orgId: orgId() }, input)) as ProtoTaxObligation[];
+  },
+
+  async computeGst(input: GstInput): Promise<ProtoTaxObligation[]> {
+    const asAt = input.asAt ?? new Date().toISOString().slice(0, 10);
+    return (await computeTax("AU_GST", { asAt, orgId: orgId() }, input)) as ProtoTaxObligation[];
   },
 
   // Optional helper for Regulator Portal (page falls back if this fails)

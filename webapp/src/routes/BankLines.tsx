@@ -7,7 +7,7 @@ export default function BankLines() {
       <header style={{ marginBottom: 16 }}>
         <h1 style={{ margin: 0 }}>Bank Lines</h1>
         <p style={{ marginTop: 8, opacity: 0.85 }}>
-          Prototype UI route for reviewing imported bank transactions and mapping them to ledger events.
+          Admin route for reviewing imported bank transactions and mapping them to ledger events.
         </p>
       </header>
 
