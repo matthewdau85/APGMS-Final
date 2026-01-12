@@ -78,3 +78,9 @@ pnpm exec playwright install --with-deps
 pnpm --filter @apgms/webapp dev -- --host 127.0.0.1 --port 5173 --strictPort
 pnpm -w exec playwright test webapp/tests/a11y.spec.ts
 pnpm audit --audit-level=high
+
+## Security scan & readiness runbook
+
+The centrally documented scripts/run-all-tests.sh now includes sbom generation, gitleaks, trivy, pnpm audit, pnpm validate:ato, and the full suite of API/webapp tests. Run it (or the individual commands listed above) whenever dependencies or sensitive routes change; the artifacts/runlogs directory stores per-stage output.
+
+Outstanding dependency findings (TODO): qs@6.14.0 (via supertest/superagent) and @remix-run/router@1.23.0 (via react-router-dom). Upgrade/override these transitive deps once patched releases arrive.
