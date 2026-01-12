@@ -1,0 +1,7 @@
+{
+  "audiences": {
+    "primary": ["SMB", "AccountingFirm", "Regulator", "Investor"],
+    "secondary": ["DeveloperOperator"]
+  },
+  "assurance_target": "Pragmatic"
+}

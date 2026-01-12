@@ -1,0 +1,61 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Docs: Init",
+      "type": "shell",
+      "command": "bash -lc ./scripts/init-docs-system.sh",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Docs: Generate",
+      "type": "shell",
+      "command": "bash -lc ./scripts/generate-docs.sh",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Docs: Validate",
+      "type": "shell",
+      "command": "bash -lc ./scripts/validate-docs.sh",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Docs: Full",
+      "dependsOrder": "sequence",
+      "dependsOn": ["Docs: Init", "Docs: Generate", "Docs: Validate"],
+      "type": "shell",
+      "command": "echo \"Docs lifecycle complete\"",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "ATO: Validate",
+      "type": "shell",
+      "command": "bash -lc 'pnpm validate:ato'",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    }
+  ]
+}

@@ -11,6 +11,12 @@ APGMS is an Australian-only platform aimed at hardened management of PAYGW and G
 - Regulator-style views/APIs (prototype routes are **non-shippable in production**)
 - Sensitive identifier crypto scaffolding (envelope-encryption approach; production key management hardening required)
 
+See docs/runbooks/ato-rules-maintenance.md for living guidance on the ATO ruleset.
+It covers adding new tax years and PAYGW/GST scenario/table keys.
+Run `pnpm validate:ato` after each change to confirm manifests and placeholder data.
+The section is written for operators and DeveloperOperator audiences.
+Link: [ATO rules runbook](docs/runbooks/ato-rules-maintenance.md)
+
 ---
 
 ## Monorepo Structure
@@ -63,4 +69,3 @@ pnpm exec playwright install --with-deps
 pnpm --filter @apgms/webapp dev -- --host 127.0.0.1 --port 5173 --strictPort
 pnpm -w exec playwright test webapp/tests/a11y.spec.ts
 pnpm audit --audit-level=high
-

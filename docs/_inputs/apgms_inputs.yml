@@ -1,0 +1,54 @@
+audiences:
+  primary:
+    - SMB
+    - AccountingFirm
+    - Regulator
+    - Investor
+  secondary:
+    - DeveloperOperator
+assurance_target:
+  level: Pragmatic
+  rationale: Pragmatic today, roadmap to SOC2-Ready (control mapping + evidence)
+support:
+  hours: Mon-Fri 09:00-17:00 AEST
+  model: Sev1 on-call outside hours (ack + triage)
+severity_model:
+  - Sev1
+  - Sev2
+  - Sev3
+  targets: targets, not contractual SLA
+incident_comms:
+  approach: notify after triage confirms impact; explicit triggers for integrity issues
+bcp_dr:
+  RTO: 8 hours
+  RPO: 1 hour
+  restore_tests: quarterly
+data_retention:
+  audit_logs: 7 years
+  evidence_packs: 7 years
+  offboarding: 90 days
+  legal_hold: supported
+security:
+  admin_mfa: 'admin MFA required if implemented; otherwise planned and required before production'
+roles:
+  - OrgOwner
+  - Admin
+  - Operator
+  - ReadOnly
+  - RegulatorReadOnly
+hosting:
+  region: AWS intent ap-southeast-2 (Sydney)
+  note: 'Australia unless otherwise agreed'
+procurement_defaults:
+  SLO_target: 99.9% monthly (non-contractual)
+  patch_SLA_targets:
+    critical: 7d
+    high: 30d
+    medium: 90d
+non_goals_disclaimers:
+  - not tax agent
+  - no legal/tax/financial advice
+  - no guarantee of ATO acceptance
+  - no custody of funds
+  - not a GL replacement
+  - no lodgment/payment without explicit authorization
