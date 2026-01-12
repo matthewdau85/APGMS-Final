@@ -12,6 +12,8 @@ import { createMetrics } from "./observability/metrics.js";
 
 import regulatorComplianceSummaryRoute from "./routes/regulator-compliance-summary.js";
 import regulatorComplianceEvidencePackPlugin from "./routes/regulator-compliance-evidence-pack.js";
+import { basSettlementRoutes } from "./routes/bas-settlement.js";
+import { registerBankLinesRoutes } from "./routes/bank-lines.js";
 import { registerRiskSummaryRoute } from "./routes/risk-summary.js";
 import {
   isPrototypePath,
@@ -35,8 +37,6 @@ export interface BuildAppOpts {
 export function buildFastifyApp(opts: BuildAppOpts = {}) {
   const app = fastify({ logger: Boolean(opts.logger ?? false) });
 
-  app.register(cors, { origin: true });
-
   const envName = String(
     opts.configOverrides?.environment ?? process.env.NODE_ENV ?? "development"
   ).toLowerCase();
@@ -48,6 +48,27 @@ export function buildFastifyApp(opts: BuildAppOpts = {}) {
   if (envName === "production" && allowedOrigins.length === 0) {
     throw new Error("CORS_ALLOWED_ORIGINS must be set in production");
   }
+
+  // Production: strict CORS allowlist (tests expect allowed.example to pass)
+  app.addHook("onRequest", async (req, reply) => {
+    if (envName !== "production") return;
+
+    const origin = String((req.headers as any)?.origin ?? "");
+    if (!origin) return;
+
+    const allow = new Set<string>(allowedOrigins);
+
+    if (!allow.has(origin)) {
+      reply.code(403).send({ error: "cors_origin_forbidden" });
+      return;
+    }
+
+    // Ensure the expected header is present even if fastify-cors is configured broadly
+    reply.header("access-control-allow-origin", origin);
+    reply.header("vary", "Origin");
+  });
+
+  app.register(cors, { origin: true });
   app.register(helmet, helmetConfigFor({ cors: { allowedOrigins } }));
 
   // DB
@@ -95,6 +116,10 @@ export function buildFastifyApp(opts: BuildAppOpts = {}) {
   app.register(regulatorComplianceSummaryRoute);
   app.register(regulatorComplianceEvidencePackPlugin, { prefix: "/regulator" });
   registerRiskSummaryRoute(app);
+  registerBankLinesRoutes(app);
+  app.register(async (instance) => {
+    await basSettlementRoutes(instance, { requireAuth: true });
+  }, { prefix: "/api" });
 
   // APGMS_TEST_BEHAVIOR_HOOKS
 
@@ -114,17 +139,6 @@ export function buildFastifyApp(opts: BuildAppOpts = {}) {
     }
   });
 
-    // Production: hard-disable prototype/demo endpoints at the edge (404)
-  app.addHook("onRequest", async (req, reply) => {
-    if (env !== "production") return;
-
-    const url = req.url || "";
-    if (isPrototypePath(url)) {
-      reply.code(404).send({ error: "not_found" });
-      return;
-    }
-  });
-
   // Non-production: only SOME prototype endpoints are admin-only (e.g. /monitor/*)
   app.addHook("onRequest", async (req, reply) => {
     if (env === "production") return;
@@ -132,45 +146,28 @@ export function buildFastifyApp(opts: BuildAppOpts = {}) {
     const url = req.url || "";
     if (!isPrototypeAdminOnlyPath(url)) return;
 
-    const userRole = String((req as any).user?.role ?? "");
-    const h: any = (req.headers as any) || {};
-    const headerRole = String(h["x-role"] ?? h["x-user-role"] ?? "");
-    const headerAdmin = String(h["x-admin"] ?? "");
+    const enablePrototype =
+      String(process.env.ENABLE_PROTOTYPE ?? "").toLowerCase() === "true";
+    if (!enablePrototype) {
+      reply.code(404).send({ error: "not_found" });
+      return;
+    }
 
-    const isAdmin =
-      userRole === "admin" ||
-      headerRole === "admin" ||
-      headerAdmin === "1" ||
-      headerAdmin === "true";
+    const guard = (app as any).authGuard as
+      | ((request: any, response: any) => Promise<void>)
+      | undefined;
+    if (guard) {
+      await guard(req as any, reply as any);
+      if (reply.sent) return;
+    }
+
+    const userRole = String((req as any).user?.role ?? "");
+    const isAdmin = userRole === "admin";
 
     if (!isAdmin) {
       reply.code(403).send({ error: "admin_only_prototype" });
       return;
     }
-  });
-
-  // Production: strict CORS allowlist (tests expect allowed.example to pass)
-  app.addHook("onRequest", async (req, reply) => {
-    if (env !== "production") return;
-
-    const origin = String((req.headers as any)?.origin ?? "");
-    if (!origin) return;
-
-    const envList = String(process.env.CORS_ALLOWLIST ?? "")
-      .split(",")
-      .map((x) => x.trim())
-      .filter(Boolean);
-
-    const allow = new Set<string>(["https://allowed.example", ...envList]);
-
-    if (!allow.has(origin)) {
-      reply.code(403).send({ error: "cors_origin_forbidden" });
-      return;
-    }
-
-    // Ensure the expected header is present even if fastify-cors is configured broadly
-    reply.header("access-control-allow-origin", origin);
-    reply.header("vary", "Origin");
   });
 
   // Metrics route (tests expect /metrics 200 + text/plain)

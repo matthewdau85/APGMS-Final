@@ -6,10 +6,13 @@ import {
   createTransferInstruction,
   createPaymentPlanRequest,
   verifyObligations,
+  BasLodgmentBodySchema,
+  BasLodgmentQuerySchema,
 } from "@apgms/shared";
 import { metrics } from "../observability/metrics.js";
 import { assertOrgAccess } from "../utils/orgScope.js";
 import { recordCriticalAuditLog } from "../lib/audit.js";
+import { validateWithReply } from "../lib/validation.js";
 
 const TAX_TYPES: Array<{ key: string; label: string }> = [
   { key: "PAYGW", label: "PAYGW obligations" },
@@ -45,13 +48,27 @@ export async function registerBasRoutes(
   app.post(
     "/bas/lodgment",
     async (request: LodgmentRequest, reply: FastifyReply): Promise<void> => {
+      const parsedQuery = validateWithReply(
+        BasLodgmentQuerySchema,
+        request.query,
+        reply,
+      );
+      if (!parsedQuery) return;
+
+      const parsedBody = validateWithReply(
+        BasLodgmentBodySchema,
+        request.body ?? {},
+        reply,
+      );
+      if (!parsedBody) return;
+
       const orgId = ensureUserOrg(request, reply);
       if (!orgId) return;
 
-      const basCycleId = String(request.query.basCycleId ?? "manual");
+      const basCycleId = parsedQuery.basCycleId ?? "manual";
       const lodgment = await recordBasLodgment({
         orgId,
-        initiatedBy: request.body?.initiatedBy,
+        initiatedBy: parsedBody.initiatedBy,
         taxTypes: TAX_TYPES.map((type) => type.key),
         status: "in_progress",
       });

@@ -1,0 +1,5 @@
+{
+  "name": "APGMS",
+  "purpose": "Automated PAYGW/GST/BAS management aligned with ATO",
+  "audiences": ["SMB", "AccountingFirm", "Regulator", "Investor"]
+}

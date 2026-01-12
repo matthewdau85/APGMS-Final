@@ -1,0 +1,9 @@
+{
+  "food_basic": "gst_free",
+  "health": "gst_free",
+  "education": "gst_free",
+  "rent_residential": "gst_free",
+  "financial_services": "gst_free",
+  "general_goods": "taxable",
+  "exports": "input_taxed"
+}

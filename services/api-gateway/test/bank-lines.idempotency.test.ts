@@ -1,6 +1,3 @@
-import assert from "node:assert/strict";
-import { afterEach, describe, it } from "node:test";
-
 import Fastify from "fastify";
 import jwt from "jsonwebtoken";
 
@@ -107,8 +104,8 @@ describe("/bank-lines idempotency", () => {
         "Idempotency-Key": "alpha",
       },
     });
-    assert.equal(first.statusCode, 201);
-    assert.equal(first.headers["idempotent-replay"], "false");
+    expect(first.statusCode).toBe(201);
+    expect(first.headers["idempotent-replay"]).toBe("false");
 
     const second = await app.inject({
       method: "POST",
@@ -119,9 +116,9 @@ describe("/bank-lines idempotency", () => {
         "Idempotency-Key": "alpha",
       },
     });
-    assert.equal(second.statusCode, 201);
-    assert.equal(second.headers["idempotent-replay"], "true");
-    assert.deepEqual(second.json(), first.json());
+    expect(second.statusCode).toBe(201);
+    expect(second.headers["idempotent-replay"]).toBe("true");
+    expect(second.json()).toEqual(first.json());
   });
 
   it("returns 409 when payload differs for same key", async () => {
@@ -146,7 +143,7 @@ describe("/bank-lines idempotency", () => {
         "Idempotency-Key": "alpha",
       },
     });
-    assert.equal(first.statusCode, 201);
+    expect(first.statusCode).toBe(201);
 
     const second = await app.inject({
       method: "POST",
@@ -157,6 +154,6 @@ describe("/bank-lines idempotency", () => {
         "Idempotency-Key": "alpha",
       },
     });
-    assert.equal(second.statusCode, 409);
+    expect(second.statusCode).toBe(409);
   });
 });

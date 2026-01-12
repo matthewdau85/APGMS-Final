@@ -2,6 +2,12 @@ import { z } from "zod";
 
 const trimmed = () => z.string().trim().min(1);
 
+const decimalString = () =>
+  z
+    .number()
+    .finite()
+    .refine((value) => Number.isFinite(value), "must be a finite number");
+
 export const LoginBodySchema = z
   .object({
     email: trimmed().email(),
@@ -100,3 +106,48 @@ const PasskeyAuthenticationPayloadSchema = z
   });
 
 export const PasskeyVerifyBodySchema = PasskeyAuthenticationPayloadSchema;
+
+export const PayrollLineSchema = z
+  .object({
+    id: trimmed(),
+    employeeId: trimmed(),
+    gross: decimalString(),
+    taxWithheld: decimalString(),
+    superannuation: decimalString(),
+  })
+  .strict();
+
+export const PayrollBatchRequestSchema = z
+  .object({
+    basPeriodId: trimmed().optional(),
+    lines: z.array(PayrollLineSchema).min(1),
+  })
+  .strict();
+
+export const GstTransactionSchema = z
+  .object({
+    id: trimmed(),
+    date: z.string().datetime({ offset: true }),
+    amount: decimalString(),
+    gstAmount: decimalString(),
+    category: trimmed().optional(),
+  })
+  .strict();
+
+export const GstBatchRequestSchema = z
+  .object({
+    transactions: z.array(GstTransactionSchema).min(1),
+  })
+  .strict();
+
+export const BasLodgmentQuerySchema = z
+  .object({
+    basCycleId: trimmed().optional(),
+  })
+  .strict();
+
+export const BasLodgmentBodySchema = z
+  .object({
+    initiatedBy: trimmed().max(200).optional(),
+  })
+  .strict();

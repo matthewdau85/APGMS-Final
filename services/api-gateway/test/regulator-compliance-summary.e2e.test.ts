@@ -5,7 +5,7 @@ import { registerAuth } from "../src/plugins/auth.js";
 const isProd = process.env.NODE_ENV === "production";
 const AUTH_SECRET = "test-secret";
 
-function signToken(orgId: string) {
+function signToken(orgId?: string) {
   return jwt.sign(
     { orgId, role: "regulator", sub: "reg-1" },
     AUTH_SECRET,
@@ -24,7 +24,7 @@ function signToken(orgId: string) {
       method: "GET",
       url: "/regulator/compliance/summary?period=2025-Q1",
       headers: {
-        authorization: `Bearer ${signToken("org-1")}`,
+        authorization: `Bearer ${signToken()}`,
         // intentionally no x-org-id
       },
     });

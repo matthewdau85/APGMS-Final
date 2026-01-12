@@ -1,0 +1,100 @@
+{
+  "spec_version": "v1",
+  "generated_at": "2026-01-12T00:00:00Z",
+  "paygw": {
+    "period_bases": ["weekly", "fortnightly", "monthly"],
+    "scenarios": [
+      "resident_tfn",
+      "resident_no_tfn",
+      "non_resident_tfn",
+      "working_holiday_maker",
+      "seasonal_worker",
+      "seniors_pensioners"
+    ],
+    "flags": ["help", "tsl", "stsl", "medicare_levy_variation"],
+    "required_tables": [
+      "paygw_brackets_weekly",
+      "paygw_brackets_fortnightly",
+      "paygw_brackets_monthly",
+      "paygw_help_variations",
+      "paygw_med_levy_variations"
+    ],
+    "rounding_policy": {
+      "precision": 2,
+      "method": "round_half_even",
+      "note": "ATO style rounding to the nearest cent for withholding"
+    }
+  },
+  "gst": {
+    "classifications": ["taxable", "gst_free", "input_taxed"],
+    "category_map": {
+      "food_basic": "gst_free",
+      "health": "gst_free",
+      "education": "gst_free",
+      "rent_residential": "gst_free",
+      "financial_services": "gst_free",
+      "general_goods": "taxable",
+      "exports": "input_taxed"
+    },
+    "adjustments_policy": {
+      "netting": "sales_minus_purchases",
+      "negative_net": "refund_or_carry",
+      "notes": "Refunds take precedence; credits that exceed liability may be refunded or carried forward."
+    }
+  },
+  "bas": {
+    "lodgment_frequencies": ["monthly", "quarterly", "annual"],
+    "entity_types": ["small_business", "medium_withholder", "large_withholder"],
+    "due_date_rules": [
+      {
+        "applies_to": { "entity_type": "small_business", "frequency": "quarterly" },
+        "due_day": 28,
+        "due_month_offset": 1,
+        "notes": "Quarterly BAS due the 28th of the month following the lodgment period"
+      },
+      {
+        "applies_to": { "entity_type": "small_business", "frequency": "monthly" },
+        "due_day": 21,
+        "due_month_offset": 1,
+        "notes": "Monthly BAS due the 21st of the following month"
+      },
+      {
+        "applies_to": { "entity_type": "medium_withholder", "frequency": "quarterly" },
+        "due_day": 28,
+        "due_month_offset": 1,
+        "notes": "Medium withholders follow same offset"
+      }
+    ],
+    "weekend_holiday_shift": {
+      "mode": "next_business_day",
+      "region": "AU",
+      "notes": "Holiday catalogued separately when ready"
+    }
+  },
+  "effective_dates": [
+    {
+      "tax_year": "2024-2025",
+      "start": "2024-07-01",
+      "end": "2025-06-30",
+      "required_tables": [
+        "paygw_brackets_weekly",
+        "paygw_brackets_fortnightly",
+        "paygw_brackets_monthly",
+        "gst_category_map",
+        "bas_due_dates"
+      ]
+    },
+    {
+      "tax_year": "2025-2026",
+      "start": "2025-07-01",
+      "end": "2026-06-30",
+      "required_tables": [
+        "paygw_brackets_weekly",
+        "paygw_brackets_fortnightly",
+        "paygw_brackets_monthly",
+        "gst_category_map",
+        "bas_due_dates"
+      ]
+    }
+  ]
+}

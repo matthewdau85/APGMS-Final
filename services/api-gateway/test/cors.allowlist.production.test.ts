@@ -1,15 +1,12 @@
-import assert from "node:assert/strict";
-import { describe, it } from "node:test";
-
 import { buildFastifyApp } from "../src/app.js";
 
 describe("CORS allowlist in production", () => {
   it("throws when allowlist is empty in production", () => {
     delete process.env.CORS_ALLOWED_ORIGINS;
 
-    assert.throws(() => {
+    expect(() => {
       buildFastifyApp({ configOverrides: { environment: "production", inMemoryDb: true } });
-    }, /CORS_ALLOWED_ORIGINS/);
+    }).toThrow(/CORS_ALLOWED_ORIGINS/);
   });
 
   it("accepts only listed origins in production", async () => {
@@ -26,8 +23,8 @@ describe("CORS allowlist in production", () => {
         "access-control-request-method": "GET",
       },
     });
-    assert.notEqual(allowed.statusCode, 403);
-    assert.equal(allowed.headers["access-control-allow-origin"], "https://app.example");
+    expect(allowed.statusCode).not.toBe(403);
+    expect(allowed.headers["access-control-allow-origin"]).toBe("https://app.example");
 
     const blocked = await app.inject({
       method: "OPTIONS",
@@ -37,7 +34,7 @@ describe("CORS allowlist in production", () => {
         "access-control-request-method": "GET",
       },
     });
-    assert.equal(blocked.statusCode, 403);
+    expect(blocked.statusCode).toBe(403);
 
     await app.close();
   });

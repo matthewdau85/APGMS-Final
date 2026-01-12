@@ -6,18 +6,27 @@ import {
   type TaxConfigRepository,
 } from "./types.js";
 import type { JurisdictionCode } from "../tax-types.js";
+import {
+  GstLine,
+  computeGstOnLines,
+  GstClassification,
+} from "./gst-utils.js";
 
 export interface GstCalculationInput {
   orgId: string;
   jurisdiction: JurisdictionCode;
-  taxableSuppliesCents: number;
-  gstFreeSuppliesCents: number;
-  inputTaxCreditsCents: number;
   asOf: Date;
+  salesLines?: GstLine[];
+  purchaseLines?: GstLine[];
+  adjustments?: GstLine[];
 }
 
 export interface GstCalculationResult {
-  netPayableCents: number;
+  gstOnSalesCents: number;
+  gstOnPurchasesCents: number;
+  netGstCents: number;
+  isRefundDue: boolean;
+  carryForwardAmount: number;
   configUsed?: GstConfig;
 }
 
@@ -42,13 +51,38 @@ export class GstEngine {
       throw new Error("No GST config for jurisdiction/date");
     }
 
-    const taxableBase =
-      input.taxableSuppliesCents - input.gstFreeSuppliesCents;
-    const gstOnSupplies = Math.round(
-      (taxableBase * config.rateMilli) / 1000
-    );
-    const netPayableCents = gstOnSupplies - input.inputTaxCreditsCents;
+    const salesLines = input.salesLines ?? [];
+    const purchaseLines = input.purchaseLines ?? [];
+    const adjustmentLines = input.adjustments ?? [];
 
-    return { netPayableCents, configUsed: config };
+    const gstOnSales = computeGstOnLines({
+      lines: salesLines,
+      config,
+      includeInputTaxed: false,
+    });
+    const gstOnPurchases = computeGstOnLines({
+      lines: purchaseLines,
+      config,
+      includeInputTaxed: false,
+    });
+    const adjustmentImpact = computeGstOnLines({
+      lines: adjustmentLines,
+      config,
+      includeInputTaxed: true,
+    });
+
+    const netGst = gstOnSales - gstOnPurchases + adjustmentImpact;
+    const isRefundDue = netGst < 0;
+    const carryForward = isRefundDue ? Math.abs(netGst) : 0;
+
+    const result = {
+      gstOnSalesCents: gstOnSales,
+      gstOnPurchasesCents: gstOnPurchases,
+      netGstCents: netGst,
+      isRefundDue,
+      carryForwardAmount: carryForward,
+      configUsed: config,
+    };
+    return result;
   }
 }

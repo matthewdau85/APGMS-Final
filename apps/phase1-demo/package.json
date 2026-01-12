@@ -17,9 +17,5 @@
     "uuid": "^10.0.0"
   },
   "devDependencies": {
-    "@types/uuid": "^11.0.0"
-  },
-  "prisma": {
-    "schema": "../../infra/prisma/schema.prisma"
   }
 }

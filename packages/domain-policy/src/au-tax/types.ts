@@ -7,6 +7,15 @@ export enum TaxType {
 
 export type PayPeriod = "WEEKLY" | "FORTNIGHTLY" | "MONTHLY" | "ANNUAL";
 
+export const GstClassification = {
+  Taxable: "taxable",
+  GstFree: "gst_free",
+  InputTaxed: "input_taxed",
+} as const;
+
+export type GstClassificationType =
+  (typeof GstClassification)[keyof typeof GstClassification];
+
 export interface PaygwBracket {
   thresholdCents: number;
   baseCents: number;
@@ -25,6 +34,11 @@ export interface GstConfig {
   jurisdiction: string;
   taxType: TaxType.GST;
   rateMilli: number;
+  classificationMap?: Record<string, GstClassificationType>;
+  adjustmentsPolicy?: {
+    netting: string;
+    negativeNet: "refund_or_carry" | "carry_only";
+  };
 }
 
 export type AuTaxConfig = PaygwConfig | GstConfig;
