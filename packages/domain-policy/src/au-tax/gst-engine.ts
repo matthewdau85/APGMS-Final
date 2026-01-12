@@ -6,11 +6,7 @@ import {
   type TaxConfigRepository,
 } from "./types.js";
 import type { JurisdictionCode } from "../tax-types.js";
-import {
-  GstLine,
-  computeGstOnLines,
-  GstClassification,
-} from "./gst-utils.js";
+import { GstLine, computeGstOnLines } from "./gst-utils.js";
 
 export interface GstCalculationInput {
   orgId: string;

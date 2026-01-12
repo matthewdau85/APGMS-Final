@@ -1,20 +1,13 @@
 // packages/domain-policy/src/au-tax/types.ts
 
+import type { GstClassificationType } from "./gst-utils.js";
+
 export enum TaxType {
   PAYGW = "PAYGW",
   GST = "GST",
 }
 
 export type PayPeriod = "WEEKLY" | "FORTNIGHTLY" | "MONTHLY" | "ANNUAL";
-
-export const GstClassification = {
-  Taxable: "taxable",
-  GstFree: "gst_free",
-  InputTaxed: "input_taxed",
-} as const;
-
-export type GstClassificationType =
-  (typeof GstClassification)[keyof typeof GstClassification];
 
 export interface PaygwBracket {
   thresholdCents: number;

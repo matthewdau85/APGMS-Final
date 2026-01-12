@@ -1,27 +1,23 @@
 import Fastify from "fastify";
 import { registerBasRoutes } from "../src/routes/bas.js";
-import {
-  recordBasLodgment,
-  finalizeBasLodgment,
-  createTransferInstruction,
-  createPaymentPlanRequest,
-} from "@apgms/shared";
-
-const recordBasLodgmentMock = jest.fn(async () => ({ id: "lodgment-1" }));
-const finalizeBasLodgmentMock = jest.fn(async () => undefined);
-const createTransferInstructionMock = jest.fn(async () => undefined);
-const createPaymentPlanRequestMock = jest.fn(async () => undefined);
 
 jest.mock("@apgms/shared", () => {
   const actualShared = jest.requireActual("@apgms/shared");
   return {
     ...actualShared,
-    recordBasLodgment: recordBasLodgmentMock,
-    finalizeBasLodgment: finalizeBasLodgmentMock,
-    createTransferInstruction: createTransferInstructionMock,
-    createPaymentPlanRequest: createPaymentPlanRequestMock,
+    recordBasLodgment: jest.fn(async () => ({ id: "lodgment-1" })),
+    finalizeBasLodgment: jest.fn(async () => undefined),
+    createTransferInstruction: jest.fn(async () => undefined),
+    createPaymentPlanRequest: jest.fn(async () => undefined),
   };
 });
+
+const {
+  recordBasLodgment: recordBasLodgmentMock,
+  finalizeBasLodgment: finalizeBasLodgmentMock,
+  createTransferInstruction: createTransferInstructionMock,
+  createPaymentPlanRequest: createPaymentPlanRequestMock,
+} = jest.requireMock("@apgms/shared");
 
 describe("BAS lodgment validation", () => {
 let app: ReturnType<typeof Fastify> | undefined;

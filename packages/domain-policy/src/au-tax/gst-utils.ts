@@ -1,5 +1,4 @@
-import { GstClassification } from "./types.js";
-import type { GstClassification as GstClassificationType, GstConfig } from "./types.js";
+import type { GstConfig } from "./types.js";
 
 export interface GstLine {
   amountCents: number;
@@ -8,6 +7,15 @@ export interface GstLine {
     classification?: GstClassificationType;
   };
 }
+
+export const GstClassification = {
+  Taxable: "taxable",
+  GstFree: "gst_free",
+  InputTaxed: "input_taxed",
+} as const;
+
+export type GstClassificationType =
+  (typeof GstClassification)[keyof typeof GstClassification];
 
 const DEFAULT_CLASSIFICATION_MAP: Record<string, GstClassificationType> = {
   general_goods: GstClassification.Taxable,
