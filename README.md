@@ -11,10 +11,12 @@ APGMS is an Australian-only platform aimed at hardened management of PAYGW and G
 - Regulator-style views/APIs (prototype routes are **non-shippable in production**)
 - Sensitive identifier crypto scaffolding (envelope-encryption approach; production key management hardening required)
 
-See docs/runbooks/ato-rules-maintenance.md for living guidance on the ATO ruleset.
-It covers adding new tax years and PAYGW/GST scenario/table keys.
-Run `pnpm validate:ato` after each change to confirm manifests and placeholder data.
-The section is written for operators and DeveloperOperator audiences.
+See `docs/runbooks/ato-rules-maintenance.md` for living guidance on:
+- Adding a new tax year / effective-date window.
+- Extending PAYGW/GST scenarios or table keys.
+- Importing ATO tables and keeping `data/ato/v1` placeholders aligned.
+- Running `pnpm validate:ato` after each edit (root script).
+- Communicating updates to operators and DeveloperOperator stakeholders.
 Link: [ATO rules runbook](docs/runbooks/ato-rules-maintenance.md)
 
 ---

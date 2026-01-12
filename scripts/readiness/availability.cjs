@@ -113,7 +113,7 @@ async function main() {
       process.exit(1);
     }
   } catch (err) {
-    if (autostart && isConnRefused(err)) {
+    if (autostart) {
       const port = new URL(base).port || "3000";
       console.log(`[availability] Starting API gateway on port ${port} ...`);
       apiProcess = startApiGateway(port);
@@ -129,7 +129,9 @@ async function main() {
         if (apiProcess) apiProcess.kill("SIGTERM");
         process.exit(0);
       }
+      console.error("[availability] FAIL - readiness endpoint never became available");
       if (apiProcess) apiProcess.kill("SIGTERM");
+      process.exit(1);
     }
 
     console.error("[availability] ERROR hitting readiness endpoint:", err.message);

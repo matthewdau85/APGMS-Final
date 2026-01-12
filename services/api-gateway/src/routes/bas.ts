@@ -42,24 +42,14 @@ type VerificationEntry = {
   shortfall: string | null;
 };
 
-export async function registerBasRoutes(
-  app: FastifyInstance,
-): Promise<void> {
+export async function registerBasRoutes(app: FastifyInstance): Promise<void> {
   app.post(
     "/bas/lodgment",
     async (request: LodgmentRequest, reply: FastifyReply): Promise<void> => {
-      const parsedQuery = validateWithReply(
-        BasLodgmentQuerySchema,
-        request.query,
-        reply,
-      );
+      const parsedQuery = validateWithReply(BasLodgmentQuerySchema, request.query, reply);
       if (!parsedQuery) return;
 
-      const parsedBody = validateWithReply(
-        BasLodgmentBodySchema,
-        request.body ?? {},
-        reply,
-      );
+      const parsedBody = validateWithReply(BasLodgmentBodySchema, request.body ?? {}, reply);
       if (!parsedBody) return;
 
       const orgId = ensureUserOrg(request, reply);
@@ -87,9 +77,7 @@ export async function registerBasRoutes(
 
         if (result.shortfall && result.shortfall.gt(0)) {
           overallStatus = "failed";
-          shortfalls.push(
-            `${type.key} shortfall ${result.shortfall.toString()}`,
-          );
+          shortfalls.push(`${type.key} shortfall ${result.shortfall.toString()}`);
         }
       }
 
@@ -113,10 +101,7 @@ export async function registerBasRoutes(
       }
 
       if (overallStatus === "failed") {
-        const reason =
-          shortfalls.length > 0
-            ? shortfalls.join("; ")
-            : "Verification failed";
+        const reason = shortfalls.length > 0 ? shortfalls.join("; ") : "Verification failed";
 
         await createPaymentPlanRequest({
           orgId,
@@ -136,7 +121,7 @@ export async function registerBasRoutes(
 
       await recordCriticalAuditLog({
         orgId,
-        actorId: request.user?.sub ?? "system",
+        actorId: (request as any).user?.sub ?? "system",
         action: "bas.lodgment",
         metadata: {
           basCycleId,

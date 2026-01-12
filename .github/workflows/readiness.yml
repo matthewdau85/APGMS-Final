@@ -21,6 +21,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Validate ATO ruleset
+        run: pnpm validate:ato
+
       - name: Build all workspaces
         run: pnpm -r build
 

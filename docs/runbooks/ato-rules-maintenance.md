@@ -47,6 +47,14 @@ Fix the referenced file, re-run the script, and only proceed when the exit code 
   - `git diff` includes only the intended files.
   - Notify the relevant audiences (Operations, DeveloperOperator) via release notes or runbook updates.
 
+## 9) BAS validation stabilization reference
+1. The BAS endpoint enforces strict query/body schemas and keeps the original Zod issue message (`"Unrecognized key(s)"`).
+2. If you ever adjust `BasLodgmentQuerySchema`/`BasLodgmentBodySchema` or the validation error handler, rerun:
+   - `pnpm --filter @apgms/api-gateway test -- bas.validation.test.ts`
+   - `pnpm --filter @apgms/api-gateway test` (ensures macros still pass).
+3. Confirm `recordBasLodgmentMock` (or the equivalent production call) is mocked via `jest.mock("@apgms/shared", ...)` with proper return shape before touching the handler; that way the route never throws 500 in CI.
+4. Document any API changes that stem from stricter validation or added scenarios so downstream teams know to expect `invalid_payload` with details.
+
 ## 8) References
 - `specs/ato/ato-ruleset.v1.json`
 - `specs/ato/ato-ruleset.schema.v1.json`
