@@ -21,6 +21,13 @@ Link: [ATO rules runbook](docs/runbooks/ato-rules-maintenance.md)
 
 ---
 
+## Security scan reminders
+
+- SBOM generation (`pnpm run sbom`) now works because `glob` is pinned to v7.x; regenerate `sbom.xml` after workspace dependency changes.
+- Secret scanning (`pnpm run gitleaks`) uses the current CLI (`gitleaks detect --redact --exit-code 1`); rerun before merging to ensure no credentials leak.
+- Trivy (`pnpm run trivy`) performs filesystem vuln+secret scans; rerun after dependency updates.
+- Known audit findings (TODO): `qs@6.14.0` (pulled via `supertest`) and `@remix-run/router@1.23.0` (`react-router-dom`). Upgrade/override when upstream patches land.
+
 ## Monorepo Structure
 
 ```text

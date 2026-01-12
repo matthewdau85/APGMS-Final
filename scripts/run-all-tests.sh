@@ -26,6 +26,12 @@ run_and_log "all-tests" pnpm -r test
 run_and_log "build-all" pnpm -r build
 run_and_log "typecheck-all" pnpm -r typecheck
 
+run_and_log "gitleaks" pnpm run gitleaks
+run_and_log "trivy" pnpm run trivy
+run_and_log "sbom" pnpm run sbom
+run_and_log "sca" pnpm run sca
+run_and_log "a11y-smoke" pnpm test:a11y
+
 run_and_log "validate-ato" pnpm validate:ato
 run_and_log "readiness" pnpm readiness:all
 

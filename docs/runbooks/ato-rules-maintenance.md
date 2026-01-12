@@ -64,3 +64,9 @@ Fix the referenced file, re-run the script, and only proceed when the exit code 
 - `packages/domain-policy/src/au-tax`
 - `webapp/src/tax`
 - `package.json` (validate:ato script)
+
+## Security scan reminders for this runbook
+- Run `pnpm run sbom`, `pnpm run gitleaks`, `pnpm run trivy`, and `pnpm validate:ato` after touching dependencies or the `specs/ato` manifest; this is captured in `scripts/run-all-tests.sh` and the CI readiness gate.  
+- `pnpm run sbom` requires the legacy `glob` API (now pinned to v7) so CycloneDX can finish; regenerate `sbom.xml` anytime the lockfile changes.  
+- `pnpm run gitleaks` uses `gitleaks detect --redact --exit-code 1` (no unsupported flags); rerun before merging to verify there are still no identified secrets.  
+- Outstanding alerts (TODO): `qs@6.14.0` via `supertest`/`superagent`, and `@remix-run/router@1.23.0` in the webapp. Update or override these deps when upstream fixes arrive.
