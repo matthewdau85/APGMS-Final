@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { requireWritesEnabled } from "../guards/service-mode.js";
+import { authGuard } from "../auth.js";
 import crypto from "node:crypto";
 
 // --------------------
@@ -176,13 +177,17 @@ function getSettlement(app: FastifyInstance, instructionId: string): BasSettleme
   return state.store.get(instructionId) ?? null;
 }
 
-export async function basSettlementRoutes(app: FastifyInstance): Promise<void> {
+export async function basSettlementRoutes(
+  app: FastifyInstance,
+  opts: { requireAuth?: boolean } = {}
+): Promise<void> {
   const writeGuard = requireWritesEnabled();
+  const preHandlers = opts.requireAuth ? [authGuard as any, writeGuard] : [writeGuard];
 
   app.post<{ Body: BasFinaliseBody }>(
     "/settlements/bas/finalise",
     {
-      preHandler: writeGuard,
+      preHandler: preHandlers,
       schema: {
         headers: {
           type: "object",

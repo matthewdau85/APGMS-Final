@@ -85,8 +85,5 @@
         "dist/outcomes/bas-outcome.d.ts"
       ]
     }
-  },
-  "prisma": {
-    "schema": "../../infra/prisma/schema.prisma"
   }
 }

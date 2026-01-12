@@ -32,6 +32,9 @@ jobs:
       - name: Install deps (frozen)
         run: pnpm install --frozen-lockfile
 
+      - name: Validate ATO ruleset
+        run: pnpm validate:ato
+
       - name: Verify (repo)
         env:
           NODE_ENV: test

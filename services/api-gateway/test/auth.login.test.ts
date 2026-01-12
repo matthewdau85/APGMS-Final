@@ -1,6 +1,3 @@
-import assert from "node:assert/strict";
-import { afterEach, describe, it } from "node:test";
-
 import type { FastifyInstance } from "fastify";
 import { buildServer } from "../src/server.js";
 
@@ -47,7 +44,7 @@ describe("/auth/login gating", () => {
       payload: { email: "dev@example.com" },
     });
 
-    assert.equal(response.statusCode, 404);
+    expect(response.statusCode).toBe(404);
   });
 
   it("returns 404 in dev mode when flag is missing", async () => {
@@ -63,7 +60,7 @@ describe("/auth/login gating", () => {
       payload: { email: "dev@example.com" },
     });
 
-    assert.equal(response.statusCode, 404);
+    expect(response.statusCode).toBe(404);
   });
 
   it("returns 200 in dev mode when flag enabled and defaults to user role", async () => {
@@ -79,9 +76,9 @@ describe("/auth/login gating", () => {
       payload: { email: "dev@example.com" },
     });
 
-    assert.equal(response.statusCode, 200);
+    expect(response.statusCode).toBe(200);
     const body = response.json() as { ok: boolean; user?: { role?: string } };
-    assert.equal(body.ok, true);
-    assert.equal(body.user?.role, "user");
+    expect(body.ok).toBe(true);
+    expect(body.user?.role).toBe("user");
   });
 });

@@ -47,7 +47,12 @@ const plugin: FastifyPluginAsync = async (app) => {
 
       let orgId = headerOrgId || userOrgId;
       if (!orgId) {
-        return reply.code(400).send({ error: "missing_org" });
+        const envName = String(process.env.NODE_ENV ?? "development").toLowerCase();
+        if (envName !== "production") {
+          orgId = await pickDefaultOrgId(app);
+        } else {
+          return reply.code(400).send({ error: "missing_org" });
+        }
       }
 
       const q = (req.query ?? {}) as any;

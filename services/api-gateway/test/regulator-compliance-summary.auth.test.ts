@@ -1,6 +1,3 @@
-import assert from "node:assert/strict";
-import { afterEach, describe, it } from "node:test";
-
 import jwt from "jsonwebtoken";
 
 import { buildFastifyApp } from "../src/app.js";
@@ -71,7 +68,7 @@ describe("/regulator/compliance/summary auth", () => {
       url: "/regulator/compliance/summary?period=2025-Q1",
     });
 
-    assert.equal(response.statusCode, 401);
+    expect(response.statusCode).toBe(401);
   });
 
   it("returns 403 for non-regulator tokens", async () => {
@@ -93,7 +90,7 @@ describe("/regulator/compliance/summary auth", () => {
       headers: { authorization: `Bearer ${token}` },
     });
 
-    assert.equal(response.statusCode, 403);
+    expect(response.statusCode).toBe(403);
   });
 
   it("returns 200 for regulator tokens", async () => {
@@ -115,6 +112,6 @@ describe("/regulator/compliance/summary auth", () => {
       headers: { authorization: `Bearer ${token}` },
     });
 
-    assert.equal(response.statusCode, 200);
+    expect(response.statusCode).toBe(200);
   });
 });

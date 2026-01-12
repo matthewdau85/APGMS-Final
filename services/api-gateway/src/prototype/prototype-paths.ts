@@ -40,10 +40,5 @@ export function isPrototypeAdminOnlyPath(url: string): boolean {
   // All /monitor/* endpoints are admin-only in non-prod
   if (path.startsWith("/monitor/")) return true;
 
-  // Contract test expects summary WITH period param to be admin-only in non-prod
-  if (path === "/regulator/compliance/summary" && hasQueryParam(query, "period")) {
-    return true;
-  }
-
   return false;
 }

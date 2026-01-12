@@ -14,7 +14,7 @@ describe("health and readiness routes", () => {
   });
 
   it("/health/ready returns ok when DB is reachable", async () => {
-    const app = buildFastifyApp({ configOverrides: { environment: "test" } });
+    const app = buildFastifyApp({ configOverrides: { environment: "test", inMemoryDb: true } });
     await app.ready();
 
     const res = await app.inject({ method: "GET", url: "/health/ready" });

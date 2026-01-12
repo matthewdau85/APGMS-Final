@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import { buildFastifyApp } from "../src/app";
+import { registerAuth } from "../src/plugins/auth";
 
 process.env.AUTH_DEV_SECRET = process.env.AUTH_DEV_SECRET ?? "local-dev-shared-secret-change-me";
 process.env.AUTH_AUDIENCE = process.env.AUTH_AUDIENCE ?? "apgms-api";
@@ -25,6 +26,7 @@ describe("BAS finalise idempotency", () => {
       configOverrides: { environment: "test", inMemoryDb: true },
     });
 
+    await registerAuth(app);
     await app.ready();
 
     const token = signToken({ sub: "user-1", orgId: "org-demo-1" });
@@ -68,6 +70,7 @@ describe("BAS finalise idempotency", () => {
       configOverrides: { environment: "test", inMemoryDb: true },
     });
 
+    await registerAuth(app);
     await app.ready();
 
     const token = signToken({ sub: "user-1", orgId: "org-demo-1" });

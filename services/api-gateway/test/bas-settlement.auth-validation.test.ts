@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import jwt from "jsonwebtoken";
 import { buildFastifyApp } from "../src/app.js";
 import { basSettlementRoutes } from "../src/routes/bas-settlement.js";
+import { registerAuth } from "../src/plugins/auth.js";
 
 jest.setTimeout(30000);
 
@@ -29,6 +30,7 @@ describe("/api/settlements/bas auth (via buildFastifyApp)", () => {
       configOverrides: { environment: "test", inMemoryDb: true },
     });
 
+    await registerAuth(app);
     await app.ready();
 
     const res = await app.inject({
@@ -57,6 +59,7 @@ describe("/api/settlements/bas auth (via buildFastifyApp)", () => {
       configOverrides: { environment: "test", inMemoryDb: true },
     });
 
+    await registerAuth(app);
     await app.ready();
 
     const token = signToken();

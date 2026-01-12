@@ -1,6 +1,3 @@
-import assert from "node:assert/strict";
-import { afterEach, describe, it } from "node:test";
-
 import Fastify from "fastify";
 import jwt from "jsonwebtoken";
 
@@ -54,6 +51,32 @@ function signToken({
   );
 }
 
+function createIdempotencyStore() {
+  const entries: any[] = [];
+  return {
+    idempotencyEntry: {
+      findUnique: async ({ where }: any) => {
+        const key = where?.orgId_key?.key;
+        const orgId = where?.orgId_key?.orgId;
+        return entries.find((e) => e.key === key && e.orgId === orgId) ?? null;
+      },
+      create: async ({ data }: any) => {
+        entries.push({ ...data });
+        return data;
+      },
+      update: async ({ where, data }: any) => {
+        const key = where?.orgId_key?.key;
+        const orgId = where?.orgId_key?.orgId;
+        const entry = entries.find((e) => e.key === key && e.orgId === orgId);
+        if (entry) {
+          Object.assign(entry, data);
+        }
+        return entry;
+      },
+    },
+  };
+}
+
 describe("/bank-lines auth", () => {
   let app: ReturnType<typeof Fastify> | null = null;
 
@@ -72,7 +95,7 @@ describe("/bank-lines auth", () => {
 
     app = Fastify();
     await registerAuth(app);
-    registerBankLinesRoutes(app);
+    registerBankLinesRoutes(app, { prisma: createIdempotencyStore() });
     await app.ready();
 
     const response = await app.inject({
@@ -81,7 +104,7 @@ describe("/bank-lines auth", () => {
       payload: { idempotencyKey: "alpha", amountCents: 100 },
     });
 
-    assert.equal(response.statusCode, 401);
+    expect(response.statusCode).toBe(401);
   });
 
   it("returns 401 when token is invalid", async () => {
@@ -91,7 +114,7 @@ describe("/bank-lines auth", () => {
 
     app = Fastify();
     await registerAuth(app);
-    registerBankLinesRoutes(app);
+    registerBankLinesRoutes(app, { prisma: createIdempotencyStore() });
     await app.ready();
 
     const badToken = signToken({
@@ -106,7 +129,7 @@ describe("/bank-lines auth", () => {
       headers: { authorization: `Bearer ${badToken}` },
     });
 
-    assert.equal(response.statusCode, 401);
+    expect(response.statusCode).toBe(401);
   });
 
   it("returns 403 when orgId does not match token", async () => {
@@ -116,7 +139,7 @@ describe("/bank-lines auth", () => {
 
     app = Fastify();
     await registerAuth(app);
-    registerBankLinesRoutes(app);
+    registerBankLinesRoutes(app, { prisma: createIdempotencyStore() });
     await app.ready();
 
     const token = signToken({
@@ -131,7 +154,7 @@ describe("/bank-lines auth", () => {
       headers: { authorization: `Bearer ${token}` },
     });
 
-    assert.equal(response.statusCode, 403);
+    expect(response.statusCode).toBe(403);
   });
 
   it("returns 201 when orgId matches token", async () => {
@@ -141,7 +164,7 @@ describe("/bank-lines auth", () => {
 
     app = Fastify();
     await registerAuth(app);
-    registerBankLinesRoutes(app);
+    registerBankLinesRoutes(app, { prisma: createIdempotencyStore() });
     await app.ready();
 
     const token = signToken({
@@ -156,6 +179,6 @@ describe("/bank-lines auth", () => {
       headers: { authorization: `Bearer ${token}` },
     });
 
-    assert.equal(response.statusCode, 201);
+    expect(response.statusCode).toBe(201);
   });
 });
