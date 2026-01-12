@@ -42,99 +42,106 @@ type VerificationEntry = {
   shortfall: string | null;
 };
 
-export async function registerBasRoutes(app: FastifyInstance): Promise<void> {
-  app.post(
-    "/bas/lodgment",
-    async (request: LodgmentRequest, reply: FastifyReply): Promise<void> => {
-      const parsedQuery = validateWithReply(BasLodgmentQuerySchema, request.query, reply);
-      if (!parsedQuery) return;
+type BasHandler = (
+  request: LodgmentRequest,
+  reply: FastifyReply,
+) => Promise<void>;
 
-      const parsedBody = validateWithReply(BasLodgmentBodySchema, request.body ?? {}, reply);
-      if (!parsedBody) return;
+async function lodgmentHandler(request: LodgmentRequest, reply: FastifyReply): Promise<void> {
+  const parsedQuery = validateWithReply(BasLodgmentQuerySchema, request.query, reply);
+  if (!parsedQuery) return;
 
-      const orgId = ensureUserOrg(request, reply);
-      if (!orgId) return;
+  const parsedBody = validateWithReply(BasLodgmentBodySchema, request.body ?? {}, reply);
+  if (!parsedBody) return;
 
-      const basCycleId = parsedQuery.basCycleId ?? "manual";
-      const lodgment = await recordBasLodgment({
+  const orgId = ensureUserOrg(request, reply);
+  if (!orgId) return;
+
+  const basCycleId = parsedQuery.basCycleId ?? "manual";
+  const lodgment = await recordBasLodgment({
+    orgId,
+    initiatedBy: parsedBody.initiatedBy,
+    taxTypes: TAX_TYPES.map((type) => type.key),
+    status: "in_progress",
+  });
+
+  const verification: Record<string, VerificationEntry> = {};
+  let overallStatus: "success" | "failed" = "success";
+  const shortfalls: string[] = [];
+
+  for (const type of TAX_TYPES) {
+    const result = await verifyObligations(orgId, type.key);
+    verification[type.key] = {
+      balance: result.balance.toString(),
+      pending: result.pending.toString(),
+      shortfall: result.shortfall?.toString() ?? null,
+    };
+
+    if (result.shortfall && result.shortfall.gt(0)) {
+      overallStatus = "failed";
+      shortfalls.push(`${type.key} shortfall ${result.shortfall.toString()}`);
+    }
+  }
+
+  if (overallStatus === "success") {
+    for (const type of TAX_TYPES) {
+      const entry = verification[type.key];
+
+      await createTransferInstruction({
         orgId,
-        initiatedBy: parsedBody.initiatedBy,
-        taxTypes: TAX_TYPES.map((type) => type.key),
-        status: "in_progress",
+        taxType: type.key,
+        basId: lodgment.id,
+        amount: entry.pending,
+        destination: `gov:${type.key.toLowerCase()}`,
       });
 
-      const verification: Record<string, VerificationEntry> = {};
-      let overallStatus: "success" | "failed" = "success";
-      const shortfalls: string[] = [];
-
-      for (const type of TAX_TYPES) {
-        const result = await verifyObligations(orgId, type.key);
-        verification[type.key] = {
-          balance: result.balance.toString(),
-          pending: result.pending.toString(),
-          shortfall: result.shortfall?.toString() ?? null,
-        };
-
-        if (result.shortfall && result.shortfall.gt(0)) {
-          overallStatus = "failed";
-          shortfalls.push(`${type.key} shortfall ${result.shortfall.toString()}`);
-        }
-      }
-
-      if (overallStatus === "success") {
-        for (const type of TAX_TYPES) {
-          const entry = verification[type.key];
-
-          await createTransferInstruction({
-            orgId,
-            taxType: type.key,
-            basId: lodgment.id,
-            amount: entry.pending,
-            destination: `gov:${type.key.toLowerCase()}`,
-          });
-
-          metrics.transferInstructionTotal.inc({
-            tax_type: type.key,
-            status: "queued",
-          });
-        }
-      }
-
-      if (overallStatus === "failed") {
-        const reason = shortfalls.length > 0 ? shortfalls.join("; ") : "Verification failed";
-
-        await createPaymentPlanRequest({
-          orgId,
-          basCycleId,
-          reason,
-          details: {
-            shortfalls,
-            verification,
-          },
-        });
-
-        metrics.paymentPlanRequestsTotal.inc({ status: "created" });
-      }
-
-      await finalizeBasLodgment(lodgment.id, verification, overallStatus);
-      metrics.basLodgmentsTotal.inc({ status: overallStatus });
-
-      await recordCriticalAuditLog({
-        orgId,
-        actorId: (request as any).user?.sub ?? "system",
-        action: "bas.lodgment",
-        metadata: {
-          basCycleId,
-          status: overallStatus,
-          shortfalls,
-        },
+      metrics.transferInstructionTotal.inc({
+        tax_type: type.key,
+        status: "queued",
       });
+    }
+  }
 
-      reply.send({
-        lodgmentId: lodgment.id,
-        status: overallStatus,
+  if (overallStatus === "failed") {
+    const reason = shortfalls.length > 0 ? shortfalls.join("; ") : "Verification failed";
+
+    await createPaymentPlanRequest({
+      orgId,
+      basCycleId,
+      reason,
+      details: {
+        shortfalls,
         verification,
-      });
+      },
+    });
+
+    metrics.paymentPlanRequestsTotal.inc({ status: "created" });
+  }
+
+  await finalizeBasLodgment(lodgment.id, verification, overallStatus);
+  metrics.basLodgmentsTotal.inc({ status: overallStatus });
+
+  await recordCriticalAuditLog({
+    orgId,
+    actorId: (request as any).user?.sub ?? "system",
+    action: "bas.lodgment",
+    metadata: {
+      basCycleId,
+      status: overallStatus,
+      shortfalls,
     },
-  );
+  });
+
+  reply.send({
+    lodgmentId: lodgment.id,
+    status: overallStatus,
+    verification,
+  });
+}
+
+export async function registerBasRoutes(app: FastifyInstance): Promise<void> {
+  const handler: BasHandler = lodgmentHandler;
+
+  app.post("/bas/lodgment", handler);
+  app.post("/bas/lodge", handler);
 }
