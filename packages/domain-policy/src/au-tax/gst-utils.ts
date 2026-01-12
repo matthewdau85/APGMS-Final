@@ -1,14 +1,15 @@
-import type { GstClassification, GstConfig } from "./types.js";
+import { GstClassification } from "./types.js";
+import type { GstClassification as GstClassificationType, GstConfig } from "./types.js";
 
 export interface GstLine {
   amountCents: number;
   category: string;
   overrides?: {
-    classification?: GstClassification;
+    classification?: GstClassificationType;
   };
 }
 
-const DEFAULT_CLASSIFICATION_MAP: Record<string, GstClassification> = {
+const DEFAULT_CLASSIFICATION_MAP: Record<string, GstClassificationType> = {
   general_goods: GstClassification.Taxable,
   gst_free: GstClassification.GstFree,
   exports: GstClassification.InputTaxed,
@@ -22,7 +23,7 @@ export function classifyItem({
   category: string;
   overrides?: GstLine["overrides"];
   config: GstConfig;
-}): GstClassification {
+}): GstClassificationType {
   if (overrides?.classification) {
     return overrides.classification;
   }

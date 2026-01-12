@@ -80,6 +80,7 @@
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "ajv": "^8.17.1",
+    "ajv-formats": "^2.1.1",
     "bcryptjs": "^3.0.3",
     "cyclonedx-bom": "0.0.9",
     "eslint": "^9.15.0",

@@ -2,6 +2,7 @@ import path from "node:path";
 import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import Ajv from "ajv";
+import addFormats from "ajv-formats";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SPEC_PATH = path.resolve("specs", "ato", "ato-ruleset.v1.json");
@@ -15,6 +16,7 @@ export async function loadJson(filePath) {
 
 export function validateSpecAgainstSchema(spec, schema) {
   const ajv = new Ajv({ allErrors: true, strict: false });
+  addFormats(ajv);
   const validate = ajv.compile(schema);
   if (!validate(spec)) {
     const message = validate.errors

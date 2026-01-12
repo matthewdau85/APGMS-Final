@@ -1,23 +1,25 @@
 import Fastify from "fastify";
 import { registerBasRoutes } from "../src/routes/bas.js";
+import {
+  recordBasLodgment,
+  finalizeBasLodgment,
+  createTransferInstruction,
+  createPaymentPlanRequest,
+} from "@apgms/shared";
+
+const recordBasLodgmentMock = jest.fn(async () => ({ id: "lodgment-1" }));
+const finalizeBasLodgmentMock = jest.fn(async () => undefined);
+const createTransferInstructionMock = jest.fn(async () => undefined);
+const createPaymentPlanRequestMock = jest.fn(async () => undefined);
 
 jest.mock("@apgms/shared", () => {
   const actualShared = jest.requireActual("@apgms/shared");
-  const mocks = {
-    recordBasLodgment: jest.fn(async () => ({ id: "lodgment-1" })),
-    finalizeBasLodgment: jest.fn(async () => undefined),
-    createTransferInstruction: jest.fn(async () => undefined),
-    createPaymentPlanRequest: jest.fn(async () => undefined),
-    verifyObligations: jest.fn(async () => ({
-      balance: "1000",
-      pending: "500",
-      shortfall: null,
-    })),
-  };
-  globalThis.__BAS_DOCS__ = { ...(globalThis.__BAS_DOCS__ || {}), mocks };
   return {
     ...actualShared,
-    ...mocks,
+    recordBasLodgment: recordBasLodgmentMock,
+    finalizeBasLodgment: finalizeBasLodgmentMock,
+    createTransferInstruction: createTransferInstructionMock,
+    createPaymentPlanRequest: createPaymentPlanRequestMock,
   };
 });
 
@@ -36,7 +38,10 @@ let app: ReturnType<typeof Fastify> | undefined;
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    recordBasLodgmentMock.mockReset();
+    finalizeBasLodgmentMock.mockReset();
+    createTransferInstructionMock.mockReset();
+    createPaymentPlanRequestMock.mockReset();
   });
 
   afterEach(async () => {
@@ -82,8 +87,6 @@ let app: ReturnType<typeof Fastify> | undefined;
     });
 
     expect(res.statusCode).toBe(200);
-    const recordBasLodgmentMock =
-      (globalThis.__BAS_DOCS__?.mocks?.recordBasLodgment as jest.Mock) ?? null;
     expect(recordBasLodgmentMock).toHaveBeenCalled();
   });
 });

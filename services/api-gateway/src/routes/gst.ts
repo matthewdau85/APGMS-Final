@@ -1,6 +1,11 @@
-﻿import type { FastifyInstance } from "fastify";
+import type { FastifyInstance } from "fastify";
 import type { GstBatch } from "@apgms/domain-policy";
-import { OrgScopedParamsSchema, GstBatchRequestSchema } from "@apgms/shared";
+import { z } from "zod";
+import {
+  OrgScopedParamsSchema,
+  GstBatchRequestSchema,
+  GstTransactionSchema,
+} from "@apgms/shared";
 import { validateWithReply } from "../lib/validation.js";
 
 export async function registerGstRoutes(app: FastifyInstance) {
@@ -14,9 +19,14 @@ export async function registerGstRoutes(app: FastifyInstance) {
     const payload = validateWithReply(GstBatchRequestSchema, req.body ?? {}, reply);
     if (!payload) return;
 
+    type GstTransaction = z.infer<typeof GstTransactionSchema>;
+
     const batch: GstBatch = {
       orgId: params.orgId,
-      transactions: payload.transactions.map((tx) => ({ ...tx, orgId: params.orgId })),
+      transactions: payload.transactions.map((tx: GstTransaction) => ({
+        ...tx,
+        orgId: params.orgId,
+      })),
     };
 
     const result = await app.services.gstSettlement.settleBatch(batch);
