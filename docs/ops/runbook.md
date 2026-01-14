@@ -14,6 +14,14 @@
 - GET /ready performs DB connectivity check; returns 503 on failure.
 - GET /regulator/health exposes the read-only portal health (same process, but logged separately for regulator traffic probes).
 
+## Readiness & security chain
+
+- `pnpm readiness:chain` executes the staged workflow defined in `scripts/readiness/run-readiness-chain.sh` (sbom → gitleaks → trivy → validate:ato → test:a11y → run-all-tests).
+- Resume from any stage via `pnpm readiness:chain -- --from <stage>` or list the stages with `pnpm readiness:chain -- --list`.
+- Logs land under `artifacts/readiness-logs/<timestamp>/<stage>.log` so you can inspect failures or rerun a single stage with the same arguments.
+- `pnpm readiness:all` runs `scripts/readiness/all.cjs` and will wait for `/ready` to return 200 (retrying on transient 503s) before concluding the availability pillar; rerun it after deployments to verify all pillars pass.
+- Security tooling reminders: `pnpm run sbom`, `pnpm run gitleaks`, `pnpm run trivy`, and `pnpm sca` (`pnpm audit --audit-level=high`) are part of the readiness/security sweep; rerun them when dependencies change and document any TODOs for known issues (e.g., `qs@6.14.0`, `@remix-run/router@1.23.0`).
+
 ## Logs & Correlation
 - Structured logs emitted with JSON, request IDs attached in Fastify hooks (services/api-gateway/src/app.ts).
 - Security events & audit trails log under security_event and audit_failed.

@@ -26,8 +26,20 @@ Link: [ATO rules runbook](docs/runbooks/ato-rules-maintenance.md)
 - SBOM generation (`pnpm run sbom`) now works because `glob` is pinned to v7.x; regenerate `sbom.xml` after workspace dependency changes.
 - Secret scanning (`pnpm run gitleaks`) uses the current CLI (`gitleaks detect --redact --exit-code 1`); rerun before merging to ensure no credentials leak.
 - Trivy (`pnpm run trivy`) performs filesystem vuln+secret scans; rerun after dependency updates.
-- Known audit findings (TODO): `qs@6.14.0` (pulled via `supertest`) and `@remix-run/router@1.23.0` (`react-router-dom`). Upgrade/override when upstream patches land.
+- Supply-chain auditing (`pnpm sca`) executes `pnpm audit --audit-level=high`; treat it as part of the security scan bundle.
+- Known audit findings (TODO): `qs@6.14.0` (pulled via `supertest`) and `@remix-run/router@1.23.0` (`react-router-dom`). Upgrade/override when upstream patches land. Document the outstanding findings so the team can revisit once the vulnerable ranges are patched upstream.
 
+## Readiness & security chain
+
+- `pnpm readiness:chain` now runs the staged workflow recorded in `scripts/readiness/run-readiness-chain.sh`:
+  1. `pnpm run sbom`
+  2. `pnpm run gitleaks`
+  3. `pnpm run trivy`
+  4. `pnpm validate:ato`
+  5. `pnpm run test:a11y`
+  6. `bash scripts/run-all-tests.sh` (or the closest run-all entry in your repo tree)
+- Each stage emits logs to `artifacts/readiness-logs/<timestamp>/<stage>.log`; rerun `pnpm readiness:chain -- --from <stage>` to resume from a specific point, or `pnpm readiness:chain -- --list` to see the stage names.
+- `pnpm readiness:all` (global readiness) runs `scripts/readiness/all.cjs`, which now waits for `/ready` to return 200 before failing so the availability pillar can survive transient 503 responses while the gateway warms up. The per-stage readiness logs live in `artifacts/readiness-logs/<timestamp>/`.
 ## Monorepo Structure
 
 ```text
@@ -45,42 +57,3 @@ APGMS-Final/
 ├── worker/               # Background jobs (parameter updates, projections)
 └── artifacts/            # Evidence bundles + dev key material (gitignored except .gitkeep)
 
-
-
----
-
-## CI & Security Gates (GitHub Actions)
-
-This repo ships with two workflows under `.github/workflows/`:
-
-### CI (`ci.yml`)
-Runs on every PR/push:
-
-- `./scripts/verify.sh` (workspace build + typecheck + unit/integration tests)
-- Playwright a11y smoke:
-  - starts the Vite webapp on `http://127.0.0.1:5173`
-  - runs: `pnpm -w exec playwright test webapp/tests/a11y.spec.ts`
-
-### Security (`security.yml`)
-Runs on PR/push + scheduled weekly:
-
-- Merge-conflict marker guard (`git grep '<<<<<<<|=======|>>>>>>>'`)
-- Dependency SCA: `pnpm audit --audit-level=high`
-- Secret scanning: Gitleaks (fails CI on findings)
-- SBOM generation: CycloneDX (uploads `sbom.json` artifact)
-- Trivy filesystem scan (fails on HIGH/CRITICAL)
-
-To run the same checks locally:
-
-```bash
-./scripts/verify.sh
-pnpm exec playwright install --with-deps
-pnpm --filter @apgms/webapp dev -- --host 127.0.0.1 --port 5173 --strictPort
-pnpm -w exec playwright test webapp/tests/a11y.spec.ts
-pnpm audit --audit-level=high
-
-## Security scan & readiness runbook
-
-The centrally documented scripts/run-all-tests.sh now includes sbom generation, gitleaks, trivy, pnpm audit, pnpm validate:ato, and the full suite of API/webapp tests. Run it (or the individual commands listed above) whenever dependencies or sensitive routes change; the artifacts/runlogs directory stores per-stage output.
-
-Outstanding dependency findings (TODO): qs@6.14.0 (via supertest/superagent) and @remix-run/router@1.23.0 (via react-router-dom). Upgrade/override these transitive deps once patched releases arrive.

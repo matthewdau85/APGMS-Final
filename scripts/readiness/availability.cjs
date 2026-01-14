@@ -1,142 +1,178 @@
 #!/usr/bin/env node
 /**
- * Readiness check: Availability
+ * Availability check:
+ * - Ensures /ready returns 200.
+ * - If /ready returns non-200 (including 503), keep retrying until attempts expire.
+ * - Optional: autostart api-gateway if nothing is listening.
  *
- * - Hits BASE_URL/ready (or /health/ready if you change READINESS_PATH)
- * - Exits 0 on HTTP 200
- * - Exits non-zero otherwise
- *
- * Env:
- *   READINESS_BASE_URL  (default: http://localhost:3000)
- *   READINESS_PATH      (default: /ready)
+ * This script is intentionally conservative:
+ * - If something is already listening and responds (even 503), we do NOT try to start another server.
+ * - If nothing responds and AUTOSTART=1, we start the api-gateway and wait.
  */
 
-const process = require("node:process");
 const { spawn } = require("node:child_process");
-const { URL } = require("node:url");
-const https = require("node:https");
 const http = require("node:http");
+const fs = require("node:fs");
+const path = require("node:path");
+
+const DEFAULT_URL = process.env.READY_URL || "http://localhost:3000/ready";
+const AUTOSTART = process.env.AUTOSTART === "1" || process.env.AUTOSTART === "true";
+const PORT = Number(process.env.READY_PORT || "3000");
+
+const PID_FILE = path.resolve(process.cwd(), ".readiness-api-gateway.pid");
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
 function get(url) {
   return new Promise((resolve, reject) => {
-    const lib = url.startsWith("https:") ? https : http;
-    const req = lib.get(url, (res) => {
-      const chunks = [];
-      res.on("data", (c) => chunks.push(c));
-      res.on("end", () => {
-        resolve({
-          statusCode: res.statusCode,
-          body: Buffer.concat(chunks).toString("utf8"),
-        });
-      });
+    const req = http.get(url, (res) => {
+      // Consume body to free socket; keep only status for decision-making
+      res.resume();
+      resolve(res);
     });
     req.on("error", reject);
-    req.setTimeout(5000, () => {
-      req.destroy(new Error("Request timed out"));
-    });
   });
-}
-
-function isConnRefused(err) {
-  return Boolean(
-    err &&
-      (err.code === "ECONNREFUSED" ||
-        String(err.message || "").includes("ECONNREFUSED"))
-  );
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function waitForReady(url, attempts, delayMs) {
-  for (let i = 0; i < attempts; i++) {
+  let lastStatus = null;
+  let lastErr = null;
+
+  for (let i = 1; i <= attempts; i++) {
     try {
       const res = await get(url);
-      if (res.statusCode === 200) return res;
-    } catch {
-      // ignore until attempts exhausted
+      lastStatus = res.statusCode;
+
+      if (res.statusCode === 200) {
+        return { ok: true, statusCode: res.statusCode, attemptsUsed: i };
+      }
+
+      // Non-200 (including 503) is "not ready yet" -> retry until attempts exhausted
+      console.log(`[availability] /ready status ${res.statusCode} (attempt ${i}/${attempts}) - retrying...`);
+    } catch (err) {
+      lastErr = err;
+      console.log(`[availability] /ready request failed (attempt ${i}/${attempts}) - retrying...`);
     }
+
     await sleep(delayMs);
   }
-  return null;
+
+  return { ok: false, lastStatus, lastErr, attemptsUsed: attempts };
 }
 
-function startApiGateway(port) {
-  const child = spawn("pnpm", ["--filter", "@apgms/api-gateway", "dev"], {
-    stdio: ["ignore", "inherit", "inherit"],
-    env: { ...process.env, PORT: String(port) },
-    cwd: process.cwd(),
-  });
-  return child;
+async function ensurePortFree(port) {
+  // If a previous readiness run started the gateway, kill it.
+  if (!fs.existsSync(PID_FILE)) return;
+
+  let pid = null;
+  try {
+    pid = Number(fs.readFileSync(PID_FILE, "utf8").trim());
+  } catch (_) {
+    // ignore
+  }
+
+  if (!pid || Number.isNaN(pid)) {
+    try {
+      fs.unlinkSync(PID_FILE);
+    } catch (_) {}
+    return;
+  }
+
+  try {
+    process.kill(pid, 0);
+  } catch (_) {
+    // Not running
+    try {
+      fs.unlinkSync(PID_FILE);
+    } catch (_) {}
+    return;
+  }
+
+  console.log(`[availability] Port ${port} already in use by pid ${pid} (node). Stop it (e.g., kill ${pid}) before rerunning readiness.`);
+  process.exit(1);
 }
 
 async function main() {
-  const base = process.env.READINESS_BASE_URL || "http://localhost:3000";
-  const path = process.env.READINESS_PATH || "/ready";
-  const autostart =
-    String(process.env.READINESS_AUTOSTART ?? "true").toLowerCase() === "true";
-
-  let url;
-  try {
-    const u = new URL(base);
-    const pathPart = path.startsWith("/") ? path : `/${path}`;
-    // ensure exactly one slash between base path and readiness path
-    const basePath = (u.pathname || "").replace(/\/+$/, "");
-    u.pathname = basePath + pathPart;
-    url = u.toString();
-  } catch (err) {
-    console.error("[availability] Invalid READINESS_BASE_URL:", err.message);
-    process.exit(2);
-  }
-
+  const url = DEFAULT_URL;
   console.log(`[availability] Checking ${url} ...`);
 
-  let apiProcess = null;
+  if (AUTOSTART) {
+    await ensurePortFree(PORT);
+  }
+
+  // First probe: if it responds (even 503), do NOT attempt autostart; just wait for readiness.
+  let firstRes = null;
+  let firstProbeHadResponse = false;
 
   try {
-    const res = await get(url);
-    if (res.statusCode === 200) {
-      console.log("[availability] OK - status 200 from readiness endpoint");
-      try {
-        const parsed = JSON.parse(res.body);
-        console.log("[availability] Body:", parsed);
-      } catch {
-        console.log("[availability] Body is not JSON, but status is 200 - treating as OK");
-      }
-      process.exit(0);
-    } else {
-      console.error(
-        `[availability] FAIL - expected 200, got ${res.statusCode}. Body snippet:`,
-        res.body.slice(0, 200)
-      );
-      process.exit(1);
-    }
+    firstRes = await get(url);
+    firstProbeHadResponse = true;
   } catch (err) {
-    if (autostart) {
-      const port = new URL(base).port || "3000";
-      console.log(`[availability] Starting API gateway on port ${port} ...`);
-      apiProcess = startApiGateway(port);
-      const res = await waitForReady(url, 40, 500);
-      if (res && res.statusCode === 200) {
-        console.log("[availability] OK - status 200 from readiness endpoint");
-        try {
-          const parsed = JSON.parse(res.body);
-          console.log("[availability] Body:", parsed);
-        } catch {
-          console.log("[availability] Body is not JSON, but status is 200 - treating as OK");
-        }
-        if (apiProcess) apiProcess.kill("SIGTERM");
-        process.exit(0);
-      }
-      console.error("[availability] FAIL - readiness endpoint never became available");
-      if (apiProcess) apiProcess.kill("SIGTERM");
-      process.exit(1);
+    firstProbeHadResponse = false;
+  }
+
+  if (firstProbeHadResponse && firstRes && firstRes.statusCode === 200) {
+    console.log("[availability] OK (200)");
+    process.exit(0);
+  }
+
+  if (firstProbeHadResponse && firstRes) {
+    console.log(`[availability] /ready responded with ${firstRes.statusCode}; waiting for 200...`);
+    const waited = await waitForReady(url, 40, 500);
+    if (waited.ok) {
+      console.log("[availability] OK (200)");
+      process.exit(0);
     }
 
-    console.error("[availability] ERROR hitting readiness endpoint:", err.message);
+    const statusMsg = waited.lastStatus != null ? `last status ${waited.lastStatus}` : "no status";
+    console.error(`[availability] /ready never returned 200 within retry window (${statusMsg}).`);
     process.exit(1);
   }
+
+  // No response: if AUTOSTART is off, fail.
+  if (!AUTOSTART) {
+    console.error("[availability] /ready not reachable and AUTOSTART is disabled.");
+    process.exit(1);
+  }
+
+  // AUTOSTART path: start api-gateway then wait for 200.
+  console.log("[availability] Starting API gateway on port 3000 ...");
+
+  const child = spawn("pnpm", ["--filter", "@apgms/api-gateway", "dev"], {
+    stdio: "inherit",
+    env: process.env,
+    shell: false,
+  });
+
+  fs.writeFileSync(PID_FILE, String(child.pid), "utf8");
+
+  const waited = await waitForReady(url, 40, 500);
+
+  if (!waited.ok) {
+    const statusMsg = waited.lastStatus != null ? `last status ${waited.lastStatus}` : "no status";
+    console.error(`[availability] /ready never returned 200 after starting gateway (${statusMsg}).`);
+    try {
+      child.kill("SIGKILL");
+    } catch (_) {}
+    try {
+      fs.unlinkSync(PID_FILE);
+    } catch (_) {}
+    process.exit(1);
+  }
+
+  console.log("[availability] OK (200)");
+  try {
+    child.kill("SIGKILL");
+  } catch (_) {}
+  try {
+    fs.unlinkSync(PID_FILE);
+  } catch (_) {}
+  process.exit(0);
 }
 
-main();
+main().catch((err) => {
+  console.error("[availability] fatal:", err && err.stack ? err.stack : String(err));
+  process.exit(1);
+});

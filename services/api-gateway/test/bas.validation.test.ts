@@ -1,8 +1,8 @@
 import fastify from "fastify";
-import jwt from "jsonwebtoken";
 
 import { registerAuth } from "../src/plugins/auth.js";
 import { registerBasRoutes } from "../src/routes/bas.js";
+import { injectWithAuth, makeTestPrincipal } from "./helpers/auth.js";
 
 const recordBasLodgmentMock = jest.fn();
 const finalizeBasLodgmentMock = jest.fn();
@@ -28,17 +28,17 @@ jest.mock("../src/lib/audit.js", () => ({
 }));
 
 function debugResponse(res: any) {
-  // keep logs because you’re actively diagnosing
-  // eslint-disable-next-line no-console
+  if (!process.env.DEBUG_TESTS) return;
   console.log("STATUS", res.statusCode);
-  // eslint-disable-next-line no-console
   console.log("RAW", res.body);
+  console.log("JSON", res.json());
+}
+
+function decodeTestPrincipal(token: string) {
   try {
-    // eslint-disable-next-line no-console
-    console.log("JSON", res.json());
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.log("JSON parse failed", e);
+    return JSON.parse(Buffer.from(token, "base64url").toString("utf8"));
+  } catch {
+    return null;
   }
 }
 
@@ -57,22 +57,12 @@ function num(n: number) {
   };
 }
 
-function signToken(orgId: string, role: string) {
-  const secret = process.env.AUTH_DEV_SECRET || "test-secret";
-  return jwt.sign(
-    { orgId, role },
-    secret,
-    {
-      algorithm: "HS256",
-      audience: process.env.AUTH_AUDIENCE || "apgms",
-      issuer: process.env.AUTH_ISSUER || "apgms-dev",
-      expiresIn: "5m",
-    }
-  );
-}
+const successPrincipal = makeTestPrincipal({
+  orgId: "org_test",
+  role: "admin",
+});
 
 describe("BAS lodgment validation", () => {
-  const orgId = "org_test";
   let app: any;
 
   beforeAll(async () => {
@@ -82,20 +72,12 @@ describe("BAS lodgment validation", () => {
 
     app = fastify({ logger: false });
     await app.register(registerAuth);
-    const secret = process.env.AUTH_DEV_SECRET || "test-secret";
-    const audience = process.env.AUTH_AUDIENCE || "apgms";
-    const issuer = process.env.AUTH_ISSUER || "apgms-dev";
-
     app.addHook("preHandler", async (req) => {
       const header = String((req.headers as any).authorization ?? "");
       if (!header.startsWith("Bearer ")) return;
-      const token = header.slice("Bearer ".length).trim();
-      try {
-        const payload = jwt.verify(token, secret, { audience, issuer });
+      const payload = decodeTestPrincipal(header.slice("Bearer ".length));
+      if (payload) {
         (req as any).user = payload;
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error("token verification failed", err?.message ?? err);
       }
     });
     await registerBasRoutes(app);
@@ -162,14 +144,16 @@ describe("BAS lodgment validation", () => {
   });
 
   it("allows valid requests", async () => {
-    const token = signToken(orgId, "admin");
-
-    const res = await app.inject({
-      method: "POST",
-      url: `/bas/lodgment?basCycleId=manual`,
-      headers: { authorization: `Bearer ${token}` },
-      payload: { initiatedBy: "test" },
-    });
+    const res = await app.inject(
+      injectWithAuth(
+        {
+          method: "POST",
+          url: `/bas/lodgment?basCycleId=manual`,
+          payload: { initiatedBy: "test" },
+        },
+        successPrincipal,
+      ),
+    );
 
     debugResponse(res);
 

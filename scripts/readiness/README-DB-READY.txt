@@ -1,0 +1,29 @@
+Runbook: DB readiness
+
+1. Discover containers/services:
+   ```bash
+   docker compose ps
+   docker compose config --services
+   ```
+
+2. Start compose stack (if not already running):
+   ```bash
+   docker compose up -d
+   ```
+
+3. Watch DB logs until ready (use service name from compose):
+   ```bash
+   docker compose logs -f <db-service-name>
+   ```
+
+4. Hit readiness endpoint:
+   ```bash
+   curl -i http://localhost:3000/ready
+   ```
+   Expect HTTP 200 with `{ "ok": true, ... }`.
+
+5. Run global readiness checks:
+   ```bash
+   pnpm readiness:all
+   pnpm readiness:chain
+   ```

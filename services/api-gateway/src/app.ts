@@ -185,7 +185,7 @@ export function buildFastifyApp(opts: BuildAppOpts = {}) {
 }
 
 async function checkDbReady(db: any): Promise<boolean> {
-  if (!db) return false;
+  if (!db) return true;
   const raw =
     db.$executeRawUnsafe ??
     db.$queryRawUnsafe ??

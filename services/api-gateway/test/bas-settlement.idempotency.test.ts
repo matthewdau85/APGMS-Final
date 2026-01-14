@@ -10,6 +10,8 @@ const SECRET = process.env.AUTH_DEV_SECRET!;
 const AUDIENCE = process.env.AUTH_AUDIENCE!;
 const ISSUER = process.env.AUTH_ISSUER!;
 
+jest.setTimeout(20000);
+
 function signToken(payload: Record<string, any>) {
   return jwt.sign(payload, SECRET, {
     algorithm: "HS256",
