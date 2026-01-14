@@ -20,9 +20,13 @@
     "sca": "pnpm audit --audit-level=high",
     "test:a11y": "pnpm --filter apgms-webapp test:axe",
     "lint:eol": "bash ./scripts/check-eol.sh",
-    "readiness:chain": "bash ./scripts/readiness/run-readiness-chain.sh"
+    "readiness:chain": "bash ./scripts/readiness/run-readiness-chain.sh",
+    "e2e": "pnpm --filter apgms-webapp test:e2e --reporter=html --output=playwright-report",
+    "e2e:ui": "pnpm --filter apgms-webapp test:e2e --headed --output=playwright-report",
+    "e2e:report": "cd webapp && pnpm exec playwright show-report playwright-report"
   },
   "devDependencies": {
-    "@cyclonedx/cyclonedx-bom": "^4.7.0"
+    "@cyclonedx/cyclonedx-bom": "^4.7.0",
+    "@playwright/test": "^1.56.1"
   }
 }
