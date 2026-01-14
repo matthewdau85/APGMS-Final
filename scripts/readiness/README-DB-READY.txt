@@ -26,4 +26,9 @@ Runbook: DB readiness
    ```bash
    pnpm readiness:all
    pnpm readiness:chain
+
+Optional: run the bundled script instead of copy/pasting:
+```bash
+./scripts/readiness/run-db-ready.sh
+```
    ```
