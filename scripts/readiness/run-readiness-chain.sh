@@ -191,15 +191,23 @@ ensure_api_gateway_ready() {
 
 # Port conflict handling: fail only when compose isn't managing it.
 handle_port_conflict() {
-  if is_port_3000_bound; then
-    if [ "${CHAIN_MANAGE_COMPOSE}" -eq 1 ] && compose_is_running "${COMPOSE_GATEWAY}"; then
-      echo "Port 3000 in use and ${COMPOSE_GATEWAY} is running – assuming expected."
-    else
-      echo "Port 3000 is already in use; please stop the listener before rerunning readiness."
-      describe_port_3000_conflict
-      exit 2
-    fi
+  if ! is_port_3000_bound; then
+    return
   fi
+
+  if [ "${CHAIN_MANAGE_COMPOSE}" -eq 1 ] && compose_is_running "${COMPOSE_GATEWAY}"; then
+    echo "Port 3000 is bound and ${COMPOSE_GATEWAY} is running; checking /ready before continuing."
+    if wait_ready "${READY_URL}" 5 1; then
+      echo "api-gateway is already ready; continuing."
+    else
+      echo "api-gateway responded but /ready ≠ 200; continuing and relying on later waits."
+    fi
+    return
+  fi
+
+  echo "Port 3000 is already in use; please stop the listener before rerunning readiness."
+  describe_port_3000_conflict
+  exit 2
 }
 
 repo_root() {

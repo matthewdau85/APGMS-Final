@@ -16,6 +16,9 @@ const http = require("node:http");
 const DEFAULT_URL = process.env.READY_URL || "http://localhost:3000/ready";
 const AUTOSTART =
   process.env.AUTOSTART === "1" || process.env.AUTOSTART === "true";
+const DOCKER_COMPOSE_CMD =
+  process.env.READINESS_COMPOSE_CMD || process.env.DOCKER_COMPOSE_CMD || "docker compose";
+const API_SERVICE = process.env.READINESS_API_SERVICE || "api-gateway";
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -57,8 +60,13 @@ async function waitForReady(url, attempts, delayMs) {
 }
 
 function startApiGatewayWithCompose() {
-  console.log("[availability] Starting API gateway via docker compose ...");
-  const res = spawnSync("docker", ["compose", "up", "-d", "api-gateway"], {
+  const parts = DOCKER_COMPOSE_CMD.split(" ");
+  const cmd = parts[0];
+  const args = [...parts.slice(1), "up", "-d", API_SERVICE];
+  console.log(
+    `[availability] Starting API gateway via ${[cmd, ...args].join(" ")} ...`
+  );
+  const res = spawnSync(cmd, args, {
     stdio: "inherit",
   });
   if (res.status !== 0) {
@@ -100,7 +108,9 @@ async function main() {
   }
 
   if (!AUTOSTART) {
-    console.error("[availability] /ready not reachable and AUTOSTART is disabled.");
+    console.error(
+      "[availability] /ready not reachable and AUTOSTART is disabled; run `docker compose up -d api-gateway` (or set AUTOSTART=1) before re-running."
+    );
     process.exit(1);
   }
 
