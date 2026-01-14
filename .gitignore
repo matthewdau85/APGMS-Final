@@ -71,3 +71,12 @@ webapp/src/**/*.js.map
 webapp/src/**/*.d.ts
 webapp/src/**/*.d.ts.map
 
+.cache/
+README.md.bak.md
+package.json.bak
+scripts/readiness/README-RUN-COMMANDS.txt
+scripts/readiness/fix-db-testdb.sh
+scripts/readiness/fix-local-readiness.sh
+scripts/readiness/run-db-ready.sh
+scripts/run-readiness-chain.sh
+
