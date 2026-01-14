@@ -1,5 +1,7 @@
 Runbook: DB readiness
 
+* The gateway reads its database name from `DATABASE_URL` (default `apgms`). `scripts/readiness/fix-local-readiness.sh` and `scripts/readiness/fix-db-testdb.sh` now derive the DB name automatically and only mention `testdb` if you explicitly override `TARGET_DB`.
+
 1. Discover containers/services:
    ```bash
    docker compose ps

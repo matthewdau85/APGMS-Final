@@ -40,6 +40,7 @@ Link: [ATO rules runbook](docs/runbooks/ato-rules-maintenance.md)
   6. `bash scripts/run-all-tests.sh` (or the closest run-all entry in your repo tree)
 - Each stage emits logs to `artifacts/readiness-logs/<timestamp>/<stage>.log`; rerun `pnpm readiness:chain -- --from <stage>` to resume from a specific point, or `pnpm readiness:chain -- --list` to see the stage names.
 - `pnpm readiness:all` (global readiness) runs `scripts/readiness/all.cjs`, which now waits for `/ready` to return 200 before failing so the availability pillar can survive transient 503 responses while the gateway warms up. The per-stage readiness logs live in `artifacts/readiness-logs/<timestamp>/`.
+- `scripts/readiness/README-DB-READY.txt` documents the quick steps to check the Docker compose stack, tail the database logs, hit `/ready`, and rerun the same readiness scans; use `./scripts/readiness/run-db-ready.sh` if you prefer a single helper script.
 ## Monorepo Structure
 
 ```text

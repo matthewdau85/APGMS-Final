@@ -18,7 +18,8 @@
     "gitleaks": "gitleaks detect --redact --exit-code 1",
     "trivy": "trivy fs . --severity HIGH,CRITICAL --exit-code 1",
     "sca": "pnpm audit --audit-level=high",
-    "test:a11y": "pnpm --filter @apgms/webapp test:axe",
+    "test:a11y": "pnpm --filter apgms-webapp test:axe",
+    "lint:eol": "bash ./scripts/check-eol.sh",
     "readiness:chain": "bash ./scripts/readiness/run-readiness-chain.sh"
   },
   "devDependencies": {

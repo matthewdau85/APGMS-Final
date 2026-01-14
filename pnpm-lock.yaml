@@ -453,6 +453,9 @@ importers:
       '@tanstack/react-query-devtools':
         specifier: ^5.91.1
         version: 5.91.1(@tanstack/react-query@5.90.12(react@18.3.1))(react@18.3.1)
+      '@playwright/test':
+        specifier: ^1.56.1
+        version: 1.56.1
       '@types/react':
         specifier: ^18.3.12
         version: 18.3.27
@@ -468,6 +471,9 @@ importers:
       axe-core:
         specifier: ^4.9.0
         version: 4.10.3
+      playwright:
+        specifier: ^1.56.1
+        version: 1.56.1
       tailwindcss:
         specifier: 4.1.12
         version: 4.1.12
