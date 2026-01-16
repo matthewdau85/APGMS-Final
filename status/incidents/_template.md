@@ -10,21 +10,21 @@
 
 ## Timeline
 
-- {{OPENED_AT}} – Incident opened by readiness runner
-- TODO – Add events here (alerts, changes, fix deployment)
+- {{OPENED_AT}} - Incident opened by readiness runner
+- TODO - Add events here (alerts, changes, fix deployment)
 
 ## Metrics / Dashboards
 
-- TODO – Link to relevant dashboards (Grafana, k6 summary, logs, etc.)
+- TODO - Link to relevant dashboards (Grafana, k6 summary, logs, etc.)
 
 ## Root Cause (when known)
 
-- TODO – Fill in after investigation
+- TODO - Fill in after investigation
 
 ## Remediation Steps
 
-- TODO – What has been done
-- TODO – What still needs to be done
+- TODO - What has been done
+- TODO - What still needs to be done
 
 ## Verification
 
