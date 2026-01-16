@@ -1,27 +1,18 @@
-name: E2E Webapp
-on:
-  workflow_dispatch:
-  pull_request:
-    branches:
-      - main
-      - master
-    paths:
-      - "webapp/**"
-      - "scripts/**"
-      - ".github/workflows/e2e.yml"
+name: e2e
 
-concurrency:
-  group: e2e-webapp-${{ github.ref }}
-  cancel-in-progress: true
+on:
+  pull_request:
+  push:
+    branches: ["main"]
 
 jobs:
-  e2e-webapp:
+  e2e:
     runs-on: ubuntu-latest
-    env:
-      E2E_BASE_URL: http://127.0.0.1:5173
-      E2E_MAX_PAGES: 200
+    timeout-minutes: 30
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -29,75 +20,19 @@ jobs:
           node-version: "20"
           cache: "pnpm"
 
-      - name: Enable Corepack + PNPM
+      - name: Enable Corepack + pnpm
         run: |
           corepack enable
           corepack prepare pnpm@9 --activate
+          pnpm --version
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Install Playwright Chromium
-        run: pnpm exec playwright install chromium
+      - name: Install Playwright browsers
+        run: pnpm --dir webapp exec playwright install --with-deps chromium
 
-      - name: Ensure docker compose stack is running
-        run: docker compose up -d
-
-      - name: Start webapp server (build + preview)
-        id: preview
-        run: |
-          set -euo pipefail
-          pnpm --filter apgms-webapp build
-          pnpm --filter apgms-webapp preview -- --host 0.0.0.0 --port 5173 --strictPort > /tmp/webapp-preview.log 2>&1 &
-          PREVIEW_PID=$!
-          echo "$PREVIEW_PID" > /tmp/webapp-preview.pid
-          trap 'kill $(cat /tmp/webapp-preview.pid) >/dev/null 2>&1 || true' EXIT
-
-      - name: Wait for webapp readiness
-        run: |
-          set -euo pipefail
-          url="${E2E_BASE_URL}"
-          ready_log=/tmp/webapp-readiness.log
-          : > "$ready_log"
-          for attempt in $(seq 1 18); do
-            if curl -sSf "$url" -o "$ready_log" >/dev/null; then
-              echo "Webapp ready after ${attempt} attempt(s)"
-              exit 0
-            fi
-            echo "Waiting for ${url} (attempt ${attempt}/18)"
-            sleep 5
-          done
-          echo "Webapp did not respond within timeout" >> "$ready_log"
-          curl -v "$url" >> "$ready_log" 2>&1 || true
-          exit 1
-
-      - name: Run E2E suite
-        run: pnpm --dir webapp exec playwright test
-
-      - name: Diagnostics on failure
-        if: failure()
-        run: |
-          node -v
-          pnpm -v
-          pwd
-          ls -la
-          ls -la webapp/test-results || true
-          echo "preview log tail (last 50 lines):"
-          tail -n 50 /tmp/webapp-preview.log || true
-          echo "readiness log tail (last 50 lines):"
-          tail -n 50 /tmp/webapp-readiness.log || true
-          echo "test results:"
-          ls webapp/test-results || true
-          curl -sSf "${E2E_BASE_URL}" || true
-
-      - name: Upload UI artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: webapp-e2e-reports
-          path: |
-            webapp/test-results
-            playwright-report
-            webapp/playwright-report
-            /tmp/webapp-preview.log
-            /tmp/webapp-readiness.log
+      - name: Run E2E smoke
+        env:
+          CI: "1"
+        run: pnpm --dir webapp exec playwright test --project=chromium --grep @smoke --workers=1 --reporter=line

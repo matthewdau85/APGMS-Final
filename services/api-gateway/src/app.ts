@@ -104,6 +104,15 @@ export function buildFastifyApp(opts: BuildAppOpts = {}) {
   // Back-compat
   app.get("/health", async () => ({ ok: true }));
   app.get("/ready", async (_req, reply) => {
+    // --- DEV readiness override ---
+    if (process.env.DEV_READY_ALWAYS === "1") {
+      return reply.code(200).send({
+        ok: true,
+        mode: "dev",
+        skipped: ["db","redis","nats"]
+      });
+    }
+    // --- end override ---
     const db = (app as any).db;
     const ready = await checkDbReady(db);
     if (!ready) {

@@ -2,7 +2,7 @@
   "name": "apgms",
   "private": true,
   "version": "0.1.0",
-  "packageManager": "pnpm@10.14.0",
+  "packageManager": "pnpm@9.15.9",
   "engines": {
     "node": ">=20"
   },
@@ -14,7 +14,7 @@
     "run-all": "bash ./scripts/run-all-tests.sh",
     "readiness:all": "node ./scripts/readiness/all.cjs",
     "validate:ato": "node ./scripts/validate-ato-ruleset.mjs",
-    "sbom": "pnpm exec cyclonedx-bom -o sbom.xml . || echo \"[sbom] cyclonedx-bom failed, check sbom.xml + logs\"",
+    "sbom": "pnpm exec cyclonedx-npm -o sbom.xml . || echo \"[sbom] cyclonedx-npm failed, check sbom.xml + logs\"",
     "gitleaks": "gitleaks detect --redact --exit-code 1",
     "trivy": "trivy fs . --severity HIGH,CRITICAL --exit-code 1",
     "sca": "pnpm audit --audit-level=high",
@@ -23,10 +23,16 @@
     "readiness:chain": "bash ./scripts/readiness/run-readiness-chain.sh",
     "e2e": "pnpm --filter apgms-webapp test:e2e --reporter=html --output=playwright-report",
     "e2e:ui": "pnpm --filter apgms-webapp test:e2e --headed --output=playwright-report",
-    "e2e:report": "cd webapp && pnpm exec playwright show-report playwright-report"
+    "e2e:report": "cd webapp && pnpm exec playwright show-report playwright-report",
+    "k6:smoke": "bash ./scripts/readiness/run-k6-smoke.sh",
+    "regwatcher:once": "node packages/regwatcher/bin/run.mjs --json",
+    "regwatcher:email": "node packages/regwatcher/bin/run.mjs --email --always --json"
   },
   "devDependencies": {
-    "@cyclonedx/cyclonedx-bom": "^4.7.0",
-    "@playwright/test": "^1.56.1"
+    "@cyclonedx/cyclonedx-npm": "^4.1.2",
+    "@playwright/test": "^1.56.1",
+    "@prisma/client": "6.19.0",
+    "@types/node": "^24.10.1",
+    "prisma": "^6.19.0"
   }
 }
