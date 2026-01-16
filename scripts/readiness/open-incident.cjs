@@ -1,83 +1,134 @@
 #!/usr/bin/env node
 /**
- * Create a new incident file in status/incidents/ based on _template.md.
+ * scripts/readiness/open-incident.cjs
  *
- * Args (CLI):
- *   --pillars="Availability & Performance, Security"
- *   --summary="Availability pillar failed due to k6 p95 breach"
- *   --script="readiness:all"
+ * Readiness check for incident tooling + a lightweight "open incident" helper.
+ *
+ * Behavior:
+ *   - Default (no args): readiness check only (does NOT create anything).
+ *   - --init: creates status/incidents and a .gitkeep if missing.
+ *   - --new "<title>": creates a new markdown incident stub in status/incidents.
+ *
+ * Notes:
+ *   - Preferred incident directory: status/incidents
+ *   - Legacy dir: incidents (discouraged)
  */
 
 const fs = require("node:fs");
 const path = require("node:path");
 const process = require("node:process");
 
-function parseArgs(argv) {
-  const args = {};
-  for (const arg of argv.slice(2)) {
-    if (!arg.startsWith("--")) continue;
-    const eq = arg.indexOf("=");
-    if (eq === -1) {
-      const key = arg.slice(2);
-      args[key] = "";
-    } else {
-      const key = arg.slice(2, eq);
-      const value = arg.slice(eq + 1);
-      args[key] = value;
+const repoRoot = path.resolve(__dirname, "../..");
+const preferredDir = path.join(repoRoot, "status", "incidents");
+const legacyDir = path.join(repoRoot, "incidents");
+
+function slugify(s) {
+  return String(s)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "incident";
+}
+
+function ymd() {
+  const d = new Date();
+  const y = String(d.getFullYear());
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function ensureDir() {
+  fs.mkdirSync(preferredDir, { recursive: true });
+  const keep = path.join(preferredDir, ".gitkeep");
+  if (!fs.existsSync(keep)) fs.writeFileSync(keep, "", "utf-8");
+}
+
+function readinessCheck() {
+  if (fs.existsSync(legacyDir) && !fs.existsSync(preferredDir)) {
+    console.warn(`[incident] NOTE: legacy folder exists but preferred location is missing: ${legacyDir}`);
+    console.warn("[incident] Preferred location is status/incidents.");
+    return 2;
+  }
+
+  if (fs.existsSync(legacyDir)) {
+    console.warn(`[incident] NOTE: legacy folder exists but is not used: ${legacyDir}`);
+    console.warn("[incident] Preferred location is status/incidents.");
+  }
+
+  if (!fs.existsSync(preferredDir)) {
+    console.warn(`[incident] AMBER: preferred incident directory missing: ${preferredDir}`);
+    console.warn("[incident] Run: node ./scripts/readiness/open-incident.cjs --init");
+    return 2;
+  }
+
+  console.log("[incident] OK - incident tooling present.");
+  return 0;
+}
+
+function createNew(title) {
+  ensureDir();
+  const stamp = ymd();
+  const slug = slugify(title);
+  const file = path.join(preferredDir, `${stamp}-${slug}.md`);
+  if (fs.existsSync(file)) {
+    console.error(`[incident] File already exists: ${file}`);
+    process.exit(1);
+  }
+  const body = [
+    `# Incident: ${title}`,
+    "",
+    `Date: ${stamp}`,
+    "",
+    "## Summary",
+    "- What happened?",
+    "",
+    "## Impact",
+    "- Who/what was affected?",
+    "",
+    "## Timeline (AEST)",
+    "- HH:MM - Event",
+    "",
+    "## Root cause",
+    "- ",
+    "",
+    "## Mitigations",
+    "- ",
+    "",
+    "## Follow-ups",
+    "- ",
+    "",
+  ].join("\n");
+  fs.writeFileSync(file, body, "utf-8");
+  console.log(`[incident] Created: ${file}`);
+}
+
+async function main() {
+  const args = process.argv.slice(2);
+
+  if (args.includes("--init")) {
+    ensureDir();
+    console.log(`[incident] Initialized: ${preferredDir}`);
+    process.exit(0);
+  }
+
+  const newIdx = args.indexOf("--new");
+  if (newIdx !== -1) {
+    const title = args[newIdx + 1];
+    if (!title) {
+      console.error("[incident] --new requires a title string.");
+      process.exit(1);
     }
+    createNew(title);
+    process.exit(0);
   }
-  return args;
+
+  const code = readinessCheck();
+  process.exit(code);
 }
 
-function main() {
-  const args = parseArgs(process.argv);
-
-  const pillars = args.pillars || "Unknown";
-  const summary = args.summary || "Readiness check failed – summary not provided.";
-  const scriptName = args.script || "readiness:all";
-
-  const now = new Date();
-  const stamp = now
-    .toISOString()
-    .replace(/[-:]/g, "")
-    .replace(/\.\d+Z$/, "Z");
-
-  const incidentId = `${stamp}-${scriptName.replace(/[^a-zA-Z0-9]+/g, "-")}`;
-
-  const incidentsDir = path.resolve("status", "incidents");
-  const templatePath = path.join(incidentsDir, "_template.md");
-
-  if (!fs.existsSync(incidentsDir)) {
-    fs.mkdirSync(incidentsDir, { recursive: true });
-  }
-
-  if (!fs.existsSync(templatePath)) {
-    console.warn("[open-incident] Template not found; creating minimal incident file.");
-  }
-
-  let template = "";
-  if (fs.existsSync(templatePath)) {
-    template = fs.readFileSync(templatePath, "utf8");
-  } else {
-    template = `# Incident: {{INCIDENT_ID}}\n\n{{SUMMARY}}\n`;
-  }
-
-  const openedAt = now.toISOString();
-
-  const content = template
-    .replace(/{{INCIDENT_ID}}/g, incidentId)
-    .replace(/{{OPENED_AT}}/g, openedAt)
-    .replace(/{{PILLARS}}/g, pillars)
-    .replace(/{{SCRIPT_NAME}}/g, scriptName)
-    .replace(/{{SUMMARY}}/g, summary);
-
-  const filePath = path.join(incidentsDir, `${incidentId}.md`);
-
-  fs.writeFileSync(filePath, content, "utf8");
-
-  console.log("[open-incident] Created incident file:", filePath);
-}
-
-if (require.main === module) {
-  main();
-}
+main().catch((err) => {
+  console.error("[incident] Unexpected error:", err && err.stack ? err.stack : String(err));
+  process.exit(1);
+});

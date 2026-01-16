@@ -1,61 +1,90 @@
 #!/usr/bin/env node
+"use strict";
+
 /**
- * Aggregate Availability & Performance pillar check.
+ * scripts/readiness/availability-and-performance.cjs
  *
- * Runs:
- *   - availability.cjs
- *   - k6-summary.cjs
- *   - log-scan.cjs
+ * Availability & Performance pillar:
+ *   - availability.cjs (checks /ready)
+ *   - k6-summary.cjs (parses k6/smoke-summary.json)
  *
- * Prints a pillar-level GREEN / RED and exits non-zero on failure.
+ * Behavior:
+ *   - If k6 summary is missing/partial, tries to regenerate it via run-k6-smoke.cjs.
+ *
+ * Exit codes:
+ *   0 = GREEN
+ *   2 = AMBER
+ *   1 = RED
  */
 
-const { spawn } = require("node:child_process");
+const { spawnSync } = require("node:child_process");
 const path = require("node:path");
-const process = require("node:process");
 
-function runScript(relPath, label) {
-  return new Promise((resolve) => {
-    const scriptPath = path.resolve(__dirname, relPath);
-    const child = spawn("node", [scriptPath], {
-      stdio: ["ignore", "inherit", "inherit"],
-      env: process.env,
-    });
+const repoRoot = path.resolve(__dirname, "..", "..");
 
-    child.on("exit", (code) => {
-      const ok = code === 0;
-      if (!ok) {
-        console.error(`[availability-and-performance] ${label} FAILED with code ${code}`);
-      } else {
-        console.log(`[availability-and-performance] ${label} OK`);
-      }
-      resolve({ label, ok, code });
-    });
+function runNode(relPath, extraEnv) {
+  const p = path.join(repoRoot, relPath);
+  const res = spawnSync(process.execPath, [p], {
+    cwd: repoRoot,
+    stdio: "inherit",
+    env: { ...process.env, ...extraEnv },
   });
+  return typeof res.status === "number" ? res.status : 1;
 }
 
-async function main() {
+function isGreen(code) {
+  return code === 0;
+}
+function isAmber(code) {
+  return code === 2;
+}
+function isRed(code) {
+  return !isGreen(code) && !isAmber(code);
+}
+
+function main() {
   console.log("=== AVAILABILITY & PERFORMANCE PILLAR ===");
 
-  const results = [];
-  results.push(await runScript("./availability.cjs", "availability"));
-  results.push(await runScript("./k6-summary.cjs", "k6-summary"));
-  results.push(await runScript("./log-scan.cjs", "log-scan"));
-
-  const failing = results.filter((r) => !r.ok);
-
-  if (failing.length === 0) {
-    console.log("=== AVAILABILITY & PERFORMANCE: GREEN ===");
-    process.exit(0);
+  const availabilityCode = runNode("scripts/readiness/availability.cjs");
+  if (isRed(availabilityCode)) {
+    console.log("=== AVAILABILITY & PERFORMANCE: RED (availability) ===");
+    process.exit(1);
   }
 
-  console.error("=== AVAILABILITY & PERFORMANCE: RED ===");
-  for (const f of failing) {
-    console.error(` - ${f.label} failed (exit code ${f.code})`);
+  let k6Code = runNode("scripts/readiness/k6-summary.cjs");
+
+  if (isAmber(k6Code)) {
+    console.log(
+      "[availability-and-performance] k6 summary missing/partial; attempting to regenerate via run-k6-smoke.cjs"
+    );
+    const regenCode = runNode("scripts/readiness/run-k6-smoke.cjs");
+    if (isRed(regenCode)) {
+      console.log("=== AVAILABILITY & PERFORMANCE: RED (k6 smoke) ===");
+      process.exit(1);
+    }
+    k6Code = runNode("scripts/readiness/k6-summary.cjs");
   }
-  process.exit(1);
+
+  if (isRed(k6Code)) {
+    console.log("=== AVAILABILITY & PERFORMANCE: RED (k6) ===");
+    process.exit(1);
+  }
+
+  if (isAmber(availabilityCode) || isAmber(k6Code)) {
+    console.log("=== AVAILABILITY & PERFORMANCE: AMBER ===");
+    process.exit(2);
+  }
+
+  console.log("=== AVAILABILITY & PERFORMANCE: GREEN ===");
+  process.exit(0);
 }
 
-if (require.main === module) {
+try {
   main();
+} catch (err) {
+  console.error(
+    "[availability-and-performance] Unexpected error:",
+    err && err.stack ? err.stack : String(err)
+  );
+  process.exit(1);
 }

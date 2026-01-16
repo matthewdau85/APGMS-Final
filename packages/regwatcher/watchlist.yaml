@@ -1,0 +1,35 @@
+# packages/regwatcher/watchlist.yaml
+materiality:
+  high_terms:
+    - law
+    - legislative
+    - instrument
+    - determination
+    - commencement
+    - date
+    - transitional
+    - penalty
+  date_terms:
+    - effective
+    - applies from
+    - starts on
+sources:
+  - id: ato-tax-rates
+    kind: html
+    url: https://www.ato.gov.au/tax-rates-and-codes/
+    tax_types: [income-tax, gst, witholding]
+    keywords: [rates, thresholds, interest]
+    selectors:
+      main: main
+  - id: ato-gic
+    kind: html
+    url: https://www.ato.gov.au/tax-rates-and-codes/general-interest-charge-rates
+    tax_types: [gic]
+    keywords: [general interest charge, gic]
+    selectors:
+      main: main
+  - id: ato-news
+    kind: rss
+    url: https://www.ato.gov.au/RSS/Newsroom/
+    tax_types: [general]
+    keywords: [gst, paygw, paygi, bas, super]

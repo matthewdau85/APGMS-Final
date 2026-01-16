@@ -10,5 +10,8 @@
   },
   "dependencies": {
     "@apgms/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@cyclonedx/cyclonedx-npm": "^4.1.2"
   }
 }

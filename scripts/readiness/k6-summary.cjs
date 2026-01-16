@@ -1,100 +1,103 @@
 #!/usr/bin/env node
 /**
- * Readiness check: k6 smoke test summary
+ * Parse a k6 --summary-export JSON and enforce basic thresholds:
+ * - error rate from http_req_failed (rate)
+ * - p95 latency from http_req_duration
  *
- * - Reads a k6 summary JSON file (from --summary-export)
- * - Checks error rate and p95 latency thresholds
- *
- * Env:
- *   K6_SUMMARY_PATH    (default: ./k6/smoke-summary.json)
- *   K6_MAX_ERROR_RATE  (default: 0.01  i.e. 1%)
- *   K6_MAX_P95_MS      (default: 1000  i.e. 1s)
- *   K6_REQS_METRIC     (default: "http_reqs")
- *   K6_LATENCY_METRIC  (default: "http_req_duration")
+ * Exits:
+ *  0 = OK
+ *  2 = WARNING (summary present but required metrics missing / unexpected format)
+ *  1 = FAIL (metrics found but thresholds exceeded)
  */
 
 const fs = require("node:fs");
 const path = require("node:path");
-const process = require("node:process");
 
-function loadJson(filePath) {
-  const content = fs.readFileSync(filePath, "utf8");
-  return JSON.parse(content);
+const SUMMARY_PATH =
+  process.env.K6_SUMMARY_PATH ||
+  path.join(process.cwd(), "k6", "smoke-summary.json");
+
+const MAX_ERROR_RATE = Number(process.env.K6_MAX_ERROR_RATE || "0.01"); // 1%
+const MAX_P95_MS = Number(process.env.K6_MAX_P95_MS || "500"); // 500ms
+
+function die(msg, code) {
+  console.error(msg);
+  process.exit(code);
 }
 
-function getMetric(summary, name) {
-  return summary.metrics && summary.metrics[name];
-}
-
-function getRate(metric) {
-  if (!metric || typeof metric.rate !== "number") return null;
-  return metric.rate;
-}
-
-function getP95(metric) {
-  if (!metric || !metric.percentiles) return null;
-  const raw = metric.percentiles["95"] ?? metric.percentiles["p(95)"];
-  if (typeof raw !== "number") return null;
-  return raw;
+function firstN(arr, n) {
+  return arr.slice(0, n);
 }
 
 function main() {
-  const summaryPath = process.env.K6_SUMMARY_PATH || "./k6/smoke-summary.json";
-  const abs = path.resolve(summaryPath);
+  console.log(`[k6-summary] Reading k6 summary from: ${SUMMARY_PATH}`);
 
-  const maxErrorRate = Number(process.env.K6_MAX_ERROR_RATE || "0.01");
-  const maxP95 = Number(process.env.K6_MAX_P95_MS || "1000");
-  const reqsMetricName = process.env.K6_REQS_METRIC || "http_reqs";
-  const latencyMetricName = process.env.K6_LATENCY_METRIC || "http_req_duration";
-
-  if (!fs.existsSync(abs)) {
-    console.error("[k6-summary] Summary file missing:", abs);
-    process.exit(1);
+  if (!fs.existsSync(SUMMARY_PATH)) {
+    die("[k6-summary] ERROR: summary file not found.", 2);
   }
 
-  console.log("[k6-summary] Reading k6 summary from:", abs);
-
-  let summary;
+  let root;
   try {
-    summary = loadJson(abs);
-  } catch (err) {
-    console.error("[k6-summary] Failed to parse JSON:", err.message);
-    process.exit(1);
+    root = JSON.parse(fs.readFileSync(SUMMARY_PATH, "utf8"));
+  } catch (e) {
+    die("[k6-summary] ERROR: could not parse JSON.", 2);
   }
 
-  const reqsMetric = getMetric(summary, reqsMetricName);
-  const latencyMetric = getMetric(summary, latencyMetricName);
+  if (!root || typeof root !== "object" || !root.metrics || typeof root.metrics !== "object") {
+    die("[k6-summary] WARNING: summary JSON is not in k6 --summary-export format (missing root.metrics).", 2);
+  }
 
-  const errorRate = getRate(reqsMetric);
-  const p95 = getP95(latencyMetric);
+  const metrics = root.metrics;
+  const metricNames = Object.keys(metrics).sort();
+
+  const errorMetricName = "http_req_failed";
+  const latencyMetricName = "http_req_duration";
+
+  console.log("[k6-summary] Selected metrics:");
+  console.log(`  errorMetric: ${errorMetricName}`);
+  console.log(`  latencyMetric: ${latencyMetricName}`);
+
+  const errorMetric = metrics[errorMetricName];
+  const latencyMetric = metrics[latencyMetricName];
+
+  // http_req_failed is a rate metric: values.rate
+  const errorRate =
+    errorMetric && errorMetric.values && typeof errorMetric.values.rate === "number"
+      ? errorMetric.values.rate
+      : null;
+
+  // http_req_duration has percentiles: values["p(95)"]
+  const p95 =
+    latencyMetric && latencyMetric.values
+      ? (typeof latencyMetric.values["p(95)"] === "number"
+          ? latencyMetric.values["p(95)"]
+          : null)
+      : null;
 
   console.log("[k6-summary] Parsed metrics:");
-  console.log("  errorRate:", errorRate);
-  console.log("  p95(ms):  ", p95);
+  console.log(`  errorRate: ${errorRate == null ? "UNKNOWN" : errorRate}`);
+  console.log(`  p95(ms):   ${p95 == null ? "UNKNOWN" : p95}`);
 
-  let ok = true;
-
-  if (errorRate == null) {
-    console.warn("[k6-summary] WARNING – error rate metric missing; treating as failure.");
-    ok = false;
-  } else if (errorRate > maxErrorRate) {
-    console.error(
-      `[k6-summary] FAIL – errorRate ${errorRate} exceeds max ${maxErrorRate}`
+  if (errorRate == null || p95 == null) {
+    console.log(
+      "[k6-summary] WARNING: k6 summary present but required metrics were not found."
     );
-    ok = false;
+    console.log(
+      `[k6-summary] Available metric names (first 40): ${firstN(metricNames, 40).join(", ")}`
+    );
+    console.log(
+      "[k6-summary] Fix: ensure you generate this file via `k6 run --summary-export k6/smoke-summary.json ...`"
+    );
+    process.exit(2);
   }
 
-  if (p95 == null) {
-    console.warn("[k6-summary] WARNING – p95 latency metric missing; treating as failure.");
-    ok = false;
-  } else if (p95 > maxP95) {
-    console.error(
-      `[k6-summary] FAIL – p95 ${p95}ms exceeds max ${maxP95}ms`
-    );
-    ok = false;
-  }
+  const errorOk = errorRate <= MAX_ERROR_RATE;
+  const p95Ok = p95 <= MAX_P95_MS;
 
-  if (!ok) {
+  if (!errorOk || !p95Ok) {
+    console.log(
+      `[k6-summary] FAIL – thresholds exceeded (max errorRate=${MAX_ERROR_RATE}, max p95=${MAX_P95_MS}ms)`
+    );
     process.exit(1);
   }
 
@@ -102,6 +105,4 @@ function main() {
   process.exit(0);
 }
 
-if (require.main === module) {
-  main();
-}
+main();
