@@ -1,6 +1,6 @@
 // packages/domain-policy/src/ledger/tax-ledger.ts
 
-import crypto from "node:crypto";
+import crypto from "crypto";
 import { prisma } from "@apgms/shared/db.js";
 
 // --- Types -------------------------------------------------------------------

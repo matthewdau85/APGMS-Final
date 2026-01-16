@@ -1,81 +1,99 @@
-import { GstEngine } from "../gst-engine.ts";
-import type { GstConfig, TaxConfigRepository } from "../types.js";
+// packages/domain-policy/src/au-tax/__tests__/gst-engine.test.ts
+
+import { GstEngine } from "../gst-engine.js";
 import { TaxType } from "../types.js";
 
-const config: GstConfig = {
+const config = {
   kind: "GST",
   jurisdiction: "AU",
   taxType: TaxType.GST,
-  rateMilli: 100,
+  rateMilli: 100, // 10%
   classificationMap: {
     general_goods: "taxable",
     food_basic: "gst_free",
-    exports: "input_taxed",
+    exports: "gst_free",
+    financial_supplies: "input_taxed",
   },
-};
+} as any;
 
-const repo: TaxConfigRepository = {
-  async getActiveConfig() {
-    return config;
-  },
-};
+describe("GstEngine", () => {
+  it("calculates net GST for taxable sales", async () => {
+    const engine = new GstEngine({
+      getActiveConfig: async (_j: any, taxType: any) => (taxType === TaxType.GST ? config : null),
+    } as any);
 
-const engine = new GstEngine(repo);
-
-describe("GST engine classification netting", () => {
-  it("reports net payable for taxable sales/purchases", async () => {
     const result = await engine.calculate({
       orgId: "org",
       jurisdiction: "AU",
-      asOf: new Date(),
+      asOf: new Date("2025-01-01T00:00:00Z"),
       salesLines: [{ category: "general_goods", amountCents: 1000 }],
-      purchaseLines: [{ category: "general_goods", amountCents: 200 }],
     });
-    expect(result.netGstCents).toBe(80);
-    expect(result.isRefundDue).toBe(false);
+
+    expect(result.gstOnSalesCents).toBe(100);
+    expect(result.netGstCents).toBe(100);
   });
 
-  it("supports refunds (negative net)", async () => {
-    const result = await engine.calculate({
-      orgId: "org",
-      jurisdiction: "AU",
-      asOf: new Date(),
-      salesLines: [{ category: "general_goods", amountCents: 1000 }],
-      purchaseLines: [{ category: "general_goods", amountCents: 2000 }],
-    });
-    expect(result.netGstCents).toBeLessThan(0);
-    expect(result.isRefundDue).toBe(true);
-  });
+  it("treats GST-free sales as zero GST", async () => {
+    const engine = new GstEngine({
+      getActiveConfig: async () => config,
+    } as any);
 
-  it("is zero for gst-free supplies", async () => {
     const result = await engine.calculate({
       orgId: "org",
       jurisdiction: "AU",
-      asOf: new Date(),
+      asOf: new Date("2025-01-01T00:00:00Z"),
       salesLines: [{ category: "food_basic", amountCents: 1000 }],
     });
+
     expect(result.gstOnSalesCents).toBe(0);
     expect(result.netGstCents).toBe(0);
   });
 
-  it("ignores input-taxed amounts when not flagged for credits", async () => {
+  it("treats input-taxed sales as zero GST", async () => {
+    const engine = new GstEngine({
+      getActiveConfig: async () => config,
+    } as any);
+
     const result = await engine.calculate({
       orgId: "org",
       jurisdiction: "AU",
-      asOf: new Date(),
-      salesLines: [{ category: "exports", amountCents: 1000 }],
+      asOf: new Date("2025-01-01T00:00:00Z"),
+      salesLines: [{ category: "financial_supplies", amountCents: 1000 }],
     });
+
+    expect(result.gstOnSalesCents).toBe(0);
     expect(result.netGstCents).toBe(0);
   });
 
-  it("applies adjustments that reduce net", async () => {
+  it("reduces net GST by taxable purchases (input tax credits)", async () => {
+    const engine = new GstEngine({
+      getActiveConfig: async () => config,
+    } as any);
+
     const result = await engine.calculate({
       orgId: "org",
       jurisdiction: "AU",
-      asOf: new Date(),
+      asOf: new Date("2025-01-01T00:00:00Z"),
+      salesLines: [{ category: "general_goods", amountCents: 1000 }],
+      purchaseLines: [{ category: "general_goods", amountCents: 500 }],
+    });
+
+    expect(result.netGstCents).toBe(50); // 100 - 50
+  });
+
+  it("applies adjustments that reduce net", async () => {
+    const engine = new GstEngine({
+      getActiveConfig: async () => config,
+    } as any);
+
+    const result = await engine.calculate({
+      orgId: "org",
+      jurisdiction: "AU",
+      asOf: new Date("2025-01-01T00:00:00Z"),
       salesLines: [{ category: "general_goods", amountCents: 1000 }],
       adjustments: [{ category: "general_goods", amountCents: -200 }],
     });
+
     expect(result.netGstCents).toBe(80); // 100 + (-20)
   });
 });

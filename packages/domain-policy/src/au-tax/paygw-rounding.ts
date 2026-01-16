@@ -1,7 +1,21 @@
+// packages/domain-policy/src/au-tax/paygw-rounding.ts
+//
+// Deterministic rounding helpers used to derive per-period cents from an annual
+// amount in cents.
+//
+// Important distinction (ATO-grade):
+// - ATO PAYG withholding *reporting* is generally rounded to whole dollars
+//   (50 cents rounds up) per the relevant schedules.
+// - This helper is about deterministic allocation and rounding in cents.
+//   Use policy.precision=0 to round the per-period amount to whole dollars (in cents).
+
 import type { PayPeriod } from "./types.js";
 
 export interface RoundingPolicy {
-  precision: number;
+  // precision in decimal places of dollars:
+  // - 2 => cents
+  // - 0 => whole dollars
+  precision: 0 | 2;
   method: "round_half_even" | "round_half_up";
 }
 
@@ -17,46 +31,66 @@ const PERIOD_DENOMINATORS: Record<PayPeriod, number> = {
   ANNUAL: 1,
 };
 
-export function computeWithholding(input: {
-  annualAmountCents: number;
-  payPeriod: PayPeriod;
-  roundingPolicy?: RoundingPolicy;
-}): number {
-  const { annualAmountCents, payPeriod, roundingPolicy = DEFAULT_ROUNDING_POLICY } = input;
-  const denominator = PERIOD_DENOMINATORS[payPeriod];
-  if (!denominator) {
-    throw new Error(`Unsupported pay period ${payPeriod}`);
-  }
-  if (annualAmountCents <= 0) {
-    return 0;
-  }
-  const scaled = roundRational(BigInt(annualAmountCents), denominator, roundingPolicy);
-  return Number(scaled);
-}
-
-function roundRational(
-  numerator: bigint,
-  denominator: number,
+function roundDivideBigInt(
+  dividend: bigint,
+  divisor: bigint,
   policy: RoundingPolicy,
 ): bigint {
-  const scaleExponent = Math.max(0, policy.precision - 2);
-  const scale = BigInt(10) ** BigInt(scaleExponent);
-  const divisor = BigInt(denominator);
-  const scaledNumerator = numerator * scale;
-  const quotient = scaledNumerator / divisor;
-  const remainder = scaledNumerator % divisor;
-  const double = remainder * 2n;
+  if (divisor <= 0n) throw new Error("Invalid divisor");
+
+  const quotient = dividend / divisor;
+  const remainder = dividend % divisor;
+
+  const absRemainder = remainder < 0n ? -remainder : remainder;
+  const absDivisor = divisor < 0n ? -divisor : divisor;
+
+  const double = absRemainder * 2n;
+
   let adjustment = 0n;
-  if (double > divisor) {
+
+  if (double > absDivisor) {
     adjustment = 1n;
-  } else if (double === divisor) {
-    if (policy.method === "round_half_even") {
-      if (quotient % 2n !== 0n) {
-        adjustment = 1n;
-      }
-    } else if (policy.method === "round_half_up") {
+  } else if (double === absDivisor) {
+    if (policy.method === "round_half_up") {
       adjustment = 1n;
+    } else if (policy.method === "round_half_even") {
+      // If quotient is odd, round away from zero; if even, round toward zero.
+      if (quotient % 2n !== 0n) adjustment = 1n;
     }
   }
-  return quotient + adjustment;
+
+  // Preserve sign for negative dividends
+  const signedAdjustment = dividend < 0n ? -adjustment : adjustment;
+  return quotient + signedAdjustment;
+}
+
+function roundToWholeDollarsCents(
+  cents: bigint,
+  policy: RoundingPolicy,
+): bigint {
+  // Convert cents -> dollars (as integer) with rounding, then back to cents.
+  const dollars = roundDivideBigInt(cents, 100n, policy);
+  return dollars * 100n;
+}
+
+export function computeWithholding(args: {
+  annualAmountCents: number;
+  payPeriod: PayPeriod;
+  policy?: RoundingPolicy;
+}): number {
+  const policy = args.policy ?? DEFAULT_ROUNDING_POLICY;
+
+  const denom = PERIOD_DENOMINATORS[args.payPeriod];
+  if (!denom) throw new Error(`Unknown pay period: ${String(args.payPeriod)}`);
+
+  const annual = BigInt(args.annualAmountCents);
+  let perPeriodCents = roundDivideBigInt(annual, BigInt(denom), policy);
+
+  if (policy.precision === 0) {
+    perPeriodCents = roundToWholeDollarsCents(perPeriodCents, policy);
+  }
+
+  const out = Number(perPeriodCents);
+  if (!Number.isFinite(out)) throw new Error("Withholding overflow");
+  return out;
 }

@@ -1,6 +1,6 @@
 // packages/domain-policy/src/outcomes/bas-outcome.ts
 
-import crypto from "node:crypto";
+import crypto from "crypto";
 import { compileOutcomeSpecV1 } from "./compiler.js";
 import { BAS_OUTCOME_SPEC_V1 } from "./specs/bas-outcomes.v1.js";
 import { canonicalJson } from "../export/canonicalJson.js";

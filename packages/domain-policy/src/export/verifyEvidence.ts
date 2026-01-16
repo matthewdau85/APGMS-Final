@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "crypto";
 import type { EvidencePackV1 } from "./evidence.schema.js";
 import { computeEvidenceChecksum } from "./evidenceChecksum.js";
 

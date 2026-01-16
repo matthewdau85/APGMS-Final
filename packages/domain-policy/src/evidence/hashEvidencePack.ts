@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash } from "crypto";
 import type { EvidencePack } from "./evidence-pack.js";
 
 export function hashEvidencePack(pack: EvidencePack): string {

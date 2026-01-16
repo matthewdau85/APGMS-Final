@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash } from "crypto";
 import { canonicalJson } from "./canonicalJson.js";
 import type { EvidencePackV1 } from "./evidence.schema.js";
 
