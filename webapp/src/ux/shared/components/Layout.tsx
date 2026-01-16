@@ -55,7 +55,7 @@ export function Layout({
 
   const navItems: NavItem[] = useMemo(
     () => [
-      { label: "Dashboard", href: "/", icon: <LayoutDashboard className="w-4 h-4" /> },
+      { label: "Dashboard", href: "/dashboard", icon: <LayoutDashboard className="w-4 h-4" /> },
       { label: "Obligations", href: "/obligations", icon: <Calendar className="w-4 h-4" /> },
       { label: "Evidence Packs", href: "/evidence-packs", icon: <FileText className="w-4 h-4" /> },
       { label: "Controls & Policies", href: "/controls", icon: <Shield className="w-4 h-4" /> },

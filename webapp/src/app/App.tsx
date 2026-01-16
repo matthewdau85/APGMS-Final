@@ -78,6 +78,7 @@ export default function App() {
             }
           >
             <Route path="/" element={<Dashboard />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/obligations" element={<Obligations />} />
             <Route path="/payments" element={<Payments />} />
             <Route path="/ledger" element={<Ledger />} />

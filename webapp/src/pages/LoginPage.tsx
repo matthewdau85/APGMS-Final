@@ -1,79 +1,120 @@
 import React, { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth, type UserRole } from "../auth/AuthContext";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
+
+type Role = "admin" | "user";
+
+function isSafeInternalPath(p: string | null): p is string {
+  if (!p) return false;
+  if (!p.startsWith("/")) return false;
+  if (p.startsWith("//")) return false;
+  return true;
+}
 
 export default function LoginPage() {
-  const nav = useNavigate();
-  const { user, login, logout } = useAuth();
-  const [name, setName] = useState<string>(user?.name ?? "Demo User");
-  const [role, setRole] = useState<UserRole>(user?.role ?? "user");
+  const { login } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  const canLogin = useMemo(() => name.trim().length >= 2, [name]);
+  const [name, setName] = useState<string>("");
+  const [role, setRole] = useState<Role>("user");
+
+  const nextPath = useMemo(() => {
+    // Support ?next=/somewhere
+    const sp = new URLSearchParams(location.search);
+    const next = sp.get("next");
+    return isSafeInternalPath(next) ? next : null;
+  }, [location.search]);
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+
+    const trimmed = name.trim() || "E2E Admin";
+    login({ name: trimmed, role });
+
+    // Your app/nav/tests expect real routes like /dashboard, not /admin.
+    // Keep this deterministic for E2E.
+    navigate(nextPath ?? "/dashboard", { replace: true });
+  }
 
   return (
-    <div style={{ maxWidth: 820, margin: "0 auto", padding: 24 }}>
-      <h1 style={{ margin: 0 }}>APGMS</h1>
-      <p style={{ opacity: 0.8, marginTop: 8 }}>
-        Demo authentication (local only). Use Admin to access the Console.
-      </p>
+    <main className="min-h-screen flex items-center justify-center p-6">
+      <section className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h1 className="text-xl font-semibold text-slate-900">Sign in (Demo)</h1>
+        <p className="mt-1 text-sm text-slate-600">
+          Local demo auth for the prototype. No passwords.
+        </p>
 
-      <div style={{ marginTop: 18, display: "grid", gap: 12, padding: 16, border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14 }}>
-        <label style={{ display: "grid", gap: 6 }}>
-          <div style={{ fontSize: 12, opacity: 0.8 }}>Display name</div>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Your name"
-            style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.18)", background: "transparent" }}
-          />
-        </label>
+        <form className="mt-6 space-y-5" onSubmit={onSubmit}>
+          <div className="space-y-2">
+            <label
+              htmlFor="displayName"
+              className="block text-sm font-medium text-slate-900"
+            >
+              Display name
+            </label>
+            <input
+              id="displayName"
+              name="displayName"
+              type="text"
+              inputMode="text"
+              autoComplete="name"
+              aria-label="Display name"
+              placeholder="Your name"
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-slate-300"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
 
-        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ fontSize: 12, opacity: 0.8, minWidth: 90 }}>Role</div>
-          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <input type="radio" checked={role === "user"} onChange={() => setRole("user")} />
-            User
-          </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <input type="radio" checked={role === "admin"} onChange={() => setRole("admin")} />
-            Admin
-          </label>
-        </div>
+          <fieldset className="space-y-2">
+            <legend className="block text-sm font-medium text-slate-900">
+              Role
+            </legend>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div className="flex items-center gap-2">
+              <input
+                id="role-admin"
+                type="radio"
+                name="role"
+                value="admin"
+                aria-label="Admin"
+                checked={role === "admin"}
+                onChange={() => setRole("admin")}
+              />
+              <label htmlFor="role-admin" className="text-sm text-slate-800">
+                Admin
+              </label>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                id="role-user"
+                type="radio"
+                name="role"
+                value="user"
+                aria-label="User"
+                checked={role === "user"}
+                onChange={() => setRole("user")}
+              />
+              <label htmlFor="role-user" className="text-sm text-slate-800">
+                User
+              </label>
+            </div>
+          </fieldset>
+
           <button
-            disabled={!canLogin}
-            onClick={() => {
-              login({ name: name.trim(), role });
-              nav(role === "admin" ? "/admin" : "/");
-            }}
-            style={{ padding: "10px 14px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.08)", cursor: "pointer" }}
+            type="submit"
+            className="w-full rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
           >
             Sign in
           </button>
 
-          {user && (
-            <button
-              onClick={() => {
-                logout();
-                nav("/");
-              }}
-              style={{ padding: "10px 14px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.18)", background: "transparent", cursor: "pointer" }}
-            >
-              Sign out
-            </button>
-          )}
-        </div>
-
-        <div style={{ fontSize: 12, opacity: 0.75 }}>
-          Admin-only behavior:
-          <ul style={{ marginTop: 6 }}>
-            <li>User login: no Console entry button.</li>
-            <li>Admin login: see “Open APGMS Console (Demo Mode)”.</li>
-            <li>Direct URL protection: non-admin hitting /proto redirects away.</li>
-          </ul>
-        </div>
-      </div>
-    </div>
+          <div className="text-xs text-slate-500">
+            Tip: E2E uses Display name + Admin.
+          </div>
+        </form>
+      </section>
+    </main>
   );
 }

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-export type UserRole = "admin" | "user";
+export type UserRole = "admin" | "user" | "regulator";
 
 export type AuthUser = {
   name: string;
@@ -16,41 +16,98 @@ type AuthContextValue = {
 
 const STORAGE_KEY = "apgms_auth_v1";
 
-function safeParse(raw: string): AuthUser | null {
+// Legacy keys still used in some older pages/tests.
+const LEGACY_USER_KEY = "apgms.auth.user";
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+function isAuthUser(v: unknown): v is AuthUser {
+  if (!isRecord(v)) return false;
+  const name = v["name"];
+  const role = v["role"];
+  return (
+    typeof name === "string" &&
+    (role === "admin" || role === "user" || role === "regulator")
+  );
+}
+
+function safeJsonParse(raw: string | null): unknown {
+  if (!raw) return null;
   try {
-    const obj = JSON.parse(raw) as AuthUser;
-    if (!obj || typeof obj.name !== "string" || (obj.role !== "admin" && obj.role !== "user")) return null;
-    return obj;
+    return JSON.parse(raw);
   } catch {
     return null;
   }
 }
 
-function readStoredUser(): AuthUser | null {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return null;
-  return safeParse(raw);
+function canUseStorage(): boolean {
+  try {
+    return typeof window !== "undefined" && !!window.localStorage;
+  } catch {
+    return false;
+  }
 }
 
-function writeStoredUser(user: AuthUser | null) {
-  if (!user) {
-    localStorage.removeItem(STORAGE_KEY);
-    return;
+function isE2EBypassEnabled(): boolean {
+  // Only allow bypass in dev builds.
+  return (
+    import.meta.env.DEV &&
+    (import.meta.env.VITE_E2E_BYPASS_AUTH === "1" ||
+      import.meta.env.VITE_E2E_BYPASS_AUTH === "true")
+  );
+}
+
+function readStoredUser(): AuthUser | null {
+  if (!canUseStorage()) return null;
+
+  // Highest priority: explicit e2e bypass (dev only).
+  if (isE2EBypassEnabled()) {
+    return { name: "E2E Admin", role: "admin" };
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+
+  // Current storage.
+  const current = safeJsonParse(window.localStorage.getItem(STORAGE_KEY));
+  if (isAuthUser(current)) return current;
+
+  // Legacy storage used by older tests/pages.
+  const legacy = safeJsonParse(window.localStorage.getItem(LEGACY_USER_KEY));
+  if (isAuthUser(legacy)) {
+    // Migrate forward so the rest of the app sees one source of truth.
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(legacy));
+    } catch {
+      // ignore
+    }
+    return legacy;
+  }
+
+  return null;
+}
+
+function writeStoredUser(u: AuthUser | null) {
+  if (!canUseStorage()) return;
+  try {
+    if (!u) {
+      window.localStorage.removeItem(STORAGE_KEY);
+      return;
+    }
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
+  } catch {
+    // ignore
+  }
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider(props: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(() => {
-    if (typeof window === "undefined") return null;
-    return readStoredUser();
-  });
+  const [user, setUser] = useState<AuthUser | null>(() => readStoredUser());
 
+  // Keep user state synced if localStorage changes in another tab.
   useEffect(() => {
     function onStorage(e: StorageEvent) {
-      if (e.key === STORAGE_KEY) {
+      if (e.key === STORAGE_KEY || e.key === LEGACY_USER_KEY) {
         setUser(readStoredUser());
       }
     }
@@ -63,12 +120,12 @@ export function AuthProvider(props: { children: React.ReactNode }) {
       user,
       isAdmin: user?.role === "admin",
       login: (u: AuthUser) => {
-        writeStoredUser(u);
         setUser(u);
+        writeStoredUser(u);
       },
       logout: () => {
-        writeStoredUser(null);
         setUser(null);
+        writeStoredUser(null);
       },
     };
   }, [user]);
@@ -76,8 +133,8 @@ export function AuthProvider(props: { children: React.ReactNode }) {
   return <AuthContext.Provider value={value}>{props.children}</AuthContext.Provider>;
 }
 
-export function useAuth() {
+export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
+  if (!ctx) throw new Error("useAuth must be used inside <AuthProvider>");
   return ctx;
 }

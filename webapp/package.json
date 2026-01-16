@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "preview": "vite preview",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "test:e2e": "playwright test",
     "test:axe": "playwright test tests/axe.spec.ts --reporter=line",
     "eslintIgnore": [
       "src",
@@ -68,12 +69,15 @@
     "zustand": "^5.0.9"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.0",
+    "@cyclonedx/cyclonedx-npm": "^4.1.2",
     "@playwright/test": "^1.56.1",
+    "@tailwindcss/vite": "^4.1.12",
     "@tanstack/react-query-devtools": "^5.91.1",
+    "@types/node": "^24.10.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@types/react-router-dom": "^5.3.3",
-    "@tailwindcss/vite": "^4.1.12",
     "@vitejs/plugin-react": "^5.1.1",
     "axe-core": "^4.9.0",
     "playwright": "^1.56.1",
