@@ -1,3 +1,4 @@
+// services/api-gateway/src/server.ts
 import rateLimit from "@fastify/rate-limit";
 
 import { buildFastifyApp } from "./app.js";
@@ -8,17 +9,15 @@ import { registerAuth } from "./plugins/auth.js";
 export function buildServer() {
   const app = buildFastifyApp({ logger: true });
 
-  // RATE LIMITING
   app.register(rateLimit, {
     max: Number(process.env.API_RATE_LIMIT_MAX ?? 120),
     timeWindow: process.env.API_RATE_LIMIT_WINDOW ?? "1 minute",
   });
 
-  // AUTH
   registerAuth(app);
   app.register(authRoutes);
 
-  // PROTOTYPE surface only
+  // Prototype surface is mounted under /prototype
   app.register(prototypeRoutes, { prefix: "/prototype" });
 
   return app;

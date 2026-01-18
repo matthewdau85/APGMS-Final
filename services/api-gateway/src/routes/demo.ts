@@ -1,4 +1,5 @@
-﻿import type { FastifyInstance } from "fastify";
+﻿// services/api-gateway/src/routes/demo.ts
+import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prototypeAdminGuard } from "../guards/prototype-admin.js";
 
@@ -7,62 +8,48 @@ const bankSchema = z.object({
   intensity: z.enum(["low", "high"]).default("low"),
 });
 
+/**
+ * Demo routes:
+ * - Only registered when ENABLE_PROTOTYPE=true
+ * - Guarded by prototypeAdminGuard (header or admin auth)
+ *
+ * NOTE: When registerDemoRoutes() is called inside routes/prototype.ts,
+ * these endpoints are effectively mounted at:
+ *   /prototype/demo/*
+ */
 export async function registerDemoRoutes(app: FastifyInstance) {
   const enabled = String(process.env.ENABLE_PROTOTYPE ?? "").toLowerCase() === "true";
   if (!enabled) return;
 
-  // Header-based prototype admin access for demo routes
-  app.addHook("preHandler", prototypeAdminGuard());
+  // Guard demo endpoints as well (belt-and-braces)
+  app.addHook("preHandler", prototypeAdminGuard({ requireHeader: "x-prototype-admin" }));
 
-  // POST /prototype/demo/banking/generate
-  app.post("/banking/generate", async (req) => {
-    const parsed = bankSchema.safeParse(req.body ?? {});
+  app.post("/demo/banking/generate", async (req) => {
+    const parsed = bankSchema.safeParse(req.body);
     if (!parsed.success) {
       return { ok: false, error: "invalid_body", details: parsed.error.flatten() };
     }
 
     const { daysBack, intensity } = parsed.data;
 
-    // TODO: replace with real prisma generator later
+    // Phase 1: stub response only (Phase 2 will add real state + event stream)
     return {
       ok: true,
-      generatedDays: daysBack,
+      generated: daysBack,
       intensity,
-      note: "Prototype demo bank feed generated (mock).",
-      rows: Array.from({ length: daysBack }).map((_, i) => ({
-        id: `demo_bank_${i + 1}`,
-        at: new Date(Date.now() - (daysBack - i) * 86400000).toISOString(),
-        amount: i % 2 === 0 ? 1200 : -600,
-        desc: i % 2 === 0 ? "Demo POS Sale" : "Demo Payroll Settlement",
-      })),
+      note: "Prototype demo bank feed generated (stub)",
     };
   });
 
-  // GET /prototype/demo/state?orgId=...
-  app.get("/state", async (req) => {
-    const orgId = (req.query as any)?.orgId?.toString() ?? null;
+  // Simple state endpoint for wiring tests
+  app.get("/demo/state", async () => {
     return {
       ok: true,
       state: {
-        org: orgId,
-        settings: {},
+        org: "demo_org_001",
         obligations: [],
+        settings: {},
       },
-    };
-  });
-
-  // (Optional now) GET /prototype/demo/events?orgId=...&afterTs=...
-  app.get("/events", async (req) => {
-    const orgId = (req.query as any)?.orgId?.toString() ?? null;
-    const afterTs = Number((req.query as any)?.afterTs ?? 0);
-
-    return {
-      ok: true,
-      orgId,
-      afterTs,
-      events: [
-        { ts: Date.now(), type: "demo.event", detail: "Mock event stream placeholder" },
-      ],
     };
   });
 }

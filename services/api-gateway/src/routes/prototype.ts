@@ -1,5 +1,6 @@
+// services/api-gateway/src/routes/prototype.ts
 import type { FastifyPluginAsync } from "fastify";
-import { requireAdmin } from "../plugins/auth.js";
+import { prototypeAdminGuard } from "../guards/prototype-admin.js";
 import { registerDemoRoutes } from "./demo.js";
 
 function isoNow() {
@@ -7,20 +8,17 @@ function isoNow() {
 }
 
 const routes: FastifyPluginAsync = async (app) => {
-  // Entire prototype surface is real-admin only
-  app.addHook("preHandler", requireAdmin);
+  // Entire /prototype surface is guarded by prototype-admin policy
+  app.addHook("preHandler", prototypeAdminGuard({ requireHeader: "x-prototype-admin" }));
 
-  // Basic prototype endpoint (admin auth required)
+  // Minimal overview endpoint for Phase 1 wiring checks
   app.get("/overview", async (req) => {
-    const period = (req.query as any)?.period?.toString() ?? "";
+    const period = String((req.query as any)?.period ?? "").trim();
     if (!period) return { ok: false, error: "missing_period" };
-
-    const orgId = (req.headers["x-org-id"] ?? "").toString() || null;
 
     return {
       ok: true,
       mode: "prototype",
-      orgId,
       period,
       generatedAt: isoNow(),
       kpis: [
@@ -38,14 +36,11 @@ const routes: FastifyPluginAsync = async (app) => {
     };
   });
 
-  /**
-   * IMPORTANT:
-   * Demo endpoints mounted under /prototype/demo/*
-   * They will apply THEIR OWN guard (prototype header guard).
-   */
-  await app.register(async (instance) => {
-    await registerDemoRoutes(instance);
-  }, { prefix: "/demo" });
+  // IMPORTANT:
+  // Demo routes are registered INSIDE this plugin.
+  // Since this plugin is mounted with prefix "/prototype", demo endpoints become:
+  //   /prototype/demo/...
+  await registerDemoRoutes(app);
 };
 
 export default routes;

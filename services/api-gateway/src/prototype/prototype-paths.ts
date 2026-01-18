@@ -6,7 +6,7 @@ function stripQuery(url: string): string {
 }
 
 /**
- * Prototype / demo surfaces to hard-disable in production.
+ * Prototype/demo surfaces to hard-disable in production.
  * This is an edge backstop: even if routes were registered, prod returns 404.
  */
 export function isPrototypePath(url: string): boolean {
@@ -16,25 +16,25 @@ export function isPrototypePath(url: string): boolean {
   if (path === "/prototype") return true;
   if (path.startsWith("/prototype/")) return true;
 
-  // Entire demo surface (registered only when ENABLE_PROTOTYPE=true, but still block in prod)
+  // Entire demo surface (in case any /demo/* exists at root)
   if (path === "/demo") return true;
   if (path.startsWith("/demo/")) return true;
 
-  // Treat regulator compliance summary as prototype-gated in production if desired
+  // Optional: treat regulator compliance summary as prototype-gated in production
   if (path === "/regulator/compliance/summary") return true;
 
   return false;
 }
 
 /**
- * In non-production, only SOME prototype paths are admin-only (example: monitor).
- * Keep this narrow: most prototype UX can be open to non-admin if you want.
+ * In non-production, only SOME prototype paths should be admin-only (e.g. monitor).
+ * Keep this narrow.
  */
 export function isPrototypeAdminOnlyPath(url: string): boolean {
   const path = stripQuery(url);
 
-  // Admin-only prototype monitor
   if (path === "/prototype/monitor") return true;
+  if (path.startsWith("/prototype/monitor/")) return true;
 
   return false;
 }
