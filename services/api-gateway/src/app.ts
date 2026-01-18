@@ -15,6 +15,7 @@ import regulatorComplianceEvidencePackPlugin from "./routes/regulator-compliance
 import { basSettlementRoutes } from "./routes/bas-settlement.js";
 import { registerBankLinesRoutes } from "./routes/bank-lines.js";
 import { registerRiskSummaryRoute } from "./routes/risk-summary.js";
+
 import {
   isPrototypePath,
   isPrototypeAdminOnlyPath,
@@ -40,6 +41,7 @@ export function buildFastifyApp(opts: BuildAppOpts = {}) {
   const envName = String(
     opts.configOverrides?.environment ?? process.env.NODE_ENV ?? "development"
   ).toLowerCase();
+
   const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS ?? "")
     .split(",")
     .map((o) => o.trim())
@@ -109,7 +111,7 @@ export function buildFastifyApp(opts: BuildAppOpts = {}) {
       return reply.code(200).send({
         ok: true,
         mode: "dev",
-        skipped: ["db","redis","nats"]
+        skipped: ["db", "redis", "nats"],
       });
     }
     // --- end override ---
@@ -126,9 +128,13 @@ export function buildFastifyApp(opts: BuildAppOpts = {}) {
   app.register(regulatorComplianceEvidencePackPlugin, { prefix: "/regulator" });
   registerRiskSummaryRoute(app);
   registerBankLinesRoutes(app);
-  app.register(async (instance) => {
-    await basSettlementRoutes(instance, { requireAuth: true });
-  }, { prefix: "/api" });
+
+  app.register(
+    async (instance) => {
+      await basSettlementRoutes(instance, { requireAuth: true });
+    },
+    { prefix: "/api" }
+  );
 
   // APGMS_TEST_BEHAVIOR_HOOKS
 

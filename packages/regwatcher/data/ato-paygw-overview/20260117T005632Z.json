@@ -1,0 +1,13 @@
+{
+  "id": "ato-paygw-overview",
+  "name": "ATO - PAYG withholding overview",
+  "url": "https://www.ato.gov.au/business/payg-withholding",
+  "ts": "2026-01-17T00:56:32.788Z",
+  "hash": "cc1d5b0f30eda4d07066025bbd048fdd6c5595da8dad9377e8363097d45d6042",
+  "bytesHtml": 75876,
+  "bytesText": 1723,
+  "tookMs": 330,
+  "htmlFile": "20260117T005632Z.html",
+  "textFile": "20260117T005632Z.txt",
+  "diffFile": null
+}

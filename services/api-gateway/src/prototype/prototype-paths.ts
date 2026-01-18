@@ -1,44 +1,40 @@
-function splitUrl(url: string): { path: string; query: string } {
-  const q = url.indexOf("?");
-  if (q === -1) return { path: url, query: "" };
-  return { path: url.slice(0, q), query: url.slice(q + 1) };
-}
+// services/api-gateway/src/prototype/prototype-paths.ts
 
-function hasQueryParam(query: string, key: string): boolean {
-  if (!query) return false;
-  // Basic query scan; avoids URLSearchParams to keep it deterministic for raw inject URLs
-  return query
-    .split("&")
-    .some((kv) => kv === key || kv.startsWith(`${key}=`));
+function stripQuery(url: string): string {
+  const q = url.indexOf("?");
+  return q >= 0 ? url.slice(0, q) : url;
 }
 
 /**
- * Prototype endpoints:
- * - Disabled in production (404)
- * - In non-prod, only some are admin-only (403 for non-admin)
- *
- * This logic is intentionally aligned to the contract tests.
+ * Prototype / demo surfaces to hard-disable in production.
+ * This is an edge backstop: even if routes were registered, prod returns 404.
  */
 export function isPrototypePath(url: string): boolean {
-  const { path } = splitUrl(url);
+  const path = stripQuery(url);
 
-  if (path === "/prototype/monitor") return true;
-  if (path.startsWith("/monitor/")) return true;
+  // Entire prototype surface
+  if (path === "/prototype") return true;
+  if (path.startsWith("/prototype/")) return true;
 
-  // Treat regulator compliance summary as prototype-gated in production.
+  // Entire demo surface (registered only when ENABLE_PROTOTYPE=true, but still block in prod)
+  if (path === "/demo") return true;
+  if (path.startsWith("/demo/")) return true;
+
+  // Treat regulator compliance summary as prototype-gated in production if desired
   if (path === "/regulator/compliance/summary") return true;
 
   return false;
 }
 
+/**
+ * In non-production, only SOME prototype paths are admin-only (example: monitor).
+ * Keep this narrow: most prototype UX can be open to non-admin if you want.
+ */
 export function isPrototypeAdminOnlyPath(url: string): boolean {
-  const { path, query } = splitUrl(url);
+  const path = stripQuery(url);
 
   // Admin-only prototype monitor
   if (path === "/prototype/monitor") return true;
-
-  // All /monitor/* endpoints are admin-only in non-prod
-  if (path.startsWith("/monitor/")) return true;
 
   return false;
 }

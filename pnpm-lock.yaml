@@ -99,7 +99,7 @@ importers:
         specifier: '*'
         version: 13.0.2
       cheerio:
-        specifier: ^1.0.0
+        specifier: ^1.1.2
         version: 1.1.2
       diff:
         specifier: ^5.2.0
@@ -111,7 +111,7 @@ importers:
         specifier: ^6.2.0
         version: 6.2.0
       undici:
-        specifier: ^6.19.8
+        specifier: ^6.23.0
         version: 6.23.0
     devDependencies:
       '@types/diff':

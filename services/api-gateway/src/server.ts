@@ -8,25 +8,17 @@ import { registerAuth } from "./plugins/auth.js";
 export function buildServer() {
   const app = buildFastifyApp({ logger: true });
 
-  /**
-   * =========================================================
-   * RATE LIMITING
-   * =========================================================
-   */
+  // RATE LIMITING
   app.register(rateLimit, {
     max: Number(process.env.API_RATE_LIMIT_MAX ?? 120),
     timeWindow: process.env.API_RATE_LIMIT_WINDOW ?? "1 minute",
   });
 
-  /**
-   * =========================================================
-   * AUTH
-   * =========================================================
-   */
+  // AUTH
   registerAuth(app);
   app.register(authRoutes);
 
-  // Prototype surface (mount under /prototype)
+  // PROTOTYPE surface only
   app.register(prototypeRoutes, { prefix: "/prototype" });
 
   return app;
