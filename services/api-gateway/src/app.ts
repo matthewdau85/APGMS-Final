@@ -6,9 +6,9 @@ import helmet from "@fastify/helmet";
 import regulatorComplianceSummaryRoute from "./routes/regulator-compliance-summary.js";
 import regulatorComplianceEvidencePackPlugin from "./routes/regulator-compliance-evidence-pack.js";
 import { basSettlementRoutes } from "./routes/bas-settlement.js";
-import { basPreviewRoutes } from "./routes/bas-preview.js";
-import { designatedAccountRoutes } from "./routes/designated-accounts.js";
-import { alertsRoutes } from "./routes/alerts.js";
+import basPreviewRoutes from "./routes/bas-preview.js";
+import designatedAccountRoutes from "./routes/designated-accounts.js";
+import alertsRoutes from "./routes/alerts.js";
 import evidenceRoutes from "./routes/evidence.js";
 
 import {
@@ -73,7 +73,6 @@ export function buildFastifyApp(opts: BuildAppOpts = {}): FastifyInstance {
   app.register(alertsRoutes);
   app.register(designatedAccountRoutes);
   app.register(basPreviewRoutes);
-  app.register(mfaRoutes);
   app.register(evidenceRoutes);
   app.register(basSettlementRoutes);
 
