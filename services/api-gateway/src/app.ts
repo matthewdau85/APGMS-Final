@@ -9,7 +9,6 @@ import { basSettlementRoutes } from "./routes/bas-settlement.js";
 import { basPreviewRoutes } from "./routes/bas-preview.js";
 import { designatedAccountRoutes } from "./routes/designated-accounts.js";
 import { alertsRoutes } from "./routes/alerts.js";
-import { mfaRoutes } from "./routes/mfa.js";
 import evidenceRoutes from "./routes/evidence.js";
 
 import {
