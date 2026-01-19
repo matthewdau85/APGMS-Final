@@ -1,40 +1,27 @@
 // services/api-gateway/src/prototype/prototype-paths.ts
 
-function stripQuery(url: string): string {
-  const q = url.indexOf("?");
-  return q >= 0 ? url.slice(0, q) : url;
-}
-
 /**
- * Prototype/demo surfaces to hard-disable in production.
- * This is an edge backstop: even if routes were registered, prod returns 404.
+ * Minimal path classification used by app.ts to hard-disable prototype/demo surfaces in production.
+ * Keep this conservative and explicit.
  */
-export function isPrototypePath(url: string): boolean {
-  const path = stripQuery(url);
 
-  // Entire prototype surface
-  if (path === "/prototype") return true;
-  if (path.startsWith("/prototype/")) return true;
+export function isPrototypePath(urlOrPath: string): boolean {
+  const path = (urlOrPath || "").split("?")[0] || "";
+  if (path.startsWith("/prototype")) return true;
+  if (path === "/demo" || path.startsWith("/demo/")) return true;
 
-  // Entire demo surface (in case any /demo/* exists at root)
-  if (path === "/demo") return true;
-  if (path.startsWith("/demo/")) return true;
-
-  // Optional: treat regulator compliance summary as prototype-gated in production
-  if (path === "/regulator/compliance/summary") return true;
+  // Treat regulator compliance summary as prototype-gated in production.
+  if (path.startsWith("/regulator/")) return true;
 
   return false;
 }
 
-/**
- * In non-production, only SOME prototype paths should be admin-only (e.g. monitor).
- * Keep this narrow.
- */
-export function isPrototypeAdminOnlyPath(url: string): boolean {
-  const path = stripQuery(url);
+export function isPrototypeAdminOnlyPath(urlOrPath: string): boolean {
+  const path = (urlOrPath || "").split("?")[0] || "";
 
-  if (path === "/prototype/monitor") return true;
-  if (path.startsWith("/prototype/monitor/")) return true;
+  // In this Option A wiring, all prototype + demo endpoints are admin-only.
+  if (path.startsWith("/prototype")) return true;
+  if (path === "/demo" || path.startsWith("/demo/")) return true;
 
   return false;
 }

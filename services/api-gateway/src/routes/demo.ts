@@ -1,55 +1,78 @@
 ﻿// services/api-gateway/src/routes/demo.ts
 import type { FastifyInstance } from "fastify";
-import { z } from "zod";
 import { prototypeAdminGuard } from "../guards/prototype-admin.js";
-
-const bankSchema = z.object({
-  daysBack: z.number().int().min(1).max(30).default(7),
-  intensity: z.enum(["low", "high"]).default("low"),
-});
 
 /**
  * Demo routes:
- * - Only registered when ENABLE_PROTOTYPE=true
- * - Guarded by prototypeAdminGuard (header or admin auth)
+ * - available only when ENABLE_PROTOTYPE=true
+ * - header-admin gated via prototypeAdminGuard (x-prototype-admin)
  *
- * NOTE: When registerDemoRoutes() is called inside routes/prototype.ts,
- * these endpoints are effectively mounted at:
- *   /prototype/demo/*
+ * Mounted at root under /demo/*
  */
 export async function registerDemoRoutes(app: FastifyInstance) {
-  const enabled = String(process.env.ENABLE_PROTOTYPE ?? "").toLowerCase() === "true";
-  if (!enabled) return;
+  // Guard everything in this plugin
+  app.addHook("preHandler", prototypeAdminGuard());
 
-  // Guard demo endpoints as well (belt-and-braces)
-  app.addHook("preHandler", prototypeAdminGuard({ requireHeader: "x-prototype-admin" }));
-
-  app.post("/demo/banking/generate", async (req) => {
-    const parsed = bankSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return { ok: false, error: "invalid_body", details: parsed.error.flatten() };
-    }
-
-    const { daysBack, intensity } = parsed.data;
-
-    // Phase 1: stub response only (Phase 2 will add real state + event stream)
+  // One route only - do not duplicate if other modules add /demo
+  app.get("/demo", async () => {
     return {
       ok: true,
-      generated: daysBack,
-      intensity,
-      note: "Prototype demo bank feed generated (stub)",
+      message: "Demo routes are enabled.",
     };
   });
 
-  // Simple state endpoint for wiring tests
-  app.get("/demo/state", async () => {
+  app.post("/demo/banking/generate", async (request) => {
+    // Keep this minimal: you can replace with your full generator logic.
+    const body = (request.body ?? {}) as any;
+    const daysBack = Number(body.daysBack ?? 7);
+    const intensity = String(body.intensity ?? "low");
+
     return {
       ok: true,
-      state: {
-        org: "demo_org_001",
-        obligations: [],
-        settings: {},
+      generated: {
+        daysBack,
+        intensity,
       },
     };
   });
+
+  app.post("/demo/seed", async (request) => {
+    const body = (request.body ?? {}) as any;
+    return {
+      ok: true,
+      seeded: {
+        orgId: String(body.orgId ?? ""),
+        caseId: String(body.caseId ?? ""),
+        seed: String(body.seed ?? ""),
+      },
+    };
+  });
+
+  app.get("/demo/state", async (request) => {
+    const q = (request.query ?? {}) as any;
+    const orgId = String(q.orgId ?? "");
+    return { ok: true, state: { orgId } };
+  });
+
+  app.post("/demo/sim/start", async (request) => {
+    const body = (request.body ?? {}) as any;
+    return { ok: true, sim: { orgId: String(body.orgId ?? ""), status: "started" } };
+  });
+
+  app.post("/demo/sim/stop", async (request) => {
+    const body = (request.body ?? {}) as any;
+    return { ok: true, sim: { orgId: String(body.orgId ?? ""), status: "stopped" } };
+  });
+
+  app.get("/demo/events", async (request) => {
+    const q = (request.query ?? {}) as any;
+    return {
+      ok: true,
+      orgId: String(q.orgId ?? ""),
+      afterTs: Number(q.afterTs ?? 0),
+      events: [],
+    };
+  });
 }
+
+export default registerDemoRoutes;

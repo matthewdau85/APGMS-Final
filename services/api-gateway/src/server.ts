@@ -5,6 +5,7 @@ import { buildFastifyApp } from "./app.js";
 import authRoutes from "./routes/auth.js";
 import prototypeRoutes from "./routes/prototype.js";
 import { registerAuth } from "./plugins/auth.js";
+import { registerDemoRoutes } from "./routes/demo.js";
 
 export function buildServer() {
   const app = buildFastifyApp({ logger: true });
@@ -17,8 +18,12 @@ export function buildServer() {
   registerAuth(app);
   app.register(authRoutes);
 
-  // Prototype surface is mounted under /prototype
+  // Prototype surface (mounted under /prototype)
   app.register(prototypeRoutes, { prefix: "/prototype" });
+
+  // Demo surface (mounted at /demo/*)
+  // Internally guarded by prototypeAdminGuard which enforces ENABLE_PROTOTYPE + header.
+  registerDemoRoutes(app);
 
   return app;
 }
