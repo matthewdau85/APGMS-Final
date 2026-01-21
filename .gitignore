@@ -78,3 +78,6 @@ scripts/readiness/README-RUN-COMMANDS.txt
 scripts/readiness/run-db-ready.sh
 
 incidents/
+
+# Local run logs
+setup-run.log
