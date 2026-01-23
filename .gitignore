@@ -81,3 +81,6 @@ incidents/
 
 # Local run logs
 setup-run.log
+
+src/**/*.d.ts
+

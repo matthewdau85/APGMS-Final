@@ -1,109 +1,86 @@
-// packages/domain-policy/src/au-tax/gst-utils.ts
-//
-// AU GST helpers.
-//
-// Notes on intent and limits:
-// - This module computes GST on a list of lines using a category->classification map.
-// - Only "taxable" lines contribute GST; "gst_free" and "input_taxed" contribute 0.
-// - This is not a full GST determination engine (it does not model mixed supplies,
-//   margin scheme, imports, financial acquisitions threshold, adjustments by label, etc.).
+export type GstLine = {
+  amountCents?: number;
+  amount?: number;
+  category?: string;
+  taxCategory?: string;
+  taxCode?: string;
+  classification?: string;
+};
 
-import type { GstConfig } from "./types.js";
-
-export const GstClassification = {
-  TAXABLE: "taxable",
-  GST_FREE: "gst_free",
-  INPUT_TAXED: "input_taxed",
-} as const;
-
-export type GstClassificationType =
-  (typeof GstClassification)[keyof typeof GstClassification];
-
-export interface GstLineOverrides {
-  classification?: GstClassificationType;
+function asInt(n: unknown, fallback: number): number {
+  const x = Number(n);
+  return Number.isFinite(x) ? x : fallback;
 }
 
-export interface GstLine {
-  category: string;
-  amountCents: number;
-  description?: string;
-  overrides?: GstLineOverrides;
+function norm(s: unknown): string {
+  return String(s ?? "").trim().toLowerCase();
 }
 
-export interface GstComputationDetail {
-  gstCents: number;
-  taxableBaseCents: number;
-  gstFreeBaseCents: number;
-  inputTaxedBaseCents: number;
-  unmappedCategories: string[];
+export function getLineAmountCents(line: GstLine): number {
+  return asInt(line.amountCents ?? line.amount ?? 0, 0);
 }
 
-function normalizeClassification(value: unknown): GstClassificationType | null {
-  if (value === GstClassification.TAXABLE) return GstClassification.TAXABLE;
-  if (value === GstClassification.GST_FREE) return GstClassification.GST_FREE;
-  if (value === GstClassification.INPUT_TAXED) return GstClassification.INPUT_TAXED;
-  return null;
+/**
+ * Classification resolution order:
+ * 1) explicit line.classification (if present)
+ * 2) config.classificationMap[line.category]
+ * 3) fall back to line.taxCategory/taxCode/category as raw string
+ */
+export function getLineClassification(
+  line: GstLine,
+  config?: { classificationMap?: Record<string, string> } | null
+): string {
+  const explicit = norm(line.classification);
+  if (explicit) return explicit;
+
+  const key = String(line.category ?? "");
+  const mapped = config?.classificationMap ? config.classificationMap[key] : undefined;
+  const mappedNorm = norm(mapped);
+  if (mappedNorm) return mappedNorm;
+
+  const fallback = norm(line.taxCategory ?? line.taxCode ?? line.category ?? "taxable");
+  return fallback;
 }
 
-function resolveClassification(line: GstLine, config: GstConfig): GstClassificationType {
-  const override = normalizeClassification(line.overrides?.classification);
-  if (override) return override;
+export function isTaxableClassification(classification: string): boolean {
+  const c = norm(classification);
 
-  const rawMap = (config as any).classificationMap as Record<string, unknown> | undefined;
-  const mapped = rawMap ? normalizeClassification(rawMap[line.category]) : null;
-  if (mapped) return mapped;
+  // Accept both underscore and hyphen conventions and common synonyms.
+  if (c === "gst_free" || c === "gst-free" || c === "gstfree") return false;
+  if (c === "input_taxed" || c === "input-taxed" || c === "inputtaxed") return false;
+  if (c === "exempt") return false;
 
-  // Default to taxable if the category is unknown. In an ATO-grade implementation,
-  // you should normally *reject* unmapped categories at the edge and force mapping.
-  return GstClassification.TAXABLE;
+  // Default: taxable
+  return true;
 }
 
-function computeLineGstCents(amountCents: number, rateMilli: number): number {
-  // rateMilli: 100 = 10% (0.1). We keep integer arithmetic and round to nearest cent.
-  // Example: 999 cents at 10% => 99.9 => 100 cents.
-  return Math.round((amountCents * rateMilli) / 1000);
+export function calcGstForCents(amountCents: number, rateMilli: number): number {
+  const amt = asInt(amountCents, 0);
+  const rate = asInt(rateMilli, 0);
+  return Math.round((amt * rate) / 1000);
 }
 
-export function computeGstOnLines(
-  lines: ReadonlyArray<GstLine>,
-  config: GstConfig,
-  opts?: { detail?: boolean; includeInputTaxed?: boolean },
-): number | GstComputationDetail {
-  const rateMilli = Number((config as any).rateMilli ?? 100);
+export function calcGstForLine(
+  line: GstLine,
+  rateMilli: number,
+  config?: { classificationMap?: Record<string, string> } | null
+): number {
+  const amt = getLineAmountCents(line);
+  if (amt === 0) return 0;
 
-  let gstCents = 0;
-  let taxableBaseCents = 0;
-  let gstFreeBaseCents = 0;
-  let inputTaxedBaseCents = 0;
+  const cls = getLineClassification(line, config);
+  if (!isTaxableClassification(cls)) return 0;
 
-  const unmapped = new Set<string>();
-  const rawMap = (config as any).classificationMap as Record<string, unknown> | undefined;
+  return calcGstForCents(amt, rateMilli);
+}
 
-  for (const line of lines ?? []) {
-    const cls = resolveClassification(line, config);
-
-    // Track unmapped categories for observability (even though we default to taxable).
-    if (!line.overrides?.classification && rawMap && rawMap[line.category] == null) {
-      unmapped.add(line.category);
-    }
-
-    if (cls === GstClassification.TAXABLE) {
-      taxableBaseCents += line.amountCents;
-      gstCents += computeLineGstCents(line.amountCents, rateMilli);
-    } else if (cls === GstClassification.GST_FREE) {
-      gstFreeBaseCents += line.amountCents;
-    } else if (cls === GstClassification.INPUT_TAXED) {
-      inputTaxedBaseCents += line.amountCents;
-    }
-  }
-
-  if (!opts?.detail) return gstCents;
-
-  return {
-    gstCents,
-    taxableBaseCents,
-    gstFreeBaseCents,
-    inputTaxedBaseCents,
-    unmappedCategories: Array.from(unmapped).sort(),
-  };
+export function sumGstForLines(
+  lines: GstLine[] | undefined,
+  rateMilli: number,
+  config?: { classificationMap?: Record<string, string> } | null
+): number {
+  const arr = Array.isArray(lines) ? lines : [];
+  let total = 0;
+  for (const line of arr) total += calcGstForLine(line, rateMilli, config);
+  return total;
 }

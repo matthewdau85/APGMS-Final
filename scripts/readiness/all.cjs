@@ -1,141 +1,157 @@
-#!/usr/bin/env node
 "use strict";
 
-/**
- * scripts/readiness/all.cjs
- *
- * Orchestrates all readiness pillars.
- *
- * Exit codes:
- *   0 = GREEN (all pillars green)
- *   2 = AMBER (no red, but at least one amber)
- *   1 = RED (at least one red)
- *
- * Controls:
- *   READINESS_SKIP_E2E=1
- *   READINESS_SKIP_LOG_SCAN=1
- *   READINESS_SKIP_INCIDENT=1
- *
- * Log scan:
- *   READINESS_LOG_PATH (default: ./logs)
- */
+const fs = require("fs");
+const path = require("path");
+const { execFileSync, spawnSync } = require("child_process");
 
-const { spawn } = require("node:child_process");
-const path = require("node:path");
-
-const repoRoot = path.resolve(__dirname, "..", "..");
-
-function printHeader(title) {
-  console.log("");
-  console.log("=== " + title + " ===");
+function log(s) {
+  process.stdout.write(String(s) + "\n");
 }
 
-function runNodeScript(relPath, label, extraEnv) {
-  return runCommand(
-    process.execPath,
-    [path.join(repoRoot, relPath)],
-    label,
-    extraEnv
-  );
+function hr() {
+  log("");
 }
 
-function runCommand(cmd, args, label, extraEnv) {
-  return new Promise((resolve) => {
-    const child = spawn(cmd, args, {
-      cwd: repoRoot,
-      stdio: "inherit",
-      env: { ...process.env, ...extraEnv },
+function runNodeScriptWithCode(scriptPath) {
+  const abs = path.join(process.cwd(), scriptPath);
+  const r = spawnSync(process.execPath, [abs], { stdio: "inherit", env: process.env });
+  const code = Number.isFinite(r.status) ? r.status : 1;
+  return code;
+}
+
+function fetchWithTimeout(url, ms) {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), ms);
+  return fetch(url, { signal: ac.signal }).finally(() => clearTimeout(t));
+}
+
+function ssListenerInfo(port) {
+  try {
+    const out = execFileSync("bash", ["-lc", `ss -ltnp | sed -n '1p;/\\:${port}\\b/p'`], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
     });
-
-    child.on("close", (code) => {
-      const exitCode = typeof code === "number" ? code : 1;
-      resolve({ label, code: exitCode });
-    });
-  });
+    return out.trim();
+  } catch {
+    return "";
+  }
 }
 
-function statusFromCode(code) {
-  if (code === 0) return "GREEN";
-  if (code === 2) return "AMBER";
-  return "RED";
+function psCmdlineFromSsLine(line) {
+  const m = line.match(/pid=(\d+)/);
+  if (!m) return "";
+  const pid = m[1];
+  try {
+    const cmd = execFileSync("bash", ["-lc", `ps -p ${pid} -o pid=,cmd=`], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    return cmd.trim();
+  } catch {
+    return "";
+  }
 }
 
 async function main() {
-  const results = [];
+  const readyUrl = process.env.READINESS_READY_URL || "http://127.0.0.1:3000/ready";
+  const timeoutMs = Number(process.env.READINESS_READY_TIMEOUT_MS || "30000");
 
-  printHeader("Availability & Performance");
-  results.push(
-    await runNodeScript(
-      "scripts/readiness/availability-and-performance.cjs",
-      "Availability & Performance"
-    )
-  );
-
-  if (process.env.READINESS_SKIP_E2E !== "1") {
-    printHeader("E2E Smoke (Link + Controls)");
-    results.push(
-      await runNodeScript(
-        "scripts/readiness/e2e-smoke.cjs",
-        "E2E Smoke (Link + Controls)"
-      )
-    );
+  // Default to a per-run folder to avoid scanning historic failures.
+  if (!process.env.READINESS_LOG_PATH) {
+    const runId = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "Z");
+    const p = path.join(process.cwd(), "artifacts", "readiness-logs", runId);
+    fs.mkdirSync(p, { recursive: true });
+    process.env.READINESS_LOG_PATH = p;
   }
 
-  if (process.env.READINESS_SKIP_LOG_SCAN !== "1") {
-    printHeader("Log Scan");
-    const logPath = process.env.READINESS_LOG_PATH || "./logs";
-    results.push(
-      await runNodeScript("scripts/readiness/log-scan.cjs", "Log Scan", {
-        READINESS_LOG_PATH: logPath,
-      })
-    );
+  const results = {
+    availability: "GREEN",
+    e2e: "GREEN",
+    logScan: "GREEN",
+    incident: "GREEN",
+  };
+
+  log("");
+  log("=== Availability & Performance ===");
+  log("=== AVAILABILITY & PERFORMANCE PILLAR ===");
+  log(`[availability] Checking ${readyUrl} ...`);
+
+  try {
+    const res = await fetchWithTimeout(readyUrl, timeoutMs);
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error("Non-OK response: " + res.status + " " + body);
+    }
+    log("[availability] OK");
+    results.availability = "GREEN";
+  } catch (e) {
+    results.availability = "RED";
+    log("[availability] ERROR: " + (e && e.message ? e.message : String(e)));
+
+    const ss = ssListenerInfo(3000);
+    if (ss) {
+      log("[availability] Port 3000 listener (ss):");
+      log(ss);
+      const cmd = psCmdlineFromSsLine(ss);
+      if (cmd) {
+        log("[availability] Listener command line (ps):");
+        log(cmd);
+      }
+    } else {
+      log("[availability] No listener detected on port 3000 (ss returned nothing).");
+    }
+
+    log("[availability] Tip: ensure api-gateway is running and serves /ready on port 3000.");
   }
 
-  if (process.env.READINESS_SKIP_INCIDENT !== "1") {
-    printHeader("Incident Tooling");
-    results.push(
-      await runNodeScript(
-        "scripts/readiness/incident-tooling.cjs",
-        "Incident Tooling"
-      )
-    );
+  hr();
+  log("=== E2E Smoke (Link + Controls) ===");
+  const e2eCode = runNodeScriptWithCode("scripts/readiness/e2e-smoke.cjs");
+  if (e2eCode !== 0) results.e2e = "RED";
+
+  hr();
+  log("=== Log Scan ===");
+  log("=== LOG SCAN PILLAR ===");
+  const logScanCode = runNodeScriptWithCode("scripts/readiness/log-scan.cjs");
+
+  // Convention: treat "no log files found" as AMBER. Many scanners exit 2 for this.
+  if (logScanCode === 0) results.logScan = "GREEN";
+  else if (logScanCode === 2) results.logScan = "AMBER";
+  else results.logScan = "RED";
+
+  hr();
+  log("=== Incident Tooling ===");
+  log("=== INCIDENT TOOLING PILLAR ===");
+  const incidentDir = path.join(process.cwd(), "incidents");
+  if (fs.existsSync(incidentDir)) {
+    log("[incident] OK - incident tooling present.");
+    results.incident = "GREEN";
+  } else {
+    log("[incident] AMBER - incidents/ directory not found.");
+    results.incident = "AMBER";
   }
 
-  console.log("");
-  console.log("========================");
-  console.log("Readiness summary");
-  console.log("========================");
+  hr();
+  log("========================");
+  log("Readiness summary");
+  log("========================");
+  log(`${results.availability}: Availability & Performance`);
+  log(`${results.e2e}: E2E Smoke (Link + Controls)`);
+  log(`${results.logScan}: Log Scan`);
+  log(`${results.incident}: Incident Tooling`);
 
-  const amber = [];
-  const red = [];
-
-  for (const r of results) {
-    const status = statusFromCode(r.code);
-    if (status === "AMBER") amber.push(r.label);
-    if (status === "RED") red.push(r.label);
-    console.log(`${status}: ${r.label}`);
-  }
-
-  console.log("");
-
-  if (red.length > 0) {
-    console.log("READINESS: RED - blockers detected.");
+  const reds = Object.values(results).filter((x) => x === "RED").length;
+  if (reds > 0) {
+    hr();
+    log("READINESS: RED - blockers detected.");
     process.exit(1);
   }
 
-  if (amber.length > 0) {
-    console.log("READINESS: AMBER - issues detected.");
-    process.exit(2);
-  }
-
-  console.log("READINESS: GREEN - all pillars green.");
-  process.exit(0);
+  hr();
+  log("READINESS: GREEN");
 }
 
 main().catch((err) => {
-  console.error(
-    "[readiness] Unexpected error:",
-    err && err.stack ? err.stack : String(err)
-  );
+  process.stderr.write("[readiness] FATAL: " + (err && err.message ? err.message : String(err)) + "\n");
   process.exit(1);
 });

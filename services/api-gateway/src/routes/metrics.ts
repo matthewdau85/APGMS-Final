@@ -1,39 +1,39 @@
-import type { FastifyInstance } from "fastify";
-import * as promClient from "prom-client";
-import { metrics } from "../observability/metrics.js";
+// services/api-gateway/src/routes/metrics.ts
+import type { FastifyPluginAsync } from "fastify";
+import client from "prom-client";
 
-function ensureDbQueryMetric() {
-  const reg: any = (metrics as any)?.registry ?? promClient.register;
-  const existing =
-    typeof reg?.getSingleMetric === "function"
-      ? reg.getSingleMetric("apgms_db_query_duration_seconds")
-      : promClient.register.getSingleMetric("apgms_db_query_duration_seconds");
+let metricsInitialized = false;
 
-  if (existing) return;
+function ensureMetricsInitialized(): void {
+  if (metricsInitialized) return;
+  metricsInitialized = true;
 
-  const opts: any = {
-    name: "apgms_db_query_duration_seconds",
-    help: "DB query duration in seconds",
-    labelNames: ["model", "op"],
-  };
-
-  // If metrics uses a custom registry, register there explicitly.
-  if (reg && reg !== promClient.register) {
-    opts.registers = [reg];
-  }
-
-  // eslint-disable-next-line no-new
-  new promClient.Histogram(opts);
-}
-
-export default async function registerMetricsRoutes(app: FastifyInstance) {
-  app.get("/metrics", async (_req, reply) => {
-    ensureDbQueryMetric();
-
-    const reg: any = (metrics as any)?.registry ?? promClient.register;
-    const body = typeof reg?.metrics === "function" ? await reg.metrics() : await promClient.register.metrics();
-
-    reply.header("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
-    return body;
+  // Default process metrics (cpu/mem/eventloop/etc)
+  client.collectDefaultMetrics({
+    // Use the default registry; avoid custom prefixes unless needed.
   });
 }
+
+export const registerMetricsRoutes: FastifyPluginAsync = async (app) => {
+  ensureMetricsInitialized();
+
+  app.get(
+    "/metrics",
+    {
+      config: {
+        // keep explicit; some codebases use this for gating/ACL elsewhere
+        isPublic: true,
+      },
+    },
+    async (_req, reply) => {
+      try {
+        const body = await client.register.metrics();
+        reply.header("content-type", client.register.contentType);
+        return reply.status(200).send(body);
+      } catch (err) {
+        app.log.error({ err }, "metrics: failed to render");
+        return reply.status(500).send({ error: "metrics_failed" });
+      }
+    }
+  );
+};

@@ -1,61 +1,13 @@
-﻿// services/api-gateway/src/prisma-augment.d.ts
+// services/api-gateway/src/prisma-augment.d.ts
+import "@prisma/client";
 
-// Ensure the module exists so we can augment it
-import '@prisma/client';
-
-declare module '@prisma/client' {
-  // --- Model types that old code still refers to --------------------------
-  // These are used only in types, so `any` is fine for now.
-  // Add more here if TS complains about missing exports later.
-
-  // e.g. src/lib/mfa-store.ts used to import this
-  type MfaCredential = any;
-
-  // e.g. bank-lines, demo, regulator routes used to import this
-  type BankLine = any;
-
-  // Monitoring / evidence used in regulator routes
-  type MonitoringSnapshot = any;
-  type EvidenceArtifact = any;
-
-  // --- PrismaClient delegate augmentation ---------------------------------
-  // The real PrismaClient is a generic class; we declare a matching generic
-  // interface so TypeScript will merge these members into it.
-
-  interface PrismaClient<T = any, U = any, V = any> {
-    // From src/auth.ts, src/routes/auth.ts
-    user: any;
-
-    // From src/lib/audit.ts
-    auditLog: any;
-
-    // From src/lib/idempotency.ts
-    idempotencyEntry: any;
-
-    // From src/lib/mfa-store.ts and src/routes/auth.ts
-    mfaCredential: any;
-
-    // From src/lib/regulator-session.ts
-    regulatorSession: any;
-
-    // From bank-lines/regulator/compliance-proxy/demo routes
-    bankLine: any;
-
-    // From regulator/compliance-proxy
-    basCycle: any;
-    paymentPlanRequest: any;
-    alert: any;
-
-    // From regulator
-    monitoringSnapshot: any;
+// Compile-time augmentation only.
+// If your runtime PrismaClient truly does not have this delegate,
+// keep the code paths that use it gated/optional (as your routes already may).
+declare module "@prisma/client" {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  interface PrismaClient {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     evidenceArtifact: any;
-
-    // From compliance-proxy/regulator
-    org: any;
-
-    // From demo.ts
-    employee: any;
-    payRun: any;
-    payslip: any;
   }
 }
