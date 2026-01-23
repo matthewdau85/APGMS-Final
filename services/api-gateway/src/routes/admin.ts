@@ -1,7 +1,6 @@
 // services/api-gateway/src/routes/admin.ts
 import type { FastifyPluginAsync } from "fastify";
-import type { Config } from "../config.js";
-
+import type { AppConfig as Config } from "../config.js";
 function unauthorized(reply: any, message: string) {
   reply.code(401).send({ ok: false, error: { code: "UNAUTHORIZED", message } });
 }

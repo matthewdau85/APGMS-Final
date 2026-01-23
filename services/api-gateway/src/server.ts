@@ -11,7 +11,7 @@ export async function startServer(): Promise<void> {
   const app = await buildServer();
 
   const host = "0.0.0.0";
-  const port = config.port;
+  const port = (config as unknown as (typeof config & { port: number })).port;
 
   try {
     await app.listen({ host, port });
