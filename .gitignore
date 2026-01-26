@@ -84,3 +84,17 @@ setup-run.log
 
 src/**/*.d.ts
 
+*.bak-*
+
+playwright-output/, playwright-report/, test-results/
+
+packages/regwatcher/data/**/*.heartbeat.json
+
+packages/regwatcher/data/**/*.diff
+
+packages/regwatcher/data/**/*.html
+
+packages/regwatcher/data/**/*.json
+
+packages/regwatcher/data/**/*.txt
+
