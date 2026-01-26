@@ -1,19 +1,28 @@
-export type Target = { id: string; name: string; url: string };
+// packages/regwatcher/src/targets.ts
+export type RegwatcherTarget = {
+  id: string;
+  url: string;
+  kind: "html";
+  enabled: boolean;
+};
 
-export const TARGETS: Target[] = [
+export const TARGETS: RegwatcherTarget[] = [
   {
     id: "ato-whats-new",
-    name: "ATO - What's new",
-    url: "https://www.ato.gov.au/General/Whats-new"
+    url: "https://www.ato.gov.au/whats-new",
+    kind: "html",
+    enabled: true,
   },
   {
     id: "ato-tax-professionals-newsroom",
-    name: "ATO - Tax professionals newsroom",
-    url: "https://www.ato.gov.au/Tax-professionals/Newsroom"
+    url: "https://www.ato.gov.au/Tax-professionals/Newsroom",
+    kind: "html",
+    enabled: true,
   },
   {
     id: "ato-paygw-overview",
-    name: "ATO - PAYG withholding overview",
-    url: "https://www.ato.gov.au/business/payg-withholding"
-  }
+    url: "https://www.ato.gov.au/business/payg-withholding",
+    kind: "html",
+    enabled: true,
+  },
 ];

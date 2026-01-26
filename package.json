@@ -25,7 +25,7 @@
     "e2e:ui": "pnpm --filter apgms-webapp test:e2e --headed --output=playwright-report",
     "e2e:report": "cd webapp && pnpm exec playwright show-report playwright-report",
     "k6:smoke": "bash ./scripts/readiness/run-k6-smoke.sh",
-    "regwatcher:once": "node packages/regwatcher/bin/run.mjs --json",
+    "regwatcher:once": "pnpm -s --filter @apgms/regwatcher run once",
     "regwatcher:email": "node packages/regwatcher/bin/run.mjs --email --always --json"
   },
   "devDependencies": {

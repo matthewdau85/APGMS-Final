@@ -1,30 +1,40 @@
 #!/usr/bin/env node
-import { config as dotenv } from 'dotenv';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-dotenv({ path: path.join(process.cwd(), '.env.local') });
+import fs from "node:fs";
+import path from "node:path";
+import process from "node:process";
+import { fileURLToPath } from "node:url";
 
-import { runOnce } from '../index.mjs';
-import { sendEmail } from '../mailer.mjs';
+function loadEnvFile(p) {
+  if (!fs.existsSync(p)) return;
+  const raw = fs.readFileSync(p, "utf8");
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq === -1) continue;
+    const k = trimmed.slice(0, eq).trim();
+    let v = trimmed.slice(eq + 1).trim();
 
-const args = new Set(process.argv.slice(2));
-const wantEmail = args.has('--email');
-const always = args.has('--always');
-const json = args.has('--json');
+    // strip optional quotes
+    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+      v = v.slice(1, -1);
+    }
 
-const results = await runOnce({ json });
-
-const changed = results.filter(r => r.changed);
-if (wantEmail && (always || changed.length)) {
-  const lines = results.map(r => {
-    if (r.error) return `✗ ${r.name}  ERROR: ${r.error}`;
-    return `${r.changed ? '•' : '–'} ${r.name}  ${r.changed ? 'CHANGED' : 'no change'}  ${r.url}`;
-  });
-  await sendEmail({
-    subject: `[RegWatcher] ${changed.length} changes`,
-    text: lines.join('\n')
-  });
-  console.log(`[email] sent (${changed.length} changes)`);
-} else {
-  console.log(`[email] skipped (changes: ${changed.length})`);
+    // only set if not already set
+    if (process.env[k] === undefined) process.env[k] = v;
+  }
 }
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load .env.local from repo root (cwd when you run pnpm scripts)
+loadEnvFile(path.join(process.cwd(), ".env.local"));
+
+// Then run the actual regwatcher "once" script (tsx)
+import("../dist/run-once.js").catch(async () => {
+  // Fallback if you haven't built dist: run TS entry via tsx
+  const { execa } = await import("execa");
+  const entry = path.join(process.cwd(), "packages", "regwatcher", "src", "run-once.ts");
+  await execa("pnpm", ["--filter", "@apgms/regwatcher", "run", "once"], { stdio: "inherit" });
+});
