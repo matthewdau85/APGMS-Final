@@ -1,23 +1,18 @@
-// services/api-gateway/src/server.ts
-import type { FastifyInstance } from "fastify";
-import { buildFastifyApp } from "./app.js";
-import { config } from "./config.js";
+import { buildFastifyApp } from './app.js';
 
-export async function buildServer(): Promise<FastifyInstance> {
-  return buildFastifyApp();
-}
+export async function startServer() {
+  const app = buildFastifyApp();
 
-export async function startServer(): Promise<void> {
-  const app = await buildServer();
+  const gitSha = process.env.GIT_SHA ?? 'dev';
+  const buildTs = process.env.BUILD_TS ?? new Date().toISOString();
+  const nodeVersion = process.version;
+  const env = process.env.NODE_ENV ?? 'development';
 
-  const host = "0.0.0.0";
-  const port = (config as unknown as (typeof config & { port: number })).port;
+  app.log.info({ gitSha, buildTs, node: nodeVersion, env }, 'service identity');
 
-  try {
-    await app.listen({ host, port });
-    app.log.info({ host, port }, "api-gateway listening");
-  } catch (err) {
-    app.log.error({ err }, "api-gateway failed to start");
-    process.exitCode = 1;
-  }
+  const host = process.env.HOST ?? '127.0.0.1';
+  const port = Number(process.env.PORT ?? '3000');
+
+  await app.listen({ host, port });
+  return app;
 }

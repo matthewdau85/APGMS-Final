@@ -1,6 +1,6 @@
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyInstance } from "fastify";
 
-const registerHealthRoutes: FastifyPluginAsync = async (app) => {
+export function registerHealthRoutes(app: FastifyInstance) {
   // Simple liveness probe
   app.get("/health/live", async () => ({ ok: true }));
 
@@ -39,6 +39,4 @@ const registerHealthRoutes: FastifyPluginAsync = async (app) => {
 
     return reply.send(res.payload);
   });
-};
-
-export default registerHealthRoutes;
+}
