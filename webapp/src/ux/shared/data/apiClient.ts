@@ -1,51 +1,71 @@
-type ApiRequestOptions = {
-  method?: "GET" | "POST" | "PUT" | "DELETE";
-  body?: unknown;
-  headers?: Record<string, string>;
-  token?: string | null;
-  orgId?: string;
+import { getSession } from "../../auth";
+
+const API_BASE =
+  (import.meta as any).env?.VITE_API_BASE_URL || "http://127.0.0.1:3000";
+
+type ApiError = Error & {
+  status?: number;
+  code?: string;
+  details?: unknown;
 };
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000";
+function joinUrl(base: string, path: string): string {
+  if (!path) return base;
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  if (!path.startsWith("/")) path = "/" + path;
+  return base.replace(/\/+$/, "") + path;
+}
 
-export async function apiRequest<T>(
+function asHeaders(h?: HeadersInit): Headers {
+  return h instanceof Headers ? new Headers(h) : new Headers(h || {});
+}
+
+export async function apiRequest<T = unknown>(
   path: string,
-  opts: ApiRequestOptions = {}
+  opts: RequestInit = {}
 ): Promise<T> {
-  const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
+  const url = joinUrl(API_BASE, path);
 
-  const headers: Record<string, string> = {
-    "content-type": "application/json",
-    ...(opts.headers ?? {}),
+  const headers = asHeaders(opts.headers);
+  headers.set("Accept", headers.get("Accept") || "application/json");
+
+  const session = getSession();
+  if (session?.token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${session.token}`);
+  }
+
+  const init: RequestInit = {
+    ...opts,
+    headers,
+    credentials: opts.credentials ?? "include",
   };
 
-  if (opts.token) {
-    headers.authorization = `Bearer ${opts.token}`;
+  const res = await fetch(url, init);
+
+  if (res.status === 204) return undefined as unknown as T;
+
+  const contentType = res.headers.get("content-type") || "";
+  const isJson = contentType.includes("application/json");
+
+  const payload = isJson
+    ? await res.json().catch(() => null)
+    : await res.text().catch(() => "");
+
+  if (res.ok) return payload as T;
+
+  const err: ApiError = new Error(
+    (payload && typeof payload === "object" && (payload as any).message) ||
+      (typeof payload === "string" && payload) ||
+      `Request failed (${res.status})`
+  );
+
+  err.status = res.status;
+  if (payload && typeof payload === "object") {
+    err.code = (payload as any).code;
+    err.details = (payload as any).details ?? payload;
+  } else {
+    err.details = payload;
   }
 
-  if (opts.orgId) {
-    headers["x-org-id"] = opts.orgId;
-  }
-
-  const res = await fetch(url, {
-    method: opts.method ?? "GET",
-    headers,
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
-  });
-
-  if (!res.ok) {
-    let detail = "";
-    try {
-      detail = await res.text();
-    } catch {
-      // ignore
-    }
-    throw new Error(`API ${res.status} ${res.statusText}${detail ? `: ${detail}` : ""}`);
-  }
-
-  if (res.status === 204) {
-    return undefined as unknown as T;
-  }
-
-  return (await res.json()) as T;
+  throw err;
 }

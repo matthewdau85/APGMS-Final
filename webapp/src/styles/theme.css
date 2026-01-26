@@ -332,3 +332,15 @@
     line-height: 1.5;
   }
 }
+
+/* APGMS_THEME_BASE_RULES */
+/* Ensure the theme variables actually paint the page, not just components. */
+html, body {
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}

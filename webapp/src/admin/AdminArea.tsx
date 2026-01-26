@@ -1,92 +1,70 @@
-import React from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
+import { Routes, Route, Navigate, Link } from "react-router-dom";
+import { useMemo, useState } from "react";
 
-export function AdminArea() {
-  const nav = useNavigate();
-  const { user, isAdmin, logout } = useAuth();
+import { AgentPage } from "./pages/AgentPage";
+import { RegWatcherPage } from "./pages/RegWatcherPage";
 
-  if (!user) {
-    return (
-      <div style={{ maxWidth: 980, margin: "0 auto", padding: 24 }}>
-        <h1 style={{ margin: 0 }}>Admin</h1>
-        <p style={{ opacity: 0.8, marginTop: 8 }}>You must sign in first.</p>
-        <Link to="/login">Go to sign in</Link>
-      </div>
-    );
-  }
+function getAdminTokenFromEnvOrStorage(): string {
+  const fromEnv = (import.meta as any).env?.VITE_ADMIN_TOKEN;
+  if (typeof fromEnv === "string" && fromEnv.trim()) return fromEnv.trim();
+  const fromStorage = localStorage.getItem("apgms_admin_token");
+  return (fromStorage ?? "").trim();
+}
 
-  if (!isAdmin) {
-    return (
-      <div style={{ maxWidth: 980, margin: "0 auto", padding: 24 }}>
-        <h1 style={{ margin: 0 }}>Admin</h1>
-        <p style={{ opacity: 0.8, marginTop: 8 }}>Access denied. This area requires Admin role.</p>
-        <Link to="/">Return to Home</Link>
-      </div>
-    );
-  }
+export const AdminArea = () => {
+  const [token, setToken] = useState<string>(() => getAdminTokenFromEnvOrStorage());
+
+  const nav = useMemo(() => {
+    return [
+      { to: "/admin/agent", label: "Agent" },
+      { to: "/admin/regwatcher", label: "RegWatcher" },
+    ];
+  }, []);
 
   return (
-    <div style={{ maxWidth: 980, margin: "0 auto", padding: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <div>
-          <h1 style={{ margin: 0 }}>Admin</h1>
-          <p style={{ opacity: 0.8, marginTop: 8 }}>
-            Admin-only entry points and demo controls.
-          </p>
-        </div>
+    <div style={{ padding: 16, fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif" }}>
+      <h1 style={{ margin: 0, fontSize: 20 }}>Admin</h1>
 
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ fontSize: 13, opacity: 0.85 }}>
-            Signed in as <strong>{user.name}</strong> ({user.role})
-          </div>
-          <button
-            onClick={() => {
-              logout();
-              nav("/");
+      <div style={{ marginTop: 12, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <label style={{ fontSize: 12, opacity: 0.85 }}>
+          x-admin-token:
+          <input
+            value={token}
+            onChange={(e) => {
+              const v = e.target.value;
+              setToken(v);
+              localStorage.setItem("apgms_admin_token", v);
             }}
-            style={{ padding: "10px 14px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.18)", background: "transparent", cursor: "pointer" }}
-          >
-            Sign out
-          </button>
+            placeholder="dev-admin-token"
+            style={{
+              marginLeft: 8,
+              padding: "8px 10px",
+              width: 320,
+              borderRadius: 8,
+              border: "1px solid rgba(0,0,0,0.2)",
+            }}
+          />
+        </label>
+
+        <div style={{ display: "flex", gap: 10 }}>
+          {nav.map((n) => (
+            <Link key={n.to} to={n.to} style={{ textDecoration: "none", fontSize: 13 }}>
+              {n.label}
+            </Link>
+          ))}
         </div>
       </div>
 
-      <div style={{ marginTop: 18, display: "grid", gap: 12 }}>
-        <div style={{ padding: 16, border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14 }}>
-          <h3 style={{ marginTop: 0 }}>Compliance Console</h3>
-          <p style={{ opacity: 0.85 }}>
-            Admin-only. The console is production-like UX with mocked data, feeds, lodgments, evidence packs, and a demo guide.
-          </p>
-
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <Link
-              to="/proto"
-              style={{
-                padding: "10px 14px",
-                borderRadius: 12,
-                border: "1px solid rgba(255,255,255,0.18)",
-                background: "rgba(255,255,255,0.08)",
-                textDecoration: "none",
-              }}
-            >
-              Open APGMS Console (Demo Mode)
-            </Link>
-            <Link to="/" style={{ alignSelf: "center" }}>
-              Back to Home
-            </Link>
-          </div>
-        </div>
-
-        <div style={{ padding: 16, border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14 }}>
-          <h3 style={{ marginTop: 0 }}>Demo notes</h3>
-          <ul style={{ opacity: 0.85, marginBottom: 0 }}>
-            <li>User login should not see console entry.</li>
-            <li>Direct URL access to /proto is protected by routing guard.</li>
-            <li>Inside the console you can toggle Simulation and Reset demo state.</li>
-          </ul>
-        </div>
+      <div style={{ marginTop: 16 }}>
+        <Routes>
+          <Route path="/" element={<Navigate to="/admin/agent" replace />} />
+          <Route path="/agent" element={<AgentPage adminToken={token} />} />
+          <Route path="/regwatcher" element={<RegWatcherPage adminToken={token} />} />
+          <Route path="*" element={<Navigate to="/admin/agent" replace />} />
+        </Routes>
       </div>
     </div>
   );
-}
+};
+
+export default AdminArea;

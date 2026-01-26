@@ -1,6 +1,9 @@
 // webapp/src/api.ts
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000";
 
+// Admin token for admin-only endpoints (must match server admin auth config)
+const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_TOKEN ?? "";
+
 function authHeaders(token?: string): Record<string, string> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -8,6 +11,12 @@ function authHeaders(token?: string): Record<string, string> {
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
+  return headers;
+}
+
+function adminHeaders(token?: string): Record<string, string> {
+  const headers = authHeaders(token);
+  if (ADMIN_TOKEN) headers["x-admin-token"] = ADMIN_TOKEN;
   return headers;
 }
 
@@ -706,5 +715,83 @@ export async function fetchRegulatorBankSummary(token: string) {
       date: string;
       amount: number;
     }>;
+  }>;
+}
+
+// --------------------
+// Admin-only endpoints
+// --------------------
+
+export type RegWatcherStatus = {
+  ok: boolean;
+  lastRun?: {
+    runId: string;
+    startedAt: string;
+    finishedAt?: string;
+    status: "running" | "success" | "failed";
+    exitCode?: number;
+    logPath?: string;
+  };
+  cacheFile?: string;
+  cachePresent: boolean;
+  cacheBytes?: number;
+  cacheSnippet?: string;
+};
+
+export async function fetchAdminRegWatcherStatus(token: string) {
+  const res = await fetch(`${API_BASE}/admin/regwatcher/status`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error("failed_admin_regwatcher_status");
+  return res.json() as Promise<RegWatcherStatus>;
+}
+
+export async function runAdminRegWatcher(token: string) {
+  const res = await fetch(`${API_BASE}/admin/regwatcher/run`, {
+    method: "POST",
+    headers: adminHeaders(token),
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) throw new Error("failed_admin_regwatcher_run");
+  return res.json() as Promise<{
+    ok: boolean;
+    runId: string;
+    startedAt: string;
+    finishedAt: string;
+    status: "success" | "failed";
+    exitCode: number;
+    logPath: string;
+  }>;
+}
+
+export type AgentRunRecord = {
+  id: string;
+  job: "agent-suite" | "smoke" | "demo-stress";
+  startedAt: string;
+  finishedAt?: string;
+  status: "running" | "success" | "failed";
+  exitCode?: number;
+  logPath: string;
+};
+
+export async function fetchAdminAgentRuns(token: string) {
+  const res = await fetch(`${API_BASE}/admin/agent/runs`, {
+    headers: adminHeaders(token),
+  });
+  if (!res.ok) throw new Error("failed_admin_agent_runs");
+  return res.json() as Promise<{ ok: boolean; runs: AgentRunRecord[] }>;
+}
+
+export async function runAdminAgent(token: string, job: AgentRunRecord["job"]) {
+  const res = await fetch(`${API_BASE}/admin/agent/run`, {
+    method: "POST",
+    headers: adminHeaders(token),
+    body: JSON.stringify({ job }),
+  });
+  if (!res.ok) throw new Error("failed_admin_agent_run");
+  return res.json() as Promise<{
+    ok: boolean;
+    run: AgentRunRecord;
+    position: string;
   }>;
 }
