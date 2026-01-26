@@ -1,0 +1,75 @@
+name: Demo Video (Playwright)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  demo-video:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm --dir webapp exec playwright install --with-deps chromium
+
+      - name: Run demo video test
+        env:
+          CI: "true"
+          PLAYWRIGHT_BASE_URL: "http://127.0.0.1:5173"
+          VITE_ADMIN_TOKEN: "demo-admin-token"
+        run: pnpm --dir webapp exec playwright test --project=demo-video
+
+      - name: Install ffmpeg (for mp4 conversion)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Convert recorded video to MP4
+        run: |
+          set -e
+          mkdir -p demo-video-out
+          VID="$(find webapp/test-results -type f -name '*.webm' | head -n 1 || true)"
+          if [ -z "$VID" ]; then
+            echo "No .webm video found under webapp/test-results"
+            find webapp/test-results -maxdepth 4 -type f | sed -n '1,200p' || true
+            exit 1
+          fi
+          echo "Found video: $VID"
+          ffmpeg -y -i "$VID" -movflags +faststart demo-video-out/apgms-demo.mp4
+          ls -la demo-video-out
+
+      - name: Upload MP4 demo video
+        uses: actions/upload-artifact@v4
+        with:
+          name: apgms-demo-video-mp4
+          path: demo-video-out/apgms-demo.mp4
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: webapp/playwright-report
+
+      - name: Upload raw test artifacts (video/trace)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: webapp/test-results

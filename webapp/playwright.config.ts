@@ -1,32 +1,67 @@
-import { defineConfig, devices } from '@playwright/test';
+// webapp/playwright.config.ts
+import { defineConfig, devices } from "@playwright/test";
 
-const PORT = Number(process.env.WEBAPP_PORT || 5173);
+const WEBAPP_PORT = Number(process.env.WEBAPP_PORT ?? "5173");
+const API_PORT = Number(process.env.API_PORT ?? "3000");
 
-// Prefer E2E_BASE_URL first (explicit), then WEBAPP_BASE_URL, else stable default.
-const BASE_URL =
-  process.env.E2E_BASE_URL ||
-  process.env.WEBAPP_BASE_URL ||
-  `http://127.0.0.1:${PORT}`;
-
-const isCI = !!process.env.CI;
+const baseURL = process.env.PLAYWRIGHT_BASE_URL || `http://127.0.0.1:${WEBAPP_PORT}`;
+const adminToken = process.env.VITE_ADMIN_TOKEN || "demo-admin-token";
 
 export default defineConfig({
-  testDir: './tests',
+  testDir: "./tests",
+  timeout: 60_000,
+  expect: { timeout: 10_000 },
+  outputDir: "test-results",
+  reporter: [["list"], ["html", { open: "never" }]],
+
+  webServer: [
+    {
+      command: `pnpm --dir ../services/api-gateway dev`,
+      url: `http://127.0.0.1:${API_PORT}/health`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+      env: {
+        PORT: String(API_PORT),
+        HOST: "127.0.0.1",
+        NODE_ENV: process.env.NODE_ENV || "test",
+        ENABLE_PROTOTYPE: "true",
+        ENABLE_DEV_AUTH: "true",
+        ADMIN_TOKEN: adminToken,
+      },
+    },
+    {
+      command: `pnpm dev -- --host 127.0.0.1 --port ${WEBAPP_PORT}`,
+      url: baseURL,
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+      env: {
+        VITE_API_BASE_URL: `http://127.0.0.1:${API_PORT}`,
+        VITE_ADMIN_TOKEN: adminToken,
+      },
+    },
+  ],
+
   use: {
-    baseURL: BASE_URL,
-    // Keep traces lightweight by default; enable full trace by setting PW_TRACE=1.
-    trace: process.env.PW_TRACE ? 'on' : 'on-first-retry',
+    baseURL,
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
   },
-  webServer: {
-    // CRITICAL: strictPort prevents Vite silently switching ports (which makes Playwright hang).
-    command: isCI
-      ? `pnpm preview -- --host 127.0.0.1 --port ${PORT} --strictPort`
-      : `pnpm dev -- --host 127.0.0.1 --port ${PORT} --strictPort`,
-    url: BASE_URL,
-    reuseExistingServer: !isCI,
-    timeout: 120000,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+
+  projects: [
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "demo-video",
+      testMatch: /demo-video\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1280, height: 720 },
+        video: "on",
+        trace: "on",
+        screenshot: "on",
+      },
+    },
+  ],
 });

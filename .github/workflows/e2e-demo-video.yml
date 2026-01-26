@@ -1,0 +1,66 @@
+name: e2e-demo-video
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  demo-video:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      CI: "1"
+      NODE_ENV: "test"
+
+      # Backend admin token (server)
+      INTERNAL_ADMIN_TOKEN: ${{ secrets.INTERNAL_ADMIN_TOKEN }}
+
+      # Frontend admin token (vite)
+      VITE_ADMIN_TOKEN: ${{ secrets.INTERNAL_ADMIN_TOKEN }}
+
+      # Local base URL for Playwright webServer
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:5173
+
+      # Ensure webapp calls api-gateway
+      VITE_API_BASE_URL: http://127.0.0.1:3000
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install pnpm
+        run: npm i -g pnpm@9.15.9
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps
+
+      - name: Start api-gateway
+        run: |
+          pnpm -C services/api-gateway install --frozen-lockfile || true
+          pnpm -C services/api-gateway dev --host 127.0.0.1 --port 3000 > api-gateway.log 2>&1 &
+          echo $! > api-gateway.pid
+          sleep 2
+
+      - name: Run Playwright demo-video
+        run: pnpm exec playwright test --project=demo-video
+
+      - name: Upload Playwright output (video, trace, report)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-demo-video-artifacts
+          path: |
+            playwright-output/**
+            playwright-report/**
+            api-gateway.log
