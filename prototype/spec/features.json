@@ -1,0 +1,23 @@
+{
+  "features": [
+    {
+      "id": "health.ready",
+      "title": "Readiness endpoint",
+      "expected": {
+        "backend_routes": ["/ready", "/health/ready"],
+        "ui_surfaces": [],
+        "smoke": [
+          { "method": "GET", "path": "/ready", "expect_status": 200, "expect_json_keys": ["ok"] }
+        ]
+      }
+    },
+    {
+      "id": "regwatcher.run_once",
+      "title": "Regwatcher run-once collector",
+      "expected": {
+        "jobs": ["pnpm --filter @apgms/regwatcher run once"],
+        "artifacts": ["packages/regwatcher/data/changes.ndjson"]
+      }
+    }
+  ]
+}
