@@ -98,3 +98,6 @@ packages/regwatcher/data/**/*.json
 
 packages/regwatcher/data/**/*.txt
 
+
+# regwatcher generated log
+packages/regwatcher/data/changes.ndjson
