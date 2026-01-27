@@ -1,0 +1,53 @@
+Scope: 10 of 11 workspace projects
+apps/apgms-webapp-design typecheck$ tsc --noEmit -p tsconfig.json
+shared typecheck$ tsc --noEmit -p tsconfig.json
+webapp typecheck$ tsc --noEmit -p tsconfig.json
+shared typecheck: Done
+apps/apgms-webapp-design typecheck: src/app/components/ui/calendar.tsx(63,9): error TS2353: Object literal may only specify known properties, and 'IconLeft' does not exist in type 'Partial<CustomComponents>'.
+apps/apgms-webapp-design typecheck: src/app/components/ui/calendar.tsx(63,22): error TS7031: Binding element 'className' implicitly has an 'any' type.
+apps/apgms-webapp-design typecheck: src/app/components/ui/calendar.tsx(66,23): error TS7031: Binding element 'className' implicitly has an 'any' type.
+apps/apgms-webapp-design typecheck: src/app/components/ui/chart.tsx(109,3): error TS2339: Property 'payload' does not exist on type 'Omit<Props<ValueType, NameType>, PropertiesReadFromContext> & { active?: boolean | undefined; allowEscapeViewBox?: AllowInDimension | undefined; ... 17 more ...; wrapperStyle?: CSSProperties | undefined; } & ClassAttributes<...> & HTMLAttributes<...> & { ...; }'.
+apps/apgms-webapp-design typecheck: src/app/components/ui/chart.tsx(114,3): error TS2339: Property 'label' does not exist on type 'Omit<Props<ValueType, NameType>, PropertiesReadFromContext> & { active?: boolean | undefined; allowEscapeViewBox?: AllowInDimension | undefined; ... 17 more ...; wrapperStyle?: CSSProperties | undefined; } & ClassAttributes<...> & HTMLAttributes<...> & { ...; }'.
+apps/apgms-webapp-design typecheck: src/app/components/ui/chart.tsx(182,23): error TS7006: Parameter 'item' implicitly has an 'any' type.
+apps/apgms-webapp-design typecheck: src/app/components/ui/chart.tsx(182,29): error TS7006: Parameter 'index' implicitly has an 'any' type.
+apps/apgms-webapp-design typecheck: src/app/components/ui/chart.tsx(260,39): error TS2344: Type '"payload" | "verticalAlign"' does not satisfy the constraint '"string" | "children" | "role" | "g1" | "g2" | "id" | "type" | "name" | "version" | "content" | "filter" | "fill" | "values" | "className" | "suppressHydrationWarning" | "lang" | ... 421 more ... | "onBBoxUpdate"'.
+apps/apgms-webapp-design typecheck:   Type '"payload"' is not assignable to type '"string" | "children" | "role" | "g1" | "g2" | "id" | "type" | "name" | "version" | "content" | "filter" | "fill" | "values" | "className" | "suppressHydrationWarning" | "lang" | ... 421 more ... | "onBBoxUpdate"'.
+apps/apgms-webapp-design typecheck: src/app/components/ui/chart.tsx(266,17): error TS2339: Property 'length' does not exist on type '{}'.
+apps/apgms-webapp-design typecheck: src/app/components/ui/chart.tsx(278,16): error TS2339: Property 'map' does not exist on type '{}'.
+apps/apgms-webapp-design typecheck: src/app/components/ui/chart.tsx(278,21): error TS7006: Parameter 'item' implicitly has an 'any' type.
+apps/apgms-webapp-design typecheck: src/app/pages/Connectors.tsx(583,57): error TS2367: This comparison appears to be unintentional because the types '"connected"' and '"syncing"' have no overlap.
+apps/apgms-webapp-design typecheck: src/app/pages/Dashboard.tsx(373,62): error TS18048: 'percent' is possibly 'undefined'.
+apps/apgms-webapp-design typecheck: src/app/pages/EvidencePacks.tsx(132,8): error TS2551: Property 'verified' does not exist on type 'EvidencePack'. Did you mean 'verifiedAt'?
+apps/apgms-webapp-design typecheck: src/app/pages/EvidencePacks.tsx(195,25): error TS2551: Property 'verified' does not exist on type 'EvidencePack'. Did you mean 'verifiedAt'?
+apps/apgms-webapp-design typecheck: src/app/pages/EvidencePacks.tsx(201,26): error TS2551: Property 'verified' does not exist on type 'EvidencePack'. Did you mean 'verifiedAt'?
+apps/apgms-webapp-design typecheck: src/app/pages/EvidencePacks.tsx(279,35): error TS2551: Property 'verified' does not exist on type 'EvidencePack'. Did you mean 'verifiedAt'?
+apps/apgms-webapp-design typecheck: src/app/pages/EvidencePacks.tsx(291,33): error TS2551: Property 'verified' does not exist on type 'EvidencePack'. Did you mean 'verifiedAt'?
+apps/apgms-webapp-design typecheck: src/app/pages/EvidencePacks.tsx(296,34): error TS2551: Property 'verified' does not exist on type 'EvidencePack'. Did you mean 'verifiedAt'?
+apps/apgms-webapp-design typecheck: src/app/pages/Funding.tsx(18,15): error TS2305: Module '"../types"' has no exported member 'FundingRequest'.
+apps/apgms-webapp-design typecheck: src/app/pages/Funding.tsx(18,31): error TS2305: Module '"../types"' has no exported member 'FundingSource'.
+apps/apgms-webapp-design typecheck: src/app/pages/Incidents.tsx(91,7): error TS2353: Object literal may only specify known properties, and 'category' does not exist in type 'Omit<Incident, "id" | "createdAt" | "timeline">'.
+apps/apgms-webapp-design typecheck: src/app/pages/Incidents.tsx(214,63): error TS2339: Property 'category' does not exist on type 'Incident'.
+apps/apgms-webapp-design typecheck: src/app/pages/Incidents.tsx(313,53): error TS2339: Property 'reportedBy' does not exist on type 'Incident'.
+apps/apgms-webapp-design typecheck: src/app/pages/Incidents.tsx(336,95): error TS2339: Property 'category' does not exist on type 'Incident'.
+apps/apgms-webapp-design typecheck: src/app/pages/Incidents.tsx(345,36): error TS2339: Property 'relatedObligationId' does not exist on type 'Incident'.
+apps/apgms-webapp-design typecheck: src/app/pages/Incidents.tsx(345,76): error TS2339: Property 'relatedAlertId' does not exist on type 'Incident'.
+apps/apgms-webapp-design typecheck: src/app/pages/Incidents.tsx(349,41): error TS2339: Property 'relatedObligationId' does not exist on type 'Incident'.
+apps/apgms-webapp-design typecheck: src/app/pages/Incidents.tsx(355,71): error TS2339: Property 'relatedObligationId' does not exist on type 'Incident'.
+apps/apgms-webapp-design typecheck: src/app/pages/Incidents.tsx(361,41): error TS2339: Property 'relatedAlertId' does not exist on type 'Incident'.
+apps/apgms-webapp-design typecheck: src/app/pages/Incidents.tsx(381,89): error TS2339: Property 'resolution' does not exist on type 'Incident'.
+apps/apgms-webapp-design typecheck: src/app/pages/Incidents.tsx(383,53): error TS2551: Property 'resolvedBy' does not exist on type 'Incident'. Did you mean 'resolvedAt'?
+apps/apgms-webapp-design typecheck: src/app/pages/Incidents.tsx(392,39): error TS2339: Property 'notes' does not exist on type 'Incident'.
+apps/apgms-webapp-design typecheck: src/app/pages/Incidents.tsx(392,65): error TS2339: Property 'notes' does not exist on type 'Incident'.
+apps/apgms-webapp-design typecheck: src/app/pages/Incidents.tsx(393,40): error TS2339: Property 'notes' does not exist on type 'Incident'.
+apps/apgms-webapp-design typecheck: src/app/pages/Incidents.tsx(393,51): error TS7006: Parameter 'note' implicitly has an 'any' type.
+apps/apgms-webapp-design typecheck: src/app/pages/Incidents.tsx(393,57): error TS7006: Parameter 'index' implicitly has an 'any' type.
+apps/apgms-webapp-design typecheck: src/app/pages/ObligationDetail.tsx(294,29): error TS2339: Property 'description' does not exist on type 'ChecklistItem'.
+apps/apgms-webapp-design typecheck: src/app/pages/ObligationDetail.tsx(295,83): error TS2339: Property 'description' does not exist on type 'ChecklistItem'.
+apps/apgms-webapp-design typecheck: src/app/store/appStore.ts(17,3): error TS2305: Module '"../types"' has no exported member 'FundingRequest'.
+apps/apgms-webapp-design typecheck: src/app/store/appStore.ts(18,3): error TS2305: Module '"../types"' has no exported member 'FundingSource'.
+apps/apgms-webapp-design typecheck: src/app/store/appStore.ts(526,11): error TS2322: Type '"allocate"' is not assignable to type 'AuditEventType'.
+apps/apgms-webapp-design typecheck: src/main.tsx(3,19): error TS5097: An import path can only end with a '.tsx' extension when 'allowImportingTsExtensions' is enabled.
+apps/apgms-webapp-design typecheck: Failed
+/home/matth/src/APGMS/apps/apgms-webapp-design:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  apgms-webapp@0.1.0 typecheck: `tsc --noEmit -p tsconfig.json`
+Exit status 2

@@ -1,26 +1,31 @@
+// webapp/src/ux/shared/data/evidence.ts
+// ASCII only. LF newlines.
+
 import { apiRequest } from "./apiClient";
 
-export type EvidenceArtifact = {
-  id: string;
+export interface EvidencePackRequest {
   kind: string;
-  sha256: string;
-  wormUri: string | null;
-  createdAt: string;
-};
+  payload?: Record<string, unknown>;
+  wormUri?: string;
+}
 
-export async function fetchEvidenceArtifacts(token: string) {
-  return apiRequest<{ artifacts: EvidenceArtifact[] }>("/compliance/evidence", {
-    token,
+export interface EvidencePackResponse {
+  id: string;
+  createdAt: string;
+  status: "pending" | "ready" | "failed";
+}
+
+export async function createEvidencePack(req: EvidencePackRequest, token?: string | null): Promise<EvidencePackResponse> {
+  return apiRequest<EvidencePackResponse>("/api/evidence/packs", {
+    method: "POST",
+    token: token ?? null,
+    body: req
   });
 }
 
-export async function createEvidenceArtifact(
-  token: string,
-  payload: { kind: string; payload?: Record<string, unknown>; wormUri?: string }
-) {
-  return apiRequest<{ artifact: { id: string } }>("/compliance/evidence", {
-    method: "POST",
-    token,
-    body: payload,
+export async function listEvidencePacks(token?: string | null): Promise<EvidencePackResponse[]> {
+  return apiRequest<EvidencePackResponse[]>("/api/evidence/packs", {
+    method: "GET",
+    token: token ?? null
   });
 }

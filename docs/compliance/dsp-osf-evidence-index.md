@@ -1,8 +1,8 @@
 # DSP / OSF Evidence Index (APGMS)
 
 Version: 0.2
-Evidence snapshot commit: ed1b77c0965d4457c931511aa7a15279b4de7073
-Last updated: 2025-12-12
+Evidence snapshot commit: 8722b00 (working tree)
+Last updated: 2026-01-27
 Owner: APGMS Team
 
 ## Purpose
@@ -145,6 +145,15 @@ Evidence:
 - `docs/ops/alerts.md`
 - `docs/ops/promql.md`
 - `docs/ops/logging.md`
+- UI compliance dashboard wiring (Figma-derived shell in live router):
+  - `webapp/src/app/App.tsx` (live route tree)
+  - `webapp/src/app/figma/FigmaProvidersLayout.tsx` (providers + Layout + Outlet)
+  - `webapp/src/_figma/app/components/Layout.tsx` (sidebar + top shell)
+  - `webapp/src/_figma/app/pages/Dashboard.tsx` (dashboard view)
+  - `webapp/src/_figma/app/pages/Obligations.tsx` (obligations view)
+  - `webapp/src/_figma/app/pages/Reconciliation.tsx` (reconciliation view)
+  - `webapp/src/_figma/app/pages/EvidencePacks.tsx` (evidence packs view)
+  - `webapp/src/_figma/app/pages/BAS.tsx` (BAS view)
 
 Verification:
 - Confirm metrics are emitted for HTTP requests and DB instrumentation.
@@ -238,38 +247,3 @@ Control summary:
 Evidence:
 - `services/api-gateway/src/auth.ts`
 - `services/api-gateway/src/routes/admin-service-mode.ts`
-
-Verification:
-- Confirm 401/403 behavior for missing/invalid authorization.
-- Confirm admin endpoint returns 503 if admin token is not configured.
-
-Status: Implemented (baseline), Planned (RBAC/claims-based admin)
-
-Gaps / next actions:
-- Replace static admin token with role/claim-based controls and audit event generation on privileged actions.
-
----
-
-### 9) SDLC testing governance (DB-backed integrity checks)
-
-Control summary:
-- Database-backed tests are gated to run only when explicitly enabled.
-- Integrity checks remain verifiable in controlled environments.
-
-Evidence:
-- ADR-004 (`docs/adr/ADR-004-db-test-gating.md`)
-- EV-012 (`docs/evidence/EV-012-ledger-integrity-testing.md`)
-- EV-013 (`docs/evidence/EV-013-au-tax-config-provider-contract-tests.md`)
-
-Verification:
-- Default runs skip DB-backed tests unless `RUN_DB_TESTS=1`.
-- Dedicated runs execute ledger integrity and AU tax config contract tests.
-
-Status: Implemented
-
----
-
-## Appendix: Partner-facing documentation pointers
-
-- Bank integration: `docs/partners/bank-packet.md`
-- POS integration reference model: `docs/partners/pos-integration.md`

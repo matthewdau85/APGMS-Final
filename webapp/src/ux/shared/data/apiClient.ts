@@ -1,71 +1,77 @@
-import { getSession } from "../../auth";
+// webapp/src/ux/shared/data/apiClient.ts
+// ASCII only. LF newlines.
 
-const API_BASE =
-  (import.meta as any).env?.VITE_API_BASE_URL || "http://127.0.0.1:3000";
+import { getAuthHeader, getSession } from "../../../auth";
 
-type ApiError = Error & {
-  status?: number;
-  code?: string;
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://127.0.0.1:3000";
+
+export type ApiMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+
+export interface ApiRequestOptions {
+  method?: ApiMethod;
+  token?: string | null;
+  orgId?: string | null;
+  headers?: Record<string, string>;
+  body?: unknown;
+  signal?: AbortSignal;
+}
+
+export interface ApiErrorShape {
+  status: number;
+  message: string;
   details?: unknown;
-};
-
-function joinUrl(base: string, path: string): string {
-  if (!path) return base;
-  if (path.startsWith("http://") || path.startsWith("https://")) return path;
-  if (!path.startsWith("/")) path = "/" + path;
-  return base.replace(/\/+$/, "") + path;
 }
 
-function asHeaders(h?: HeadersInit): Headers {
-  return h instanceof Headers ? new Headers(h) : new Headers(h || {});
-}
-
-export async function apiRequest<T = unknown>(
-  path: string,
-  opts: RequestInit = {}
-): Promise<T> {
-  const url = joinUrl(API_BASE, path);
-
-  const headers = asHeaders(opts.headers);
-  headers.set("Accept", headers.get("Accept") || "application/json");
-
+function buildHeaders(opts: ApiRequestOptions): Record<string, string> {
   const session = getSession();
-  if (session?.token && !headers.has("Authorization")) {
-    headers.set("Authorization", `Bearer ${session.token}`);
-  }
+  const token = opts.token ?? session?.token ?? null;
+  const orgId = opts.orgId ?? session?.user?.orgId ?? null;
 
-  const init: RequestInit = {
-    ...opts,
-    headers,
-    credentials: opts.credentials ?? "include",
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    ...(opts.headers ?? {}),
+    ...getAuthHeader(token)
   };
 
-  const res = await fetch(url, init);
+  if (orgId) headers["X-Org-Id"] = orgId;
 
-  if (res.status === 204) return undefined as unknown as T;
+  return headers;
+}
 
-  const contentType = res.headers.get("content-type") || "";
-  const isJson = contentType.includes("application/json");
+export async function apiRequest<T = unknown>(path: string, opts: ApiRequestOptions = {}): Promise<T> {
+  const url = path.startsWith("http") ? path : `${API_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
+  const method: ApiMethod = opts.method ?? "GET";
+  const headers = buildHeaders(opts);
 
-  const payload = isJson
-    ? await res.json().catch(() => null)
-    : await res.text().catch(() => "");
-
-  if (res.ok) return payload as T;
-
-  const err: ApiError = new Error(
-    (payload && typeof payload === "object" && (payload as any).message) ||
-      (typeof payload === "string" && payload) ||
-      `Request failed (${res.status})`
-  );
-
-  err.status = res.status;
-  if (payload && typeof payload === "object") {
-    err.code = (payload as any).code;
-    err.details = (payload as any).details ?? payload;
-  } else {
-    err.details = payload;
+  let body: BodyInit | undefined;
+  if (opts.body !== undefined) {
+    headers["Content-Type"] = "application/json";
+    body = JSON.stringify(opts.body);
   }
 
-  throw err;
+  const res = await fetch(url, {
+    method,
+    headers,
+    body,
+    signal: opts.signal
+  });
+
+  const contentType = res.headers.get("content-type") ?? "";
+  const isJson = contentType.includes("application/json");
+
+  if (!res.ok) {
+    const details = isJson ? await res.json().catch(() => null) : await res.text().catch(() => null);
+    const err: ApiErrorShape = {
+      status: res.status,
+      message: `API ${method} ${path} failed (${res.status})`,
+      details
+    };
+    throw err;
+  }
+
+  if (res.status === 204) return undefined as T;
+  if (isJson) return (await res.json()) as T;
+
+  // Fallback: if server returns text
+  return (await res.text()) as unknown as T;
 }

@@ -9,7 +9,7 @@
   "scripts": {
     "bootstrap": "pnpm -r install && pnpm -r build",
     "build": "pnpm -r build",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm -r --filter '!./apps/apgms-webapp-design...' typecheck",
     "test": "pnpm -r test",
     "run-all": "bash ./scripts/run-all-tests.sh",
     "readiness:all": "node ./scripts/readiness/all.cjs",

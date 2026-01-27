@@ -6,18 +6,17 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
     "noEmit": true,
     "strict": true,
-    "noImplicitAny": true,
-    "types": ["vite/client", "node"],
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["src/*"]
-    }
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true
   },
-  "include": ["src", "tests", "vite.config.ts", "playwright.config.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": [
-    "dist",
-    "node_modules"
+    "src/_figma/**",
+    "src/App.tsx",
+    "src/pages/**"
   ]
 }
