@@ -14,10 +14,10 @@
   "dependencies": {
     "@apgms/domain-policy": "workspace:*",
     "@apgms/shared": "workspace:*",
-    "@prisma/client": "6.17.1"
+    "@prisma/client": "7.4.1"
   },
   "devDependencies": {
-    "prisma": "6.17.1",
+    "prisma": "7.4.1",
     "typescript": "^5.9.3",
     "@cyclonedx/cyclonedx-npm": "^4.1.2"
   }
